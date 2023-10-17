@@ -1,0 +1,66 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# VScode
+.vscode
+
+# Xcode
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+*.xcodeproj/project.xcworkspace/xcshareddata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# Carthage
+Carthage/
+*.framework
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Compiled Source code
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Logs
+*.log
+
+# Other unneeded files
+*.bak
+*.swp
+*.swo
+*.tmp
+*.tmp.*
+*.tmproj
+*.mode1
+*.mode1v3
+*.mode2v3
+*.perspective
+*.perspectivev3
+*.pbxuser
+*.moved-aside
+*.xcuserstate
+
+# JetBrains IDE
+.idea/
+
+# User-specific
+*.p12
+*.mobileprovision
+
+# Generated files
+DerivedData/
+
