@@ -2,7 +2,7 @@ Amazon Bedrock Client for Mac
 =============================
 
 [![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
-![example workflow](https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build%20and%20Release%20macOS%20Application/badge.svg)
+![Build](https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build/badge.svg)
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-green.svg)](https://opensource.org/license/mit-0/)
 [![Platform](https://img.shields.io/badge/platform-macOS-blue.svg)](https://developer.apple.com/macos/)
 [![Built with Swift](https://img.shields.io/badge/Swift-5.9-green.svg)](https://swift.org)
@@ -12,6 +12,7 @@ Overview
 
 The Amazon Bedrock Client for Mac is a macOS demo application built with SwiftUI. It serves as a client interface for AWS Bedrock, allowing users to interact with AWS Bedrock models.
 
+![preview-claude](assets/preview-claude.png)
 ![preview](assets/preview.png)
 
 > **Note**

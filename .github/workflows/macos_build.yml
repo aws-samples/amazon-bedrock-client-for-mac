@@ -1,4 +1,4 @@
-name: Build and Release macOS Application
+name: Build
 
 permissions:
   contents: write
