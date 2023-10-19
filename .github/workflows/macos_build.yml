@@ -44,7 +44,13 @@ jobs:
     - name: Package as DMG
       run: |
         export APP_PATH="$(pwd)/DerivedData/Build/Products/Release/Amazon Bedrock Client for Mac.app"
-        create-dmg 'Amazon Bedrock Client for Mac.dmg' "$APP_PATH"
+        create-dmg --window-pos 200 120 \
+        --window-size 800 400 \
+        --icon-size 100 \
+        --icon "Amazon Bedrock Client for Mac.app" 200 190 \
+        --hide-extension "Amazon Bedrock Client for Mac.app" \
+        --app-drop-link 600 185 \
+        'Amazon Bedrock Client for Mac.dmg' "$APP_PATH"
 
     # Upload Artifact
     - name: Upload Artifact
