@@ -11,7 +11,7 @@ struct Channel: View {
     @Binding var messages: [MessageData]
     @ObservedObject var messageManager: ChannelManager = ChannelManager.shared
     @ObservedObject var viewModel = ChannelViewModel()
-
+    
     @State var userInput: String = ""
     @State var isMessageBarDisabled: Bool = false
     @State var isSending: Bool = false
@@ -19,12 +19,12 @@ struct Channel: View {
     @State var emptyText: String = ""
     
     @State private var isStreamingEnabled: Bool
-
+    
     var backend: Backend
     var modelId: String
     var modelName: String
     var channelId: String
-
+    
     // Move the UserDefaults logic to the init method
     init(messages: Binding<[MessageData]>, backend: Backend, modelId: String, modelName: String, channelId: String) {
         self._messages = messages  // setting the Binding
@@ -32,7 +32,7 @@ struct Channel: View {
         self.modelId = modelId
         self.modelName = modelName
         self.channelId = channelId
-
+        
         
         // Initialize isStreamingEnabled from UserDefaults or default to true
         let key = "isStreamingEnabled_\(channelId)"
@@ -82,7 +82,7 @@ struct Channel: View {
                 }
                 .padding()
             }
-
+            
             MessageBarView(
                 channelID: channelId,
                 userInput: $userInput,
@@ -204,49 +204,49 @@ struct Channel: View {
         // Get response from Bedrock
         let response = try await backend.invokeModelStream(withId: modelId, prompt: prompt)
         let modelType = backend.getModelType(modelId)
-
+        
         for try await event in response {
             switch event {
             case .chunk(let part):
                 let jsonObject = try JSONSerialization.jsonObject(with: part.bytes!, options: [])
                 switch modelType {
-                    case .claude:
-                        if let chunkOfText = (jsonObject as? [String: Any])?["completion"] as? String {
+                case .claude:
+                    if let chunkOfText = (jsonObject as? [String: Any])?["completion"] as? String {
+                        
+                        let processedText = chunkOfText
+                        
+                        // Trim whitespace if it's the first chunk
+                        if isFirstChunk {
+                            isFirstChunk = false
+                            emptyText.append(chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
                             
-                            let processedText = chunkOfText
-                            
-                            // Trim whitespace if it's the first chunk
-                            if isFirstChunk {
-                                isFirstChunk = false
-                                emptyText.append( chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
-                                
-                                // Append a message for Bedrock's first response
-                                messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
-                            } else {
-                                // Append the chunk to the last message
-                                emptyText.append(processedText)
-                                messages[messages.count - 1].text = emptyText
-                            }
+                            // Append a message for Bedrock's first response
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
+                        } else {
+                            // Append the chunk to the last message
+                            emptyText.append(processedText)
+                            messages[messages.count - 1].text = emptyText
                         }
-                    case .titan:
-                        if let chunkOfText = (jsonObject as? [String: Any])?["outputText"] as? String {
+                    }
+                case .titan:
+                    if let chunkOfText = (jsonObject as? [String: Any])?["outputText"] as? String {
+                        
+                        let processedText = chunkOfText
+                        
+                        // Trim whitespace if it's the first chunk
+                        if isFirstChunk {
+                            isFirstChunk = false
+                            emptyText.append( chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
                             
-                            let processedText = chunkOfText
-                            
-                            // Trim whitespace if it's the first chunk
-                            if isFirstChunk {
-                                isFirstChunk = false
-                                emptyText.append( chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
-                                
-                                // Append a message for Bedrock's first response
-                                messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
-                            } else {
-                                // Append the chunk to the last message
-                                emptyText.append(processedText)
-                                messages[messages.count - 1].text = emptyText
-                            }
+                            // Append a message for Bedrock's first response
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
+                        } else {
+                            // Append the chunk to the last message
+                            emptyText.append(processedText)
+                            messages[messages.count - 1].text = emptyText
                         }
-                    default:
+                    }
+                default:
                     break;
                 }
             case .sdkUnknown(let unknown):
@@ -257,7 +257,7 @@ struct Channel: View {
         if let lastMessage = messages.last {
             currentHistory += "\nAssistant: \(lastMessage.text)"
         }
-
+        
         messageManager.setHistory(for: channelId, history: currentHistory)
     }
     
@@ -289,7 +289,7 @@ struct Channel: View {
             case .cohereCommand:
                 let response = try backend.decode(data) as InvokeCommandResponse
                 messages.append(MessageData(id: UUID(), text: response.generations[0].text, user: modelName, isError: false, sentTime: Date()))
-                                
+                
             default:
                 messages.append(MessageData(id: UUID(), text: "Error: Unable to decode response.", user: "System", isError: false, sentTime: Date()))
             }
@@ -306,7 +306,7 @@ struct Channel: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"
             let timestamp = formatter.string(from: now)
-
+            
             let fileName = "\(timestamp).png"
             
             // Get the temporary directory
