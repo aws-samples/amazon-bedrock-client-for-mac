@@ -8,7 +8,7 @@
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-
+    var settingsWindow: NSWindow?
     var localhostServer: LocalhostServer?
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -27,9 +27,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
     }
-
+    
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
+            if window == settingsWindow {
+                settingsWindow = nil  // Set to nil after closing
+            }
             let windowID = window.windowNumber
             saveWindowSize(window: window, id: windowID)
         }
@@ -54,6 +57,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         return true
     }
+    
+    @objc func openSettings() {
+        let settingsView = SettingsView(selectedRegion: .constant(.usEast1))
+        
+        settingsWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 300),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered, defer: false)
+        if let settingsWindow = settingsWindow {
+            settingsWindow.center()
+            settingsWindow.setFrameAutosaveName("Settings")
+            settingsWindow.contentView = NSHostingView(rootView: settingsView)
+            settingsWindow.makeKeyAndOrderFront(nil)
+            
+            settingsWindow.delegate = self  // Set the delegate to self
+        }
+    }
 }
 
 extension UserDefaults {
@@ -74,7 +94,6 @@ extension UserDefaults {
 @main
 struct Amazon_Bedrock_Client_for_MacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
     @State private var alertIsPresented: Bool = false
     
     var body: some Scene {
@@ -95,12 +114,16 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
                 Button("Version") {
                     alertIsPresented = true  // Set the alert to be presented
                 }
-                .alert(isPresented: $alertIsPresented) {  // Attach the alert here
+                .alert(isPresented: $alertIsPresented) {
                     Alert(title: Text("Alert Title"), message: Text("Alert Message"), dismissButton: .default(Text("OK")))
                 }
             }
-            
+            CommandMenu("Preference") {
+                Button("Open Settings") {
+                    appDelegate.openSettings()
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
         }
     }
 }
-

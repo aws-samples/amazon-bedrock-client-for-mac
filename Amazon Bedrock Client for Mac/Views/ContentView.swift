@@ -9,11 +9,17 @@ struct ContentView: View {
     @State var alertMessage: String = ""
     @State var channelMessages: [ChannelModel: [MessageData]] = [:] // Add this line
     @ObservedObject var backendModel: BackendModel = BackendModel()
-
+    @State var showSettings = false
+    
     var body: some View {
         NavigationView {
-            SidebarView(selection: $selection, channelModels: $channelModels, showAlert: $showAlert, alertMessage: $alertMessage, backendModel: backendModel)
-            MainContentView(selection: $selection, channelMessages: $channelMessages, backendModel: backendModel)
+            if showSettings {
+                SettingsView(selectedRegion: .constant(.usEast1))
+            } else {
+                SidebarView(selection: $selection, channelModels: $channelModels, showAlert: $showAlert, alertMessage: $alertMessage, backendModel: backendModel)
+                MainContentView(selection: $selection, channelMessages: $channelMessages, backendModel: backendModel)
+            }
         }
+        .frame(idealWidth: 1200, idealHeight: 800)
     }
 }

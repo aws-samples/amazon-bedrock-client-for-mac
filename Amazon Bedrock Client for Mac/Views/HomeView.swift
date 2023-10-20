@@ -3,15 +3,16 @@ import AppKit
 
 struct HomeView: View {
     @State var showSettings = false
+    @State var buttonHover = false
     @State private var selectedRegion: AWSRegion = .usEast1  // Default region
-
+    
     let featureHighlightCards = [
         ("Choose from a range of leading foundation models", "Explore developer experience", "image1", "https://aws.amazon.com/bedrock/developer-experience/"),
         ("Build agents that dynamically invoke APIs to execute complex business tasks", "Explore agents", "image2", "https://aws.amazon.com/bedrock/agents/"),
         ("Extend the power of FMs with RAG by connecting them to your company-specific data sources", "Explore RAG capabilities", "image3", "https://aws.amazon.com/bedrock/knowledge-bases/"),
         ("Support data security and compliance standards", "Explore security features", "image4", "https://aws.amazon.com/bedrock/security-compliance/")
     ]
-
+    
     let cards = [
         ("Amazon Titan", "FM for text generation and classification, question answering, and information extraction and a text embeddings model for personalization and search.", "your-image-1", "https://aws.amazon.com/bedrock/titan/"),
         ("Jurassic", "Instruction-following FMs for any language task, including question answering, summarization, text generation, and more.", "your-image-2", "https://aws.amazon.com/bedrock/jurassic/"),
@@ -20,21 +21,27 @@ struct HomeView: View {
         ("Llama 2", "Fine-tuned models ideal for dialogue use cases.", "your-image-5", "https://aws.amazon.com/bedrock/llama-2/"),
         ("Stable Diffusion", "Image generation model produces unique, realistic, and high-quality visuals, art, logos, and designs.", "your-image-6", "https://aws.amazon.com/bedrock/stable-diffusion/")
     ]
-
+    
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                headerView
-                featureSection
-                modelChoiceSection
-            }
-            .padding(EdgeInsets(top: 40, leading: 40, bottom: 40, trailing: 40))
+        ZStack {  // Add ZStack
+            Color.background  // Background color
+                .edgesIgnoringSafeArea(.all)  // Extend to all edges
+            
+//            ScrollView {
+                VStack(spacing: 20) {
+                    headerView
+                    // Uncomment these if you want to include them later
+                    // featureSection
+                    // modelChoiceSection
+                }
+                .padding(EdgeInsets(top: 40, leading: 40, bottom: 40, trailing: 40))
+//            }
         }
-        .background(Color.background)
         .toolbar {
             // Left-aligned items
             ToolbarItem(placement: .navigation) {
-                Button(action: {
+              
+               Button(action: {
                     if let url = URL(string: "https://aws.amazon.com/bedrock/") {
                         NSWorkspace.shared.open(url)
                     }
@@ -59,10 +66,16 @@ struct HomeView: View {
             
             // Right-aligned items
             ToolbarItem(placement: .primaryAction) {
-                Button(action: {
-                    showSettings.toggle()
-                }) {
-                    Image(systemName: "gearshape")
+                HStack {
+                    Button(action: toggleSidebar) {
+                        Label("Toggle Sidebar", systemImage: "sidebar.left")
+                    }
+
+                    Button(action: {
+                        showSettings.toggle()
+                    }) {
+                        Image(systemName: "gearshape")
+                    }
                 }
             }
         }
@@ -72,8 +85,16 @@ struct HomeView: View {
         }
     }
     
+    
+    func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+    }
+
+    
     var headerView: some View {
-        VStack(spacing: 20) {
+        VStack {
+            Spacer()  // Spacer at the top
+            
             Text("Amazon Bedrock")
                 .font(.system(size: 40, weight: .bold, design: .default))
                 .foregroundColor(Color.text)
@@ -88,12 +109,16 @@ struct HomeView: View {
                 }
             }
             .padding()
-            .background(Color.blue)
+            .background(buttonHover ? Color.blue.opacity(0.7) : Color.blue)  // Conditionally change the background
             .foregroundColor(Color.white)
             .cornerRadius(8)
             .buttonStyle(PlainButtonStyle())
+            .onHover { hover in
+                buttonHover = hover  // Update the state on hover
+            }
+            
+            Spacer()  // Spacer at the bottom
         }
-        .padding(.bottom, 20)
     }
     
     var featureSection: some View {
@@ -123,7 +148,7 @@ struct HomeView: View {
             }
         }
     }
-
+    
     @ViewBuilder
     private func modelChoiceRow(index: Int) -> some View {
         HStack(spacing: 20) {
@@ -172,12 +197,12 @@ struct DeluxeCard: View {
                     .font(.caption2)  // Increased font size
                     .multilineTextAlignment(.leading)  // Aligned to left
                     .foregroundColor(Color.white)
-                    
+                
                 Text(title)
                     .font(.title3)  // Increased font size
                     .multilineTextAlignment(.leading)  // Aligned to left
                     .foregroundColor(Color.white)
-                    
+                
                 HStack {
                     Text(subtitle)
                         .font(.headline)  // Increased font size

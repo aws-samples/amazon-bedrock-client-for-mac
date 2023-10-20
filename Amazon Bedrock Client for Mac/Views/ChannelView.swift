@@ -72,6 +72,13 @@ struct Channel: View {
                             }
                         }
                     }
+                    .onAppear() {
+                        if let lastMessage = messages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
                 }
                 .padding()
             }
@@ -85,6 +92,9 @@ struct Channel: View {
         }.toolbar {
             ToolbarItemGroup(placement: .automatic) {
                 Spacer()
+                Button(action: toggleSidebar) {
+                    Label("Toggle Sidebar", systemImage: "sidebar.left")
+                }
                 
                 HStack {
                     Text("Streaming")
@@ -107,6 +117,10 @@ struct Channel: View {
                 }
             }
         }
+    }
+    
+    func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
     
     func sendMessage() async {

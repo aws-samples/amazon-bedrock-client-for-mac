@@ -46,11 +46,11 @@ struct MessageView: View {
                     .frame(width: 40, height: 40)  // Set the frame
                     .foregroundColor(Color.link)
                     .opacity(0.8)
-                    .clipShape(Circle())  // Clip into a circle
+                    .clipShape(RoundedRectangle(cornerRadius: 8))  // Clip into a circle
                     .shadow(radius: 3)  // Optional shadow for depth
                     .overlay(  // Optional border
-                        Circle()
-                            .stroke(Color.blue, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.link, lineWidth: 2)
                     )
                     .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             } else {
@@ -58,9 +58,9 @@ struct MessageView: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: 40, height: 40)
-                    .clipShape(Circle())
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     .shadow(radius: 3)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
                     .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -69,7 +69,7 @@ struct MessageView: View {
                         .font(.system(size: self.fontSize))  // Increase username text size
                         .bold()
                         .textSelection(.enabled)
-
+                    
                     Text(format(date: message.sentTime))
                         .font(.callout)
                         .foregroundColor(Color.secondary)
@@ -86,11 +86,11 @@ struct MessageView: View {
                         .font(.system(size: self.fontSize))
                 } else {
                     Text(message.text)
-                    .font(.system(size: self.fontSize))
-                    .textSelection(.enabled)
+                        .font(.system(size: self.fontSize))
+                        .textSelection(.enabled)
                 }
                 
-
+                
             }
             .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             .textSelection(.enabled)
@@ -122,7 +122,7 @@ struct MessageView: View {
             .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
         }.textSelection(.enabled)
     }
-
+    
     var containsLocalhostImage: Bool {
         return message.text.contains("![](http://localhost:8080/")
     }

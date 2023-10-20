@@ -8,6 +8,10 @@
 import Foundation
 import Combine
 
+class GlobalSettings: ObservableObject {
+    @Published var showSettings: Bool = false
+}
+
 class SettingManager {
     static let shared = SettingManager()
     
