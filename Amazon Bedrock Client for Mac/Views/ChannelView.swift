@@ -19,6 +19,7 @@ struct Channel: View {
     @State var emptyText: String = ""
     
     @State private var isStreamingEnabled: Bool
+    @State private var isConfigPopupPresented: Bool = false
     
     var backend: Backend
     var modelId: String
@@ -106,14 +107,6 @@ struct Channel: View {
                 .onChange(of: isStreamingEnabled) { newValue in
                     // Save to UserDefaults whenever the toggle changes
                     UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(channelId)")
-                }
-                
-                Button(action: {
-                    if let url = URL(string: "https://aws.amazon.com/bedrock/\(modelName)") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }) {
-                    Image(systemName: "info.circle")
                 }
             }
         }
@@ -289,6 +282,10 @@ struct Channel: View {
             case .cohereCommand:
                 let response = try backend.decode(data) as InvokeCommandResponse
                 messages.append(MessageData(id: UUID(), text: response.generations[0].text, user: modelName, isError: false, sentTime: Date()))
+                
+            case .llama2:
+                let response = try backend.decode(data) as InvokeLlama2Response
+                messages.append(MessageData(id: UUID(), text: response.generation, user: modelName, isError: false, sentTime: Date()))
                 
             default:
                 messages.append(MessageData(id: UUID(), text: "Error: Unable to decode response.", user: "System", isError: false, sentTime: Date()))

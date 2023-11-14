@@ -75,25 +75,25 @@ struct Backend {
         
         return try AWSTemporaryCredentials(from: credentials)
     }
-
+    
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         // Determine the model type (claude or titan)
         let modelType = getModelType(modelId)
         
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
         
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         let encodedParams = try self.encode(params, strategy: strategy)
-
+        
         let request = InvokeModelInput(body: encodedParams,
                                        contentType: "application/json",
                                        modelId: modelId)
-
+        
         // Log the JSON-structured encoded request body
         if let requestJson = String(data: encodedParams, encoding: .utf8) {
             logger.info("Request: \(requestJson)")
         }
-
+        
         let config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
         
         let client = BedrockRuntimeClient(config: config)
@@ -104,20 +104,20 @@ struct Backend {
             logger.error("Invalid Bedrock response: \(response)")
             throw BedrockRuntimeError.invalidResponse(response.body)
         }
-
+        
         return data
     }
-
+    
     // Add or modify this function in your Backend struct
     func invokeModelStream(withId modelId: String, prompt: String) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
         // Determine the model type and parameters
         let modelType = getModelType(modelId)
-
+        
         // Determine the appropriate key encoding strategy for the model type
         let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude) ? .convertToSnakeCase : .useDefaultKeys
-
+        
         let params = getModelParameters(modelType: modelType, prompt: prompt)
-
+        
         do {
             // Encode parameters and create request using the appropriate key encoding strategy
             let encodedParams = try self.encode(params, strategy: strategy)
@@ -125,7 +125,7 @@ struct Backend {
                 body: encodedParams,
                 contentType: "application/json",
                 modelId: modelId)
-           
+            
             // Log the JSON-structured encoded request body
             if let requestJson = String(data: encodedParams, encoding: .utf8) {
                 logger.info("Request: \(requestJson)")
@@ -137,7 +137,7 @@ struct Backend {
             
             // Invoke the model and get the response stream
             let output = try await client.invokeModelWithResponseStream(input: request)
-
+            
             return output.body ?? AsyncThrowingStream { _ in }
             
         } catch {
@@ -146,7 +146,7 @@ struct Backend {
             throw error
         }
     }
-
+    
     func invokeStableDiffusionModel(withId modelId: String, prompt: String) async throws -> Data {
         let promptData = [
             "text_prompts": [["text": prompt]],
@@ -154,7 +154,7 @@ struct Backend {
             "seed": Int.random(in: 0..<100),
             "steps": 50
         ] as [String : Any]
-
+        
         let jsonData: Data
         do {
             jsonData = try JSONSerialization.data(withJSONObject: promptData)
@@ -166,10 +166,10 @@ struct Backend {
         if let jsonString = String(data: jsonData, encoding: .utf8) {
             logger.info("Serialized JSON: \(jsonString)")
         }
-
+        
         let contentType = "application/json"
         let accept = "image/png"
-
+        
         // Prepare the request
         let request = InvokeModelInput(
             accept: accept,
@@ -177,18 +177,18 @@ struct Backend {
             contentType: contentType,
             modelId: modelId
         )
-
+        
         // Create client and make the request
         let config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
         let client = BedrockRuntimeClient(config: config)
         
         let response = try await client.invokeModel(input: request)
-
+        
         guard response.contentType == "image/png", let data = response.body else {
             logger.error("Invalid Bedrock response: \(response)")
             throw BedrockRuntimeError.invalidResponse(response.body)
         }
-
+        
         return data
     }
     
@@ -211,11 +211,13 @@ struct Backend {
             return .cohereCommand
         } else if modelName.hasPrefix("stable-diffusion") {
             return .stableDiffusion
+        } else if modelName.hasPrefix("llama2") {
+            return .llama2
         } else {
             return .unknown
         }
     }
-
+    
     // Function to get model parameters
     func getModelParameters(modelType: FoundationModelType, prompt: String) -> ModelParameters {
         switch modelType {
@@ -235,11 +237,13 @@ struct Backend {
             return AI21ModelParameters(prompt: prompt, temperature: 0.5, topP: 0.5, maxTokens: 200)
         case .cohereCommand:
             return CohereModelParameters(prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
+        case .llama2:
+            return Llama2ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
         default:
             return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
         }
     }
-
+    
     func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
                               byInferenceType: BedrockClientTypes.InferenceType? = nil,
                               byOutputModality: BedrockClientTypes.ModelModality? = nil,
@@ -453,6 +457,7 @@ enum FoundationModelType {
     case j2
     case cohereCommand
     case stableDiffusion
+    case llama2
     case unknown
 }
 
@@ -519,14 +524,53 @@ public struct TitanEmbedModelParameters: ModelParameters {
 }
 
 public struct ClaudeModelParameters: ModelParameters {
-    public let prompt: String
-    // Your existing properties here
-    public let temperature: Double = 1.0
-    public let topP: Double = 1.0
-    public let topK: Int = 250
-    public let maxTokensToSample: Int = 8191
-    public let stopSequences: [String] = ["\n\nHuman:"]
+    public var prompt: String
+    public var temperature: Double
+    public var topP: Double
+    public var topK: Int
+    public var maxTokensToSample: Int
+    public var stopSequences: [String]
+    
+    public init(
+        prompt: String,
+        temperature: Double = 1.0,
+        topP: Double = 1.0,
+        topK: Int = 250,
+        maxTokensToSample: Int = 8191,
+        stopSequences: [String] = ["\n\nHuman:"]
+    ) {
+        self.prompt = prompt
+        self.temperature = temperature
+        self.topP = topP
+        self.topK = topK
+        self.maxTokensToSample = maxTokensToSample
+        self.stopSequences = stopSequences
+    }
+    
+    public func encodeModel() throws -> Data {
+        let encoder = JSONEncoder()
+        return try encoder.encode(self)
+    }
+}
 
+public struct Llama2ModelParameters: ModelParameters {
+    public var prompt: String
+    public var maxGenLen: Int
+    public var topP: Double
+    public var temperature: Double
+    
+    public init(
+        prompt: String,
+        maxGenLen: Int = 512,
+        topP: Double = 0.9,
+        temperature: Double = 1.0
+    ) {
+        self.prompt = prompt
+        self.maxGenLen = maxGenLen
+        self.topP = topP
+        self.temperature = temperature
+    }
+    
     public func encodeModel() throws -> Data {
         let encoder = JSONEncoder()
         return try encoder.encode(self)
@@ -599,6 +643,10 @@ public struct InvokeCommandResponse: ModelResponse, Decodable {
 
 public struct InvokeStableDiffusionResponse: ModelResponse, Decodable {
     public let body: Data // Specify the type here
+}
+
+public struct InvokeLlama2Response: ModelResponse, Decodable {
+    public let generation: String
 }
 
 struct ListFoundationModelsResponse: Decodable {
