@@ -59,20 +59,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func openSettings() {
-        let settingsView = SettingsView(selectedRegion: .constant(.usEast1))
+        let currentRegion = SettingManager.shared.getAWSRegion() ?? .usEast1 // Replace .defaultRegion with your default region
+        let settingsView = SettingsView(selectedRegion: .constant(currentRegion))
         
-        settingsWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 300),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered, defer: false)
-        if let settingsWindow = settingsWindow {
-            settingsWindow.center()
-            settingsWindow.setFrameAutosaveName("Settings")
-            settingsWindow.contentView = NSHostingView(rootView: settingsView)
-            settingsWindow.makeKeyAndOrderFront(nil)
-            
-            settingsWindow.delegate = self  // Set the delegate to self
+        if settingsWindow == nil {
+            settingsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 480, height: 300),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered, defer: false)
+            settingsWindow!.center()
+            settingsWindow!.setFrameAutosaveName("Settings")
+            settingsWindow!.contentView = NSHostingView(rootView: settingsView)
+            settingsWindow!.isReleasedWhenClosed = false
+            settingsWindow!.delegate = self
         }
+        settingsWindow!.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -88,6 +89,7 @@ extension UserDefaults {
         let data = NSKeyedArchiver.archivedData(withRootObject: size)
         set(data, forKey: key)
     }
+    
 }
 
 
@@ -118,12 +120,12 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
                     Alert(title: Text("Alert Title"), message: Text("Alert Message"), dismissButton: .default(Text("OK")))
                 }
             }
-            CommandMenu("Preference") {
-                Button("Open Settings") {
-                    appDelegate.openSettings()
-                }
-                .keyboardShortcut(",", modifiers: [.command])
-            }
+//            CommandMenu("Preference") {
+//                Button("Open Settings") {
+//                    appDelegate.openSettings()
+//                }
+//                .keyboardShortcut(",", modifiers: [.command])
+//            }
         }
     }
 }

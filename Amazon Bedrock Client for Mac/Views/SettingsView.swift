@@ -41,19 +41,19 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             
             // Text Size Picker Section
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Text Size")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                Picker("Text Size", selection: $selectedTextSize) {
-                    ForEach(textSizes, id: \.self) { size in
-                        Text("\(size) pt").tag(size)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-            }
-            .padding(.horizontal, 20)
+//            VStack(alignment: .leading, spacing: 10) {
+//                Text("Text Size")
+//                    .font(.title2)
+//                    .fontWeight(.semibold)
+//
+//                Picker("Text Size", selection: $selectedTextSize) {
+//                    ForEach(textSizes, id: \.self) { size in
+//                        Text("\(size) pt").tag(size)
+//                    }
+//                }
+//                .pickerStyle(MenuPickerStyle())
+//            }
+//            .padding(.horizontal, 20)
             
             // Save Button Section
             Button(action: {
@@ -76,6 +76,7 @@ struct SettingsView: View {
             .alert(isPresented: $showMessage) {
                 Alert(title: Text("Saved"), message: Text("Your settings have been saved."), dismissButton: .default(Text("OK")) {
                     self.presentationMode.wrappedValue.dismiss()
+                    SettingManager.shared.notifySettingsChanged()
                 })
             }
             

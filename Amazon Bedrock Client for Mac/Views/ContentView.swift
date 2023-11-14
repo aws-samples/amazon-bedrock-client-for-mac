@@ -10,6 +10,7 @@ struct ContentView: View {
     @State var channelMessages: [ChannelModel: [MessageData]] = [:] // Add this line
     @ObservedObject var backendModel: BackendModel = BackendModel()
     @State var showSettings = false
+    @State private var key = UUID()  // Used to force-refresh the view
     
     var body: some View {
         NavigationView {
@@ -21,5 +22,10 @@ struct ContentView: View {
             }
         }
         .frame(idealWidth: 1200, idealHeight: 800)
+        .onReceive(SettingManager.shared.settingsChangedPublisher) {
+            // Refresh the view by changing the key
+            self.key = UUID()
+        }
+        .id(key)
     }
 }

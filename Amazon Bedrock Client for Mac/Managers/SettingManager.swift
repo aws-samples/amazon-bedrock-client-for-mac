@@ -17,7 +17,8 @@ class SettingManager {
     
     // Publisher for AWS Region
     var awsRegionPublisher = PassthroughSubject<AWSRegion, Never>()
-    
+    var settingsChangedPublisher = PassthroughSubject<Void, Never>()
+
     private let awsRegionKey = "awsRegionKey"
     private let fontSizeKey = "fontSizeKey"
     
@@ -45,6 +46,10 @@ class SettingManager {
     }
     
     var fontSizePublisher = PassthroughSubject<CGFloat, Never>()
+    
+    func notifySettingsChanged() {
+        settingsChangedPublisher.send()
+    }
     
     func saveFontSize(_ size: CGFloat) {
         UserDefaults.standard.set(size, forKey: fontSizeKey)
