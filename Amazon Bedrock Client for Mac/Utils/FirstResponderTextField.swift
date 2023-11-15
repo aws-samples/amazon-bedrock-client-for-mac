@@ -12,7 +12,7 @@ import Combine
 struct FirstResponderTextView: NSViewRepresentable, Equatable {
     @Binding var text: String
     @Binding var isDisabled: Bool
-    @Binding var calculatedHeight: CGFloat  // Add this line
+    @Binding var calculatedHeight: CGFloat
     var onCommit: () -> Void
     
     func makeCoordinator() -> Coordinator {
@@ -23,9 +23,12 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
         return lhs.text == rhs.text && lhs.isDisabled == rhs.isDisabled
     }
     
-    
     func makeNSView(context: NSViewRepresentableContext<FirstResponderTextView>) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
+        scrollView.hasVerticalScroller = false  // Disable vertical scrollbar
+        scrollView.hasHorizontalScroller = false  // Disable horizontal scrollbar
+        scrollView.autohidesScrollers = true  // Hide scrollers when not necessary
+        
         if let textView = scrollView.documentView as? NSTextView {
             textView.delegate = context.coordinator
             textView.font = NSFont.systemFont(ofSize: 15)
@@ -34,17 +37,13 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
             textView.allowsUndo = true
             textView.becomeFirstResponder()
             
+            textView.textContainerInset = CGSize(width: 5, height: 10)  // Adjust text container insets
+
             let isDarkMode = textView.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             textView.textColor = isDarkMode ? NSColor.textDark : NSColor.textLight
             textView.backgroundColor = isDarkMode ? NSColor.backgroundDark : NSColor.backgroundLight
-            //            textView.isEditable = !isDisabled
             
-            // Calculate initial height based on the text content
-            if let layoutManager = textView.layoutManager,
-               let textContainer = textView.textContainer {
-                let usedRect = layoutManager.usedRect(for: textContainer)
-                self.calculatedHeight = max(60, 32 + usedRect.height + textView.textContainerInset.height * 2)
-            }
+            updateHeight(textView: textView)
         }
         return scrollView
     }
@@ -55,13 +54,22 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
                 let selectedRange = textView.selectedRange
                 textView.string = self.text
                 textView.setSelectedRange(selectedRange)
+                updateHeight(textView: textView)
             }
+        }
+    }
+    
+    private func updateHeight(textView: NSTextView) {
+        if let layoutManager = textView.layoutManager,
+           let textContainer = textView.textContainer {
+            let usedRect = layoutManager.usedRect(for: textContainer)
+            self.calculatedHeight = max(70, 32 + usedRect.height + textView.textContainerInset.height * 2)
         }
     }
     
     public class Coordinator: NSObject, NSTextViewDelegate {
         var parent: FirstResponderTextView
-        var textUpdateCancellable: AnyCancellable?  // <-- Add this line
+        
         init(_ parent: FirstResponderTextView) {
             self.parent = parent
         }
@@ -70,13 +78,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
             if let textView = notification.object as? NSTextView {
                 DispatchQueue.main.async {
                     self.parent.text = textView.string
-                    
-                    // Calculate height based on the layout manager
-                    if let layoutManager = textView.layoutManager,
-                       let textContainer = textView.textContainer {
-                        let usedRect = layoutManager.usedRect(for: textContainer)
-                        self.parent.calculatedHeight = max(60, 32 + usedRect.height + textView.textContainerInset.height * 2)
-                    }
+                    self.parent.updateHeight(textView: textView)
                 }
             }
         }

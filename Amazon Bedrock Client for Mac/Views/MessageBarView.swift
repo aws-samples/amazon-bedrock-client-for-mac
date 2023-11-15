@@ -42,7 +42,7 @@ struct MessageBarView: View {
             }
             .padding()
             .background(Color.background)
-            .frame(minHeight: 60, maxHeight: max(60, calculatedHeight))  // Set the maximum height
+            .frame(minHeight: 70, maxHeight: max(70, calculatedHeight))  // Set the maximum height
         }
         .foregroundColor(Color.text)
     }
@@ -60,7 +60,7 @@ struct MessageBarView: View {
             isDisabled: .constant(messageManager.getIsLoading(for: channelID)),  // Change here
             calculatedHeight: $calculatedHeight,  // Pass the binding
             onCommit: {
-                calculatedHeight = 60
+                calculatedHeight = 70
                 Task { await sendMessage() }
             }
         )
