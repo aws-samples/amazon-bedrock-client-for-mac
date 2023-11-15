@@ -25,9 +25,9 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
     
     func makeNSView(context: NSViewRepresentableContext<FirstResponderTextView>) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
-        scrollView.hasVerticalScroller = false  // Disable vertical scrollbar
-        scrollView.hasHorizontalScroller = false  // Disable horizontal scrollbar
-        scrollView.autohidesScrollers = true  // Hide scrollers when not necessary
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
         
         if let textView = scrollView.documentView as? NSTextView {
             textView.delegate = context.coordinator
@@ -47,6 +47,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
         }
         return scrollView
     }
+
     
     func updateNSView(_ nsView: NSScrollView, context: NSViewRepresentableContext<FirstResponderTextView>) {
         if let textView = nsView.documentView as? NSTextView {

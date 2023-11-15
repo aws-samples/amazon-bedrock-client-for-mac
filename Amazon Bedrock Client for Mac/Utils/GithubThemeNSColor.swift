@@ -15,4 +15,14 @@ extension NSColor {
     static let secondaryTextDark = NSColor(rgba: 0x9294_a0ff)
     static let backgroundLight = NSColor(rgba: 0xFFFFFFff)
     static let backgroundDark = NSColor(rgba: 0x1819_1dff)
+    
+    static var dynamicTextBackground: NSColor {
+        if NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+            // Dark mode background color
+            return NSColor(rgba: 0x1819_1dff)
+        } else {
+            // Light mode background color
+            return NSColor.textBackgroundColor
+        }
+    }
 }

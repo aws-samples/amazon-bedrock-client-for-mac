@@ -27,9 +27,9 @@ struct MessageBarView: View {
 
     private var sendButtonColor: Color {
         if messageManager.getIsLoading(for: channelID) {
-            return Color.secondaryText
+            return Color.background
         } else {
-            return isSendButtonDisabled ? Color.secondaryText : Color.link
+            return isSendButtonDisabled ? Color.secondaryText : Color.text
         }
     }
 
@@ -71,21 +71,27 @@ struct MessageBarView: View {
     }
     
     @State private var isLoading: Bool = false  // Add this line
-    
+
     private var sendButton: some View {
         Button(action: { Task { await sendMessage() } }) {
             if isLoading {
                 ProgressView().controlSize(.small)
             } else {
-                Image(systemName: sendButtonIcon)
-                    .foregroundColor(sendButtonColor)
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color.background)
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .frame(width: 25, height: 25)
+        .background(sendButtonColor)
+        .cornerRadius(5)
+//        .shadow(radius: 2)
         .disabled(isSendButtonDisabled)
         .onChange(of: messageManager.getIsLoading(for: channelID)) { newIsLoading in
             self.isLoading = newIsLoading
         }
     }
+
 }
 

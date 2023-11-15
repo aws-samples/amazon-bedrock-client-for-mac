@@ -14,6 +14,7 @@ enum AWSRegion: String, CaseIterable, Identifiable {
     case usWest2 = "us-west-2"
     case apSouthEast1 = "ap-southeast-1"
     case apNortheEast1 = "ap-northeast-1"
+    case euCentral1 = "eu-central-1"
     
     // ... add other regions
 }
