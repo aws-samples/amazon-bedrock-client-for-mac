@@ -7,93 +7,65 @@
 
 import SwiftUI
 
-struct SettingsView: View {
+struct GeneralSettingsView: View {
     @Binding var selectedRegion: AWSRegion
-    @State private var selectedTextSize: Int = 14  // Default value
-    @State private var showMessage: Bool = false
-    @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
 
-    let textSizes = [12, 14, 16, 18, 20, 22, 24]  // Sample text sizes
-    
+    @AppStorage("showPreview") private var showPreview = true
+    @AppStorage("fontSize") private var fontSize = 12.0
+
+
     var body: some View {
-        VStack(spacing: 20) {
-            
-            // Title Section
-            Text("Settings")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.bottom, 20)
-                .padding(.top, 10)
-            
-            // AWS Region Picker Section
-            VStack(alignment: .leading, spacing: 10) {
-                Text("AWS Region")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                Picker("AWS Region", selection: $selectedRegion) {
-                    ForEach(AWSRegion.allCases) { region in
-                        Text(region.rawValue).tag(region)
-                    }
+        Form {
+            Picker("AWS Region", selection: $selectedRegion) {
+                ForEach(AWSRegion.allCases) { region in
+                    Text(region.rawValue).tag(region)
                 }
-                .pickerStyle(MenuPickerStyle())
             }
-            .padding(.horizontal, 20)
-            
-            // Text Size Picker Section
-//            VStack(alignment: .leading, spacing: 10) {
-//                Text("Text Size")
-//                    .font(.title2)
-//                    .fontWeight(.semibold)
-//
-//                Picker("Text Size", selection: $selectedTextSize) {
-//                    ForEach(textSizes, id: \.self) { size in
-//                        Text("\(size) pt").tag(size)
-//                    }
-//                }
-//                .pickerStyle(MenuPickerStyle())
-//            }
-//            .padding(.horizontal, 20)
-            
-            // Save Button Section
-            Button(action: {
-                SettingManager.shared.saveAWSRegion(selectedRegion)
-                showMessage = true
-            }) {
-                Text("Save")
-                    .padding(.horizontal, 40)
-                    .padding(.vertical, 10)
+            .pickerStyle(DefaultPickerStyle())
+            .onChange(of: selectedRegion) { newValue in
+                SettingManager.shared.saveAWSRegion(newValue)
+                SettingManager.shared.notifySettingsChanged()
             }
-            .background(
-                Color.blue
-                    .cornerRadius(8)
-                    .onTapGesture {
-                        SettingManager.shared.saveAWSRegion(selectedRegion)
-                        showMessage = true
-                    }
-            )
-            .foregroundColor(.white)
-            .alert(isPresented: $showMessage) {
-                Alert(title: Text("Saved"), message: Text("Your settings have been saved."), dismissButton: .default(Text("OK")) {
-                    self.presentationMode.wrappedValue.dismiss()
-                    SettingManager.shared.notifySettingsChanged()
-                })
-            }
-            
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(30)
-        .background(Color(.windowBackgroundColor))
+        .padding(20)
+        .frame(width: 350, height: 100)
     }
 }
 
-// SettingsView_Previews.swift
+struct AdvancedSettingsView: View {
+    @AppStorage("enableLog") private var enableLog = true
 
-import SwiftUI
+    var body: some View {
+        Form {
+            Toggle("Enable Debug Log", isOn: $enableLog)
+        }
+        .padding(20)
+        .frame(width: 350, height: 100)
+    }
+}
 
-@available(macOS 11.0, *)
-struct SettingsView_Previews: PreviewProvider {
-    static var previews: some View {
-        SettingsView(selectedRegion: .constant(.usEast1))
+struct SettingsView: View {
+    private enum Tabs: Hashable {
+        case general, advanced
+    }
+    
+    @State private var selectedRegion: AWSRegion = SettingManager.shared.getAWSRegion() ?? .usEast1
+    @State private var showMessage: Bool = false
+
+    var body: some View {
+        TabView {
+            GeneralSettingsView(selectedRegion: $selectedRegion)
+                .tabItem {
+                    Label("General", systemImage: "network")
+                }
+                .tag(Tabs.general)
+            AdvancedSettingsView()
+                .tabItem {
+                    Label("Advanced", systemImage: "star")
+                }
+                .tag(Tabs.advanced)
+        }
+        .padding(20)
+        .frame(width: 375, height: 150)
     }
 }

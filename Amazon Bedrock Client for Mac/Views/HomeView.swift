@@ -81,7 +81,7 @@ struct HomeView: View {
         }
         .navigationTitle("")
         .sheet(isPresented: $showSettings) {
-            SettingsView(selectedRegion: $selectedRegion)
+            SettingsView()
         }
     }
     

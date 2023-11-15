@@ -59,8 +59,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func openSettings() {
-        let currentRegion = SettingManager.shared.getAWSRegion() ?? .usEast1 // Replace .defaultRegion with your default region
-        let settingsView = SettingsView(selectedRegion: .constant(currentRegion))
+        let currentRegion = SettingManager.shared.getAWSRegion() ?? .usEast1
+        let settingsView = GeneralSettingsView(selectedRegion: .constant(currentRegion)) // Change to GeneralSettingsView
         
         if settingsWindow == nil {
             settingsWindow = NSWindow(
@@ -120,12 +120,12 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
                     Alert(title: Text("Alert Title"), message: Text("Alert Message"), dismissButton: .default(Text("OK")))
                 }
             }
-//            CommandMenu("Preference") {
-//                Button("Open Settings") {
-//                    appDelegate.openSettings()
-//                }
-//                .keyboardShortcut(",", modifiers: [.command])
-//            }
         }
+        
+        #if os(macOS)
+        Settings {
+            SettingsView()
+        }
+        #endif
     }
 }

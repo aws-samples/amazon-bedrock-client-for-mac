@@ -14,12 +14,8 @@ struct ContentView: View {
     
     var body: some View {
         NavigationView {
-            if showSettings {
-                SettingsView(selectedRegion: .constant(.usEast1))
-            } else {
-                SidebarView(selection: $selection, channelModels: $channelModels, showAlert: $showAlert, alertMessage: $alertMessage, backendModel: backendModel)
-                MainContentView(selection: $selection, channelMessages: $channelMessages, backendModel: backendModel)
-            }
+            SidebarView(selection: $selection, channelModels: $channelModels, showAlert: $showAlert, alertMessage: $alertMessage, backendModel: backendModel)
+            MainContentView(selection: $selection, channelMessages: $channelMessages, backendModel: backendModel)
         }
         .frame(idealWidth: 1200, idealHeight: 800)
         .onReceive(SettingManager.shared.settingsChangedPublisher) {
