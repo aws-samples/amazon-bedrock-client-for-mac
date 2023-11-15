@@ -54,7 +54,7 @@ Steps to Open the Application:
 3. Select Open
 4. Click Open in the dialog
 
-### 2. Issues with AWS Tokens
+### 2. Issues with AWS Tokens or "Amazon_Bedrock.BedrockError error 1."
 
 You encounter error messages like "Token has expired" or "The security token included in the request is invalid."
 
