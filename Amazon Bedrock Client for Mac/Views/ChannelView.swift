@@ -187,12 +187,20 @@ struct Channel: View {
         isSending = false
     }
     
+    func processModelName(_ name: String) -> String {
+        let parts = name.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
+        return parts.first.map(String.init) ?? name
+    }
+    
     func invokeModelStream(prompt: String, history: String) async throws {
         // History
         var currentHistory = history
         
         // Flag to indicate if it's the first chunk
         var isFirstChunk = true
+        
+        // Process modelName
+        let modelId = processModelName(modelId)
         
         // Get response from Bedrock
         let response = try await backend.invokeModelStream(withId: modelId, prompt: prompt)
@@ -257,6 +265,9 @@ struct Channel: View {
     func invokeModel(prompt: String, history: String) async throws {
         // History
         var currentHistory = history
+        
+        // Process modelName
+        let modelId = processModelName(modelId)
         
         // Get response from Bedrock
         let modelType = backend.getModelType(modelId)
