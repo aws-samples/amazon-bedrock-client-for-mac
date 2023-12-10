@@ -285,7 +285,43 @@ struct Channel: View {
             case .j2:
                 let response = try backend.decode(data) as InvokeAI21Response
                 messages.append(MessageData(id: UUID(), text: response.completions[0].data.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: modelName, isError: false, sentTime: Date()))
+
+            case .titanImage:
+                let response = try backend.decode(data) as InvokeTitanImageResponse
+                let image = response.images[0]
                 
+                // Generate a unique file name
+                let now = Date()
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"
+                let timestamp = formatter.string(from: now)
+                
+                let fileName = "\(timestamp).png"
+                
+                // Get the temporary directory
+                let tempDir = FileManager.default.homeDirectoryForCurrentUser
+                
+                // Create the full file path
+                let fileURL = tempDir.appendingPathComponent("Amazon Bedrock Client").appendingPathComponent(fileName)
+                
+                do {
+                    // Write the data to the temporary file
+                    try image.write(to: fileURL)
+                    
+                    // Create the Markdown string referencing the image
+                    // Assuming your Vapor server is running on localhost:8080
+                    if let encoded = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                        let markdownImage = "![](http://localhost:8080/\(encoded))"
+                        messages.append(MessageData(id: UUID(), text: markdownImage, user: modelName, isError: false, sentTime: Date()))
+                    } else {
+                        messages.append(MessageData(id: UUID(), text: "Invalid url path.", user: "System", isError: true, sentTime: Date()))
+                    }
+                    
+                } catch {
+                    // Handle errors, for instance by logging them
+                    print("Error saving image: \(error)")
+                }
+
             case .titanEmbed:
                 let response = try backend.decode(data) as InvokeTitanEmbedResponse
                 messages.append(MessageData(id: UUID(), text: response.embedding.map({"\($0)"}).joined(separator: ","), user: modelName, isError: false, sentTime: Date()))

@@ -203,6 +203,8 @@ struct Backend {
             return .claude
         } else if modelName.hasPrefix("titan-embed") {
             return .titanEmbed
+        } else if modelName.hasPrefix("titan-image") {
+            return .titanImage
         } else if modelName.hasPrefix("titan") {
             return .titan
         } else if modelName.hasPrefix("j2") {
@@ -233,6 +235,8 @@ struct Backend {
             return TitanModelParameters(inputText: "User: \(prompt)\n\nBot:", textGenerationConfig: textGenerationConfig)
         case .titanEmbed:
             return TitanEmbedModelParameters(inputText: prompt)
+        case .titanImage:
+            return TitanImageModelParameters(inputText: prompt)
         case .j2:
             return AI21ModelParameters(prompt: prompt, temperature: 0.5, topP: 0.5, maxTokens: 200)
         case .cohereCommand:
@@ -453,6 +457,7 @@ public enum BedrockModelProvider : String {
 enum FoundationModelType {
     case titan
     case titanEmbed
+    case titanImage
     case claude
     case j2
     case cohereCommand
@@ -521,6 +526,32 @@ public struct CohereModelParameters: ModelParameters {
 
 public struct TitanEmbedModelParameters: ModelParameters {
     let inputText: String
+}
+
+struct TitanImageModelParameters: ModelParameters {
+    var taskType: String
+    var textToImageParams: TextToImageParams
+    var imageGenerationConfig: ImageGenerationConfig
+
+    struct TextToImageParams: Codable {
+        var text: String
+    }
+
+    struct ImageGenerationConfig: Codable {
+        var numberOfImages: Int
+        var quality: String
+        var cfgScale: Double
+        var height: Int
+        var width: Int
+        var seed: Int?
+    }
+
+    // Initialize with default values and the input text
+    init(inputText: String, numberOfImages: Int = 1, quality: String = "standard", cfgScale: Double = 8.0, height: Int = 512, width: Int = 512, seed: Int? = nil) {
+        self.taskType = "TEXT_IMAGE"
+        self.textToImageParams = TextToImageParams(text: inputText)
+        self.imageGenerationConfig = ImageGenerationConfig(numberOfImages: numberOfImages, quality: quality, cfgScale: cfgScale, height: height, width: width, seed: seed)
+    }
 }
 
 public struct ClaudeModelParameters: ModelParameters {
@@ -617,6 +648,10 @@ public struct InvokeTitanResponse: ModelResponse, Decodable {
 
 public struct InvokeTitanEmbedResponse: ModelResponse, Decodable {
     public let embedding: [Float]
+}
+
+public struct InvokeTitanImageResponse: ModelResponse, Decodable {
+    public let images: [Data]
 }
 
 public struct InvokeTitanResult: Decodable {
