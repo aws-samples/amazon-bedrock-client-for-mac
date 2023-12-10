@@ -166,6 +166,20 @@ struct Channel: View {
                 \(userInput)
                 </human_reply>
                 """
+            } else if modelId.contains("llama2") || modelName.contains("titan-text") {
+                prompt = """
+                The following is a friendly conversation between a human and an AI.
+                The AI is talkative and provides lots of specific details from its context.
+                Current conversation:
+                <conversation_history>
+                \(history)
+                </conversation_history>
+                
+                Here is the human's next reply:
+                <human_reply>
+                \(userInput)
+                </human_reply>
+                """
             }
             
             history += "\nHuman: \(userInput)"  // Add user's message to history
@@ -213,6 +227,24 @@ struct Channel: View {
                 switch modelType {
                 case .claude:
                     if let chunkOfText = (jsonObject as? [String: Any])?["completion"] as? String {
+                        
+                        let processedText = chunkOfText
+                        
+                        // Trim whitespace if it's the first chunk
+                        if isFirstChunk {
+                            isFirstChunk = false
+                            emptyText.append(chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
+                            
+                            // Append a message for Bedrock's first response
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
+                        } else {
+                            // Append the chunk to the last message
+                            emptyText.append(processedText)
+                            messages[messages.count - 1].text = emptyText
+                        }
+                    }
+                case .llama2:
+                    if let chunkOfText = (jsonObject as? [String: Any])?["generation"] as? String {
                         
                         let processedText = chunkOfText
                         

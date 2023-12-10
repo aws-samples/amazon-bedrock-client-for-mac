@@ -114,7 +114,7 @@ struct Backend {
         let modelType = getModelType(modelId)
         
         // Determine the appropriate key encoding strategy for the model type
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
         
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         
