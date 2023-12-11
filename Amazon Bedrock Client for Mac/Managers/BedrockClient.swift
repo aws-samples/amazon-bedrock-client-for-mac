@@ -203,6 +203,8 @@ struct Backend {
             return .claude
         } else if modelName.hasPrefix("titan-embed") {
             return .titanEmbed
+        } else if modelName.hasPrefix("titan-e1t") {
+            return .titanEmbed
         } else if modelName.hasPrefix("titan-image") {
             return .titanImage
         } else if modelName.hasPrefix("titan") {
