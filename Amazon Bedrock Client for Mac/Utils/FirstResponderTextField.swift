@@ -39,9 +39,8 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
             
             textView.textContainerInset = CGSize(width: 5, height: 10)  // Adjust text container insets
 
-            let isDarkMode = textView.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            textView.textColor = isDarkMode ? NSColor.textDark : NSColor.textLight
-            textView.backgroundColor = isDarkMode ? NSColor.backgroundDark : NSColor.backgroundLight
+            textView.textColor = NSColor(Color.text)
+            textView.backgroundColor = .clear
             
             updateHeight(textView: textView)
         }

@@ -12,8 +12,8 @@ Overview
 
 The Amazon Bedrock Client for Mac is a macOS demo application built with SwiftUI. It serves as a client interface for AWS Bedrock, allowing users to interact with AWS Bedrock models.
 
-![preview-claude](assets/preview-claude.png)
 ![preview](assets/preview.png)
+![preview-claude](assets/preview-claude.png)
 
 > **Note**
 > Please see the [AWS Bedrock Pricing](https://aws.amazon.com/ko/bedrock/pricing/) page for details and make sure to understand the costs before using the application.
@@ -137,7 +137,7 @@ Build Instructions
 Usage
 -----
 
-1.  **Sidebar**: Use the sidebar to navigate between your preferences and channels.
+1.  **Sidebar**: Use the sidebar to navigate between your preferences and chats.
 2.  **Message Bar**: Use the message bar at the bottom to send messages to AWS Bedrock.
 3.  **Alerts**: The app provides alerts for various activities and errors, displayed in a pop-up window.
 

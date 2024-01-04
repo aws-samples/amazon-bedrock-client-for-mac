@@ -21,109 +21,160 @@ struct SectionHeader: View {
     }
 }
 
-
-
 struct SidebarView: View {
     @Binding var selection: SidebarSelection?
-    @Binding var channelModels: [ChannelModel]
-    @State private var organizedChannelModels: [String: [ChannelModel]] = [:]
-    @State private var sectionVisibility: [String: Bool] = [:]
-    @Binding var showAlert: Bool
-    @Binding var alertMessage: String
-    @ObservedObject var backendModel: BackendModel
-    @ObservedObject var messageManager: ChannelManager = ChannelManager.shared
+    @Binding var menuSelection: SidebarSelection?
+    @ObservedObject var chatManager: ChatManager = ChatManager.shared
 
-    var body: some View {
-        List(selection: $selection) {
-            homeSection
-                .tag(SidebarSelection.preferences)
-            
-            ForEach(organizedChannelModels.keys.sorted(), id: \.self) { provider in
-                dynamicSection(provider: provider)
-            }
-        }
-        .listStyle(SidebarListStyle())
-        .frame(minWidth: 100, idealWidth: 150, maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear(perform: fetchData)
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
-        }
-    }
+    @State private var organizedChatModels: [String: [ChatModel]] = [:]
+    @State private var selectionId = UUID() // Add a unique ID for the selection state
+    @State private var hoverStates: [String: Bool] = [:] // Dictionary to track hover state for each chat
+
+    @State var buttonHover = false
+
+    // Timer to update chat list periodically
+    let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
-    // Updated dynamicSection
-    func dynamicSection(provider: String) -> some View {
-        // Initialize from UserDefaults or default to true
-        let initialVisibility = UserDefaults.standard.bool(forKey: "sectionVisibility_\(provider)")
-
-        // Create a binding for section visibility
-        let isOnBinding = Binding<Bool>(
-            get: {
-                sectionVisibility[provider, default: initialVisibility]
-            },
-            set: { newValue in
-                sectionVisibility[provider] = newValue
-                UserDefaults.standard.set(newValue, forKey: "sectionVisibility_\(provider)")
-            }
-        )
-
-        return Section(
-            header: SectionHeader(title: provider)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation {
-                        isOnBinding.wrappedValue.toggle()
+    var body: some View {
+        List {
+            newChatSection
+            ForEach(organizedChatModels.keys.sorted().reversed(), id: \.self) { dateKey in
+                Section(header: Text(dateKey)) {
+                    ForEach(organizedChatModels[dateKey] ?? [], id: \.self) { chat in
+                        chatRowView(for: chat)
+                            .contextMenu {
+                                Button("Delete Chat", action: {
+                                    deleteChat(chat)
+                                })
+                            }
                     }
                 }
-        ) {
-            if isOnBinding.wrappedValue {  // Use isOnBinding here
-                ForEach(organizedChannelModels[provider] ?? [], id: \.self) { channel in
-                    channelRowView(for: channel, provider: provider)
-                }
             }
         }
-        .onAppear {
-            // Sync the section visibility from UserDefaults when this view appears
-            sectionVisibility[provider] = UserDefaults.standard.bool(forKey: "sectionVisibility_\(provider)")
+        .onReceive(timer) { _ in
+             organizeChatsByDate() // Refresh the chat list every minute
+         }
+        .id(selectionId) // Use the unique ID here to force a redraw
+        .listStyle(SidebarListStyle())
+        .frame(minWidth: 100, idealWidth: 150, maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear(perform: organizeChatsByDate)
+        .onChange(of: chatManager.chats, perform: { _ in organizeChatsByDate() })
+    }
+
+    var newChatSection: some View {
+        Button(action: {
+            createNewChat()
+            // Reset button hover state after action is performed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.buttonHover = false
+            }
+        }) {
+            HStack {
+                Image(systemName: "square.and.pencil")
+                    .font(.title) // Increase the size of the icon
+
+                Text("New Chat")
+                    .font(.title2) // Increase the text size
+                    .fontWeight(.medium) // Adjust the font weight as needed
+            }
+            .padding(.horizontal, 4) // Reduce horizontal padding
+            .padding(.vertical) // Default vertical padding
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle()) // Extend the clickable area to the entire bounds of the button
+        }
+        .buttonStyle(PlainButtonStyle())
+//        .onHover { hover in
+//            buttonHover = hover
+//        }
+        .background(buttonHover ? Color.gray.opacity(0.2) : Color.clear)
+        .cornerRadius(8)
+    }
+
+    private func createNewChat() {
+        if let modelSelection = menuSelection, case .chat(let model) = modelSelection {
+            var newChat = chatManager.createNewChat(modelId: model.id, modelName: model.name)
+            // Ensure the last message date is set to now so it appears at the top
+            newChat.lastMessageDate = Date()
+            organizeChatsByDate()
+            selection = .chat(newChat)
+            selectionId = UUID() // Update the ID to force a redraw
         }
     }
 
+    private func organizeChatsByDate() {
+        let calendar = Calendar.current
+        
+        // Sort chats by their last message date in descending order
+        let sortedChats = chatManager.chats.sorted { $0.lastMessageDate > $1.lastMessageDate }
+        
+        // Group sorted chats by their date components
+        let groupedChats = Dictionary(grouping: sortedChats) { chat -> DateComponents in
+            calendar.dateComponents([.year, .month, .day], from: chat.lastMessageDate)
+        }
+        
+        // Convert DateComponents back to Dates to sort them
+        let sortedDates = groupedChats.keys.compactMap { calendar.date(from: $0) }.sorted(by: >)
+        
+        // Reconstruct the organizedChatModels using the sorted dates
+        organizedChatModels = [:]  // Clear the existing dictionary
+        for date in sortedDates {
+            let key = formatDate(date)
+            if let chatsForDate = groupedChats[calendar.dateComponents([.year, .month, .day], from: date)] {
+                organizedChatModels[key] = chatsForDate
+            }
+        }
+    }
 
-    func channelRowView(for channel: ChannelModel, provider: String) -> some View {
-        let components = channel.id.split(separator: ".", maxSplits: 1)
-        let channelName = components.count > 1 ? String(components[1]) : channel.id
+    private func formatDate(_ date: Date) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMMM dd, yyyy"
+        return dateFormatter.string(from: date)
+    }
 
-        return HStack {
-            Label(channelName, systemImage: "number")
+    func chatRowView(for chat: ChatModel) -> some View {
+        HStack {
+            Circle() // Placeholder for profile picture or status indicator
+                .frame(width: 10, height: 10)
+                .foregroundColor(.blue) // This could be dynamic based on chat status
+            
+            VStack(alignment: .leading) {
+                Text(chat.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(chat.description)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .foregroundColor(.gray)
+            }
+            
             Spacer()
-            if messageManager.getIsLoading(for: channel.id) {
-                // Display an ellipsis next to the SidebarModel to indicate loading
-                Text("…")
-                    .font(.body)  // Adjust font size if needed
-                    .foregroundColor(.gray)  // Optional: set the text color
+            
+            if chatManager.getIsLoading(for: chat.chatId) {
+                ProgressView() // Shows a loading indicator if the chat is loading
+                    .progressViewStyle(CircularProgressViewStyle())
             }
         }
-        .tag(SidebarSelection.channel(channel))
-    }
-
-
-    var homeSection: some View {
-        Label("Home", systemImage: "house")
-            .tag(SidebarSelection.preferences)
-    }
-    
-    func fetchData() {
-        Task {
-            let result = await backendModel.backend.listFoundationModels()
-            switch result {
-            case .success(let modelSummaries):
-                for modelSummary in modelSummaries {
-                    let channel = ChannelModel.fromSummary(modelSummary)
-                    organizedChannelModels[channel.provider, default: []].append(channel)
-                }
-            case .failure(let error):
-                alertMessage = error.localizedDescription
-                showAlert = true
-            }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 8) // Reduce horizontal padding
+        .contentShape(Rectangle()) // Extend the clickable area to the entire bounds of the row
+        .background(hoverStates[chat.chatId, default: false] || selection == .chat(chat) ? Color.gray.opacity(0.2) : Color.clear)
+        .cornerRadius(8)
+        .onHover { hover in
+            hoverStates[chat.chatId] = hover
         }
+        .onTapGesture { selection = .chat(chat) }
     }
+
+    private func deleteChat(_ chat: ChatModel) {
+        // Update hover states in case the deleted chat was being hovered
+        hoverStates[chat.chatId] = false
+        // Perform the delete operation
+        if let index = chatManager.chats.firstIndex(where: { $0.chatId == chat.chatId }) {
+            chatManager.chats.remove(at: index)
+        }
+        selection = .newChat
+        // Re-organize the chat list to reflect the changes
+        organizeChatsByDate()
+    }
+
 }

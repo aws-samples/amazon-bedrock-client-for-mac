@@ -1,5 +1,5 @@
 //
-//  ChannelView.swift
+//  ChatView.swift
 //  Amazon Bedrock Client for Mac
 //
 //  Created by Na, Sanghwa on 2023/10/08.
@@ -7,10 +7,9 @@
 
 import SwiftUI
 
-struct Channel: View {
+struct Chat: View {
     @Binding var messages: [MessageData]
-    @ObservedObject var messageManager: ChannelManager = ChannelManager.shared
-    @ObservedObject var viewModel = ChannelViewModel()
+    @ObservedObject var messageManager: ChatManager = ChatManager.shared
     
     @State var userInput: String = ""
     @State var isMessageBarDisabled: Bool = false
@@ -20,32 +19,46 @@ struct Channel: View {
     
     @State private var isStreamingEnabled: Bool
     @State private var isConfigPopupPresented: Bool = false
+    @State private var selectedPlaceholder: String
     
     var backend: Backend
     var modelId: String
     var modelName: String
-    var channelId: String
+    var chatId: String
+    
+    // Placeholder messages
+    private let placeholderMessages = [
+        "Start a new conversation.",
+        "It's quiet... too quiet.",
+        "Your messages will appear here.",
+        "Reach out and say hello!",
+        "Nothing here yet. Break the ice!",
+        "Awaiting your words..."
+    ]
     
     // Move the UserDefaults logic to the init method
-    init(messages: Binding<[MessageData]>, backend: Backend, modelId: String, modelName: String, channelId: String) {
+    init(messages: Binding<[MessageData]>, backend: Backend, modelId: String, modelName: String, chatId: String) {
         self._messages = messages  // setting the Binding
         self.backend = backend
         self.modelId = modelId
         self.modelName = modelName
-        self.channelId = channelId
-        
+        self.chatId = chatId
         
         // Initialize isStreamingEnabled from UserDefaults or default to true
-        let key = "isStreamingEnabled_\(channelId)"
+        let key = "isStreamingEnabled_\(chatId)"
         if let savedValue = UserDefaults.standard.value(forKey: key) as? Bool {
             _isStreamingEnabled = State(initialValue: savedValue)
         } else {
-            if modelName.contains("Claude") {
-                _isStreamingEnabled = State(initialValue: true)
-            } else {
-                _isStreamingEnabled = State(initialValue: false)
-            }
+            _isStreamingEnabled = State(initialValue: modelName.contains("Claude"))
         }
+
+        // Set the random placeholder message once during initialization
+        _selectedPlaceholder = State(initialValue: placeholderMessages.randomElement() ?? "No messages")
+    }
+    
+    // Function to get a random placeholder message
+    private func getRandomPlaceholder() -> String {
+        placeholderMessages.randomElement() ?? "No messages"
     }
     
     var body: some View {
@@ -53,7 +66,7 @@ struct Channel: View {
             VStack(alignment: .center) {
                 if messages.isEmpty {
                     Spacer()
-                    Text("No Messages yet").font(.title2).foregroundColor(.secondaryText)
+                    Text(selectedPlaceholder).font(.title2).foregroundColor(.text)
                 }
             }.textSelection(.disabled)
             
@@ -85,17 +98,14 @@ struct Channel: View {
             }
             
             MessageBarView(
-                channelID: channelId,
+                chatID: chatId,
                 userInput: $userInput,
                 messages: $messages,
                 sendMessage: sendMessage
             )
         }.toolbar {
             ToolbarItemGroup(placement: .automatic) {
-                Spacer()
-                Button(action: toggleSidebar) {
-                    Label("Toggle Sidebar", systemImage: "sidebar.left")
-                }
+//                Spacer()
                 
                 HStack {
                     Text("Streaming")
@@ -106,14 +116,10 @@ struct Channel: View {
                 }
                 .onChange(of: isStreamingEnabled) { newValue in
                     // Save to UserDefaults whenever the toggle changes
-                    UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(channelId)")
+                    UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(chatId)")
                 }
             }
         }
-    }
-    
-    func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
     
     func sendMessage() async {
@@ -130,21 +136,15 @@ struct Channel: View {
         messages.append(MessageData(id: UUID(), text: userInput, user: "User", isError: false, sentTime: Date()))
         
         // Update both messages and isLoading at once
-        messageManager.updateMessagesAndLoading(for: channelId, messages: messages, isLoading: true)
+        messageManager.updateMessagesAndLoading(for: chatId, messages: messages, isLoading: true)
+        messageManager.saveChats()
         
-        var history = messageManager.getHistory(for: channelId)
+        var history = messageManager.getHistory(for: chatId)
         
         // Check and truncate history if it exceeds 100000 characters
         if history.count > 50000 {
             let excess = history.count - 50000
             history = String(history.dropFirst(excess))
-        }
-        
-        // 애니메이션 적용
-        let lastMessageId = messages.last?.id
-        viewModel.highlightMsg = lastMessageId
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if viewModel.highlightMsg == lastMessageId { viewModel.highlightMsg = nil }
         }
         
         do {
@@ -184,6 +184,10 @@ struct Channel: View {
             
             history += "\nHuman: \(userInput)"  // Add user's message to history
             // Clear the input field
+            let tempInput = userInput
+            Task {
+                await updateChatTitle(with: tempInput)
+            }
             userInput = ""
             
             if isStreamingEnabled {
@@ -196,9 +200,26 @@ struct Channel: View {
             messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
         }
         
-        messageManager.setIsLoading(for: channelId, isLoading: false)  // End loading
+        messageManager.setIsLoading(for: chatId, isLoading: false)  // End loading
         isMessageBarDisabled = false
         isSending = false
+    }
+    
+    // Asynchronously update the chat title with a summary of the input
+    func updateChatTitle(with input: String) async {
+        let summaryPrompt = "\nHuman: Summarize user input \(input) as short as possible. Just in few words without punctuation. It should not be more than 5 words. It will be book title. Do as best as you can. If you don't know how to do summarize, please give me just 'Friendly Chat', but please do summary this without punctuation: \(input) "
+        
+        do {
+            // Invoke the model to get a summary
+            let data = try await backend.invokeModel(withId: "anthropic.claude-instant-v1", prompt: summaryPrompt)
+            let response = try backend.decode(data) as InvokeClaudeResponse
+
+            // Update the chat title with the summary
+            messageManager.updateChatTitle(for: chatId, title: response.completion.trimmingCharacters(in: .whitespacesAndNewlines))
+        } catch {
+            // Handle any errors that occur during title update
+            print("Error updating chat title: \(error)")
+        }
     }
     
     func processModelName(_ name: String) -> String {
@@ -291,7 +312,7 @@ struct Channel: View {
             currentHistory += "\nAssistant: \(lastMessage.text)"
         }
         
-        messageManager.setHistory(for: channelId, history: currentHistory)
+        messageManager.setHistory(for: chatId, history: currentHistory)
     }
     
     func invokeModel(prompt: String, history: String) async throws {
@@ -410,12 +431,12 @@ struct Channel: View {
             }
         }
         
-        messageManager.setHistory(for: channelId, history: currentHistory)
+        messageManager.setHistory(for: chatId, history: currentHistory)
     }
 }
 
 // MARK: - Previews
-struct Channel_Previews: PreviewProvider {
+struct Chat_Previews: PreviewProvider {
     
     @State static var dummyMessages: [MessageData] = [
         MessageData(id: UUID(), text: "Hello, World!", user: "User", isError: false, sentTime: Date()),
@@ -425,12 +446,12 @@ struct Channel_Previews: PreviewProvider {
     static var previews: some View {
         let backendModel: BackendModel = BackendModel()
         
-        return Channel(
+        return Chat(
             messages: $dummyMessages, // Using binding
             backend: backendModel.backend,
             modelId: "ModelID",
             modelName: "ModelName",
-            channelId: "ChannelID"
+            chatId: "ChatID"
         )
         .previewLayout(.sizeThatFits)
         .padding()

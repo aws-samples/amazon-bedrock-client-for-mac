@@ -11,6 +11,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var settingsWindow: NSWindow?
     var localhostServer: LocalhostServer?
     
+    @objc func newTab() {
+        if let currentWindow = NSApp.keyWindow,
+           let windowController = currentWindow.windowController {
+            windowController.newWindowForTab(nil)
+            if let newWindow = NSApp.keyWindow, currentWindow != newWindow {
+                currentWindow.addTabbedWindow(newWindow, ordered: .above)
+            }
+        }
+    }
+    
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         for window in NSApplication.shared.windows {
             window.delegate = self
@@ -119,6 +129,10 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
                 .alert(isPresented: $alertIsPresented) {
                     Alert(title: Text("Alert Title"), message: Text("Alert Message"), dismissButton: .default(Text("OK")))
                 }
+            }
+            CommandGroup(before: CommandGroupPlacement.newItem) {
+                Button("New Tab", action: appDelegate.newTab)
+                .keyboardShortcut("t", modifiers: [.command])
             }
         }
         

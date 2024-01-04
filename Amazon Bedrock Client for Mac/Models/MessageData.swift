@@ -14,14 +14,18 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 
-struct MessageData: Identifiable & Equatable {
+struct MessageData: Identifiable, Equatable, Codable {
     let id: UUID
     var text: String
     let user: String
-    var isError: Bool  // 에러 상태를 나타내는 필드 추가
+    var isError: Bool
     let sentTime: Date
     
     static func == (lhs: MessageData, rhs: MessageData) -> Bool {
         return lhs.id == rhs.id && lhs.text == rhs.text && lhs.user == rhs.user && lhs.isError == rhs.isError
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case id, text, user, isError, sentTime
     }
 }

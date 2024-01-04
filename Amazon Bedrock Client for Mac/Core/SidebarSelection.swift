@@ -10,11 +10,13 @@ import Foundation
 enum SidebarSelection: Hashable, Identifiable {
     var id: String {
         switch self {
-        case .preferences: return "Preferences"
-        case .channel(let channel): return channel.id
+        case .newChat:
+            return "newChat"
+        case .chat(let chat):
+            return chat.chatId // Make sure to use `chatId` if it is the unique identifier
         }
     }
     
-    case preferences
-    case channel(ChannelModel)
+    case newChat
+    case chat(ChatModel)
 }

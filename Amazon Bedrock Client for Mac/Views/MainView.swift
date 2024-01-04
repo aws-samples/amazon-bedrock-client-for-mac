@@ -17,30 +17,30 @@ struct MainView: View {
 
     var modelId: String
     var modelName: String
-    var channelName: String
-    var channelDescription: String
-    var channelId: String
+    var chatName: String
+    var chatDescription: String
+    var chatId: String
     
-    @ObservedObject var messageManager: ChannelManager = ChannelManager.shared
+    @ObservedObject var messageManager: ChatManager = ChatManager.shared
     @ObservedObject var backendModel: BackendModel
 
     var body: some View {
-        Channel(
+        Chat(
             messages: $messages,  // Use a binding here
             backend: backendModel.backend  ,  // Pass the required backend
             modelId: modelId,  // Pass the required modelId
             modelName: modelName,  // Pass the required modelId
-            channelId: channelId
+            chatId: chatId
         )
         .onChange(of: messages) { newMessages in
-            messageManager.setMessages(for: channelId, messages: newMessages)
+            messageManager.setMessages(for: chatId, messages: newMessages)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("# \(channelId)")
-        .navigationSubtitle("\(channelDescription)")
+//        .navigationTitle("# \(chatId)")
+//        .navigationSubtitle("\(chatDescription)")
         .background(Color.background)  // use the theme background
         .foregroundColor(Color.text)  // use the theme text color
         .textSelection(.enabled)
-        .id(channelId)
+        .id(chatId)
     }
 }

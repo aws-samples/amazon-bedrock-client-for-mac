@@ -47,7 +47,7 @@ struct MessageView: View {
                     .foregroundColor(Color.link)
                     .opacity(0.8)
                     .clipShape(RoundedRectangle(cornerRadius: 8))  // Clip into a circle
-                    .shadow(radius: 3)  // Optional shadow for depth
+//                    .shadow(radius: 3)  // Optional shadow for depth
                     .overlay(  // Optional border
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.link, lineWidth: 2)
@@ -59,7 +59,7 @@ struct MessageView: View {
                     .scaledToFill()
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .shadow(radius: 3)
+//                    .shadow(radius: 3)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
                     .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             }

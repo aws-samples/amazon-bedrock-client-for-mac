@@ -9,31 +9,34 @@ import SwiftUI
 
 struct MainContentView: View {
     @Binding var selection: SidebarSelection?
-    @Binding var channelMessages: [ChannelModel: [MessageData]]
+    @Binding var menuSelection: SidebarSelection?
+    @Binding var chatMessages: [ChatModel: [MessageData]]
     @ObservedObject var backendModel: BackendModel
     
-    // Function to get a Binding<[MessageData]> for a specific channel
-    func messagesBinding(for channel: ChannelModel) -> Binding<[MessageData]> {
+    var organizedChatModels: [String: [ChatModel]]
+    
+    // Function to get a Binding<[MessageData]> for a specific chat
+    func messagesBinding(for chat: ChatModel) -> Binding<[MessageData]> {
         return Binding(
-            get: { self.channelMessages[channel, default: [MessageData]()] },
-            set: { self.channelMessages[channel] = $0 }
+            get: { self.chatMessages[chat, default: [MessageData]()] },
+            set: { self.chatMessages[chat] = $0 }
         )
     }
     
     var body: some View {
         switch selection {
-        case .preferences:
-            HomeView()
-        case .channel(let selectedChannel):
+        case .newChat:
+            HomeView(selection:$selection, menuSelection:$menuSelection)
+        case .chat(let selectedChat):
             // Use the custom binding here
-            let messages = messagesBinding(for: selectedChannel)
+            let messages = messagesBinding(for: selectedChat)
             MainView(messages: messages,
-                 modelId: selectedChannel.id,
-                 modelName: selectedChannel.name,
-                 channelName: selectedChannel.name,
-                 channelDescription: selectedChannel.description,
-                 channelId: selectedChannel.id,
-                 backendModel: backendModel)
+                     modelId: selectedChat.id,
+                     modelName: selectedChat.name,
+                     chatName: selectedChat.title,
+                     chatDescription: selectedChat.description,
+                     chatId: selectedChat.chatId,
+                     backendModel: backendModel)
             .textSelection(.enabled)
         case .none:
             Text("Select an option")

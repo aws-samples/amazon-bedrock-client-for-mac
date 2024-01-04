@@ -1,11 +1,14 @@
 import SwiftUI
-import AppKit
 
 struct HomeView: View {
+    @Binding var selection: SidebarSelection?
+    @Binding var menuSelection: SidebarSelection?
+    
     @State var showSettings = false
     @State var buttonHover = false
     @State private var selectedRegion: AWSRegion = .usEast1  // Default region
-    
+    @State private var hasLoadedModels = false
+
     let featureHighlightCards = [
         ("Choose from a range of leading foundation models", "Explore developer experience", "image1", "https://aws.amazon.com/bedrock/developer-experience/"),
         ("Build agents that dynamically invoke APIs to execute complex business tasks", "Explore agents", "image2", "https://aws.amazon.com/bedrock/agents/"),
@@ -27,69 +30,30 @@ struct HomeView: View {
             Color.background  // Background color
                 .edgesIgnoringSafeArea(.all)  // Extend to all edges
             
-//            ScrollView {
-                VStack(spacing: 20) {
-                    headerView
-                    // Uncomment these if you want to include them later
-                    // featureSection
-                    // modelChoiceSection
-                }
-                .padding(EdgeInsets(top: 40, leading: 40, bottom: 40, trailing: 40))
-//            }
-        }
-        .toolbar {
-            // Left-aligned items
-            ToolbarItem(placement: .navigation) {
-              
-               Button(action: {
-                    if let url = URL(string: "https://aws.amazon.com/bedrock/") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }) {
-                    HStack(spacing: 0) {
-                        Image("bedrock")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 40, height: 40)
-                            .font(.system(size: 40))
-                        
-                        VStack(alignment: .leading) {
-                            Text("Amazon Bedrock")
-                                .font(.headline)
-                            Text("The easiest way to build and scale generative AI applications with foundation models")
-                                .font(.subheadline)
-                        }
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
+            //            ScrollView {
+            VStack(spacing: 20) {
+                headerView
+                // Uncomment these if you want to include them later
+                // featureSection
+                // modelChoiceSection
             }
-            
-            // Right-aligned items
-            ToolbarItem(placement: .primaryAction) {
-                HStack {
-                    Button(action: toggleSidebar) {
-                        Label("Toggle Sidebar", systemImage: "sidebar.left")
-                    }
-
-                    Button(action: {
-                        showSettings.toggle()
-                    }) {
-                        Image(systemName: "gearshape")
-                    }
-                }
-            }
+            .padding(EdgeInsets(top: 40, leading: 40, bottom: 40, trailing: 40))
+            //            }
         }
-        .navigationTitle("")
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .onAppear {
+            // If menuSelection count is greater than zero and models are not loaded, load models.
+            if menuSelection != .newChat && !hasLoadedModels {
+                // Simulate loading models
+                self.hasLoadedModels = true
+            }
+        }
+        .onChange(of: menuSelection) { newSelection in
+            onModelsLoaded()
+        }
     }
-    
-    
-    func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
-    }
-
     
     var headerView: some View {
         VStack {
@@ -103,19 +67,12 @@ struct HomeView: View {
                 .font(.system(size: 16, weight: .regular, design: .default))
                 .foregroundColor(Color.secondaryText)
             
-            Button("Get started with Amazon Bedrock") {
-                if let url = URL(string: "https://console.aws.amazon.com/bedrock/") {
-                    NSWorkspace.shared.open(url)
-                }
+            if !hasLoadedModels {
+                ProgressView("Loading models...")
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .padding()
             }
-            .padding()
-            .background(buttonHover ? Color.blue.opacity(0.7) : Color.blue)  // Conditionally change the background
-            .foregroundColor(Color.white)
-            .cornerRadius(8)
-            .buttonStyle(PlainButtonStyle())
-            .onHover { hover in
-                buttonHover = hover  // Update the state on hover
-            }
+            
             
             Spacer()  // Spacer at the bottom
         }
@@ -147,6 +104,11 @@ struct HomeView: View {
                 modelChoiceRow(index: i)
             }
         }
+    }
+    
+    // Correct the onModelsLoaded method
+    func onModelsLoaded() {
+        hasLoadedModels = true // Models have been loaded, reflect that in state
     }
     
     @ViewBuilder
@@ -279,13 +241,13 @@ struct CardView: View {
 }
 
 
-struct HomeView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            HomeView()
-                .preferredColorScheme(.dark)
-            HomeView()
-                .preferredColorScheme(.light)
-        }
-    }
-}
+//struct HomeView_Previews: PreviewProvider {
+//    static var previews: some View {
+//        Group {
+//            HomeView()
+//                .preferredColorScheme(.dark)
+//            HomeView()
+//                .preferredColorScheme(.light)
+//        }
+//    }
+//}
