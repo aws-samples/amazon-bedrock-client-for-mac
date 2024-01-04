@@ -92,6 +92,14 @@ class ChatManager: ObservableObject {
         }
     }
     
+    func clearAllChats() {
+        DispatchQueue.main.async {
+            self.chats.removeAll()
+            self.chatMessages.removeAll()
+            self.objectWillChange.send() // UI Update
+        }
+    }
+    
     // Other methods to manage chat state
     func setMessages(for chatId: String, messages: [MessageData]) {
         chatMessages[chatId] = messages

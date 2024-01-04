@@ -9,7 +9,7 @@ import SwiftUI
 
 struct Chat: View {
     @Binding var messages: [MessageData]
-    @ObservedObject var messageManager: ChatManager = ChatManager.shared
+    @ObservedObject var chatManager: ChatManager = ChatManager.shared
     
     @State var userInput: String = ""
     @State var isMessageBarDisabled: Bool = false
@@ -136,10 +136,10 @@ struct Chat: View {
         messages.append(MessageData(id: UUID(), text: userInput, user: "User", isError: false, sentTime: Date()))
         
         // Update both messages and isLoading at once
-        messageManager.updateMessagesAndLoading(for: chatId, messages: messages, isLoading: true)
-        messageManager.saveChats()
+        chatManager.updateMessagesAndLoading(for: chatId, messages: messages, isLoading: true)
+        chatManager.saveChats()
         
-        var history = messageManager.getHistory(for: chatId)
+        var history = chatManager.getHistory(for: chatId)
         
         // Check and truncate history if it exceeds 100000 characters
         if history.count > 50000 {
@@ -200,7 +200,9 @@ struct Chat: View {
             messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
         }
         
-        messageManager.setIsLoading(for: chatId, isLoading: false)  // End loading
+        chatManager.saveChats()
+
+        chatManager.setIsLoading(for: chatId, isLoading: false)  // End loading
         isMessageBarDisabled = false
         isSending = false
     }
@@ -215,7 +217,7 @@ struct Chat: View {
             let response = try backend.decode(data) as InvokeClaudeResponse
 
             // Update the chat title with the summary
-            messageManager.updateChatTitle(for: chatId, title: response.completion.trimmingCharacters(in: .whitespacesAndNewlines))
+            chatManager.updateChatTitle(for: chatId, title: response.completion.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
             // Handle any errors that occur during title update
             print("Error updating chat title: \(error)")
@@ -312,7 +314,7 @@ struct Chat: View {
             currentHistory += "\nAssistant: \(lastMessage.text)"
         }
         
-        messageManager.setHistory(for: chatId, history: currentHistory)
+        chatManager.setHistory(for: chatId, history: currentHistory)
     }
     
     func invokeModel(prompt: String, history: String) async throws {
@@ -431,7 +433,7 @@ struct Chat: View {
             }
         }
         
-        messageManager.setHistory(for: chatId, history: currentHistory)
+        chatManager.setHistory(for: chatId, history: currentHistory)
     }
 }
 

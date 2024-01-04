@@ -36,7 +36,6 @@
 		79610DE42AD22A2F00993D09 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */; };
 		79610DE52AD22A2F00993D09 /* MessageBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD02AD22A2F00993D09 /* MessageBarView.swift */; };
 		79610DE62AD22A2F00993D09 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD12AD22A2F00993D09 /* HomeView.swift */; };
-		79610DE72AD22A2F00993D09 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD22AD22A2F00993D09 /* MainView.swift */; };
 		79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD32AD22A2F00993D09 /* SidebarView.swift */; };
 		79610DE92AD22A2F00993D09 /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD42AD22A2F00993D09 /* MainContentView.swift */; };
 		79610DEA2AD22A2F00993D09 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD52AD22A2F00993D09 /* ContentView.swift */; };
@@ -111,7 +110,6 @@
 		79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		79610DD02AD22A2F00993D09 /* MessageBarView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageBarView.swift; sourceTree = "<group>"; };
 		79610DD12AD22A2F00993D09 /* HomeView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		79610DD22AD22A2F00993D09 /* MainView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		79610DD32AD22A2F00993D09 /* SidebarView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		79610DD42AD22A2F00993D09 /* MainContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
 		79610DD52AD22A2F00993D09 /* ContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -290,7 +288,6 @@
 				79610DD32AD22A2F00993D09 /* SidebarView.swift */,
 				79610DD42AD22A2F00993D09 /* MainContentView.swift */,
 				79610DD12AD22A2F00993D09 /* HomeView.swift */,
-				79610DD22AD22A2F00993D09 /* MainView.swift */,
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
 				79610DD02AD22A2F00993D09 /* MessageBarView.swift */,
 				79610DD62AD22A2F00993D09 /* MessageView.swift */,
@@ -470,7 +467,6 @@
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
 				79610DED2AD230A200993D09 /* ChatView.swift in Sources */,
 				798A9CE82AD3AB4300E9D039 /* LocalHostServer.swift in Sources */,
-				79610DE72AD22A2F00993D09 /* MainView.swift in Sources */,
 				79610DD82AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift in Sources */,
 				79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */,
 				79610DEB2AD22A2F00993D09 /* MessageView.swift in Sources */,

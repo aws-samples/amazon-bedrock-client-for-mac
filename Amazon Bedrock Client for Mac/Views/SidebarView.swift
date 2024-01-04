@@ -46,6 +46,9 @@ struct SidebarView: View {
                                 Button("Delete Chat", action: {
                                     deleteChat(chat)
                                 })
+                                Button("Export Chat as Text", action: {
+                                    exportChatAsTextFile(chat)
+                                })
                             }
                     }
                 }
@@ -177,4 +180,24 @@ struct SidebarView: View {
         organizeChatsByDate()
     }
 
+    private func exportChatAsTextFile(_ chat: ChatModel) {
+        let chatMessages = chatManager.chatMessages[chat.chatId] ?? []
+        
+        let fileContents = chatMessages.map { "\($0.sentTime): \($0.user): \($0.text)" }.joined(separator: "\n")
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.text]
+        savePanel.nameFieldStringValue = "\(chat.title)-ChatHistory.txt"
+
+        savePanel.begin { response in
+            if response == .OK {
+                guard let url = savePanel.url else { return }
+                do {
+                    try fileContents.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    print("Failed to save chat history: \(error)")
+                }
+            }
+        }
+    }
 }

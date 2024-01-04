@@ -8,6 +8,7 @@ struct ContentView: View {
     @State var chatModels: [ChatModel] = []
     @State var showAlert: Bool = false
     @State var alertMessage: String = ""
+    @State private var showingClearChatAlert = false
     @State var chatMessages: [ChatModel: [MessageData]] = [:]
     @ObservedObject var backendModel: BackendModel = BackendModel()
     @State var showSettings = false
@@ -17,7 +18,7 @@ struct ContentView: View {
     
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var sectionVisibility: [String: Bool] = [:]
-    @ObservedObject var messageManager: ChatManager = ChatManager.shared
+    @ObservedObject var chatManager: ChatManager = ChatManager.shared
     
     // Function to select the Claude model
     func selectClaudeModel() {
@@ -118,7 +119,7 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             SidebarView(selection: $selection, menuSelection: $menuSelection)
-            MainContentView(selection: $selection, menuSelection: $menuSelection, chatMessages: $chatMessages, backendModel: backendModel, organizedChatModels: organizedChatModels)
+            MainContentView(selection: $selection, menuSelection: $menuSelection, backendModel: backendModel, organizedChatModels: organizedChatModels)
         }
         .frame(idealWidth: 1200, idealHeight: 800)
         .onReceive(SettingManager.shared.settingsChangedPublisher) {
@@ -152,6 +153,22 @@ struct ContentView: View {
                         showSettings.toggle()
                     }) {
                         Image(systemName: "gearshape")
+                    }
+                    
+                    Button(action: {
+                        showingClearChatAlert = true
+                    }) {
+                        Image(systemName: "trash")
+                    }
+                    .alert(isPresented: $showingClearChatAlert) {
+                        Alert(
+                            title: Text("Delete all messages"),
+                            message: Text("This will delte all messages."),
+                            primaryButton: .destructive(Text("Delete")) {
+                                chatManager.clearAllChats()
+                            },
+                            secondaryButton: .cancel()
+                        )
                     }
                 }
             }

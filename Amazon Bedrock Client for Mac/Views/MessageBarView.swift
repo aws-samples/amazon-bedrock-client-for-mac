@@ -12,21 +12,21 @@ struct MessageBarView: View {
     var chatID: String  // Identifier for the chat
     @Binding var userInput: String
     @Binding var messages: [MessageData]
-    @ObservedObject var messageManager: ChatManager = ChatManager.shared
+    @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @State private var calculatedHeight: CGFloat = 60  // Add this line
 
     var sendMessage: () async -> Void
     
     private var isSendButtonDisabled: Bool {
-        userInput.isEmpty || messageManager.getIsLoading(for: chatID)
+        userInput.isEmpty || chatManager.getIsLoading(for: chatID)
     }
     
     private var sendButtonIcon: String {
-        messageManager.getIsLoading(for: chatID) ? "ellipsis.circle" : "paperplane.fill"
+        chatManager.getIsLoading(for: chatID) ? "ellipsis.circle" : "paperplane.fill"
     }
 
     private var sendButtonColor: Color {
-        if messageManager.getIsLoading(for: chatID) {
+        if chatManager.getIsLoading(for: chatID) {
             return Color.background
         } else {
             return isSendButtonDisabled ? Color.secondaryText : Color.text
@@ -57,7 +57,7 @@ struct MessageBarView: View {
     private var messageTextView: some View {
         FirstResponderTextView(
             text: $userInput,
-            isDisabled: .constant(messageManager.getIsLoading(for: chatID)),  // Change here
+            isDisabled: .constant(chatManager.getIsLoading(for: chatID)),  // Change here
             calculatedHeight: $calculatedHeight,  // Pass the binding
             onCommit: {
                 calculatedHeight = 70
@@ -88,7 +88,7 @@ struct MessageBarView: View {
         .cornerRadius(5)
 //        .shadow(radius: 2)
         .disabled(isSendButtonDisabled)
-        .onChange(of: messageManager.getIsLoading(for: chatID)) { newIsLoading in
+        .onChange(of: chatManager.getIsLoading(for: chatID)) { newIsLoading in
             self.isLoading = newIsLoading
         }
     }
