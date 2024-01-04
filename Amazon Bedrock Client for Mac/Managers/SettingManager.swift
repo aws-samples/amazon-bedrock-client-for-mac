@@ -21,11 +21,26 @@ class SettingManager {
 
     private let awsRegionKey = "awsRegionKey"
     private let fontSizeKey = "fontSizeKey"
-    
+    private let checkForUpdatesKey = "checkForUpdatesKey"
+
     init() {
         if let savedRegion = getAWSRegion() {
             awsRegionPublisher.send(savedRegion)
         }
+    }
+    
+    // Save the update check setting
+    func saveCheckForUpdates(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: checkForUpdatesKey)
+    }
+    
+    // Get the update check setting with a default value of True
+    func getCheckForUpdates() -> Bool {
+        if UserDefaults.standard.object(forKey: checkForUpdatesKey) == nil {
+            // Set the default value to True if it's not already set
+            UserDefaults.standard.set(true, forKey: checkForUpdatesKey)
+        }
+        return UserDefaults.standard.bool(forKey: checkForUpdatesKey)
     }
     
     func saveAWSRegion(_ region: AWSRegion) {

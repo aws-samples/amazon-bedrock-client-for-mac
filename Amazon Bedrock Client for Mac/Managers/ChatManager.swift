@@ -63,7 +63,7 @@ class ChatManager: ObservableObject {
             chatId: newChatId,
             name: modelName,
             title: "New Chat",
-            description: "Chat with \(modelId)",
+            description: "\(modelId)",
             provider: "Provider for \(modelId)",
             lastMessageDate: Date()
         )

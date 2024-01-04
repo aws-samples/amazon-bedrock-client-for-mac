@@ -213,6 +213,8 @@ struct Backend {
             return .j2
         } else if modelName.hasPrefix("command") {
             return .cohereCommand
+        } else if modelName.hasPrefix("embed") {
+            return .cohereEmbed
         } else if modelName.hasPrefix("stable-diffusion") {
             return .stableDiffusion
         } else if modelName.hasPrefix("llama2") {
@@ -243,6 +245,8 @@ struct Backend {
             return AI21ModelParameters(prompt: prompt, temperature: 0.5, topP: 0.5, maxTokens: 200)
         case .cohereCommand:
             return CohereModelParameters(prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
+        case .cohereEmbed:
+            return CohereEmbedModelParameters(texts: [prompt], inputType: .searchDocument)
         case .llama2:
             return Llama2ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
         default:
@@ -463,6 +467,7 @@ enum FoundationModelType {
     case claude
     case j2
     case cohereCommand
+    case cohereEmbed
     case stableDiffusion
     case llama2
     case unknown
@@ -524,7 +529,46 @@ public struct CohereModelParameters: ModelParameters {
     }
 }
 
+public struct CohereEmbedModelParameters: ModelParameters, Encodable {
+    let texts: [String]
+    let inputType: EmbedInputType
+    let truncate: TruncateOption?
 
+    init(texts: [String],
+         inputType: EmbedInputType,
+         truncate: TruncateOption? = nil) {
+        self.texts = texts
+        self.inputType = inputType
+        self.truncate = truncate
+    }
+
+    enum EmbedInputType: String, Codable {
+        case searchDocument = "search_document"
+        case searchQuery = "search_query"
+        case classification = "classification"
+        case clustering = "clustering"
+    }
+
+    enum TruncateOption: String, Codable {
+        case none = "NONE"
+        case left = "LEFT"
+        case right = "RIGHT"
+    }
+
+    // Define the CodingKeys enum for custom JSON key names
+    enum CodingKeys: String, CodingKey {
+        case texts
+        case inputType = "input_type"
+        case truncate
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(texts, forKey: .texts)
+        try container.encode(inputType, forKey: .inputType)
+        try container.encodeIfPresent(truncate, forKey: .truncate)
+    }
+}
 
 public struct TitanEmbedModelParameters: ModelParameters {
     let inputText: String
@@ -676,6 +720,10 @@ public struct AI21Data: Decodable {
 
 public struct InvokeCommandResponse: ModelResponse, Decodable {
     public let generations: [AI21Data]
+}
+
+public struct InvokeCohereEmbedResponse: ModelResponse, Decodable {
+    public let embeddings: [[Float]]
 }
 
 public struct InvokeStableDiffusionResponse: ModelResponse, Decodable {

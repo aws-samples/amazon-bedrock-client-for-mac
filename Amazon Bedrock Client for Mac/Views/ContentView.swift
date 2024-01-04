@@ -8,6 +8,7 @@ struct ContentView: View {
     @State var chatModels: [ChatModel] = []
     @State var showAlert: Bool = false
     @State var alertMessage: String = ""
+
     @State private var showingClearChatAlert = false
     @State var chatMessages: [ChatModel: [MessageData]] = [:]
     @ObservedObject var backendModel: BackendModel = BackendModel()
@@ -22,12 +23,12 @@ struct ContentView: View {
     
     // Function to select the Claude model
     func selectClaudeModel() {
-        // Find a Claude model in the organizedChatModels
-        if let claudeModel = organizedChatModels.flatMap({ $0.value }).first(where: { $0.name.contains("Claude") }) {
-            menuSelection = .chat(claudeModel)
-        } else if let claudeV2Model = organizedChatModels.flatMap({ $0.value }).first(where: { $0.name.contains("Claude v2") }) {
-            // If there's no Claude, select Claude v2 if available
+        // Find a Claude v2 model in the organizedChatModels
+        if let claudeV2Model = organizedChatModels.flatMap({ $0.value }).first(where: { $0.id.contains("claude-v2:1:200k") }) {
             menuSelection = .chat(claudeV2Model)
+        } else if let claudeModel = organizedChatModels.flatMap({ $0.value }).first(where: { $0.name.contains("Claude") }) {
+            // If there's no Claude v2, select Claude if available
+            menuSelection = .chat(claudeModel)
         }
     }
     
@@ -184,6 +185,9 @@ struct ContentView: View {
             SettingsView()
         }
         .onAppear(perform: fetchModels)
+        .onAppear {
+            UpdateManager().checkForUpdates()
+        }
         .id(key)
         .alert(isPresented: $showAlert) {
             Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))

@@ -392,6 +392,10 @@ struct Chat: View {
             case .cohereCommand:
                 let response = try backend.decode(data) as InvokeCommandResponse
                 messages.append(MessageData(id: UUID(), text: response.generations[0].text, user: modelName, isError: false, sentTime: Date()))
+         
+            case .cohereEmbed:
+                let response = try backend.decode(data) as InvokeCohereEmbedResponse
+                messages.append(MessageData(id: UUID(), text: response.embeddings.map({"\($0)"}).joined(separator: ","), user: modelName, isError: false, sentTime: Date()))
                 
             case .llama2:
                 let response = try backend.decode(data) as InvokeLlama2Response
