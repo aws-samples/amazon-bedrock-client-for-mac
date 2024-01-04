@@ -116,6 +116,22 @@ struct ContentView: View {
         }
     }
     
+    // Function to delete the currently selected chat and switch to the most recent one
+    func deleteCurrentChat() {
+        guard case .chat(let chat) = selection, chatManager.chats.contains(where: { $0.chatId == chat.chatId }) else {
+            return
+        }
+        chatManager.chats.removeAll { $0.chatId == chat.chatId }
+        chatManager.chatMessages.removeValue(forKey: chat.chatId)
+
+        // Find the most recent chat, if available
+        if let mostRecentChat = chatManager.chats.sorted(by: { $0.lastMessageDate > $1.lastMessageDate }).first {
+            selection = .chat(mostRecentChat)  // Navigate to the most recent chat
+        } else {
+            selection = .newChat  // Switch to a default view if no chats are available
+        }
+    }
+
     var body: some View {
         NavigationView {
             SidebarView(selection: $selection, menuSelection: $menuSelection)
@@ -155,20 +171,10 @@ struct ContentView: View {
                         Image(systemName: "gearshape")
                     }
                     
-                    Button(action: {
-                        showingClearChatAlert = true
-                    }) {
-                        Image(systemName: "trash")
-                    }
-                    .alert(isPresented: $showingClearChatAlert) {
-                        Alert(
-                            title: Text("Delete all messages"),
-                            message: Text("This will delte all messages."),
-                            primaryButton: .destructive(Text("Delete")) {
-                                chatManager.clearAllChats()
-                            },
-                            secondaryButton: .cancel()
-                        )
+                    if case .chat(let chat) = selection, chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
+                        Button(action: deleteCurrentChat) {
+                            Image(systemName: "trash")
+                        }
                     }
                 }
             }

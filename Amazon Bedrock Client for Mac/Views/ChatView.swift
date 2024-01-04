@@ -137,6 +137,7 @@ struct Chat: View {
         
         // Update both messages and isLoading at once
         chatManager.updateMessagesAndLoading(for: chatId, messages: messages, isLoading: true)
+//        updateLastMessageDate()
         chatManager.saveChats()
         
         var history = chatManager.getHistory(for: chatId)
@@ -200,6 +201,7 @@ struct Chat: View {
             messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
         }
         
+//        updateLastMessageDate()
         chatManager.saveChats()
 
         chatManager.setIsLoading(for: chatId, isLoading: false)  // End loading
@@ -221,6 +223,12 @@ struct Chat: View {
         } catch {
             // Handle any errors that occur during title update
             print("Error updating chat title: \(error)")
+        }
+    }
+    
+    func updateLastMessageDate() {
+        if let index = chatManager.chats.firstIndex(where: { $0.chatId == self.chatId }) {
+            chatManager.chats[index].lastMessageDate = Date()
         }
     }
     

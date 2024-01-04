@@ -26,6 +26,7 @@ struct SidebarView: View {
     @Binding var menuSelection: SidebarSelection?
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
 
+    @State private var showingClearChatAlert = false
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var selectionId = UUID() // Add a unique ID for the selection state
     @State private var hoverStates: [String: Bool] = [:] // Dictionary to track hover state for each chat
@@ -53,6 +54,21 @@ struct SidebarView: View {
                     }
                 }
             }
+        }
+        .contextMenu {
+            Button("Delete All Chats", action: {
+                showingClearChatAlert = true
+            })
+        }
+        .alert(isPresented: $showingClearChatAlert) {
+            Alert(
+                title: Text("Delete all messages"),
+                message: Text("This will delete all chat histories"),
+                primaryButton: .destructive(Text("Delete")) {
+                    chatManager.clearAllChats()
+                },
+                secondaryButton: .cancel()
+            )
         }
         .onReceive(timer) { _ in
              organizeChatsByDate() // Refresh the chat list every minute
@@ -104,7 +120,7 @@ struct SidebarView: View {
         }
     }
 
-    private func organizeChatsByDate() {
+    func organizeChatsByDate() {
         let calendar = Calendar.current
         
         // Sort chats by their last message date in descending order
@@ -175,7 +191,11 @@ struct SidebarView: View {
         if let index = chatManager.chats.firstIndex(where: { $0.chatId == chat.chatId }) {
             chatManager.chats.remove(at: index)
         }
-        selection = .newChat
+        if let mostRecentChat = chatManager.chats.sorted(by: { $0.lastMessageDate > $1.lastMessageDate }).first {
+            selection = .chat(mostRecentChat)  // Navigate to the most recent chat
+        } else {
+            selection = .newChat  // Switch to a default view if no chats are available
+        }
         // Re-organize the chat list to reflect the changes
         organizeChatsByDate()
     }
@@ -187,7 +207,7 @@ struct SidebarView: View {
 
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.text]
-        savePanel.nameFieldStringValue = "\(chat.title)-ChatHistory.txt"
+        savePanel.nameFieldStringValue = "\(chat.title).txt"
 
         savePanel.begin { response in
             if response == .OK {
