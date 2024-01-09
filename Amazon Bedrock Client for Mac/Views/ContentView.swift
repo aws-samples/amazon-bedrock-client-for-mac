@@ -8,7 +8,7 @@ struct ContentView: View {
     @State var chatModels: [ChatModel] = []
     @State var showAlert: Bool = false
     @State var alertMessage: String = ""
-
+    
     @State private var showingClearChatAlert = false
     @State var chatMessages: [ChatModel: [MessageData]] = [:]
     @ObservedObject var backendModel: BackendModel = BackendModel()
@@ -104,6 +104,26 @@ struct ContentView: View {
                 self.isHovering = hover
             }
             .buttonStyle(PlainButtonStyle())
+            .onChange(of: menuSelection) { newValue in
+                if case .chat(let selectedModel) = newValue {
+                    if case .chat(let currentChat) = selection, chatManager.chatMessages[currentChat.chatId]?.isEmpty == true {
+                        // Update the current chat with the selected model details
+                        var updatedChat = currentChat
+                        updatedChat.description = selectedModel.id
+                        updatedChat.id = selectedModel.id
+                        updatedChat.name = selectedModel.name
+                        
+                        
+                        
+                        selection = .chat(updatedChat)
+                        
+                        // Update the chat in the chat manager
+                        if let index = chatManager.chats.firstIndex(where: { $0.chatId == currentChat.chatId }) {
+                            chatManager.chats[index] = updatedChat
+                        }
+                    }
+                }
+            }
             
             Text(menuSelection.flatMap { menuSelection -> String? in
                 if case let .chat(chat) = menuSelection {
@@ -113,6 +133,7 @@ struct ContentView: View {
                 }
             } ?? "")
             .font(.subheadline)
+            .frame(minWidth: 100, alignment: .leading) // Fixed minimum width
             .lineLimit(1)
         }
     }
@@ -124,7 +145,7 @@ struct ContentView: View {
         }
         chatManager.chats.removeAll { $0.chatId == chat.chatId }
         chatManager.chatMessages.removeValue(forKey: chat.chatId)
-
+        
         // Find the most recent chat, if available
         if let mostRecentChat = chatManager.chats.sorted(by: { $0.lastMessageDate > $1.lastMessageDate }).first {
             selection = .chat(mostRecentChat)  // Navigate to the most recent chat
@@ -132,7 +153,7 @@ struct ContentView: View {
             selection = .newChat  // Switch to a default view if no chats are available
         }
     }
-
+    
     var body: some View {
         NavigationView {
             SidebarView(selection: $selection, menuSelection: $menuSelection)

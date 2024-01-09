@@ -25,6 +25,7 @@ class ChatManager: ObservableObject {
     private init() {
         self.chats = Self.loadChats()
         self.chatMessages = Self.loadMessages()
+        self.chatHistories = Self.loadHistories()
     }
 
     func saveChats() {
@@ -53,6 +54,21 @@ class ChatManager: ObservableObject {
         }
         return [:]
         }
+    
+    func saveHistories() {
+        if let encodedHistories = try? JSONEncoder().encode(chatHistories) {
+            UserDefaults.standard.set(encodedHistories, forKey: "SavedHistories")
+        }
+    }
+
+    private static func loadHistories() -> [String: String] {
+        if let savedHistories = UserDefaults.standard.object(forKey: "SavedHistories") as? Data {
+            if let decodedHistories = try? JSONDecoder().decode([String: String].self, from: savedHistories) {
+                return decodedHistories
+            }
+        }
+        return [:]
+    }
     
     var selectedModelId: String?  // Holds the currently selected model ID
     

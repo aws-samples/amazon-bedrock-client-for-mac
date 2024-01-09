@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct Chat: View {
+struct ChatView: View {
     @Binding var messages: [MessageData]
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     
@@ -22,9 +22,8 @@ struct Chat: View {
     @State private var selectedPlaceholder: String
     
     var backend: Backend
-    var modelId: String
-    var modelName: String
-    var chatId: String
+    // Local copy of ChatModel
+    @State var chatModel: ChatModel
     
     // Placeholder messages
     private let placeholderMessages = [
@@ -37,21 +36,19 @@ struct Chat: View {
     ]
     
     // Move the UserDefaults logic to the init method
-    init(messages: Binding<[MessageData]>, backend: Backend, modelId: String, modelName: String, chatId: String) {
+    init(messages: Binding<[MessageData]>, chatModel: ChatModel, backend: Backend) {
         self._messages = messages  // setting the Binding
+        self._chatModel = State(initialValue: chatModel) // Use State to hold the local copy
         self.backend = backend
-        self.modelId = modelId
-        self.modelName = modelName
-        self.chatId = chatId
         
         // Initialize isStreamingEnabled from UserDefaults or default to true
-        let key = "isStreamingEnabled_\(chatId)"
+        let key = "isStreamingEnabled_\(chatModel.chatId)"
         if let savedValue = UserDefaults.standard.value(forKey: key) as? Bool {
             _isStreamingEnabled = State(initialValue: savedValue)
         } else {
-            _isStreamingEnabled = State(initialValue: modelName.contains("Claude"))
+            _isStreamingEnabled = State(initialValue: chatModel.name.contains("Claude"))
         }
-
+        
         // Set the random placeholder message once during initialization
         _selectedPlaceholder = State(initialValue: placeholderMessages.randomElement() ?? "No messages")
     }
@@ -98,14 +95,14 @@ struct Chat: View {
             }
             
             MessageBarView(
-                chatID: chatId,
+                chatID: chatModel.chatId,
                 userInput: $userInput,
                 messages: $messages,
                 sendMessage: sendMessage
             )
         }.toolbar {
             ToolbarItemGroup(placement: .automatic) {
-//                Spacer()
+                //                Spacer()
                 
                 HStack {
                     Text("Streaming")
@@ -116,7 +113,7 @@ struct Chat: View {
                 }
                 .onChange(of: isStreamingEnabled) { newValue in
                     // Save to UserDefaults whenever the toggle changes
-                    UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(chatId)")
+                    UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(chatModel.chatId)")
                 }
             }
         }
@@ -136,11 +133,11 @@ struct Chat: View {
         messages.append(MessageData(id: UUID(), text: userInput, user: "User", isError: false, sentTime: Date()))
         
         // Update both messages and isLoading at once
-        chatManager.updateMessagesAndLoading(for: chatId, messages: messages, isLoading: true)
-//        updateLastMessageDate()
+        chatManager.updateMessagesAndLoading(for: chatModel.chatId, messages: messages, isLoading: true)
+        //        updateLastMessageDate()
         chatManager.saveChats()
         
-        var history = chatManager.getHistory(for: chatId)
+        var history = chatManager.getHistory(for: chatModel.chatId)
         
         // Check and truncate history if it exceeds 100000 characters
         if history.count > 50000 {
@@ -153,7 +150,7 @@ struct Chat: View {
             emptyText = ""
             
             var prompt = userInput
-            if modelName.contains("Claude") {
+            if chatModel.name.contains("Claude") {
                 prompt = """
                 The following is a friendly conversation between a human and an AI.
                 The AI is talkative and provides lots of specific details from its context.
@@ -167,7 +164,7 @@ struct Chat: View {
                 \(userInput)
                 </human_reply>
                 """
-            } else if modelId.contains("llama2") || modelName.contains("titan-text") {
+            } else if chatModel.id.contains("llama2") || chatModel.id.contains("titan-text") {
                 prompt = """
                 The following is a friendly conversation between a human and an AI.
                 The AI is talkative and provides lots of specific details from its context.
@@ -201,10 +198,10 @@ struct Chat: View {
             messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
         }
         
-//        updateLastMessageDate()
+        //        updateLastMessageDate()
         chatManager.saveChats()
-
-        chatManager.setIsLoading(for: chatId, isLoading: false)  // End loading
+        
+        chatManager.setIsLoading(for: chatModel.chatId, isLoading: false)  // End loading
         isMessageBarDisabled = false
         isSending = false
     }
@@ -217,9 +214,9 @@ struct Chat: View {
             // Invoke the model to get a summary
             let data = try await backend.invokeModel(withId: "anthropic.claude-instant-v1", prompt: summaryPrompt)
             let response = try backend.decode(data) as InvokeClaudeResponse
-
+            
             // Update the chat title with the summary
-            chatManager.updateChatTitle(for: chatId, title: response.completion.trimmingCharacters(in: .whitespacesAndNewlines))
+            chatManager.updateChatTitle(for: chatModel.chatId, title: response.completion.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
             // Handle any errors that occur during title update
             print("Error updating chat title: \(error)")
@@ -227,7 +224,7 @@ struct Chat: View {
     }
     
     func updateLastMessageDate() {
-        if let index = chatManager.chats.firstIndex(where: { $0.chatId == self.chatId }) {
+        if let index = chatManager.chats.firstIndex(where: { $0.chatId == self.chatModel.chatId }) {
             chatManager.chats[index].lastMessageDate = Date()
         }
     }
@@ -244,8 +241,8 @@ struct Chat: View {
         // Flag to indicate if it's the first chunk
         var isFirstChunk = true
         
-        // Process modelName
-        let modelId = processModelName(modelId)
+        // Process chatModel.name
+        let modelId = processModelName(chatModel.id)
         
         // Get response from Bedrock
         let response = try await backend.invokeModelStream(withId: modelId, prompt: prompt)
@@ -267,7 +264,7 @@ struct Chat: View {
                             emptyText.append(chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
                             
                             // Append a message for Bedrock's first response
-                            messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: chatModel.name, isError: false, sentTime: Date()))
                         } else {
                             // Append the chunk to the last message
                             emptyText.append(processedText)
@@ -285,7 +282,7 @@ struct Chat: View {
                             emptyText.append(chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
                             
                             // Append a message for Bedrock's first response
-                            messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: chatModel.name, isError: false, sentTime: Date()))
                         } else {
                             // Append the chunk to the last message
                             emptyText.append(processedText)
@@ -303,7 +300,7 @@ struct Chat: View {
                             emptyText.append( chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
                             
                             // Append a message for Bedrock's first response
-                            messages.append(MessageData(id: UUID(), text: emptyText, user: modelName, isError: false, sentTime: Date()))
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: chatModel.name, isError: false, sentTime: Date()))
                         } else {
                             // Append the chunk to the last message
                             emptyText.append(processedText)
@@ -322,7 +319,8 @@ struct Chat: View {
             currentHistory += "\nAssistant: \(lastMessage.text)"
         }
         
-        chatManager.setHistory(for: chatId, history: currentHistory)
+        chatManager.setHistory(for: chatModel.chatId, history: currentHistory)
+        chatManager.saveHistories()
     }
     
     func invokeModel(prompt: String, history: String) async throws {
@@ -330,7 +328,7 @@ struct Chat: View {
         var currentHistory = history
         
         // Process modelName
-        let modelId = processModelName(modelId)
+        let modelId = processModelName(chatModel.id)
         
         // Get response from Bedrock
         let modelType = backend.getModelType(modelId)
@@ -339,16 +337,16 @@ struct Chat: View {
             switch modelType {
             case .claude:
                 let response = try backend.decode(data) as InvokeClaudeResponse
-                messages.append(MessageData(id: UUID(), text: response.completion.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: modelName, isError: false, sentTime: Date()))
+                messages.append(MessageData(id: UUID(), text: response.completion.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date()))
                 
             case .titan:
                 let response = try backend.decode(data) as InvokeTitanResponse
-                messages.append(MessageData(id: UUID(), text: response.results[0].outputText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: modelName, isError: false, sentTime: Date()))
+                messages.append(MessageData(id: UUID(), text: response.results[0].outputText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date()))
                 
             case .j2:
                 let response = try backend.decode(data) as InvokeAI21Response
-                messages.append(MessageData(id: UUID(), text: response.completions[0].data.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: modelName, isError: false, sentTime: Date()))
-
+                messages.append(MessageData(id: UUID(), text: response.completions[0].data.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date()))
+                
             case .titanImage:
                 let response = try backend.decode(data) as InvokeTitanImageResponse
                 let image = response.images[0]
@@ -375,7 +373,7 @@ struct Chat: View {
                     // Assuming your Vapor server is running on localhost:8080
                     if let encoded = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
                         let markdownImage = "![](http://localhost:8080/\(encoded))"
-                        messages.append(MessageData(id: UUID(), text: markdownImage, user: modelName, isError: false, sentTime: Date()))
+                        messages.append(MessageData(id: UUID(), text: markdownImage, user: chatModel.name, isError: false, sentTime: Date()))
                     } else {
                         messages.append(MessageData(id: UUID(), text: "Invalid url path.", user: "System", isError: true, sentTime: Date()))
                     }
@@ -384,22 +382,22 @@ struct Chat: View {
                     // Handle errors, for instance by logging them
                     print("Error saving image: \(error)")
                 }
-
+                
             case .titanEmbed:
                 let response = try backend.decode(data) as InvokeTitanEmbedResponse
-                messages.append(MessageData(id: UUID(), text: response.embedding.map({"\($0)"}).joined(separator: ","), user: modelName, isError: false, sentTime: Date()))
+                messages.append(MessageData(id: UUID(), text: response.embedding.map({"\($0)"}).joined(separator: ","), user: chatModel.name, isError: false, sentTime: Date()))
                 
             case .cohereCommand:
                 let response = try backend.decode(data) as InvokeCommandResponse
-                messages.append(MessageData(id: UUID(), text: response.generations[0].text, user: modelName, isError: false, sentTime: Date()))
-         
+                messages.append(MessageData(id: UUID(), text: response.generations[0].text, user: chatModel.name, isError: false, sentTime: Date()))
+                
             case .cohereEmbed:
                 let response = try backend.decode(data) as InvokeCohereEmbedResponse
-                messages.append(MessageData(id: UUID(), text: response.embeddings.map({"\($0)"}).joined(separator: ","), user: modelName, isError: false, sentTime: Date()))
+                messages.append(MessageData(id: UUID(), text: response.embeddings.map({"\($0)"}).joined(separator: ","), user: chatModel.name, isError: false, sentTime: Date()))
                 
             case .llama2:
                 let response = try backend.decode(data) as InvokeLlama2Response
-                messages.append(MessageData(id: UUID(), text: response.generation, user: modelName, isError: false, sentTime: Date()))
+                messages.append(MessageData(id: UUID(), text: response.generation, user: chatModel.name, isError: false, sentTime: Date()))
                 
             default:
                 messages.append(MessageData(id: UUID(), text: "Error: Unable to decode response.", user: "System", isError: false, sentTime: Date()))
@@ -434,7 +432,7 @@ struct Chat: View {
                 // Assuming your Vapor server is running on localhost:8080
                 if let encoded = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
                     let markdownImage = "![](http://localhost:8080/\(encoded))"
-                    messages.append(MessageData(id: UUID(), text: markdownImage, user: modelName, isError: false, sentTime: Date()))
+                    messages.append(MessageData(id: UUID(), text: markdownImage, user: chatModel.name, isError: false, sentTime: Date()))
                 } else {
                     messages.append(MessageData(id: UUID(), text: "Invalid url path.", user: "System", isError: true, sentTime: Date()))
                 }
@@ -445,30 +443,9 @@ struct Chat: View {
             }
         }
         
-        chatManager.setHistory(for: chatId, history: currentHistory)
+        chatManager.setHistory(for: chatModel.chatId, history: currentHistory)
+        chatManager.saveHistories()
     }
 }
 
 // MARK: - Previews
-struct Chat_Previews: PreviewProvider {
-    
-    @State static var dummyMessages: [MessageData] = [
-        MessageData(id: UUID(), text: "Hello, World!", user: "User", isError: false, sentTime: Date()),
-        MessageData(id: UUID(), text: "How are you?", user: "Bedrock", isError: false, sentTime: Date())
-    ]
-    
-    static var previews: some View {
-        let backendModel: BackendModel = BackendModel()
-        
-        return Chat(
-            messages: $dummyMessages, // Using binding
-            backend: backendModel.backend,
-            modelId: "ModelID",
-            modelName: "ModelName",
-            chatId: "ChatID"
-        )
-        .previewLayout(.sizeThatFits)
-        .padding()
-    }
-}
-

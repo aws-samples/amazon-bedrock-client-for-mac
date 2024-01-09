@@ -13,7 +13,7 @@ struct MainContentView: View {
     //    @Binding var chatMessages: [ChatModel: [MessageData]]
     @ObservedObject var backendModel: BackendModel
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
-
+    
     var organizedChatModels: [String: [ChatModel]]
     
     // Function to get a Binding<[MessageData]> for a specific chat
@@ -33,12 +33,10 @@ struct MainContentView: View {
             let messagesBinding = messagesBinding(for: selectedChat.chatId)
             let messages = messagesBinding.wrappedValue  // 실제 메시지 배열을 가져옵니다.
             
-            Chat(
+            ChatView(
                 messages: messagesBinding,  // Use a binding here
-                backend: backendModel.backend,  // Pass the required backend
-                modelId: selectedChat.id,  // Pass the required modelId
-                modelName: selectedChat.name,  // Pass the required modelName
-                chatId: selectedChat.chatId
+                chatModel: selectedChat,
+                backend: backendModel.backend  // Pass the required backend
             )
             .textSelection(.enabled)
             .onChange(of: messages.count) { _ in  // 메시지 배열의 길이 변경 감지

@@ -9,11 +9,11 @@ import Foundation
 import AWSBedrock
 
 class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
-    let id: String
+    var id: String
     let chatId: String
-    let name: String
+    var name: String
     @Published var title: String
-    let description: String
+    var description: String
     let provider: String
     @Published var lastMessageDate: Date
     
