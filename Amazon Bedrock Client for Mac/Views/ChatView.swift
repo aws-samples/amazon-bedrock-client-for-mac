@@ -20,6 +20,7 @@ struct ChatView: View {
     @State private var isStreamingEnabled: Bool
     @State private var isConfigPopupPresented: Bool = false
     @State private var selectedPlaceholder: String
+//    @State private var scrollToBottomTrigger: Bool = false
     
     var backend: Backend
     // Local copy of ChatModel
@@ -46,7 +47,7 @@ struct ChatView: View {
         if let savedValue = UserDefaults.standard.value(forKey: key) as? Bool {
             _isStreamingEnabled = State(initialValue: savedValue)
         } else {
-            _isStreamingEnabled = State(initialValue: chatModel.name.contains("Claude"))
+            _isStreamingEnabled = State(initialValue: chatModel.id.contains("mistral") || chatModel.id.contains("claude") || chatModel.id.contains("llama"))
         }
         
         // Set the random placeholder message once during initialization
@@ -76,18 +77,25 @@ struct ChatView: View {
                                 .id(message.id)
                         }
                     }
-                    .onChange(of: messages) { _ in
-                        if let lastMessage = messages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
-                    }
+//                    .onChange(of: messages) { _ in
+//                        if let lastMessage = messages.last {
+//                            withAnimation {
+//                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+//                            }
+//                        }
+//                    }
                     .onAppear() {
                         if let lastMessage = messages.last {
-                            withAnimation {
+//                            withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
+//                            }
+                        }
+                    }
+                    .onChange(of: messages) { _ in
+                        if let lastMessage = messages.last {
+//                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+//                            }
                         }
                     }
                 }
@@ -138,6 +146,7 @@ struct ChatView: View {
         chatManager.saveChats()
         
         var history = chatManager.getHistory(for: chatModel.chatId)
+        var claudeHistory = chatManager.getClaudeHistory(for: chatModel.chatId)
         
         // Check and truncate history if it exceeds 100000 characters
         if history.count > 50000 {
@@ -178,9 +187,30 @@ struct ChatView: View {
                 \(userInput)
                 </human_reply>
                 """
+            } else if chatModel.id.contains("mistral") || chatModel.id.contains("mixtral"){
+                prompt = """
+                The following is a friendly conversation between a human and an AI.
+                The AI is talkative and provides lots of specific details from its context.
+                Current conversation:
+                <s>
+                \(history)
+                </s>
+                
+                Here is the human's next reply:
+                [INST]
+                \(userInput)
+                [/INST]
+                """
             }
             
             history += "\nHuman: \(userInput)"  // Add user's message to history
+            if chatModel.id.contains("claude-3") {
+                let contentBlock = ClaudeMessageRequest.Message.Content(type: "text", text: userInput, source: nil) // Create a content block for the message
+                let message = ClaudeMessageRequest.Message(role: "user", content: [contentBlock]) // Create the Message object
+                
+                chatManager.addClaudeHistory(for: chatModel.chatId, message: message) // Append the message to claudeHistory
+            }
+            
             // Clear the input field
             let tempInput = userInput
             Task {
@@ -188,14 +218,23 @@ struct ChatView: View {
             }
             userInput = ""
             
-            if isStreamingEnabled {
-                try await invokeModelStream(prompt:prompt, history:history)
+            if chatModel.id.contains("claude-3") {
+                if isStreamingEnabled {
+                    try await invokeClaudeModelStream(claudeMessages: chatManager.getClaudeHistory(for: chatModel.chatId) ?? [])
+                } else {
+                    try await invokeClaudeModel(claudeMessages: chatManager.getClaudeHistory(for: chatModel.chatId) ?? [])
+                }
             } else {
-                try await invokeModel(prompt:prompt, history:history)
+                if isStreamingEnabled {
+                    try await invokeModelStream(prompt:prompt, history:history)
+                } else {
+                    try await invokeModel(prompt:prompt, history:history)
+                }
             }
         } catch {
             print("Error invoking the model: \(error)")
             messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
+//            scrollToBottomTrigger.toggle()
         }
         
         //        updateLastMessageDate()
@@ -229,9 +268,77 @@ struct ChatView: View {
         }
     }
     
-    func processModelName(_ name: String) -> String {
-        let parts = name.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
-        return parts.first.map(String.init) ?? name
+    func invokeClaudeModelStream(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
+        // Flag to indicate if it's the first chunk
+        var isFirstChunk = true
+        
+        // Process chatModel.name
+        let modelId = chatModel.id
+        
+        // Get response from Bedrock specifically for Claude model
+        let response = try await backend.invokeClaudeModelStream(withId: modelId, messages: claudeMessages)
+        
+        for try await event in response {
+            switch event {
+            case .chunk(let part):
+                guard let jsonObject = try JSONSerialization.jsonObject(with: part.bytes!, options: []) as? [String: Any] else {
+                    print("Failed to decode JSON")
+                    continue
+                }
+                
+                if let type = jsonObject["type"] as? String {
+                    switch type {
+                    case "message_delta":
+                        if let delta = jsonObject["delta"] as? [String: Any],
+                           let stopReason = delta["stop_reason"] as? String,
+                           let stopSequence = delta["stop_sequence"] as? String,
+                           let usage = delta["usage"] as? [String: Any],
+                           let outputTokens = usage["output_tokens"] as? Int {
+                            DispatchQueue.main.async {
+                                print("\nStop reason: \(stopReason)")
+                                print("Stop sequence: \(stopSequence)")
+                                print("Output tokens: \(outputTokens)")
+                            }
+                        }
+                        
+                    case "content_block_delta":
+                        if let delta = jsonObject["delta"] as? [String: Any],
+                           let type = delta["type"] as? String, type == "text_delta",
+                           let text = delta["text"] as? String {
+                            let processedText = text
+                            
+                            DispatchQueue.main.async {
+                                if isFirstChunk {
+                                    isFirstChunk = false
+                                    self.emptyText += processedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    self.messages.append(MessageData(id: UUID(), text: self.emptyText, user: self.chatModel.name, isError: false, sentTime: Date()))
+                                } else {
+                                    if var lastMessage = self.messages.last {
+                                        lastMessage.text += processedText
+                                        self.messages[self.messages.count - 1] = lastMessage
+                                    }
+                                }
+                            }
+                        }
+                        
+                    default:
+                        print("Unhandled event type: \(type)")
+                    }
+                }
+                
+            case .sdkUnknown(let unknown):
+                print("Unknown SDK event: \"\(unknown)\"")
+            }
+        }
+        
+        
+        if let lastMessage = messages.last {
+            let content = ClaudeMessageRequest.Message.Content(type: "text", text: lastMessage.text, source: nil)
+            // The role is assumed to be "user"; adjust as necessary.
+            chatManager.addClaudeHistory(for: chatModel.chatId, message: ClaudeMessageRequest.Message(role: "assistant", content: [content]))
+        }
+        
+        chatManager.saveClaudeHistories()
     }
     
     func invokeModelStream(prompt: String, history: String) async throws {
@@ -242,7 +349,7 @@ struct ChatView: View {
         var isFirstChunk = true
         
         // Process chatModel.name
-        let modelId = processModelName(chatModel.id)
+        let modelId = chatModel.id
         
         // Get response from Bedrock
         let response = try await backend.invokeModelStream(withId: modelId, prompt: prompt)
@@ -289,6 +396,28 @@ struct ChatView: View {
                             messages[messages.count - 1].text = emptyText
                         }
                     }
+                case .mistral:
+                    do {
+                        let decoder = JSONDecoder()
+                        let response = try decoder.decode(InvokeMistralResponse.self, from: part.bytes!)
+                        if let chunkOfText = response.outputs.first?.text {
+                            let processedText = chunkOfText
+                            
+                            if isFirstChunk {
+                                isFirstChunk = false
+                                emptyText.append(chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
+                                
+                                // Append a message for Bedrock's first response
+                                messages.append(MessageData(id: UUID(), text: emptyText, user: chatModel.name, isError: false, sentTime: Date()))
+                            } else {
+                                // Append the chunk to the last message
+                                emptyText.append(processedText)
+                                messages[messages.count - 1].text = emptyText
+                            }
+                        }
+                    } catch {
+                        print("Error decoding JSON: \(error)")
+                    }
                 case .titan:
                     if let chunkOfText = (jsonObject as? [String: Any])?["outputText"] as? String {
                         
@@ -323,12 +452,33 @@ struct ChatView: View {
         chatManager.saveHistories()
     }
     
+    func invokeClaudeModel(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
+        // Process chatModel.name
+        let modelId = chatModel.id
+        
+        // Get response from Bedrock specifically for Claude model
+        let data = try await backend.invokeClaudeModel(withId: modelId, messages: claudeMessages)
+
+        let response = try JSONDecoder().decode(ClaudeMessageResponse.self, from: data)
+        if let firstText = response.content.first?.text {
+            messages.append(MessageData(id: UUID(), text: firstText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date()))
+        }
+
+        if let lastMessage = messages.last {
+            let content = ClaudeMessageRequest.Message.Content(type: "text", text: lastMessage.text, source: nil)
+            // The role is assumed to be "user"; adjust as necessary.
+            chatManager.addClaudeHistory(for: chatModel.chatId, message: ClaudeMessageRequest.Message(role: "assistant", content: [content]))
+        }
+        
+        chatManager.saveClaudeHistories()
+    }
+    
     func invokeModel(prompt: String, history: String) async throws {
         // History
         var currentHistory = history
         
         // Process modelName
-        let modelId = processModelName(chatModel.id)
+        let modelId = chatModel.id
         
         // Get response from Bedrock
         let modelType = backend.getModelType(modelId)
@@ -399,6 +549,10 @@ struct ChatView: View {
                 let response = try backend.decode(data) as InvokeLlama2Response
                 messages.append(MessageData(id: UUID(), text: response.generation, user: chatModel.name, isError: false, sentTime: Date()))
                 
+            case .mistral:
+                let response = try backend.decode(data) as InvokeMistralResponse
+                messages.append(MessageData(id: UUID(), text: response.outputs[0].text, user: chatModel.name, isError: false, sentTime: Date()))
+                
             default:
                 messages.append(MessageData(id: UUID(), text: "Error: Unable to decode response.", user: "System", isError: false, sentTime: Date()))
             }
@@ -447,5 +601,3 @@ struct ChatView: View {
         chatManager.saveHistories()
     }
 }
-
-// MARK: - Previews

@@ -111,7 +111,7 @@ struct SidebarView: View {
 
     private func createNewChat() {
         if let modelSelection = menuSelection, case .chat(let model) = modelSelection {
-            var newChat = chatManager.createNewChat(modelId: model.id, modelName: model.name)
+            let newChat = chatManager.createNewChat(modelId: model.id, modelName: model.name)
             // Ensure the last message date is set to now so it appears at the top
             newChat.lastMessageDate = Date()
             organizeChatsByDate()
@@ -131,15 +131,24 @@ struct SidebarView: View {
             calendar.dateComponents([.year, .month, .day], from: chat.lastMessageDate)
         }
         
-        // Convert DateComponents back to Dates to sort them
-        let sortedDates = groupedChats.keys.compactMap { calendar.date(from: $0) }.sorted(by: >)
+        let sortedDateComponents = groupedChats.keys.sorted {
+            if $0.year != $1.year {
+                return $0.year! < $1.year!
+            } else if $0.month != $1.month {
+                return $0.month! < $1.month!
+            } else {
+                return $0.day! < $1.day!
+            }
+        }
         
-        // Reconstruct the organizedChatModels using the sorted dates
-        organizedChatModels = [:]  // Clear the existing dictionary
-        for date in sortedDates {
-            let key = formatDate(date)
-            if let chatsForDate = groupedChats[calendar.dateComponents([.year, .month, .day], from: date)] {
-                organizedChatModels[key] = chatsForDate
+        // Reconstruct the organizedChatModels using the correctly sorted dates
+        organizedChatModels = [:]
+        for components in sortedDateComponents {
+            if let date = calendar.date(from: components) {
+                let key = formatDate(date)
+                if let chatsForDate = groupedChats[components] {
+                    organizedChatModels[key] = chatsForDate
+                }
             }
         }
     }

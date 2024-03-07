@@ -17,6 +17,7 @@ class ChatManager: ObservableObject {
     }
     @Published var chatMessages: [String: [MessageData]] = [:]
     @Published var chatHistories: [String: String] = [:]
+    @Published var claudeHistories: [String: [ClaudeMessageRequest.Message]] = [:]
     @Published var chatIsLoading: [String: Bool] = [:]
     
     // Singleton instance
@@ -26,6 +27,7 @@ class ChatManager: ObservableObject {
         self.chats = Self.loadChats()
         self.chatMessages = Self.loadMessages()
         self.chatHistories = Self.loadHistories()
+        self.claudeHistories = Self.loadClaudeHistories()
     }
 
     func saveChats() {
@@ -56,7 +58,7 @@ class ChatManager: ObservableObject {
         }
     
     func saveHistories() {
-        if let encodedHistories = try? JSONEncoder().encode(chatHistories) {
+        if let encodedHistories = try? JSONEncoder().encode(claudeHistories) {
             UserDefaults.standard.set(encodedHistories, forKey: "SavedHistories")
         }
     }
@@ -64,6 +66,21 @@ class ChatManager: ObservableObject {
     private static func loadHistories() -> [String: String] {
         if let savedHistories = UserDefaults.standard.object(forKey: "SavedHistories") as? Data {
             if let decodedHistories = try? JSONDecoder().decode([String: String].self, from: savedHistories) {
+                return decodedHistories
+            }
+        }
+        return [:]
+    }
+    
+    func saveClaudeHistories() {
+        if let encodedHistories = try? JSONEncoder().encode(claudeHistories) {
+            UserDefaults.standard.set(encodedHistories, forKey: "SavedClaudeHistories")
+        }
+    }
+
+    private static func loadClaudeHistories() -> [String: [ClaudeMessageRequest.Message]] {
+        if let savedHistories = UserDefaults.standard.object(forKey: "SavedClaudeHistories") as? Data {
+            if let decodedHistories = try? JSONDecoder().decode([String: [ClaudeMessageRequest.Message]].self, from: savedHistories) {
                 return decodedHistories
             }
         }
@@ -127,6 +144,19 @@ class ChatManager: ObservableObject {
     
     func getHistory(for chatId: String) -> String {
         return chatHistories[chatId] ?? "" // Retrieve history for a specific chat
+    }
+    
+    func addClaudeHistory(for chatId: String, message: ClaudeMessageRequest.Message) {
+        if var messages = claudeHistories[chatId] {
+            messages.append(message)
+            claudeHistories[chatId] = messages // Update the dictionary since 'messages' is a copy
+        } else {
+            claudeHistories[chatId] = [message] // Initialize with the new message if nil
+        }
+    }
+    
+    func getClaudeHistory(for chatId: String) -> [ClaudeMessageRequest.Message]? {
+        return claudeHistories[chatId]
     }
     
     func setIsLoading(for chatId: String, isLoading: Bool) {

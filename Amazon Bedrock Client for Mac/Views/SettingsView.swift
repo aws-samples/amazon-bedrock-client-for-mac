@@ -10,11 +10,10 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @Binding var selectedRegion: AWSRegion
     @AppStorage("checkForUpdatesKey") private var checkForUpdates = true
-
+    
     @AppStorage("showPreview") private var showPreview = true
     @AppStorage("fontSize") private var fontSize = 12.0
-
-
+    
     var body: some View {
         Form {
             Picker("AWS Region", selection: $selectedRegion) {
@@ -25,7 +24,6 @@ struct GeneralSettingsView: View {
             .pickerStyle(DefaultPickerStyle())
             .onChange(of: selectedRegion) { newValue in
                 SettingManager.shared.saveAWSRegion(newValue)
-                SettingManager.shared.notifySettingsChanged()
             }
             
             Toggle("Check for Version Updates", isOn: $checkForUpdates)
@@ -35,18 +33,40 @@ struct GeneralSettingsView: View {
         }
         .padding(20)
         .frame(width: 350, height: 100)
+        
     }
 }
 
 struct AdvancedSettingsView: View {
     @AppStorage("enableLog") private var enableLog = true
-
+    
+    @State private var endpoint: String = SettingManager.shared.getEndpoint() ?? ""
+    @State private var tempEndpoint: String = ""
+    @State private var runtimeEndpoint: String = SettingManager.shared.getRuntimeEndpoint() ?? ""
+    @State private var tempRuntimeEndpoint: String = ""
+    
+    
     var body: some View {
         Form {
+            TextField("Bedrock Endpoint", text: $tempEndpoint, onEditingChanged: { _ in
+                endpoint = tempEndpoint
+            }).disableAutocorrection(true)
+                .onAppear {
+                    tempEndpoint = endpoint
+                }
+            
+            TextField("Bedrock Runtime Endpoint", text: $tempRuntimeEndpoint, onEditingChanged: { _ in
+                runtimeEndpoint = tempRuntimeEndpoint
+            }).disableAutocorrection(true)
+                .onAppear {
+                    tempRuntimeEndpoint = runtimeEndpoint
+                }
+            
             Toggle("Enable Debug Log", isOn: $enableLog)
         }
         .padding(20)
-        .frame(width: 350, height: 100)
+        .frame(width: 500, height: 100)
+        
     }
 }
 
@@ -58,8 +78,7 @@ struct SettingsView: View {
     }
     
     @State private var selectedRegion: AWSRegion = SettingManager.shared.getAWSRegion() ?? .usEast1
-    @State private var showMessage: Bool = false
-
+    
     var body: some View {
         VStack {
             TabView {
@@ -73,16 +92,15 @@ struct SettingsView: View {
                         Label("Advanced", systemImage: "star")
                     }
                     .tag(Tabs.advanced)
-                
-                
             }
             .padding(20)
-            .frame(width: 375, height: 150)
+            .frame(width: 480, height: 300) // Increased width and height
             
-            Button("Close", action: {
+            Button("Save", action: {
                 self.presentationMode.wrappedValue.dismiss() // Close the settings view
+                SettingManager.shared.notifySettingsChanged()
             })
             .padding()
-        }.frame(width: 400, height: 200) // Adjust size as needed
+        }.frame(width: 500, height: 350) // Adjusted overall frame size
     }
 }

@@ -3,8 +3,9 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State var selection: SidebarSelection? = .newChat
-    @State var menuSelection: SidebarSelection? = .newChat
+    @State var selection: SidebarSelection? = .newChat // 앱 로드 시 기본 선택
+    @State var menuSelection: SidebarSelection? = nil // 메뉴 선택 초기화
+    
     @State var chatModels: [ChatModel] = []
     @State var showAlert: Bool = false
     @State var alertMessage: String = ""
@@ -23,12 +24,30 @@ struct ContentView: View {
     
     // Function to select the Claude model
     func selectClaudeModel() {
-        // Find a Claude v2 model in the organizedChatModels
-        if let claudeV2Model = organizedChatModels.flatMap({ $0.value }).first(where: { $0.id.contains("claude-v2:1:200k") }) {
+        // Find a Claude v3 model in the organizedChatModels
+        if let claudeV3Model = organizedChatModels.flatMap({ $0.value }).first(where: { $0.id.contains("claude-3") }) {
+            menuSelection = .chat(claudeV3Model)
+        } else if let claudeV2Model = organizedChatModels.flatMap({ $0.value }).first(where: { $0.id.contains("claude-v2") }) {
             menuSelection = .chat(claudeV2Model)
         } else if let claudeModel = organizedChatModels.flatMap({ $0.value }).first(where: { $0.name.contains("Claude") }) {
             // If there's no Claude v2, select Claude if available
             menuSelection = .chat(claudeModel)
+        }
+    }
+    
+    // 사용자가 새 모델을 선택할 때 호출되는 함수
+    func selectModel(_ model: ChatModel) {
+        let chatSelection = SidebarSelection.chat(model)
+        self.selection = chatSelection // 사이드바 선택 업데이트
+        self.menuSelection = chatSelection // 메뉴 선택 업데이트
+        // 필요한 경우 추가 로직 수행
+    }
+    
+    // 앱이 처음 로드될 때 또는 특정 조건에서 호출될 수 있는 초기화 함수
+    func initializeSelections() {
+        // 예를 들어, 첫 번째 모델 또는 특정 조건에 따른 모델을 기본 선택으로 설정
+        if let firstModel = chatModels.first {
+            selectModel(firstModel)
         }
     }
     
@@ -67,9 +86,36 @@ struct ContentView: View {
         NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
     
+    // 이미지를 선택하는 로직을 별도의 함수로 분리
+    func selectedModelImage() -> Image {
+        guard case let .chat(chat) = menuSelection else {
+            return Image("bedrock")
+        }
+        
+        if chat.id.contains("anthropic") {
+            return Image("anthropic")
+        } else if chat.id.contains("meta") {
+            return Image("meta")
+        } else if chat.id.contains("cohere") {
+            return Image("cohere")
+        } else if chat.id.contains("mistral") {
+            return Image("mistral")
+        } else {
+            
+            return Image("bedrock") // 일치하는 경우가 없으면 기본 로고 사용
+        }
+    }
+    
+    func currentSelectedModelName() -> String {
+        guard case let .chat(chat) = selection else {
+            return "Model Not Selected" // 기본 텍스트
+        }
+        return chat.name // 선택된 채팅 모델의 이름
+    }
+    
     // Custom hoverable dropdown button
     func customDropdownButton(_ title: String) -> some View {
-        HStack {
+        VStack(alignment: .leading) {
             Menu {
                 // Menu content with ForEach loop
                 ForEach(organizedChatModels.keys.sorted(), id: \.self) { provider in
@@ -97,6 +143,7 @@ struct ContentView: View {
                 } ?? title)
                 .font(.title2)
                 .foregroundColor(isHovering ? .gray : .primary) // Change text color on hover
+                
             }
             .background(isHovering ? Color.gray.opacity(0.2) : Color.clear)
             .cornerRadius(8)
@@ -113,8 +160,6 @@ struct ContentView: View {
                         updatedChat.id = selectedModel.id
                         updatedChat.name = selectedModel.name
                         
-                        
-                        
                         selection = .chat(updatedChat)
                         
                         // Update the chat in the chat manager
@@ -125,17 +170,17 @@ struct ContentView: View {
                 }
             }
             
-            Text(menuSelection.flatMap { menuSelection -> String? in
-                if case let .chat(chat) = menuSelection {
-                    return "\(chat.id)" // Use the chat's model ID
-                } else {
-                    return nil
-                }
-            } ?? "")
-            .font(.subheadline)
-            .frame(minWidth: 100, alignment: .leading) // Fixed minimum width
-            .lineLimit(1)
+            if case let .chat(chat) = menuSelection {
+                Text("\(chat.id)") // Display the selected chat's model ID
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading) // Align text to the left
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.leading, 4)
+            }
+
         }
+//        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
     
     // Function to delete the currently selected chat and switch to the most recent one
@@ -154,6 +199,7 @@ struct ContentView: View {
         }
     }
     
+    
     var body: some View {
         NavigationView {
             SidebarView(selection: $selection, menuSelection: $menuSelection)
@@ -167,14 +213,12 @@ struct ContentView: View {
             ToolbarItem(placement: .navigation) {
                 Button(action: {}) {
                     HStack(spacing: 0) {
-                        Image("bedrock") // Ensure you have this image in your assets
+                        selectedModelImage() // Ensure you have this image in your assets
                             .resizable()
                             .scaledToFit()
                             .frame(width: 40, height: 40)
                         
-                        VStack(alignment: .leading) {
-                            customDropdownButton("Model Not Selected") // Use this in the toolbar or other parts of your UI
-                        }
+                        customDropdownButton(currentSelectedModelName()) // Use this in the toolbar or other parts of your UI
                     }
                 }
                 .buttonStyle(PlainButtonStyle())

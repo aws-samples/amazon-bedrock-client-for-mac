@@ -26,6 +26,55 @@ struct MessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.fontSize) private var fontSize: CGFloat  // Inject the fontSize environment value
     
+    func userImage(for user: String) -> some View {
+        let imageName: String
+        let isDefaultImage: Bool
+
+        if user.starts(with: "Claude") {
+            imageName = "anthropic sq"
+            isDefaultImage = false
+        } else if user.starts(with: "Mistral") {
+            imageName = "mistral sq"
+            isDefaultImage = false
+        } else if user.starts(with: "Mixtral") {
+            imageName = "mistral sq"
+            isDefaultImage = false
+        } else if user.starts(with: "Command") {
+            imageName = "cohere sq"
+            isDefaultImage = false
+        } else if user.starts(with: "Llama") {
+            imageName = "meta sq"
+            isDefaultImage = false
+        } else {
+            imageName = "bedrock sq"
+            isDefaultImage = true
+        }
+        
+        // 기본 이미지가 아닐 경우에만 크기를 작게 조정합니다.
+        let image = Image(imageName)
+        return Group {
+            if isDefaultImage {
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+    //                    .shadow(radius: 3)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
+                    .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
+            } else {
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40) // 여기서 이미지 크기를 조절합니다.
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
+                    .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
+            }
+        }
+    }
+
     
     private var theme: Splash.Theme {
         // NOTE: We are ignoring the Splash theme font
@@ -54,14 +103,7 @@ struct MessageView: View {
                     )
                     .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             } else {
-                Image("bedrock sq")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-//                    .shadow(radius: 3)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
-                    .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
+                userImage(for: message.user)
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {

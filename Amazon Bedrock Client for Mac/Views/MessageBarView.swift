@@ -1,5 +1,5 @@
 //
-//  MessageBar.swift
+//  MessageBarView.swift
 //  Amazon Bedrock Client for Mac
 //
 //  Created by Na, Sanghwa on 2023/10/06.
@@ -29,7 +29,7 @@ struct MessageBarView: View {
         if chatManager.getIsLoading(for: chatID) {
             return Color.background
         } else {
-            return isSendButtonDisabled ? Color.secondaryText : Color.text
+            return isSendButtonDisabled ? Color.text : Color.text
         }
     }
 

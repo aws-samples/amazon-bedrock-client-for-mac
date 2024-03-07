@@ -20,6 +20,8 @@ class SettingManager {
     var settingsChangedPublisher = PassthroughSubject<Void, Never>()
 
     private let awsRegionKey = "awsRegionKey"
+    private let awsEndpointKey = "awsEndpointKey"
+    private let awsRuntimeEndpointKey = "awsRuntimeEndpointKey"
     private let fontSizeKey = "fontSizeKey"
     private let checkForUpdatesKey = "checkForUpdatesKey"
 
@@ -58,6 +60,22 @@ class SettingManager {
             return region
         }
         return nil
+    }
+    
+    func saveEndpoint(_ endpoint: String) {
+        UserDefaults.standard.set(endpoint, forKey: awsEndpointKey)
+    }
+    
+    func getEndpoint() -> String? {
+        return UserDefaults.standard.string(forKey: awsEndpointKey)
+    }
+
+    func saveRuntimeEndpoint(_ endpoint: String) {
+        UserDefaults.standard.set(endpoint, forKey: awsRuntimeEndpointKey)
+    }
+    
+    func getRuntimeEndpoint() -> String? {
+        return UserDefaults.standard.string(forKey: awsRuntimeEndpointKey)
     }
     
     var fontSizePublisher = PassthroughSubject<CGFloat, Never>()

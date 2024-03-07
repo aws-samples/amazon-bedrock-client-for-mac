@@ -1,4 +1,9 @@
-// MARK: - Imports
+//
+//  Bedrockclient.swift
+//  Amazon Bedrock Client for Mac
+//
+//  Created by Na, Sanghwa on 2023/10/08.
+//
 
 import Foundation
 import Combine
@@ -8,6 +13,7 @@ import AWSBedrock
 import AWSBedrockRuntime
 import AWSClientRuntime
 import AppKit
+import AwsCommonRuntimeKit
 
 // MARK: - Backend Class
 class BackendModel: ObservableObject {
@@ -16,7 +22,7 @@ class BackendModel: ObservableObject {
     var cancellables = Set<AnyCancellable>()  // To hold subscription
     
     init() {
-        self.backend = Backend(region: AWSRegion.usEast1.rawValue)
+        self.backend = Backend(region: AWSRegion.usEast1.rawValue, endpoint: "", runtimeEndpoint: "")
         
         updateBackend()
         
@@ -30,7 +36,9 @@ class BackendModel: ObservableObject {
     
     private func updateBackend() {
         let region: String = SettingManager.shared.getAWSRegion()?.rawValue ?? AWSRegion.usEast1.rawValue // Default to "us-east-1"
-        self.backend = Backend(region: region)
+        let endpoint: String = SettingManager.shared.getEndpoint() ?? ""
+        let runtimeEndpoint: String = SettingManager.shared.getRuntimeEndpoint() ?? ""
+        self.backend = Backend(region: region, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
     }
 }
 
@@ -42,15 +50,19 @@ struct Backend {
     private var logger = Logger(label: "Backend")
     private let credentials: AWSTemporaryCredentials?
     private let region: String
+    private let endpoint: String
+    private let runtimeEndpoint: String
     
     // MARK: - Initializers
     
-    init(withCredentials creds: AWSTemporaryCredentials? = nil, region: String) {
+    init(withCredentials creds: AWSTemporaryCredentials? = nil, region: String, endpoint: String, runtimeEndpoint: String) {
         self.credentials = creds
         self.region = region
 #if DEBUG
         self.logger.logLevel = .debug
 #endif
+        self.endpoint = endpoint
+        self.runtimeEndpoint = runtimeEndpoint
     }
     
     // MARK: - AWS Methods
@@ -77,10 +89,9 @@ struct Backend {
     }
     
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
-        // Determine the model type (claude or titan)
         let modelType = getModelType(modelId)
         
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
         
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         let encodedParams = try self.encode(params, strategy: strategy)
@@ -94,7 +105,12 @@ struct Backend {
             logger.info("Request: \(requestJson)")
         }
         
-        let config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
+        if !self.runtimeEndpoint.isEmpty {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
+        } else {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+        }
         
         let client = BedrockRuntimeClient(config: config)
         let response = try await client.invokeModel(input: request)
@@ -114,7 +130,7 @@ struct Backend {
         let modelType = getModelType(modelId)
         
         // Determine the appropriate key encoding strategy for the model type
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .claude3 || modelType == .mistral || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
         
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         
@@ -132,7 +148,12 @@ struct Backend {
             }
             
             // Create client and make the request
-            let config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+            let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
+            if !self.runtimeEndpoint.isEmpty {
+                config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
+            } else {
+                config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+            }
             let client = BedrockRuntimeClient(config: config)
             
             // Invoke the model and get the response stream
@@ -145,6 +166,86 @@ struct Backend {
             logger.error("Error: \(error)")
             throw error
         }
+    }
+    
+    func invokeClaudeModel(withId modelId: String, messages: [ClaudeMessageRequest.Message]) async throws -> Data {
+        let anthropicVersion = "bedrock-2023-05-31"
+        let requestBody = ClaudeMessageRequest(
+            anthropicVersion: anthropicVersion,
+            maxTokens: 4096,
+            system: nil,
+            messages: messages,
+            temperature: 0.7,
+            topP: 0.9,
+            topK: nil,
+            stopSequences: nil
+        )
+        
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase // Since your CodingKeys are in snake_case
+        let jsonData = try encoder.encode(requestBody)
+        
+        let request = InvokeModelInput(
+            body: jsonData,
+            contentType: "application/json",
+            modelId: modelId
+        )
+
+        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
+        if !self.runtimeEndpoint.isEmpty {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
+        } else {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+        }
+        
+        let client = BedrockRuntimeClient(config: config)
+        let response = try await client.invokeModel(input: request)
+        
+        guard response.contentType == "application/json",
+              let data = response.body else {
+            logger.error("Invalid Bedrock response: \(response)")
+            throw BedrockRuntimeError.invalidResponse(response.body)
+        }
+        
+        return data
+    }
+
+    func invokeClaudeModelStream(withId modelId: String, messages: [ClaudeMessageRequest.Message]) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
+        let anthropicVersion = "bedrock-2023-05-31"
+
+        let requestBody = ClaudeMessageRequest(
+            anthropicVersion: anthropicVersion,
+            maxTokens: 4096,
+            system: nil,
+            messages: messages,
+            temperature: 0.7,
+            topP: 0.9,
+            topK: nil,
+            stopSequences: nil
+        )
+        
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase // Since your CodingKeys are in snake_case
+        let jsonData = try encoder.encode(requestBody)
+
+        let request = InvokeModelWithResponseStreamInput(
+            body: jsonData,
+            contentType: "application/json",
+            modelId: modelId
+        )
+        
+        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
+        if !self.runtimeEndpoint.isEmpty {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
+        } else {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+        }
+        
+        // Invoke the model and get the response stream
+        let client = BedrockRuntimeClient(config: config)
+        let output = try await client.invokeModelWithResponseStream(input: request)
+        
+        return output.body ?? AsyncThrowingStream { _ in }
     }
     
     func invokeStableDiffusionModel(withId modelId: String, prompt: String) async throws -> Data {
@@ -179,7 +280,13 @@ struct Backend {
         )
         
         // Create client and make the request
-        let config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+        // Create client and make the request
+        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
+        if !self.runtimeEndpoint.isEmpty {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
+        } else {
+            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
+        }
         let client = BedrockRuntimeClient(config: config)
         
         let response = try await client.invokeModel(input: request)
@@ -219,6 +326,8 @@ struct Backend {
             return .stableDiffusion
         } else if modelName.hasPrefix("llama2") {
             return .llama2
+        } else if modelName.hasPrefix("mistral") || modelName.hasPrefix("mixtral") {
+            return .mistral
         } else {
             return .unknown
         }
@@ -229,6 +338,19 @@ struct Backend {
         switch modelType {
         case .claude:
             return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
+//        case .claude3:
+//            let userMessage = ClaudeMessageRequest.Message(role: "user", content: [.init(type: "text", text: prompt, source: nil)])
+//            let messages = [userMessage]
+//            return ClaudeMessageRequest(
+//                anthropicVersion: "bedrock-2023-05-31",
+//                maxTokens: 4096,
+//                system: nil,
+//                messages: messages,
+//                temperature: 0.7,
+//                topP: 0.9,
+//                topK: nil,
+//                stopSequences: nil
+//            )
         case .titan:
             let textGenerationConfig = TitanModelParameters.TextGenerationConfig(
                 temperature: 0,
@@ -247,6 +369,8 @@ struct Backend {
             return CohereModelParameters(prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
         case .cohereEmbed:
             return CohereEmbedModelParameters(texts: [prompt], inputType: .searchDocument)
+        case .mistral:
+            return MistralModelParameters(prompt: "<s>[INST] \(prompt)[\\INST]", maxTokens: 4096, temperature: 0.9, topP: 0.9)
         case .llama2:
             return Llama2ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
         default:
@@ -255,7 +379,7 @@ struct Backend {
     }
     
     func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
-                              byInferenceType: BedrockClientTypes.InferenceType? = nil,
+                              byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
                               byOutputModality: BedrockClientTypes.ModelModality? = nil,
                               byProvider: String? = nil) async -> Result<[BedrockClientTypes.FoundationModelSummary], BedrockError> {
         
@@ -266,9 +390,13 @@ struct Backend {
                 byOutputModality: byOutputModality,
                 byProvider: byProvider)
             
-            let config = try await BedrockClient.BedrockClientConfiguration(
-                region: self.region)
-            
+            // Create client and make the request
+            let config: BedrockClient.BedrockClientConfiguration
+            if !self.runtimeEndpoint.isEmpty {
+                config = try await BedrockClient.BedrockClientConfiguration(region: self.region, endpoint: self.endpoint)
+            } else {
+                config = try await BedrockClient.BedrockClientConfiguration(region: self.region)
+            }
             let client = BedrockClient(config: config)
             
             let response = try await client.listFoundationModels(input: request)
@@ -361,10 +489,10 @@ struct AWSTemporaryCredentials: Codable {
 }
 extension AWSTemporaryCredentials: CredentialsProviding {
     func getCredentials() async throws -> Credentials {
-        return Credentials(accessKey: self.accessKey,
+        return try Credentials(accessKey: self.accessKey,
                            secret: self.secretAccessKey,
-                           expirationTimeout: self.expiration,
-                           sessionToken: self.sessionToken)
+                           sessionToken: self.sessionToken,
+                           expiration: self.expiration)
     }
 }
 extension AWSTemporaryCredentials {
@@ -465,6 +593,8 @@ enum FoundationModelType {
     case titanEmbed
     case titanImage
     case claude
+    case claude3
+    case mistral
     case j2
     case cohereCommand
     case cohereEmbed
@@ -533,7 +663,7 @@ public struct CohereEmbedModelParameters: ModelParameters, Encodable {
     let texts: [String]
     let inputType: EmbedInputType
     let truncate: TruncateOption?
-
+    
     init(texts: [String],
          inputType: EmbedInputType,
          truncate: TruncateOption? = nil) {
@@ -541,27 +671,27 @@ public struct CohereEmbedModelParameters: ModelParameters, Encodable {
         self.inputType = inputType
         self.truncate = truncate
     }
-
+    
     enum EmbedInputType: String, Codable {
         case searchDocument = "search_document"
         case searchQuery = "search_query"
         case classification = "classification"
         case clustering = "clustering"
     }
-
+    
     enum TruncateOption: String, Codable {
         case none = "NONE"
         case left = "LEFT"
         case right = "RIGHT"
     }
-
+    
     // Define the CodingKeys enum for custom JSON key names
     enum CodingKeys: String, CodingKey {
         case texts
         case inputType = "input_type"
         case truncate
     }
-
+    
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(texts, forKey: .texts)
@@ -578,11 +708,11 @@ struct TitanImageModelParameters: ModelParameters {
     var taskType: String
     var textToImageParams: TextToImageParams
     var imageGenerationConfig: ImageGenerationConfig
-
+    
     struct TextToImageParams: Codable {
         var text: String
     }
-
+    
     struct ImageGenerationConfig: Codable {
         var numberOfImages: Int
         var quality: String
@@ -591,7 +721,7 @@ struct TitanImageModelParameters: ModelParameters {
         var width: Int
         var seed: Int?
     }
-
+    
     // Initialize with default values and the input text
     init(inputText: String, numberOfImages: Int = 1, quality: String = "standard", cfgScale: Double = 8.0, height: Int = 512, width: Int = 512, seed: Int? = nil) {
         self.taskType = "TEXT_IMAGE"
@@ -622,6 +752,149 @@ public struct ClaudeModelParameters: ModelParameters {
         self.topK = topK
         self.maxTokensToSample = maxTokensToSample
         self.stopSequences = stopSequences
+    }
+    
+    public func encodeModel() throws -> Data {
+        let encoder = JSONEncoder()
+        return try encoder.encode(self)
+    }
+}
+
+public struct ClaudeMessageRequest: ModelParameters {
+    public let anthropicVersion: String
+    public let maxTokens: Int
+    public let system: String?
+    public let messages: [Message]
+    public let temperature: Float?
+    public let topP: Float?
+    public let topK: Int?
+    public let stopSequences: [String]?
+    
+    enum CodingKeys: String, CodingKey {
+        case anthropicVersion = "anthropic_version"
+        case maxTokens = "max_tokens"
+        case system
+        case messages
+        case temperature
+        case topP = "top_p"
+        case topK = "top_k"
+        case stopSequences = "stop_sequences"
+    }
+    
+    // 메시지 구조체 정의
+    public struct Message: Codable {
+        let role: String
+        let content: [Content]
+        
+        // 컨텐츠 구조체 정의
+        struct Content: Codable {
+            var type: String
+            var text: String?
+            var source: ImageSource?
+            
+            // 이미지 소스 구조체 정의
+            struct ImageSource: Codable {
+                let type: String = "base64"
+                let mediaType: String
+                let data: String
+                
+                enum CodingKeys: String, CodingKey {
+                    case type
+                    case mediaType = "media_type"
+                    case data
+                }
+            }
+        }
+    }
+    
+    public init(
+        anthropicVersion: String = "bedrock-2023-05-31",
+        maxTokens: Int,
+        system: String? = nil,
+        messages: [Message],
+        temperature: Float? = nil,
+        topP: Float? = nil,
+        topK: Int? = nil,
+        stopSequences: [String]? = nil
+    ) {
+        self.anthropicVersion = anthropicVersion
+        self.maxTokens = maxTokens
+        self.system = system
+        self.messages = messages
+        self.temperature = temperature
+        self.topP = topP
+        self.topK = topK
+        self.stopSequences = stopSequences
+    }
+}
+
+extension ClaudeMessageRequest {
+    var dictionaryRepresentation: [String: Any] {
+        var dict = [String: Any]()
+        dict["anthropic_version"] = anthropicVersion
+        dict["max_tokens"] = maxTokens
+        if let system = system { dict["system"] = system }
+        dict["messages"] = messages.map { $0.dictionaryRepresentation }
+        if let temperature = temperature { dict["temperature"] = temperature }
+        if let topP = topP { dict["top_p"] = topP }
+        if let topK = topK { dict["top_k"] = topK }
+        if let stopSequences = stopSequences { dict["stop_sequences"] = stopSequences }
+        return dict
+    }
+}
+
+extension ClaudeMessageRequest.Message {
+    var dictionaryRepresentation: [String: Any] {
+        var dict = [String: Any]()
+        dict["role"] = role
+        dict["content"] = content.map { $0.dictionaryRepresentation }
+        return dict
+    }
+}
+
+extension ClaudeMessageRequest.Message.Content {
+    var dictionaryRepresentation: [String: Any] {
+        var dict = [String: Any]()
+        dict["type"] = type
+        if let text = text { dict["text"] = text }
+        if let source = source { dict["source"] = source.dictionaryRepresentation }
+        return dict
+    }
+}
+
+extension ClaudeMessageRequest.Message.Content.ImageSource {
+    var dictionaryRepresentation: [String: Any] {
+        return [
+            "type": type,
+            "media_type": mediaType,
+            "data": data
+        ]
+    }
+}
+
+public struct MistralModelParameters: ModelParameters {
+    public var prompt: String
+    // Updated maxTokens maximum value to 4096.
+    public var maxTokens: Int
+    public var stop: [String]?
+    public var temperature: Double
+    public var topP: Double
+    public var topK: Double?
+    
+    // Included default values for stop and topK to align with the rest of the structure
+    public init(
+        prompt: String,
+        maxTokens: Int = 4096,
+        temperature: Double = 1.0,
+        topP: Double = 0.9,
+        topK: Double? = nil
+    ) {
+        self.prompt = prompt
+        // Ensured maxTokens cannot exceed 4096.
+        self.maxTokens = min(maxTokens, 4096)
+        self.temperature = temperature
+        self.topP = topP
+        self.topK = topK
     }
     
     public func encodeModel() throws -> Data {
@@ -675,17 +948,46 @@ public struct TitanModelParameters: ModelParameters {
 
 // MARK: - ModelType Enumeration
 
-public enum ModelType {
-    case claude
-    case titan
-}
-
 // Model response protocols
 protocol ModelResponse {}
 
 public struct InvokeClaudeResponse: ModelResponse, Decodable {
     public let completion: String
     public let stop_reason: String
+}
+
+// 응답 모델 정의
+struct ClaudeMessageResponse: Codable {
+    let id: String
+    let model: String
+    let type: String
+    let role: String
+    let content: [Content]
+    let stopReason: String
+    let stopSequence: String?
+    let usage: Usage
+
+    struct Content: Codable {
+        let type: String
+        let text: String?
+    }
+
+    struct Usage: Codable {
+        let inputTokens: Int
+        let outputTokens: Int
+
+        enum CodingKeys: String, CodingKey {
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, model, type, role, content
+        case stopReason = "stop_reason"
+        case stopSequence = "stop_sequence"
+        case usage
+    }
 }
 
 public struct InvokeTitanResponse: ModelResponse, Decodable {
@@ -728,6 +1030,16 @@ public struct InvokeCohereEmbedResponse: ModelResponse, Decodable {
 
 public struct InvokeStableDiffusionResponse: ModelResponse, Decodable {
     public let body: Data // Specify the type here
+}
+
+public struct MistralData: Decodable {
+    public let text: String
+    public let stop_reason: String?
+}
+
+
+public struct InvokeMistralResponse: ModelResponse, Decodable {
+    public let outputs: [MistralData]
 }
 
 public struct InvokeLlama2Response: ModelResponse, Decodable {
