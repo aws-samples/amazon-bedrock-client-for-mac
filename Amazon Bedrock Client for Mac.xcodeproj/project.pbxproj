@@ -10,6 +10,7 @@
 		7907BEAA2ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */; };
 		7907BEB42ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */; };
 		7907BEB62ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */; };
+		790804242B99F0DA00930011 /* ImageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790804232B99F0DA00930011 /* ImageManager.swift */; };
 		79320FC92B469BAE0074090A /* ChatModelSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79320FC82B469BAE0074090A /* ChatModelSnapshot.swift */; };
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
 		7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8422AD247CC008B03D3 /* AWSRegion.swift */; };
@@ -83,6 +84,7 @@
 		7907BEAF2ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacUITests.swift; sourceTree = "<group>"; };
 		7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		790804232B99F0DA00930011 /* ImageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageManager.swift; sourceTree = "<group>"; };
 		791461202AD0E51B00C454DC /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		79320FC82B469BAE0074090A /* ChatModelSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModelSnapshot.swift; sourceTree = "<group>"; };
 		7937953C2B46CAF1000C94A5 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
@@ -246,6 +248,7 @@
 				7954F8462AD249A7008B03D3 /* SettingManager.swift */,
 				79BFF50F2AD342710057BF3A /* ChatManager.swift */,
 				7937953C2B46CAF1000C94A5 /* UpdateManager.swift */,
+				790804232B99F0DA00930011 /* ImageManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -459,6 +462,7 @@
 				79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */,
 				7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */,
 				79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */,
+				790804242B99F0DA00930011 /* ImageManager.swift in Sources */,
 				79610DE62AD22A2F00993D09 /* HomeView.swift in Sources */,
 				7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */,
 				79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */,
@@ -645,7 +649,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.1.4;
+				CURRENT_PROJECT_VERSION = 1.1.5;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = B47A25FR9P;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -667,7 +671,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.1.5;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -687,7 +691,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.1.4;
+				CURRENT_PROJECT_VERSION = 1.1.5;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = B47A25FR9P;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -709,7 +713,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";

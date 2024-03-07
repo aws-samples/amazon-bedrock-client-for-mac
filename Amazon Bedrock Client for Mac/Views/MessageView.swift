@@ -20,6 +20,15 @@ class MessageViewModel: ObservableObject {
     }
 }
 
+extension NSImage {
+    convenience init?(base64Encoded: String) {
+        guard let imageData = Data(base64Encoded: base64Encoded) else {
+            return nil
+        }
+        self.init(data: imageData)
+    }
+}
+
 struct MessageView: View {
     var message: MessageData
     
@@ -29,7 +38,7 @@ struct MessageView: View {
     func userImage(for user: String) -> some View {
         let imageName: String
         let isDefaultImage: Bool
-
+        
         if user.starts(with: "Claude") {
             imageName = "anthropic sq"
             isDefaultImage = false
@@ -59,7 +68,7 @@ struct MessageView: View {
                     .scaledToFill()
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-    //                    .shadow(radius: 3)
+                //                    .shadow(radius: 3)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
                     .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             } else {
@@ -74,7 +83,7 @@ struct MessageView: View {
             }
         }
     }
-
+    
     
     private var theme: Splash.Theme {
         // NOTE: We are ignoring the Splash theme font
@@ -85,6 +94,7 @@ struct MessageView: View {
             return .sunset(withFont: .init(size: self.fontSize))
         }
     }
+
     
     var body: some View {
         HStack(spacing: 12) {
@@ -96,7 +106,7 @@ struct MessageView: View {
                     .foregroundColor(Color.link)
                     .opacity(0.8)
                     .clipShape(RoundedRectangle(cornerRadius: 8))  // Clip into a circle
-//                    .shadow(radius: 3)  // Optional shadow for depth
+                //                    .shadow(radius: 3)  // Optional shadow for depth
                     .overlay(  // Optional border
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.link, lineWidth: 2)
@@ -127,6 +137,22 @@ struct MessageView: View {
                         .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: self.theme))
                         .font(.system(size: self.fontSize))
                 } else {
+                    HStack(spacing: 10) {
+                        ForEach(message.imageBase64Strings ?? [], id: \.self) { imageData in
+                            if let image = NSImage(base64Encoded: imageData) {  // Safely unwrap the optional NSImage
+                                Image(nsImage: image)  // Use the unwrapped image here
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                                    )
+                            }
+                        }
+                    }
+                    
                     Text(message.text)
                         .font(.system(size: self.fontSize))
                         .textSelection(.enabled)

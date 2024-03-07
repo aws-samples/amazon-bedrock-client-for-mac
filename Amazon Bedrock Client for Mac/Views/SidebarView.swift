@@ -51,6 +51,7 @@ struct SidebarView: View {
                                     exportChatAsTextFile(chat)
                                 })
                             }
+
                     }
                 }
             }
@@ -102,9 +103,13 @@ struct SidebarView: View {
             .contentShape(Rectangle()) // Extend the clickable area to the entire bounds of the button
         }
         .buttonStyle(PlainButtonStyle())
-//        .onHover { hover in
-//            buttonHover = hover
-//        }
+        .onHover { hover in
+            if hover {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
         .background(buttonHover ? Color.gray.opacity(0.2) : Color.clear)
         .cornerRadius(8)
     }

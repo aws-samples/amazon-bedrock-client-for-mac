@@ -10,6 +10,7 @@ import SwiftUI
 struct ChatView: View {
     @Binding var messages: [MessageData]
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
+    @StateObject var sharedImageDataSource = SharedImageDataSource()
     
     @State var userInput: String = ""
     @State var isMessageBarDisabled: Bool = false
@@ -20,7 +21,7 @@ struct ChatView: View {
     @State private var isStreamingEnabled: Bool
     @State private var isConfigPopupPresented: Bool = false
     @State private var selectedPlaceholder: String
-//    @State private var scrollToBottomTrigger: Bool = false
+    @State private var scrollToBottomTrigger: UUID?
     
     var backend: Backend
     // Local copy of ChatModel
@@ -53,6 +54,42 @@ struct ChatView: View {
         // Set the random placeholder message once during initialization
         _selectedPlaceholder = State(initialValue: placeholderMessages.randomElement() ?? "No messages")
     }
+    
+    func base64EncodeImage(_ image: NSImage, withExtension fileExtension: String) -> (base64String: String?, mediaType: String?) {
+        guard let tiffRepresentation = image.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffRepresentation) else {
+            return (nil, nil)
+        }
+        
+        let imageData: Data?
+        let mediaType: String
+        
+        switch fileExtension.lowercased() {
+        case "jpg", "jpeg":
+            imageData = bitmapImage.representation(using: .jpeg, properties: [:])
+            mediaType = "image/jpeg"
+        case "png":
+            imageData = bitmapImage.representation(using: .png, properties: [:])
+            mediaType = "image/png"
+        case "webp":
+            // Encoding to WEBP is not natively supported; would require additional implementation
+            imageData = nil
+            mediaType = "image/webp"
+        case "gif":
+            // Encoding to GIF is not natively supported; would require additional implementation
+            imageData = nil
+            mediaType = "image/gif"
+        default:
+            return (nil, nil)
+        }
+        
+        guard let data = imageData else {
+            return (nil, nil)
+        }
+        
+        return (data.base64EncodedString(), mediaType)
+    }
+
     
     // Function to get a random placeholder message
     private func getRandomPlaceholder() -> String {
@@ -92,10 +129,13 @@ struct ChatView: View {
                         }
                     }
                     .onChange(of: messages) { _ in
-                        if let lastMessage = messages.last {
-//                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-//                            }
+                        if let lastMessageId = messages.last?.id {
+                            proxy.scrollTo(lastMessageId, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: scrollToBottomTrigger) { _ in
+                        withAnimation {
+                            proxy.scrollTo(scrollToBottomTrigger, anchor: .bottom)
                         }
                     }
                 }
@@ -106,7 +146,9 @@ struct ChatView: View {
                 chatID: chatModel.chatId,
                 userInput: $userInput,
                 messages: $messages,
-                sendMessage: sendMessage
+                sharedImageDataSource: sharedImageDataSource,
+                sendMessage: sendMessage,
+                modelId: chatModel.id
             )
         }.toolbar {
             ToolbarItemGroup(placement: .automatic) {
@@ -136,9 +178,56 @@ struct ChatView: View {
         
         isSending = true
         isMessageBarDisabled = true
+
+        let userid = UUID()
         
+        var imageBase64Strings: [String] = []
+        
+        if chatModel.id.contains("claude-3") {
+            var contentBlocks: [ClaudeMessageRequest.Message.Content] = []
+            
+            // Add text content block
+            let textContentBlock = ClaudeMessageRequest.Message.Content(type: "text", text: userInput, source: nil)
+            contentBlocks.append(textContentBlock)
+            
+            // Iterate over images and add each as a content block
+            for (index, image) in sharedImageDataSource.images.enumerated() {
+                // Assume you also have access to the image's file extension
+                let fileExtension = sharedImageDataSource.fileExtensions[index]
+                let (base64String, mediaType) = base64EncodeImage(image, withExtension: fileExtension)
+                
+                if let base64String = base64String, let mediaType = mediaType {
+                    let imageContentBlock = ClaudeMessageRequest.Message.Content(
+                        type: "image",
+                        source: ClaudeMessageRequest.Message.Content.ImageSource(
+                            mediaType: mediaType,
+                            data: base64String
+                        )
+                    )
+                    contentBlocks.append(imageContentBlock)
+                    imageBase64Strings.append(base64String)
+                }
+            }
+            
+            // Construct the message with all content blocks (text and images)
+            let message = ClaudeMessageRequest.Message(role: "user", content: contentBlocks)
+            chatManager.addClaudeHistory(for: chatModel.chatId, message: message)
+        }
+        
+        var userMessage = MessageData(id: userid, text: userInput, user: "User", isError: false, sentTime: Date(), imageBase64Strings: imageBase64Strings)
+        
+        sharedImageDataSource.images.removeAll()
+        sharedImageDataSource.fileExtensions.removeAll()
+
         // Add user message
-        messages.append(MessageData(id: UUID(), text: userInput, user: "User", isError: false, sentTime: Date()))
+        messages.append(userMessage)
+        
+        // 메시지 배열 업데이트 후 스크롤 위치 조정
+        if let lastMessageId = self.messages.last?.id {
+            withAnimation {
+                self.scrollToBottomTrigger = userid
+            }
+        }
         
         // Update both messages and isLoading at once
         chatManager.updateMessagesAndLoading(for: chatModel.chatId, messages: messages, isLoading: true)
@@ -204,13 +293,7 @@ struct ChatView: View {
             }
             
             history += "\nHuman: \(userInput)"  // Add user's message to history
-            if chatModel.id.contains("claude-3") {
-                let contentBlock = ClaudeMessageRequest.Message.Content(type: "text", text: userInput, source: nil) // Create a content block for the message
-                let message = ClaudeMessageRequest.Message(role: "user", content: [contentBlock]) // Create the Message object
-                
-                chatManager.addClaudeHistory(for: chatModel.chatId, message: message) // Append the message to claudeHistory
-            }
-            
+
             // Clear the input field
             let tempInput = userInput
             Task {
@@ -242,6 +325,7 @@ struct ChatView: View {
         
         chatManager.setIsLoading(for: chatModel.chatId, isLoading: false)  // End loading
         isMessageBarDisabled = false
+        
         isSending = false
     }
     
