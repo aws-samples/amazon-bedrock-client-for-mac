@@ -11,12 +11,17 @@ import SwiftUI
 import AppKit  // Import AppKit to use NSPasteboard
 
 class MessageViewModel: ObservableObject {
-    @Published var userInput: String = ""
+    @Published var selectedImageData: String? = nil
+    @Published var isShowingImageModal: Bool = false
     
-    func addBoldMarkdown() {
-        // Add the logic to bold the selected text, similar to how it was done in FirstResponderTextView
-        // For demonstration, I'll just add ** at the start and end. You would replace this with the actual implementation.
-        self.userInput = "**\(self.userInput)**"
+    func selectImage(with data: String) {
+        self.selectedImageData = data
+        self.isShowingImageModal = true
+    }
+    
+    func clearSelection() {
+        self.selectedImageData = nil
+        self.isShowingImageModal = false
     }
 }
 
@@ -31,6 +36,8 @@ extension NSImage {
 
 struct MessageView: View {
     var message: MessageData
+    
+    @ObservedObject var viewModel = MessageViewModel()
     
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.fontSize) private var fontSize: CGFloat  // Inject the fontSize environment value
@@ -94,7 +101,7 @@ struct MessageView: View {
             return .sunset(withFont: .init(size: self.fontSize))
         }
     }
-
+    
     
     var body: some View {
         HStack(spacing: 12) {
@@ -139,16 +146,35 @@ struct MessageView: View {
                 } else {
                     HStack(spacing: 10) {
                         ForEach(message.imageBase64Strings ?? [], id: \.self) { imageData in
-                            if let image = NSImage(base64Encoded: imageData) {  // Safely unwrap the optional NSImage
-                                Image(nsImage: image)  // Use the unwrapped image here
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                                    )
+                            Button(action: {
+                                viewModel.selectImage(with: imageData)
+                            }) {
+                                if let image = NSImage(base64Encoded: imageData) {
+                                    Image(nsImage: image)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                                        )
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .onHover { isHovering in
+                                if isHovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                        }
+                    }
+                    .sheet(isPresented: $viewModel.isShowingImageModal) {
+                        if let imageData = viewModel.selectedImageData, let imageToShow = NSImage(base64Encoded: imageData) {
+                            ImageViewerModal(image: imageToShow) {
+                                viewModel.clearSelection()
                             }
                         }
                     }
@@ -157,8 +183,6 @@ struct MessageView: View {
                         .font(.system(size: self.fontSize))
                         .textSelection(.enabled)
                 }
-                
-                
             }
             .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             .textSelection(.enabled)
@@ -199,5 +223,36 @@ struct MessageView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+struct ImageViewerModal: View {
+    var image: NSImage
+    var closeModal: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.white.opacity(0.5).edgesIgnoringSafeArea(.all)
+            
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .cornerRadius(10)
+                .padding()
+            
+            VStack {
+                HStack {
+                    Spacer() // Use Spacer to push the button to the right
+                    Button(action: closeModal) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.black)
+                            .font(.title)
+                    }
+                    .padding([.top, .trailing]) // Add padding to ensure it's not too close to the edges
+                    .buttonStyle(PlainButtonStyle())
+                }
+                Spacer() // Use Spacer to push the button up
+            }
+        }
     }
 }

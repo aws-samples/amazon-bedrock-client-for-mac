@@ -14,9 +14,10 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
     @Binding var isDisabled: Bool
     @Binding var calculatedHeight: CGFloat
     var onCommit: () -> Void
-    
+    var onPaste: ((NSImage) -> Void)?
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(self, onPaste: onPaste)
     }
     
     static func == (lhs: FirstResponderTextView, rhs: FirstResponderTextView) -> Bool {
@@ -67,11 +68,27 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
         }
     }
     
+    func paste(sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage], !images.isEmpty {
+            if let firstImage = images.first {
+                DispatchQueue.main.async {
+                    self.onPaste?(firstImage)
+                }
+            }
+        } else if let strings = pasteboard.readObjects(forClasses: [NSString.self], options: nil) as? [String], !strings.isEmpty {
+            // 붙여넣기된 텍스트 처리
+            self.text = strings.first ?? ""
+        }
+    }
+    
     public class Coordinator: NSObject, NSTextViewDelegate {
         var parent: FirstResponderTextView
+        var onPaste: ((NSImage) -> Void)?
         
-        init(_ parent: FirstResponderTextView) {
+        init(_ parent: FirstResponderTextView, onPaste: ((NSImage) -> Void)?) {
             self.parent = parent
+            self.onPaste = onPaste
         }
         
         func textDidChange(_ notification: Notification) {

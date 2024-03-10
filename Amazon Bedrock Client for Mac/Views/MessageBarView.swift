@@ -120,21 +120,26 @@ struct MessageBarView: View {
         .padding(.bottom, 10)
     }
 
-    
     private var messageTextView: some View {
-        FirstResponderTextView(
-            text: $userInput,
-            isDisabled: .constant(chatManager.getIsLoading(for: chatID)),  // Change here
-            calculatedHeight: $calculatedHeight,  // Pass the binding
-            onCommit: {
-                calculatedHeight = 70
-                Task { await sendMessage() }
-            }
-        )
-        .font(.system(size: 16))
-        .textFieldStyle(PlainTextFieldStyle())
-        .foregroundColor(Color.text)
-        // Use GeometryReader to calculate the height
+        VStack {
+            FirstResponderTextView(
+                text: $userInput,
+                isDisabled: .constant(chatManager.getIsLoading(for: chatID)),  // Change here
+                calculatedHeight: $calculatedHeight,  // Pass the binding
+                onCommit: {
+                    calculatedHeight = 70
+                    Task { await sendMessage() }
+                },
+                onPaste: { image in
+                    self.sharedImageDataSource.images.append(image)
+                    self.showImagePreview = true
+                }
+            )
+            .font(.system(size: 16))
+            .textFieldStyle(PlainTextFieldStyle())
+            .foregroundColor(Color.text)
+            // Use GeometryReader to calculate the height
+        }
     }
     
     @State private var isLoading: Bool = false  // Add this line
@@ -170,43 +175,6 @@ struct MessageBarView: View {
     private func isClaude3Model() -> Bool {
         // Implement logic to determine if the model is "claude3" based on `chatID` or another property
         return modelId.contains("claude-3")
-    }
-    
-    // 붙여넣기 처리를 위한 함수
-//    private func handlePaste(itemProviders: [NSItemProvider]) {
-//        for item in itemProviders {
-//            // 이미지 유형 확인 및 처리
-//            if item.canLoadObject(ofClass: NSImage.self) {
-//                item.loadObject(ofClass: NSImage.self) { (image, error) in
-//                    DispatchQueue.main.async {
-//                        if let image = image as? NSImage {
-//                            // 이미지 처리 로직 (예: 메모리에 임시 저장, 서버 업로드 등)
-//                            uploadClipBoardImage(image: image)
-//                        }
-//                    }
-//                }
-//            } else if item.hasItemConformingToTypeIdentifier(kUTTypeFileURL as String) {
-//                item.loadItem(forTypeIdentifier: kUTTypeFileURL as String, options: nil) { (urlData, error) in
-//                    DispatchQueue.main.async {
-//                        if let urlData = urlData as? Data, let url = NSURL(dataRepresentation: urlData, relativeTo: nil) as URL? {
-//                            // 파일 URL에서 이미지 처리
-//                            uploadImage(at: url)
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-//    
-//    private func uploadImage(at url: URL) {
-//        if let image = NSImage(contentsOf: url) {
-//            self.sharedImageDataSource.images.append(image)
-//            self.showImagePreview = true // 이미지 미리보기 창을 표시합니다.
-//        }
-//    }
-    
-    private func uploadClipBoardImage(image: NSImage) {
-        print(image)
     }
     
     private var imageUploadButton: some View {
