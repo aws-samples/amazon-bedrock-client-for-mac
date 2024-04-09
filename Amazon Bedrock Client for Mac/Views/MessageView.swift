@@ -139,8 +139,14 @@ struct MessageView: View {
                     Markdown(message.text)  // Use MarkdownUI directly
                         .id(message.id)
                         .textSelection(.enabled)
-                        .markdownTheme(.gitHub)
+                        .markdownTheme(
+                          .gitHub
+                            .codeBlock() {
+                              CodeBlockView(theme: theme, configuration: $0)
+                            }
+                        )
                         .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: self.theme))
+                   
                         .font(.system(size: self.fontSize))
                 } else {
                     HStack(spacing: 10) {
