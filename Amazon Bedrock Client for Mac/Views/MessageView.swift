@@ -139,7 +139,6 @@ struct MessageView: View {
                     Markdown(message.text)  // Use MarkdownUI directly
                         .id(message.id)
                         .textSelection(.enabled)
-                    
                         .markdownTheme(.gitHub)
                         .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: self.theme))
                         .font(.system(size: self.fontSize))

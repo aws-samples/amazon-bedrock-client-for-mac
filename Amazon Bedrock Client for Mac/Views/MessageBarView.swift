@@ -28,38 +28,25 @@ struct MessageBarView: View {
     @Binding var userInput: String
     @Binding var messages: [MessageData]
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
-    @State private var calculatedHeight: CGFloat = 60  // Add this line
+    @State private var calculatedHeight: CGFloat = 60
     @StateObject var sharedImageDataSource: SharedImageDataSource
     
     @State private var showImagePreview = false
     @State private var isImagePickerPresented = false
+    @State private var isLoading: Bool = false
     
     var sendMessage: () async -> Void
+    var cancelSending: () -> Void
     var modelId: String
     
     private var isSendButtonDisabled: Bool {
-        return (userInput.isEmpty && sharedImageDataSource.images.isEmpty) || chatManager.getIsLoading(for: chatID)
+        userInput.isEmpty && sharedImageDataSource.images.isEmpty
     }
-    
-    private var sendButtonIcon: String {
-        chatManager.getIsLoading(for: chatID) ? "ellipsis.circle" : "paperplane.fill"
-    }
-    
-    private var sendButtonColor: Color {
-        if chatManager.getIsLoading(for: chatID) {
-            return Color.background
-        } else {
-            return isSendButtonDisabled ? Color.text : Color.text
-        }
-    }
-    
     
     var body: some View {
         VStack(spacing: 0) {
             if !sharedImageDataSource.images.isEmpty {
                 imagePreview
-                    .transition(.opacity.combined(with: .slide))
-                    .animation(.easeInOut, value: sharedImageDataSource.images)
             }
             
             Divider()
@@ -72,6 +59,11 @@ struct MessageBarView: View {
             .frame(minHeight: 70, maxHeight: max(70, calculatedHeight))  // Set the maximum height
         }
         .foregroundColor(Color.text)
+        .onExitCommand(perform: {
+            if isLoading {
+                cancelSending()
+            }
+        })
     }
     
     private var inputView: some View {
@@ -98,7 +90,7 @@ struct MessageBarView: View {
                                 RoundedRectangle(cornerRadius: 10)
                                     .stroke(Color.primary.opacity(0.2), lineWidth: 1)
                             )
-
+                        
                         // Delete button
                         Button(action: {
                             self.sharedImageDataSource.images.remove(at: index)
@@ -119,7 +111,7 @@ struct MessageBarView: View {
         .frame(height: 110)
         .padding(.bottom, 10)
     }
-
+    
     private var messageTextView: some View {
         VStack {
             FirstResponderTextView(
@@ -142,33 +134,25 @@ struct MessageBarView: View {
         }
     }
     
-    @State private var isLoading: Bool = false  // Add this line
-    
+    // Send Button
     private var sendButton: some View {
-        Button(action: { Task { await sendMessage() } }) {
+        Button(action: {
             if isLoading {
-                ProgressView().controlSize(.small)
+                cancelSending()
             } else {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color.background)
+                Task { await sendMessage() }
             }
+        }) {
+            Image(systemName: isLoading ? "stop.fill" : "arrow.up")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color.background)
         }
         .buttonStyle(PlainButtonStyle())
         .frame(width: 25, height: 25)
-        .background(sendButtonColor)
-        .cornerRadius(5)
-        //        .shadow(radius: 2)
-        .disabled(isSendButtonDisabled)
+        .background(Color.text)
+        .clipShape(isLoading ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 5, style: .continuous)))
         .onChange(of: chatManager.getIsLoading(for: chatID)) { newIsLoading in
-            self.isLoading = newIsLoading
-        }
-        .onHover { hover in
-            if hover && !isSendButtonDisabled {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
-            }
+            self.isLoading = newIsLoading // Update isLoading when chatManager's loading state changes
         }
     }
     
@@ -179,7 +163,6 @@ struct MessageBarView: View {
     
     private var imageUploadButton: some View {
         Button(action: {
-            // 이미지 피커를 열기 위해 isImagePickerPresented를 true로 설정
             isImagePickerPresented = true
         }) {
             Image(systemName: "photo")
@@ -219,4 +202,3 @@ struct MessageBarView: View {
         }
     }
 }
-

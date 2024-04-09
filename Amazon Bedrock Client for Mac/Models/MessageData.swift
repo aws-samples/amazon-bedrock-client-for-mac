@@ -8,12 +8,6 @@
 import Foundation
 import SwiftUI
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
-}
-
 struct MessageData: Identifiable, Equatable, Codable {
     let id: UUID
     var text: String

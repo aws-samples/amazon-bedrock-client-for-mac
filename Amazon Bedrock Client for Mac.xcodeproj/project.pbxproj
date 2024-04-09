@@ -16,6 +16,7 @@
 		7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8422AD247CC008B03D3 /* AWSRegion.swift */; };
 		7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8442AD247DF008B03D3 /* SettingsView.swift */; };
 		7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8462AD249A7008B03D3 /* SettingManager.swift */; };
+		795D9C8F2BC57D3900DF38C0 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795D9C8E2BC57D3900DF38C0 /* MainView.swift */; };
 		79610D802AD2290300993D09 /* troubleshooting-3.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D782AD2290200993D09 /* troubleshooting-3.png */; };
 		79610D812AD2290300993D09 /* troubleshooting-2.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D792AD2290200993D09 /* troubleshooting-2.png */; };
 		79610D822AD2290300993D09 /* troubleshooting-1.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7A2AD2290200993D09 /* troubleshooting-1.png */; };
@@ -34,13 +35,10 @@
 		79610DE02AD22A2F00993D09 /* FirstResponderTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */; };
 		79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCA2AD22A2F00993D09 /* ChatModel.swift */; };
 		79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCB2AD22A2F00993D09 /* MessageData.swift */; };
-		79610DE32AD22A2F00993D09 /* ReadmeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCC2AD22A2F00993D09 /* ReadmeViewModel.swift */; };
 		79610DE42AD22A2F00993D09 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */; };
 		79610DE52AD22A2F00993D09 /* MessageBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD02AD22A2F00993D09 /* MessageBarView.swift */; };
 		79610DE62AD22A2F00993D09 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD12AD22A2F00993D09 /* HomeView.swift */; };
 		79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD32AD22A2F00993D09 /* SidebarView.swift */; };
-		79610DE92AD22A2F00993D09 /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD42AD22A2F00993D09 /* MainContentView.swift */; };
-		79610DEA2AD22A2F00993D09 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD52AD22A2F00993D09 /* ContentView.swift */; };
 		79610DEB2AD22A2F00993D09 /* MessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD62AD22A2F00993D09 /* MessageView.swift */; };
 		79610DED2AD230A200993D09 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DEC2AD230A200993D09 /* ChatView.swift */; };
 		798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = 798A9CE52AD3AB2E00E9D039 /* Vapor */; };
@@ -91,6 +89,7 @@
 		7954F8422AD247CC008B03D3 /* AWSRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSRegion.swift; sourceTree = "<group>"; };
 		7954F8442AD247DF008B03D3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7954F8462AD249A7008B03D3 /* SettingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingManager.swift; sourceTree = "<group>"; };
+		795D9C8E2BC57D3900DF38C0 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		79610D782AD2290200993D09 /* troubleshooting-3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-3.png"; sourceTree = "<group>"; };
 		79610D792AD2290200993D09 /* troubleshooting-2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-2.png"; sourceTree = "<group>"; };
 		79610D7A2AD2290200993D09 /* troubleshooting-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-1.png"; sourceTree = "<group>"; };
@@ -110,13 +109,10 @@
 		79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FirstResponderTextField.swift; sourceTree = "<group>"; };
 		79610DCA2AD22A2F00993D09 /* ChatModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		79610DCB2AD22A2F00993D09 /* MessageData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageData.swift; sourceTree = "<group>"; };
-		79610DCC2AD22A2F00993D09 /* ReadmeViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ReadmeViewModel.swift; sourceTree = "<group>"; };
 		79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		79610DD02AD22A2F00993D09 /* MessageBarView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageBarView.swift; sourceTree = "<group>"; };
 		79610DD12AD22A2F00993D09 /* HomeView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		79610DD32AD22A2F00993D09 /* SidebarView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
-		79610DD42AD22A2F00993D09 /* MainContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
-		79610DD52AD22A2F00993D09 /* ContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		79610DD62AD22A2F00993D09 /* MessageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageView.swift; sourceTree = "<group>"; };
 		79610DEC2AD230A200993D09 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalHostServer.swift; sourceTree = "<group>"; };
@@ -272,7 +268,6 @@
 			children = (
 				79610DCA2AD22A2F00993D09 /* ChatModel.swift */,
 				79610DCB2AD22A2F00993D09 /* MessageData.swift */,
-				79610DCC2AD22A2F00993D09 /* ReadmeViewModel.swift */,
 				7954F8422AD247CC008B03D3 /* AWSRegion.swift */,
 				79320FC82B469BAE0074090A /* ChatModelSnapshot.swift */,
 			);
@@ -290,14 +285,13 @@
 		79610DCF2AD22A2F00993D09 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				79610DD52AD22A2F00993D09 /* ContentView.swift */,
 				79610DD32AD22A2F00993D09 /* SidebarView.swift */,
-				79610DD42AD22A2F00993D09 /* MainContentView.swift */,
 				79610DD12AD22A2F00993D09 /* HomeView.swift */,
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
 				79610DD02AD22A2F00993D09 /* MessageBarView.swift */,
 				79610DD62AD22A2F00993D09 /* MessageView.swift */,
 				7954F8442AD247DF008B03D3 /* SettingsView.swift */,
+				795D9C8E2BC57D3900DF38C0 /* MainView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -478,12 +472,10 @@
 				79610DD82AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift in Sources */,
 				79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */,
 				79610DEB2AD22A2F00993D09 /* MessageView.swift in Sources */,
-				79610DE92AD22A2F00993D09 /* MainContentView.swift in Sources */,
+				795D9C8F2BC57D3900DF38C0 /* MainView.swift in Sources */,
 				79610DE02AD22A2F00993D09 /* FirstResponderTextField.swift in Sources */,
-				79610DEA2AD22A2F00993D09 /* ContentView.swift in Sources */,
 				79C7F5ED2AD282EE008FBB35 /* EnvironmentExtensions.swift in Sources */,
 				79610DE52AD22A2F00993D09 /* MessageBarView.swift in Sources */,
-				79610DE32AD22A2F00993D09 /* ReadmeViewModel.swift in Sources */,
 				79BFF5102AD342710057BF3A /* ChatManager.swift in Sources */,
 				79610DDE2AD22A2F00993D09 /* SplashCodeSyntaxHighlighter.swift in Sources */,
 			);
@@ -649,7 +641,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.1.7;
+				CURRENT_PROJECT_VERSION = 1.1.8;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = B47A25FR9P;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -670,8 +662,8 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.1.7;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.1.8;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -691,7 +683,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.1.7;
+				CURRENT_PROJECT_VERSION = 1.1.8;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = B47A25FR9P;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -712,8 +704,8 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.1.7;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";

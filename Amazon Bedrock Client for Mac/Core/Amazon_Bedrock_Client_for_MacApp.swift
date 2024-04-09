@@ -110,7 +110,7 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView().frame(idealWidth: 1200, idealHeight: 800)
+            MainView().frame(idealWidth: 1200, idealHeight: 800)
                 .onAppear {
                     if let window = NSApplication.shared.keyWindow {
                         window.delegate = appDelegate

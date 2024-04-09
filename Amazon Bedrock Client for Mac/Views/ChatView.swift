@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var isConfigPopupPresented: Bool = false
     @State private var selectedPlaceholder: String
     @State private var scrollToBottomTrigger: UUID?
+    @State private var chatTask: Task<Void, Never>? = nil
+
     
     var backend: Backend
     // Local copy of ChatModel
@@ -89,7 +91,7 @@ struct ChatView: View {
         
         return (data.base64EncodedString(), mediaType)
     }
-
+    
     
     // Function to get a random placeholder message
     private func getRandomPlaceholder() -> String {
@@ -114,18 +116,9 @@ struct ChatView: View {
                                 .id(message.id)
                         }
                     }
-//                    .onChange(of: messages) { _ in
-//                        if let lastMessage = messages.last {
-//                            withAnimation {
-//                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-//                            }
-//                        }
-//                    }
-                    .onAppear() {
+                    .onAppear {
                         if let lastMessage = messages.last {
-//                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-//                            }
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
                         }
                     }
                     .onChange(of: messages) { _ in
@@ -148,185 +141,196 @@ struct ChatView: View {
                 messages: $messages,
                 sharedImageDataSource: sharedImageDataSource,
                 sendMessage: sendMessage,
+                cancelSending: {
+                    chatTask?.cancel()
+                },
                 modelId: chatModel.id
             )
-        }.toolbar {
+        }
+        .toolbar {
             ToolbarItemGroup(placement: .automatic) {
-                //                Spacer()
-                
                 HStack {
                     Text("Streaming")
                         .font(.caption)
                     Toggle("Stream", isOn: $isStreamingEnabled)
                         .toggleStyle(SwitchToggleStyle())
-                        .labelsHidden()  // Optional: hides the built-in label
+                        .labelsHidden()
                 }
                 .onChange(of: isStreamingEnabled) { newValue in
-                    // Save to UserDefaults whenever the toggle changes
                     UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(chatModel.chatId)")
                 }
             }
         }
+        
     }
     
     func sendMessage() async {
-        // 입력 확인
-        guard !userInput.isEmpty else { return }
+        chatTask?.cancel()
         
-        // 상태 플래그 사용
-        guard !isSending else { return }
-        
-        isSending = true
-        isMessageBarDisabled = true
-
-        let userid = UUID()
-        
-        var imageBase64Strings: [String] = []
-        
-        if chatModel.id.contains("claude-3") {
-            var contentBlocks: [ClaudeMessageRequest.Message.Content] = []
+        chatTask = Task {
+            // 입력 확인
+            guard !userInput.isEmpty else { return }
             
-            // Add text content block
-            let textContentBlock = ClaudeMessageRequest.Message.Content(type: "text", text: userInput, source: nil)
-            contentBlocks.append(textContentBlock)
+            // 상태 플래그 사용
+            guard !isSending else { return }
             
-            // Iterate over images and add each as a content block
-            for (index, image) in sharedImageDataSource.images.enumerated() {
-                // Assume you also have access to the image's file extension
-                let fileExtension = sharedImageDataSource.fileExtensions[index]
-                let (base64String, mediaType) = base64EncodeImage(image, withExtension: fileExtension)
-                
-                if let base64String = base64String, let mediaType = mediaType {
-                    let imageContentBlock = ClaudeMessageRequest.Message.Content(
-                        type: "image",
-                        source: ClaudeMessageRequest.Message.Content.ImageSource(
-                            mediaType: mediaType,
-                            data: base64String
-                        )
-                    )
-                    contentBlocks.append(imageContentBlock)
-                    imageBase64Strings.append(base64String)
-                }
-            }
+            isSending = true
+            isMessageBarDisabled = true
             
-            // Construct the message with all content blocks (text and images)
-            let message = ClaudeMessageRequest.Message(role: "user", content: contentBlocks)
-            chatManager.addClaudeHistory(for: chatModel.chatId, message: message)
-        }
-        
-        var userMessage = MessageData(id: userid, text: userInput, user: "User", isError: false, sentTime: Date(), imageBase64Strings: imageBase64Strings)
-        
-        sharedImageDataSource.images.removeAll()
-        sharedImageDataSource.fileExtensions.removeAll()
-
-        // Add user message
-        messages.append(userMessage)
-        
-        // 메시지 배열 업데이트 후 스크롤 위치 조정
-        if let lastMessageId = self.messages.last?.id {
-            withAnimation {
-                self.scrollToBottomTrigger = userid
-            }
-        }
-        
-        // Update both messages and isLoading at once
-        chatManager.updateMessagesAndLoading(for: chatModel.chatId, messages: messages, isLoading: true)
-        //        updateLastMessageDate()
-        chatManager.saveChats()
-        
-        var history = chatManager.getHistory(for: chatModel.chatId)
-        var claudeHistory = chatManager.getClaudeHistory(for: chatModel.chatId)
-        
-        // Check and truncate history if it exceeds 100000 characters
-        if history.count > 50000 {
-            let excess = history.count - 50000
-            history = String(history.dropFirst(excess))
-        }
-        
-        do {
-            // Initialize emptyText to an empty string
-            emptyText = ""
+            let userid = UUID()
             
-            var prompt = userInput
-            if chatModel.name.contains("Claude") {
-                prompt = """
-                The following is a friendly conversation between a human and an AI.
-                The AI is talkative and provides lots of specific details from its context.
-                Current conversation:
-                <conversation_history>
-                \(history)
-                </conversation_history>
-                
-                Here is the human's next reply:
-                <human_reply>
-                \(userInput)
-                </human_reply>
-                """
-            } else if chatModel.id.contains("llama2") || chatModel.id.contains("titan-text") {
-                prompt = """
-                The following is a friendly conversation between a human and an AI.
-                The AI is talkative and provides lots of specific details from its context.
-                Current conversation:
-                <conversation_history>
-                \(history)
-                </conversation_history>
-                
-                Here is the human's next reply:
-                <human_reply>
-                \(userInput)
-                </human_reply>
-                """
-            } else if chatModel.id.contains("mistral") || chatModel.id.contains("mixtral"){
-                prompt = """
-                The following is a friendly conversation between a human and an AI.
-                The AI is talkative and provides lots of specific details from its context.
-                Current conversation:
-                <s>
-                \(history)
-                </s>
-                
-                Here is the human's next reply:
-                [INST]
-                \(userInput)
-                [/INST]
-                """
-            }
-            
-            history += "\nHuman: \(userInput)"  // Add user's message to history
-
-            // Clear the input field
-            let tempInput = userInput
-            Task {
-                await updateChatTitle(with: tempInput)
-            }
-            userInput = ""
+            var imageBase64Strings: [String] = []
             
             if chatModel.id.contains("claude-3") {
-                if isStreamingEnabled {
-                    try await invokeClaudeModelStream(claudeMessages: chatManager.getClaudeHistory(for: chatModel.chatId) ?? [])
-                } else {
-                    try await invokeClaudeModel(claudeMessages: chatManager.getClaudeHistory(for: chatModel.chatId) ?? [])
+                var contentBlocks: [ClaudeMessageRequest.Message.Content] = []
+                
+                // Add text content block
+                let textContentBlock = ClaudeMessageRequest.Message.Content(type: "text", text: userInput, source: nil)
+                contentBlocks.append(textContentBlock)
+                
+                // Iterate over images and add each as a content block
+                for (index, image) in sharedImageDataSource.images.enumerated() {
+                    // Assume you also have access to the image's file extension
+                    let fileExtension = sharedImageDataSource.fileExtensions[index]
+                    let (base64String, mediaType) = base64EncodeImage(image, withExtension: fileExtension)
+                    
+                    if let base64String = base64String, let mediaType = mediaType {
+                        let imageContentBlock = ClaudeMessageRequest.Message.Content(
+                            type: "image",
+                            source: ClaudeMessageRequest.Message.Content.ImageSource(
+                                mediaType: mediaType,
+                                data: base64String
+                            )
+                        )
+                        contentBlocks.append(imageContentBlock)
+                        imageBase64Strings.append(base64String)
+                    }
                 }
-            } else {
-                if isStreamingEnabled {
-                    try await invokeModelStream(prompt:prompt, history:history)
-                } else {
-                    try await invokeModel(prompt:prompt, history:history)
+                
+                // Construct the message with all content blocks (text and images)
+                let message = ClaudeMessageRequest.Message(role: "user", content: contentBlocks)
+                chatManager.addClaudeHistory(for: chatModel.chatId, message: message)
+            }
+            
+            var userMessage = MessageData(id: userid, text: userInput, user: "User", isError: false, sentTime: Date(), imageBase64Strings: imageBase64Strings)
+            
+            sharedImageDataSource.images.removeAll()
+            sharedImageDataSource.fileExtensions.removeAll()
+            
+            // Add user message
+            messages.append(userMessage)
+            
+            // 메시지 배열 업데이트 후 스크롤 위치 조정
+            if let lastMessageId = self.messages.last?.id {
+                withAnimation {
+                    self.scrollToBottomTrigger = userid
                 }
             }
-        } catch {
-            print("Error invoking the model: \(error)")
-            messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
-//            scrollToBottomTrigger.toggle()
+            
+            // Update both messages and isLoading at once
+            chatManager.updateMessagesAndLoading(for: chatModel.chatId, messages: messages, isLoading: true)
+            //        updateLastMessageDate()
+            chatManager.saveChats()
+            
+            var history = chatManager.getHistory(for: chatModel.chatId)
+            var claudeHistory = chatManager.getClaudeHistory(for: chatModel.chatId)
+            
+            // Check and truncate history if it exceeds 100000 characters
+            if history.count > 50000 {
+                let excess = history.count - 50000
+                history = String(history.dropFirst(excess))
+            }
+            
+            do {
+                // Initialize emptyText to an empty string
+                emptyText = ""
+                
+                var prompt = userInput
+                if chatModel.name.contains("Claude") {
+                    prompt = """
+                    The following is a friendly conversation between a human and an AI.
+                    The AI is talkative and provides lots of specific details from its context.
+                    Current conversation:
+                    <conversation_history>
+                    \(history)
+                    </conversation_history>
+                    
+                    Here is the human's next reply:
+                    <human_reply>
+                    \(userInput)
+                    </human_reply>
+                    """
+                } else if chatModel.id.contains("llama2") || chatModel.id.contains("titan-text") {
+                    prompt = """
+                    The following is a friendly conversation between a human and an AI.
+                    The AI is talkative and provides lots of specific details from its context.
+                    Current conversation:
+                    <conversation_history>
+                    \(history)
+                    </conversation_history>
+                    
+                    Here is the human's next reply:
+                    <human_reply>
+                    \(userInput)
+                    </human_reply>
+                    """
+                } else if chatModel.id.contains("mistral") || chatModel.id.contains("mixtral"){
+                    prompt = """
+                    The following is a friendly conversation between a human and an AI.
+                    The AI is talkative and provides lots of specific details from its context.
+                    Current conversation:
+                    <s>
+                    \(history)
+                    </s>
+                    
+                    Here is the human's next reply:
+                    [INST]
+                    \(userInput)
+                    [/INST]
+                    """
+                }
+                
+                history += "\nHuman: \(userInput)"  // Add user's message to history
+                
+                // Clear the input field
+                let tempInput = userInput
+                Task {
+                    await updateChatTitle(with: tempInput)
+                }
+                userInput = ""
+                
+                if chatModel.id.contains("claude-3") {
+                    if isStreamingEnabled {
+                        try await invokeClaudeModelStream(claudeMessages: chatManager.getClaudeHistory(for: chatModel.chatId) ?? [])
+                    } else {
+                        try await invokeClaudeModel(claudeMessages: chatManager.getClaudeHistory(for: chatModel.chatId) ?? [])
+                    }
+                } else {
+                    if isStreamingEnabled {
+                        try await invokeModelStream(prompt:prompt, history:history)
+                    } else {
+                        try await invokeModel(prompt:prompt, history:history)
+                    }
+                }
+            } catch {
+                print("Error invoking the model: \(error)")
+                messages.append(MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date()))
+                //            scrollToBottomTrigger.toggle()
+            }
+            
+            //        updateLastMessageDate()
+            chatManager.saveChats()
+            
+            chatManager.setIsLoading(for: chatModel.chatId, isLoading: false)  // End loading
+            isMessageBarDisabled = false
+            
+            isSending = false
+            
+            DispatchQueue.main.async {
+                self.isSending = false
+                self.isMessageBarDisabled = false
+            }
         }
-        
-        //        updateLastMessageDate()
-        chatManager.saveChats()
-        
-        chatManager.setIsLoading(for: chatModel.chatId, isLoading: false)  // End loading
-        isMessageBarDisabled = false
-        
-        isSending = false
     }
     
     // Asynchronously update the chat title with a summary of the input
@@ -542,12 +546,12 @@ struct ChatView: View {
         
         // Get response from Bedrock specifically for Claude model
         let data = try await backend.invokeClaudeModel(withId: modelId, messages: claudeMessages)
-
+        
         let response = try JSONDecoder().decode(ClaudeMessageResponse.self, from: data)
         if let firstText = response.content.first?.text {
             messages.append(MessageData(id: UUID(), text: firstText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date()))
         }
-
+        
         if let lastMessage = messages.last {
             let content = ClaudeMessageRequest.Message.Content(type: "text", text: lastMessage.text, source: nil)
             // The role is assumed to be "user"; adjust as necessary.
