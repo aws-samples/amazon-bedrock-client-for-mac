@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BC0DA4A2BC5BDE20019C74D /* CodeBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC0DA492BC5BDE20019C74D /* CodeBlockView.swift */; };
 		7907BEAA2ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */; };
 		7907BEB42ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */; };
 		7907BEB62ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */; };
@@ -76,6 +77,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		5BC0DA492BC5BDE20019C74D /* CodeBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBlockView.swift; sourceTree = "<group>"; };
 		7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Amazon Bedrock Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA52ACD87A200C4D500 /* Amazon Bedrock Client for MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacTests.swift; sourceTree = "<group>"; };
@@ -287,6 +289,7 @@
 			children = (
 				79610DD32AD22A2F00993D09 /* SidebarView.swift */,
 				79610DD12AD22A2F00993D09 /* HomeView.swift */,
+				5BC0DA492BC5BDE20019C74D /* CodeBlockView.swift */,
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
 				79610DD02AD22A2F00993D09 /* MessageBarView.swift */,
 				79610DD62AD22A2F00993D09 /* MessageView.swift */,
@@ -464,6 +467,7 @@
 				79AFC17E2AD23B4800A75ED3 /* ToggleSidebar.swift in Sources */,
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,
+				5BC0DA4A2BC5BDE20019C74D /* CodeBlockView.swift in Sources */,
 				79610DDF2AD22A2F00993D09 /* GithubTheme.swift in Sources */,
 				79610DDD2AD22A2F00993D09 /* TextOutputFormat.swift in Sources */,
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
