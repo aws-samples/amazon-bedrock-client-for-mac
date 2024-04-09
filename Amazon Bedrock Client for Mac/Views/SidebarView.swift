@@ -36,10 +36,24 @@ struct SidebarView: View {
     // Timer to update chat list periodically
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM dd, yyyy"
+        return formatter
+    }()
+    
+    private var sortedDateKeys: [String] {
+        organizedChatModels.keys
+            .compactMap { dateFormatter.date(from: $0) }
+            .sorted()
+            .reversed()
+            .map { dateFormatter.string(from: $0) }
+    }
+    
     var body: some View {
         List {
             newChatSection
-            ForEach(organizedChatModels.keys.sorted().reversed(), id: \.self) { dateKey in
+            ForEach(sortedDateKeys, id: \.self) { dateKey in
                 Section(header: Text(dateKey)) {
                     ForEach(organizedChatModels[dateKey] ?? [], id: \.self) { chat in
                         chatRowView(for: chat)
