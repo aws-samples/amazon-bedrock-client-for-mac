@@ -119,6 +119,10 @@ struct MessageBarView: View {
                 isDisabled: .constant(chatManager.getIsLoading(for: chatID)),  // Change here
                 calculatedHeight: $calculatedHeight,  // Pass the binding
                 onCommit: {
+                    if isLoading {
+                        return
+                    }
+                    
                     calculatedHeight = 70
                     Task { await sendMessage() }
                 },
