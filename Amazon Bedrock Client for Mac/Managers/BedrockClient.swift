@@ -91,7 +91,7 @@ struct Backend {
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
         
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
         
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         let encodedParams = try self.encode(params, strategy: strategy)
@@ -130,7 +130,7 @@ struct Backend {
         let modelType = getModelType(modelId)
         
         // Determine the appropriate key encoding strategy for the model type
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .claude3 || modelType == .mistral || modelType == .llama2) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .claude3 || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
         
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         
@@ -326,6 +326,8 @@ struct Backend {
             return .stableDiffusion
         } else if modelName.hasPrefix("llama2") {
             return .llama2
+        } else if modelName.hasPrefix("llama3") {
+            return .llama3
         } else if modelName.hasPrefix("mistral") || modelName.hasPrefix("mixtral") {
             return .mistral
         } else {
@@ -373,6 +375,8 @@ struct Backend {
             return MistralModelParameters(prompt: "<s>[INST] \(prompt)[\\INST]", maxTokens: 4096, temperature: 0.9, topP: 0.9)
         case .llama2:
             return Llama2ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
+        case .llama3:
+            return Llama3ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
         default:
             return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
         }
@@ -581,12 +585,6 @@ extension AWSTemporaryCredentials {
         return path
     }
 }
-public enum BedrockModelProvider : String {
-    case titan = "Amazon"
-    case claude = "Anthropic"
-    case stabledifusion = "Stability AI"
-    case j2 = "AI21 Labs"
-}
 
 enum FoundationModelType {
     case titan
@@ -600,6 +598,7 @@ enum FoundationModelType {
     case cohereEmbed
     case stableDiffusion
     case llama2
+    case llama3
     case unknown
 }
 
@@ -927,6 +926,30 @@ public struct Llama2ModelParameters: ModelParameters {
     }
 }
 
+public struct Llama3ModelParameters: ModelParameters {
+    public var prompt: String
+    public var maxGenLen: Int
+    public var topP: Double
+    public var temperature: Double
+    
+    public init(
+        prompt: String,
+        maxGenLen: Int = 2048,
+        topP: Double = 0.9,
+        temperature: Double = 0.9
+    ) {
+        self.prompt = prompt
+        self.maxGenLen = maxGenLen
+        self.topP = topP
+        self.temperature = temperature
+    }
+    
+    public func encodeModel() throws -> Data {
+        let encoder = JSONEncoder()
+        return try encoder.encode(self)
+    }
+}
+
 // MARK: - TitanModelParameters
 
 public struct TitanModelParameters: ModelParameters {
@@ -1043,6 +1066,10 @@ public struct InvokeMistralResponse: ModelResponse, Decodable {
 }
 
 public struct InvokeLlama2Response: ModelResponse, Decodable {
+    public let generation: String
+}
+
+public struct InvokeLlama3Response: ModelResponse, Decodable {
     public let generation: String
 }
 

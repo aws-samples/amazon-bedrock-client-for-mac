@@ -260,6 +260,13 @@ struct ChatView: View {
                     \(userInput)
                     </human_reply>
                     """
+                } else if chatModel.id.contains("llama3") {
+                    prompt = """
+                    <|begin_of_text|><|start_header_id|>system<|end_header_id|>The following is a friendly conversation between a human and an AI.
+                    The AI is talkative and provides lots of specific details from its context.<|eot_id|>
+                    \(history)
+                    <|start_header_id|>user<|end_header_id|>\n\n\(userInput)<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n
+                    """
                 } else if chatModel.id.contains("llama2") || chatModel.id.contains("titan-text") {
                     prompt = """
                     The following is a friendly conversation between a human and an AI.
@@ -289,8 +296,11 @@ struct ChatView: View {
                     [/INST]
                     """
                 }
-                
-                history += "\nHuman: \(userInput)"  // Add user's message to history
+                if chatModel.id.contains("llama3") {
+                    history += "<|start_header_id|>user<|end_header_id|>\n\n\(userInput)<|eot_id|>"  // Add user's message to history
+                } else {
+                    history += "\nHuman: \(userInput)"  // Add user's message to history
+                }
                 
                 // Clear the input field
                 let tempInput = userInput
@@ -484,6 +494,24 @@ struct ChatView: View {
                             messages[messages.count - 1].text = emptyText
                         }
                     }
+                case .llama3:
+                    if let chunkOfText = (jsonObject as? [String: Any])?["generation"] as? String {
+                        
+                        let processedText = chunkOfText
+                        
+                        // Trim whitespace if it's the first chunk
+                        if isFirstChunk {
+                            isFirstChunk = false
+                            emptyText.append(chunkOfText.trimmingCharacters(in: .whitespacesAndNewlines))
+                            
+                            // Append a message for Bedrock's first response
+                            messages.append(MessageData(id: UUID(), text: emptyText, user: chatModel.name, isError: false, sentTime: Date()))
+                        } else {
+                            // Append the chunk to the last message
+                            emptyText.append(processedText)
+                            messages[messages.count - 1].text = emptyText
+                        }
+                    }
                 case .mistral:
                     do {
                         let decoder = JSONDecoder()
@@ -533,7 +561,11 @@ struct ChatView: View {
         }
         
         if let lastMessage = messages.last {
-            currentHistory += "\nAssistant: \(lastMessage.text)"
+            if modelType == .llama3 {
+                currentHistory += "<|start_header_id|>assistant<|end_header_id|>\n\n\(lastMessage.text)<|eot_id|>"
+            } else {
+                currentHistory += "\nAssistant: \(lastMessage.text)"
+            }
         }
         
         chatManager.setHistory(for: chatModel.chatId, history: currentHistory)
@@ -636,6 +668,10 @@ struct ChatView: View {
             case .llama2:
                 let response = try backend.decode(data) as InvokeLlama2Response
                 messages.append(MessageData(id: UUID(), text: response.generation, user: chatModel.name, isError: false, sentTime: Date()))
+
+            case .llama3:
+                let response = try backend.decode(data) as InvokeLlama2Response
+                messages.append(MessageData(id: UUID(), text: response.generation, user: chatModel.name, isError: false, sentTime: Date()))
                 
             case .mistral:
                 let response = try backend.decode(data) as InvokeMistralResponse
@@ -647,7 +683,11 @@ struct ChatView: View {
             
             // Update history
             if let lastMessage = messages.last {
-                currentHistory += "\nAssistant: \(lastMessage.text)"
+                if modelType == .llama3 {
+                    currentHistory += "<|start_header_id|>assistant<|end_header_id|>\n\n\(lastMessage.text)<|eot_id|>"
+                } else {
+                    currentHistory += "\nAssistant: \(lastMessage.text)"
+                }
             }
         } else {
             let data = try await backend.invokeStableDiffusionModel(withId: modelId, prompt: prompt)
