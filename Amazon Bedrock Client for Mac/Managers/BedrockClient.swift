@@ -300,7 +300,7 @@ struct Backend {
     }
     
     // Helper function to determine the model type based on modelId
-    func getModelType(_ modelId: String) -> FoundationModelType {
+    func getModelType(_ modelId: String) -> ModelType {
         let parts = modelId.split(separator: ".")
         guard let modelName = parts.last else {
             fatalError("Invalid modelId: \(modelId)")
@@ -336,7 +336,7 @@ struct Backend {
     }
     
     // Function to get model parameters
-    func getModelParameters(modelType: FoundationModelType, prompt: String) -> ModelParameters {
+    func getModelParameters(modelType: ModelType, prompt: String) -> ModelParameters {
         switch modelType {
         case .claude:
             return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
@@ -586,21 +586,10 @@ extension AWSTemporaryCredentials {
     }
 }
 
-enum FoundationModelType {
-    case titan
-    case titanEmbed
-    case titanImage
-    case claude
-    case claude3
-    case mistral
-    case j2
-    case cohereCommand
-    case cohereEmbed
-    case stableDiffusion
-    case llama2
-    case llama3
-    case unknown
+enum ModelType {
+    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, unknown
 }
+
 
 public protocol ModelParameters: Encodable {
 }

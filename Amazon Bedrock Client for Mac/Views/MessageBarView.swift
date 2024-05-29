@@ -9,7 +9,7 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
-
+/// A view that displays a resizable image with rounded corners and a shadow effect.
 struct ImageViewer: View {
     var image: NSImage
     
@@ -17,46 +17,47 @@ struct ImageViewer: View {
         Image(nsImage: image)
             .resizable()
             .scaledToFit()
-            .frame(width: 300, height: 300)
+            .frame(width: 100, height: 100)
             .cornerRadius(12)
             .shadow(radius: 7)
     }
 }
 
+/// Main user interface for managing text input and image uploads for messaging.
 struct MessageBarView: View {
-    var chatID: String  // Identifier for the chat
+    var chatID: String
     @Binding var userInput: String
     @Binding var messages: [MessageData]
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
-    @State private var calculatedHeight: CGFloat = 60
     @StateObject var sharedImageDataSource: SharedImageDataSource
     
-    @State private var showImagePreview = false
-    @State private var isImagePickerPresented = false
+    @State private var calculatedHeight: CGFloat = 40
+    @State private var isImagePickerPresented: Bool = false
     @State private var isLoading: Bool = false
     
     var sendMessage: () async -> Void
     var cancelSending: () -> Void
     var modelId: String
     
-    private var isSendButtonDisabled: Bool {
-        userInput.isEmpty && sharedImageDataSource.images.isEmpty
-    }
-    
     var body: some View {
-        VStack(spacing: 0) {
+        VStack {
             if !sharedImageDataSource.images.isEmpty {
                 imagePreview
             }
             
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                inputView
+            HStack(alignment: .bottom) {
+                fileUploadButton
+                    .padding(.bottom, 4)
+                Spacer()
+                inputArea
+                    .background(RoundedRectangle(cornerRadius: 30).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                    .padding(.top, 4)
+                Spacer()
+                sendButton
+                    .padding(.bottom, 4)
             }
-            .padding()
-            .background(Color.background)
-            .frame(minHeight: 70, maxHeight: max(70, calculatedHeight))  // Set the maximum height
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
         }
         .foregroundColor(Color.text)
         .onExitCommand(perform: {
@@ -64,134 +65,73 @@ struct MessageBarView: View {
                 cancelSending()
             }
         })
-    }
-    
-    private var inputView: some View {
-        HStack(alignment: .center, spacing: 10) {
-            if isClaude3Model() {
-                imageUploadButton
-            }
-            messageTextView
-            sendButton
-        }
+        //        .animation(.default, value: calculatedHeight)
     }
     
     private var imagePreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(sharedImageDataSource.images.indices, id: \.self) { index in
-                    ZStack(alignment: .topTrailing) {
-                        Image(nsImage: sharedImageDataSource.images[index])
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                            )
-                        
-                        // Delete button
-                        Button(action: {
-                            self.sharedImageDataSource.images.remove(at: index)
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(2)
-                    }
+                    ImageViewer(image: sharedImageDataSource.images[index])
+                        .overlay(deleteButton(at: index), alignment: .topTrailing)
                 }
             }
             .padding(.horizontal)
-            .padding(.top, 5)
-        }
-        .frame(height: 110)
-        .padding(.bottom, 10)
-    }
-    
-    private var messageTextView: some View {
-        VStack {
-            FirstResponderTextView(
-                text: $userInput,
-                isDisabled: .constant(chatManager.getIsLoading(for: chatID)),  // Change here
-                calculatedHeight: $calculatedHeight,  // Pass the binding
-                onCommit: {
-                    if isLoading {
-                        return
-                    }
-                    
-                    calculatedHeight = 70
-                    Task { await sendMessage() }
-                },
-                onPaste: { image in
-                    self.sharedImageDataSource.images.append(image)
-                    self.showImagePreview = true
-                }
-            )
-            .font(.system(size: 16))
-            .textFieldStyle(PlainTextFieldStyle())
-            .foregroundColor(Color.text)
-            // Use GeometryReader to calculate the height
+            .frame(height: 110)
         }
     }
     
-    // Send Button
-    private var sendButton: some View {
+    private func deleteButton(at index: Int) -> some View {
         Button(action: {
-            if isLoading {
-                cancelSending()
-            } else {
-                Task { await sendMessage() }
-            }
+            sharedImageDataSource.images.remove(at: index)
         }) {
-            Image(systemName: isLoading ? "stop.fill" : "arrow.up")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color.background)
+            Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.gray)
+                .background(Color.white)
+                .clipShape(Circle())
         }
         .buttonStyle(PlainButtonStyle())
-        .frame(width: 25, height: 25)
-        .background(Color.text)
-        .clipShape(isLoading ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 5, style: .continuous)))
-        .onChange(of: chatManager.getIsLoading(for: chatID)) { newIsLoading in
-            self.isLoading = newIsLoading // Update isLoading when chatManager's loading state changes
-        }
+        .padding(2)
     }
     
-    private func isClaude3Model() -> Bool {
-        // Implement logic to determine if the model is "claude3" based on `chatID` or another property
-        return modelId.contains("claude-3")
+    private var inputArea: some View {
+        FirstResponderTextView(
+            text: $userInput,
+            isDisabled: $isLoading,
+            calculatedHeight: $calculatedHeight,
+            onCommit: {             if !userInput.isEmpty {
+                Task { await sendMessage() }
+            } },
+            onPaste: { image in
+                if let compressedData = image.compressedData(maxFileSize: 1024 * 1024, format: .jpeg),
+                   let compressedImage = NSImage(data: compressedData) {
+                    sharedImageDataSource.images.append(compressedImage)
+                    sharedImageDataSource.fileExtensions.append("jpeg")
+                } else {
+                    sharedImageDataSource.images.append(image)
+                    sharedImageDataSource.fileExtensions.append("png")
+                }
+            }
+        )
+        .frame(minHeight: 40, maxHeight: calculatedHeight)
+        .padding(.horizontal, 12)
     }
     
-    private var imageUploadButton: some View {
+    private var fileUploadButton: some View {
         Button(action: {
             isImagePickerPresented = true
         }) {
-            Image(systemName: "photo")
-                .font(.system(size: 15))
+            Image(systemName: "paperclip")
+                .font(.system(size: 16, weight: .bold))
                 .foregroundColor(Color.text)
         }
         .buttonStyle(PlainButtonStyle())
-        .frame(width: 25, height: 25)
-        .cornerRadius(5)
-        .onHover { hover in
-            if hover {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
-            }
-        }
-        .fileImporter(isPresented: $isImagePickerPresented, allowedContentTypes: [
-            UTType.jpeg,
-            UTType.png,
-            UTType.webP,
-            UTType.gif
-        ], allowsMultipleSelection: true) { result in
+        .frame(width: 32, height: 32)
+        .clipShape(Circle())
+        .fileImporter(isPresented: $isImagePickerPresented, allowedContentTypes: [.jpeg, .png], allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls):
-                for url in urls {
+                urls.forEach { url in
                     if let image = NSImage(contentsOf: url) {
                         self.sharedImageDataSource.images.append(image)
                         
@@ -201,8 +141,55 @@ struct MessageBarView: View {
                     }
                 }
             case .failure(let error):
-                print(error.localizedDescription)
+                print("Failed to import images: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private var sendButton: some View {
+        Button(action: {
+            if isLoading {
+                cancelSending()
+            } else {
+                Task { await sendMessage() }
+            }
+        }) {
+            Image(systemName: isLoading ? "stop.fill" : "arrow.up")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color.background)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .frame(width: 32, height: 32)
+        .background(Color.text)
+        .clipShape(Circle())
+        .disabled(userInput.isEmpty && !isLoading)
+        .onChange(of: chatManager.getIsLoading(for: chatID)) { isLoading = $0 }
+    }
+    
+    /// Determines if the user's device or server model corresponds to "claude-3".
+    private func isClaude3Model() -> Bool {
+        return modelId.contains("claude-3")
+    }
+}
+
+extension NSImage {
+    func compressedData(maxFileSize: Int, format: NSBitmapImageRep.FileType = .jpeg) -> Data? {
+        guard let tiffRepresentation = self.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffRepresentation) else { return nil }
+        
+        var compressionFactor: CGFloat = 1.0
+        var compressedData: Data?
+        
+        while compressionFactor > 0.0 {
+            let properties: [NSBitmapImageRep.PropertyKey: Any] = [.compressionFactor: compressionFactor]
+            compressedData = bitmapImage.representation(using: format, properties: properties)
+            
+            if let data = compressedData, data.count <= maxFileSize {
+                return data
+            }
+            compressionFactor -= 0.1
+        }
+        
+        return compressedData
     }
 }

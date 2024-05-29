@@ -40,7 +40,7 @@ struct MessageView: View {
     @ObservedObject var viewModel = MessageViewModel()
     
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
-    @Environment(\.fontSize) private var fontSize: CGFloat  // Inject the fontSize environment value
+    @Environment(\.fontSize) private var fontSize: CGFloat
     
     func userImage(for user: String) -> some View {
         let imageName: String
@@ -66,7 +66,6 @@ struct MessageView: View {
             isDefaultImage = true
         }
         
-        // 기본 이미지가 아닐 경우에만 크기를 작게 조정합니다.
         let image = Image(imageName)
         return Group {
             if isDefaultImage {
@@ -75,14 +74,13 @@ struct MessageView: View {
                     .scaledToFill()
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                //                    .shadow(radius: 3)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
                     .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             } else {
                 image
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40) // 여기서 이미지 크기를 조절합니다.
+                    .frame(width: 40, height: 40)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
@@ -91,9 +89,7 @@ struct MessageView: View {
         }
     }
     
-    
     private var theme: Splash.Theme {
-        // NOTE: We are ignoring the Splash theme font
         switch self.colorScheme {
         case .dark:
             return .wwdc17(withFont: .init(size: self.fontSize))
@@ -102,19 +98,17 @@ struct MessageView: View {
         }
     }
     
-    
     var body: some View {
         HStack(spacing: 12) {
             if message.user == "User" {
                 Image(systemName: "person.crop.square.fill")
-                    .resizable()  // Make the icon resizable
-                    .scaledToFill()  // Fill the frame
-                    .frame(width: 40, height: 40)  // Set the frame
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
                     .foregroundColor(Color.link)
                     .opacity(0.8)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))  // Clip into a circle
-                //                    .shadow(radius: 3)  // Optional shadow for depth
-                    .overlay(  // Optional border
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.link, lineWidth: 2)
                     )
@@ -125,7 +119,7 @@ struct MessageView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(message.user)
-                        .font(.system(size: self.fontSize))  // Increase username text size
+                        .font(.system(size: self.fontSize))
                         .bold()
                         .textSelection(.enabled)
                     
@@ -136,7 +130,7 @@ struct MessageView: View {
                 }
                 
                 if message.user != "User" {
-                    Markdown(message.text)  // Use MarkdownUI directly
+                    Markdown(message.text)
                         .id(message.id)
                         .textSelection(.enabled)
                         .markdownTheme(
@@ -146,7 +140,6 @@ struct MessageView: View {
                             }
                         )
                         .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: self.theme))
-                   
                         .font(.system(size: self.fontSize))
                 } else {
                     HStack(spacing: 10) {
@@ -155,15 +148,28 @@ struct MessageView: View {
                                 viewModel.selectImage(with: imageData)
                             }) {
                                 if let image = NSImage(base64Encoded: imageData) {
-                                    Image(nsImage: image)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                                        )
+                                    if let compressedData = image.compressedData(maxFileSize: 100 * 1024, maxDimension: 500),
+                                       let compressedImage = NSImage(data: compressedData) {
+                                        Image(nsImage: compressedImage)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                                            )
+                                    } else {
+                                        Image(nsImage: image)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                                            )
+                                    }
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -194,17 +200,13 @@ struct MessageView: View {
             
             Spacer()
             
-            // Copy button
             Button(action: {
                 if containsLocalhostImage {
-                    // Copy the image URL to the clipboard
-                    // Extract the URL from the Markdown-like string
                     if let urlRange = message.text.range(of: "http://localhost:[^)]+", options: .regularExpression),
                        let url = URL(string: String(message.text[urlRange])) {
-                        // Open the URL with NSWorkspace
-                        NSWorkspace.shared.open(url)}
+                        NSWorkspace.shared.open(url)
+                    }
                 } else {
-                    // Copy the message to the clipboard
                     let pasteboard = NSPasteboard.general
                     pasteboard.clearContents()
                     pasteboard.setString(message.text, forType: .string)
@@ -219,6 +221,7 @@ struct MessageView: View {
             .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
         }.textSelection(.enabled)
     }
+    
     
     var containsLocalhostImage: Bool {
         return message.text.contains("![](http://localhost:8080/")
@@ -247,17 +250,66 @@ struct ImageViewerModal: View {
             
             VStack {
                 HStack {
-                    Spacer() // Use Spacer to push the button to the right
+                    Spacer()
                     Button(action: closeModal) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.black)
                             .font(.title)
                     }
-                    .padding([.top, .trailing]) // Add padding to ensure it's not too close to the edges
+                    .padding([.top, .trailing])
                     .buttonStyle(PlainButtonStyle())
                 }
-                Spacer() // Use Spacer to push the button up
+                Spacer()
             }
         }
     }
 }
+
+extension NSImage {
+    func resized(to targetSize: NSSize) -> NSImage? {
+        let newSize = NSSize(width: targetSize.width, height: targetSize.height)
+        let newImage = NSImage(size: newSize)
+
+        newImage.lockFocus()
+        self.draw(in: NSRect(origin: .zero, size: newSize),
+                  from: NSRect(origin: .zero, size: self.size),
+                  operation: .sourceOver,
+                  fraction: 1.0)
+        newImage.unlockFocus()
+
+        return newImage
+    }
+
+    func resizedMaintainingAspectRatio(maxDimension: CGFloat) -> NSImage? {
+        let aspectRatio = self.size.width / self.size.height
+        let newSize: NSSize
+        
+        if self.size.width > self.size.height {
+            newSize = NSSize(width: maxDimension, height: maxDimension / aspectRatio)
+        } else {
+            newSize = NSSize(width: maxDimension * aspectRatio, height: maxDimension)
+        }
+        
+        return resized(to: newSize)
+    }
+    
+    func compressedData(maxFileSize: Int, maxDimension: CGFloat, format: NSBitmapImageRep.FileType = .jpeg) -> Data? {
+        guard let resizedImage = self.resizedMaintainingAspectRatio(maxDimension: maxDimension),
+              let tiffRepresentation = resizedImage.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffRepresentation) else {
+            return nil
+        }
+        
+        var compressionFactor: CGFloat = 1.0
+        var data = bitmapImage.representation(using: format, properties: [.compressionFactor: compressionFactor])
+        
+        // 이미지 크기가 maxFileSize보다 클 때 압축률을 증가시키면서 파일 크기를 줄입니다.
+        while let imageData = data, imageData.count > maxFileSize && compressionFactor > 0 {
+            compressionFactor -= 0.1
+            data = bitmapImage.representation(using: format, properties: [.compressionFactor: compressionFactor])
+        }
+        
+        return data
+    }
+}
+
