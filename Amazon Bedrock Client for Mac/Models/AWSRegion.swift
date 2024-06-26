@@ -20,6 +20,9 @@ enum AWSRegion: String, CaseIterable, Identifiable {
     case euCentral1 = "eu-central-1"     // Europe (Frankfurt)
     case euWest1 = "eu-west-1"           // Europe (Ireland)
     case euWest3 = "eu-west-3"           // Europe (Paris)
+    case euWest2 = "eu-west-2"           // Europe (London)
+    case caCentral1 = "ca-central-1"     // Canada (Central)
+    case saEast1 = "sa-east-1"           // South America (São Paulo)
     
     // Add other regions as needed
 }
