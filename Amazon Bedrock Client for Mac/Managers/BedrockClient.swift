@@ -413,7 +413,7 @@ struct Backend {
             }
             
         } catch {
-            if let awsError = error as? AWSClientRuntime.UnknownAWSHTTPServiceError {
+            if let awsError = error as? AWSClientRuntime.AWSServiceError {
                 if awsError.typeName == "ExpiredTokenException" {
                     logger.error("Token has expired")
                     return .failure(BedrockError.tokenExpired)
@@ -1060,10 +1060,6 @@ public struct InvokeLlama2Response: ModelResponse, Decodable {
 
 public struct InvokeLlama3Response: ModelResponse, Decodable {
     public let generation: String
-}
-
-struct ListFoundationModelsResponse: Decodable {
-    public var modelSummaries: [BedrockClientTypes.FoundationModelSummary]?
 }
 
 // MARK: - Errors

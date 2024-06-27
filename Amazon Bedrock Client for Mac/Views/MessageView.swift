@@ -36,13 +36,134 @@ extension NSImage {
 
 struct MessageView: View {
     var message: MessageData
-    
-    @ObservedObject var viewModel = MessageViewModel()
-    
+    @StateObject var viewModel = MessageViewModel()
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.fontSize) private var fontSize: CGFloat
     
-    func userImage(for user: String) -> some View {
+    private let imageSize: CGFloat = 100
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            userImage
+            
+            VStack(alignment: .leading, spacing: 2) {
+                messageHeader
+                messageContent
+            }
+            
+            Spacer()
+            
+            copyButton
+        }
+        .textSelection(.enabled)
+    }
+    
+    private var userImage: some View {
+        Group {
+            if message.user == "User" {
+                Image(systemName: "person.crop.square.fill")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .foregroundColor(Color.link)
+                    .opacity(0.8)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.link, lineWidth: 2))
+            } else {
+                userImage(for: message.user)
+            }
+        }
+        .frame(width: 40, height: 40)
+    }
+    
+    private var messageHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(message.user)
+                .font(.system(size: fontSize))
+                .bold()
+            
+            Text(format(date: message.sentTime))
+                .font(.callout)
+                .foregroundColor(Color.secondary)
+        }
+    }
+    
+    @ViewBuilder
+    private var messageContent: some View {
+        if message.user != "User" {
+            LazyMarkdownView(text: message.text, fontSize: fontSize, theme: theme)
+        } else {
+            userMessageContent
+        }
+    }
+    
+    private var userMessageContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let imageBase64Strings = message.imageBase64Strings, !imageBase64Strings.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 10) {
+                        ForEach(imageBase64Strings, id: \.self) { imageData in
+                            LazyImageView(imageData: imageData, size: imageSize) {
+                                viewModel.selectImage(with: imageData)
+                            }
+                        }
+                    }
+                }
+                .frame(height: imageSize)
+            }
+            
+            Text(message.text)
+                .font(.system(size: fontSize))
+        }
+        .sheet(isPresented: $viewModel.isShowingImageModal) {
+            if let imageData = viewModel.selectedImageData,
+               let imageToShow = NSImage(base64Encoded: imageData) {
+                ImageViewerModal(image: imageToShow) {
+                    viewModel.clearSelection()
+                }
+            }
+        }
+    }
+    
+    private var copyButton: some View {
+        Button(action: {
+            copyMessageToClipboard()
+        }) {
+            Image(systemName: "doc.on.doc")
+                .foregroundColor(Color.secondary)
+                .font(.system(size: 15))
+                .padding(.horizontal, 10)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var theme: Splash.Theme {
+        colorScheme == .dark ? .wwdc17(withFont: .init(size: fontSize)) : .sunset(withFont: .init(size: fontSize))
+    }
+    
+    private func copyMessageToClipboard() {
+        if containsLocalhostImage {
+            if let urlRange = message.text.range(of: "http://localhost:[^)]+", options: .regularExpression),
+               let url = URL(string: String(message.text[urlRange])) {
+                NSWorkspace.shared.open(url)
+            }
+        } else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(message.text, forType: .string)
+        }
+    }
+    
+    private var containsLocalhostImage: Bool {
+        message.text.contains("![](http://localhost:8080/")
+    }
+    
+    private func format(date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    private func userImage(for user: String) -> some View {
         let imageName: String
         let isDefaultImage: Bool
         
@@ -75,7 +196,6 @@ struct MessageView: View {
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
-                    .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             } else {
                 image
                     .resizable()
@@ -84,153 +204,58 @@ struct MessageView: View {
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
-                    .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
             }
         }
     }
-    
-    private var theme: Splash.Theme {
-        switch self.colorScheme {
-        case .dark:
-            return .wwdc17(withFont: .init(size: self.fontSize))
-        default:
-            return .sunset(withFont: .init(size: self.fontSize))
-        }
-    }
+}
+
+struct LazyImageView: View {
+    let imageData: String
+    let size: CGFloat
+    let onTap: () -> Void
     
     var body: some View {
-        HStack(spacing: 12) {
-            if message.user == "User" {
-                Image(systemName: "person.crop.square.fill")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .foregroundColor(Color.link)
-                    .opacity(0.8)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.link, lineWidth: 2)
-                    )
-                    .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
-            } else {
-                userImage(for: message.user)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(message.user)
-                        .font(.system(size: self.fontSize))
-                        .bold()
-                        .textSelection(.enabled)
-                    
-                    Text(format(date: message.sentTime))
-                        .font(.callout)
-                        .foregroundColor(Color.secondary)
-                        .textSelection(.enabled)
-                }
-                
-                if message.user != "User" {
-                    Markdown(message.text)
-                        .id(message.id)
-                        .textSelection(.enabled)
-                        .markdownTheme(
-                          .gitHub
-                            .codeBlock() {
-                              CodeBlockView(theme: theme, configuration: $0)
-                            }
-                        )
-                        .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: self.theme))
-                        .font(.system(size: self.fontSize))
-                } else {
-                    HStack(spacing: 10) {
-                        ForEach(message.imageBase64Strings ?? [], id: \.self) { imageData in
-                            Button(action: {
-                                viewModel.selectImage(with: imageData)
-                            }) {
-                                if let image = NSImage(base64Encoded: imageData) {
-                                    if let compressedData = image.compressedData(maxFileSize: 100 * 1024, maxDimension: 500),
-                                       let compressedImage = NSImage(data: compressedData) {
-                                        Image(nsImage: compressedImage)
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 100, height: 100)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                                            )
-                                    } else {
-                                        Image(nsImage: image)
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 100, height: 100)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                                            )
-                                    }
-                                }
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .onHover { isHovering in
-                                if isHovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                        }
-                    }
-                    .sheet(isPresented: $viewModel.isShowingImageModal) {
-                        if let imageData = viewModel.selectedImageData, let imageToShow = NSImage(base64Encoded: imageData) {
-                            ImageViewerModal(image: imageToShow) {
-                                viewModel.clearSelection()
-                            }
-                        }
-                    }
-                    
-                    Text(message.text)
-                        .font(.system(size: self.fontSize))
-                        .textSelection(.enabled)
+        Button(action: onTap) {
+            AsyncImage(url: URL(string: "data:image/jpeg;base64,\(imageData)")) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                case .failure:
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.red)
+                @unknown default:
+                    EmptyView()
                 }
             }
-            .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.2), lineWidth: 1))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+
+struct LazyMarkdownView: View {
+    let text: String
+    let fontSize: CGFloat
+    let theme: Splash.Theme
+    
+    var body: some View {
+        Markdown(text)
             .textSelection(.enabled)
-            
-            Spacer()
-            
-            Button(action: {
-                if containsLocalhostImage {
-                    if let urlRange = message.text.range(of: "http://localhost:[^)]+", options: .regularExpression),
-                       let url = URL(string: String(message.text[urlRange])) {
-                        NSWorkspace.shared.open(url)
+            .markdownTheme(
+                .gitHub
+                    .codeBlock { configuration in
+                        CodeBlockView(theme: theme, configuration: configuration)
                     }
-                } else {
-                    let pasteboard = NSPasteboard.general
-                    pasteboard.clearContents()
-                    pasteboard.setString(message.text, forType: .string)
-                }
-            }) {
-                Image(systemName: "doc.on.doc")
-                    .foregroundColor(Color.secondary)
-                    .font(.system(size: 15))
-                    .padding(.horizontal, 10)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .alignmentGuide(VerticalAlignment.center) { d in d[.top] }
-        }.textSelection(.enabled)
-    }
-    
-    
-    var containsLocalhostImage: Bool {
-        return message.text.contains("![](http://localhost:8080/")
-    }
-    
-    func format(date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+            )
+            .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: theme))
+            .font(.system(size: fontSize))
     }
 }
 
