@@ -35,10 +35,15 @@ jobs:
       with:
         xcode-version: latest-stable
 
-    # Build Xcode Project
+    # Build Xcode Project for both architectures
     - name: Build Xcode Project
       run: |
-        xcodebuild build -project "Amazon Bedrock Client for Mac.xcodeproj" -scheme "Amazon Bedrock Client for Mac" -configuration Release -derivedDataPath DerivedData
+        xcodebuild -project "Amazon Bedrock Client for Mac.xcodeproj" \
+          -scheme "Amazon Bedrock Client for Mac" \
+          -configuration Release \
+          -arch x86_64 -arch arm64 \
+          -derivedDataPath DerivedData \
+          ONLY_ACTIVE_ARCH=NO
 
     # Package as DMG
     - name: Package as DMG
