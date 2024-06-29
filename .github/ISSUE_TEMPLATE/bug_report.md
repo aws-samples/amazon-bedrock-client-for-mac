@@ -1,9 +1,9 @@
 ---
 name: Bug report
 about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
+title: "[BUG] "
+labels: bug
+assignees: didhd
 
 ---
 
@@ -20,19 +20,15 @@ Steps to reproduce the behavior:
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
+**Environment (required):**
+ - macOS version: [e.g. 13.0]
+ - Amazon Bedrock Client for Mac version: [e.g. 1.0.0]
+
+**Log Files (optional)**
+Please attach the log files located in `~/Amazon Bedrock Client/logs/`. These logs are crucial for diagnosing the issue.
+
+**Screenshots (optional)**
 If applicable, add screenshots to help explain your problem.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
-
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
-
-**Additional context**
+**Additional context (optional)**
 Add any other context about the problem here.
