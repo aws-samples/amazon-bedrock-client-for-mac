@@ -27,7 +27,6 @@ struct ImageViewer: View {
 struct MessageBarView: View {
     var chatID: String
     @Binding var userInput: String
-    @Binding var messages: [MessageData]
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @StateObject var sharedImageDataSource: SharedImageDataSource
     

@@ -1,3 +1,4 @@
+//
 //  SidebarView.swift
 //  Amazon Bedrock Client for Mac
 //
@@ -24,15 +25,15 @@ struct SidebarView: View {
     @Binding var selection: SidebarSelection?
     @Binding var menuSelection: SidebarSelection?
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
+    @ObservedObject var appCoordinator = AppCoordinator.shared
 
     @State private var showingClearChatAlert = false
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var selectionId = UUID()
     @State private var hoverStates: [String: Bool] = [:]
-
+    
     @State var buttonHover = false
-
-    // Timer to update chat list periodically
+    
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
     private let dateFormatter: DateFormatter = {
@@ -84,8 +85,14 @@ struct SidebarView: View {
             )
         }
         .onReceive(timer) { _ in
-             organizeChatsByDate()
-         }
+            organizeChatsByDate()
+        }
+        .onChange(of: appCoordinator.shouldCreateNewChat, perform: { newValue in
+            if newValue {
+                createNewChat()
+                appCoordinator.shouldCreateNewChat = false
+            }
+        })
         .id(selectionId)
         .listStyle(SidebarListStyle())
         .frame(minWidth: 100, idealWidth: 150, maxWidth: .infinity, maxHeight: .infinity)
@@ -94,7 +101,7 @@ struct SidebarView: View {
             organizeChatsByDate()
         })
     }
-
+    
     var newChatSection: some View {
         Button(action: {
             createNewChat()
@@ -125,17 +132,18 @@ struct SidebarView: View {
         .background(buttonHover ? Color.gray.opacity(0.2) : Color.clear)
         .cornerRadius(8)
     }
-
+    
     private func createNewChat() {
         if let modelSelection = menuSelection, case .chat(let model) = modelSelection {
-            let newChat = chatManager.createNewChat(modelId: model.id, modelName: model.name)
-            newChat.lastMessageDate = Date()
-            organizeChatsByDate()
-            selection = .chat(newChat)
-            selectionId = UUID()
+            chatManager.createNewChat(modelId: model.id, modelName: model.name) { newChat in
+                newChat.lastMessageDate = Date()
+                self.organizeChatsByDate()
+                self.selection = .chat(newChat)
+                self.selectionId = UUID()
+            }
         }
     }
-
+    
     func organizeChatsByDate() {
         let calendar = Calendar.current
         let sortedChats = chatManager.chats.sorted { $0.lastMessageDate > $1.lastMessageDate }
@@ -163,19 +171,24 @@ struct SidebarView: View {
             }
         }
     }
-
+    
     private func formatDate(_ date: Date) -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMMM dd, yyyy"
         return dateFormatter.string(from: date)
     }
-
+    
     func chatRowView(for chat: ChatModel) -> some View {
         HStack {
-//            Circle()
-//                .frame(width: 10, height: 10)
-//                .foregroundColor(.blue)
-
+            if hoverStates[chat.chatId, default: false] {
+                withAnimation {
+                    getIcon(for: chat)
+                        .resizable()
+                        .frame(width: 20, height: 20)
+                        .padding(.trailing, 8)
+                }
+            }
+            
             VStack(alignment: .leading) {
                 Text(chat.title)
                     .font(.headline)
@@ -185,9 +198,9 @@ struct SidebarView: View {
                     .lineLimit(1)
                     .foregroundColor(.gray)
             }
-
+            
             Spacer()
-
+            
             if chatManager.getIsLoading(for: chat.chatId) {
                 Text("…")
                     .font(.headline)
@@ -200,33 +213,49 @@ struct SidebarView: View {
         .background(hoverStates[chat.chatId, default: false] || selection == .chat(chat) ? Color.gray.opacity(0.2) : Color.clear)
         .cornerRadius(8)
         .onHover { hover in
-            hoverStates[chat.chatId] = hover
+            withAnimation {
+                hoverStates[chat.chatId] = hover
+            }
         }
         .onTapGesture {
             selection = .chat(chat)
         }
     }
-
+    
+    private func getIcon(for chat: ChatModel) -> Image {
+        switch chat.id {
+        case let id where id.contains("anthropic"):
+            return Image("anthropic")
+        case let id where id.contains("meta"):
+            return Image("meta")
+        case let id where id.contains("cohere"):
+            return Image("cohere")
+        case let id where id.contains("mistral"):
+            return Image("mistral")
+        case let id where id.contains("ai21"):
+            return Image("AI21")
+        case let id where id.contains("amazon"):
+            return Image("amazon")
+        case let id where id.contains("stability"):
+            return Image("stability ai")
+        default:
+            return Image("bedrock")
+        }
+    }
+    
     private func deleteChat(_ chat: ChatModel) {
         hoverStates[chat.chatId] = false
-        if let index = chatManager.chats.firstIndex(where: { $0.chatId == chat.chatId }) {
-            chatManager.chats.remove(at: index)
-        }
-        if let mostRecentChat = chatManager.chats.sorted(by: { $0.lastMessageDate > $1.lastMessageDate }).first {
-            selection = .chat(mostRecentChat)
-        } else {
-            selection = .newChat
-        }
+        selection = chatManager.deleteChat(with: chat.chatId)
         organizeChatsByDate()
     }
-
+    
     private func exportChatAsTextFile(_ chat: ChatModel) {
-        let chatMessages = chatManager.chatMessages[chat.chatId] ?? []
+        let chatMessages = chatManager.getMessages(for: chat.chatId)
         let fileContents = chatMessages.map { "\($0.sentTime): \($0.user): \($0.text)" }.joined(separator: "\n")
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.text]
         savePanel.nameFieldStringValue = "\(chat.title).txt"
-
+        
         savePanel.begin { response in
             if response == .OK {
                 guard let url = savePanel.url else { return }

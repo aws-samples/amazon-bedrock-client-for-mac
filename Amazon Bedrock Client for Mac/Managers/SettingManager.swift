@@ -5,92 +5,132 @@
 //  Created by Na, Sanghwa on 2023/10/08.
 //
 
-import Foundation
+import SwiftUI
 import Combine
+import Logging
 
-class GlobalSettings: ObservableObject {
-    @Published var showSettings: Bool = false
-}
-
-class SettingManager {
+class SettingManager: ObservableObject {
     static let shared = SettingManager()
+    private var logger = Logger(label: "SettingManager")
     
-    // Publisher for AWS Region
-    var awsRegionPublisher = PassthroughSubject<AWSRegion, Never>()
-    var settingsChangedPublisher = PassthroughSubject<Void, Never>()
-
-    private let awsRegionKey = "awsRegionKey"
-    private let awsEndpointKey = "awsEndpointKey"
-    private let awsRuntimeEndpointKey = "awsRuntimeEndpointKey"
-    private let fontSizeKey = "fontSizeKey"
-    private let checkForUpdatesKey = "checkForUpdatesKey"
-
-    init() {
-        if let savedRegion = getAWSRegion() {
-            awsRegionPublisher.send(savedRegion)
+    @Published var selectedRegion: AWSRegion {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var selectedProfile: String {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var profiles: [String]
+    @Published var checkForUpdates: Bool {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var appearance: String {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var accentColor: NSColor {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var sidebarIconSize: String {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var allowWallpaperTinting: Bool {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var endpoint: String {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var runtimeEndpoint: String {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var enableDebugLog: Bool {
+        didSet {
+            saveSettings()
         }
     }
     
-    // Save the update check setting
-    func saveCheckForUpdates(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: checkForUpdatesKey)
+    private var cancellables = Set<AnyCancellable>()
+    
+    private init() {
+        self.selectedRegion = UserDefaults.standard.string(forKey: "selectedRegion").flatMap { AWSRegion(rawValue: $0) } ?? .usEast1
+        self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
+        self.checkForUpdates = UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true
+        self.profiles = Self.readAWSProfiles()
+        self.appearance = UserDefaults.standard.string(forKey: "appearance") ?? "auto"
+        self.accentColor = UserDefaults.standard.color(forKey: "accentColor") ?? .systemBlue
+        self.sidebarIconSize = UserDefaults.standard.string(forKey: "sidebarIconSize") ?? "Medium"
+        self.allowWallpaperTinting = UserDefaults.standard.bool(forKey: "allowWallpaperTinting")
+        self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
+        self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
+        self.enableDebugLog = UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
+
+        logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
     
-    // Get the update check setting with a default value of True
-    func getCheckForUpdates() -> Bool {
-        if UserDefaults.standard.object(forKey: checkForUpdatesKey) == nil {
-            // Set the default value to True if it's not already set
-            UserDefaults.standard.set(true, forKey: checkForUpdatesKey)
-        }
-        return UserDefaults.standard.bool(forKey: checkForUpdatesKey)
+    private func saveSettings() {
+        logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
+
+        UserDefaults.standard.set(selectedRegion.rawValue, forKey: "selectedRegion")
+        UserDefaults.standard.set(selectedProfile, forKey: "selectedProfile")
+        UserDefaults.standard.set(checkForUpdates, forKey: "checkForUpdates")
+        UserDefaults.standard.set(appearance, forKey: "appearance")
+        UserDefaults.standard.set(accentColor, forKey: "accentColor")
+        UserDefaults.standard.set(sidebarIconSize, forKey: "sidebarIconSize")
+        UserDefaults.standard.set(allowWallpaperTinting, forKey: "allowWallpaperTinting")
+        UserDefaults.standard.set(endpoint, forKey: "endpoint")
+        UserDefaults.standard.set(runtimeEndpoint, forKey: "runtimeEndpoint")
+        UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
     }
     
-    func saveAWSRegion(_ region: AWSRegion) {
-        // Save the region to UserDefaults
-        UserDefaults.standard.set(region.rawValue, forKey: awsRegionKey)
+    static func readAWSProfiles() -> [String] {
+        let fileManager = FileManager.default
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        let credentialsPath = homeDirectory.appendingPathComponent(".aws/credentials")
         
-        // Notify subscribers that the region has changed
-        awsRegionPublisher.send(region)
-    }
-    
-    func getAWSRegion() -> AWSRegion? {
-        // Retrieve the saved AWS region from UserDefaults
-        if let savedRegion = UserDefaults.standard.string(forKey: awsRegionKey),
-           let region = AWSRegion(rawValue: savedRegion) {
-            return region
+        do {
+            let contents = try String(contentsOf: credentialsPath, encoding: .utf8)
+            let lines = contents.components(separatedBy: .newlines)
+            var profiles: [String] = []
+            
+            for line in lines {
+                if line.starts(with: "[") && line.hasSuffix("]") {
+                    let profile = String(line.dropFirst().dropLast())
+                    profiles.append(profile)
+                }
+            }
+            
+            return profiles.isEmpty ? ["default"] : profiles
+        } catch {
+            print("Error reading AWS credentials file: \(error)")
+            return ["default"]
         }
-        return nil
-    }
-    
-    func saveEndpoint(_ endpoint: String) {
-        UserDefaults.standard.set(endpoint, forKey: awsEndpointKey)
-    }
-    
-    func getEndpoint() -> String? {
-        return UserDefaults.standard.string(forKey: awsEndpointKey)
-    }
-
-    func saveRuntimeEndpoint(_ endpoint: String) {
-        UserDefaults.standard.set(endpoint, forKey: awsRuntimeEndpointKey)
-    }
-    
-    func getRuntimeEndpoint() -> String? {
-        return UserDefaults.standard.string(forKey: awsRuntimeEndpointKey)
-    }
-    
-    var fontSizePublisher = PassthroughSubject<CGFloat, Never>()
-    
-    func notifySettingsChanged() {
-        settingsChangedPublisher.send()
-    }
-    
-    func saveFontSize(_ size: CGFloat) {
-        UserDefaults.standard.set(size, forKey: fontSizeKey)
-        fontSizePublisher.send(size)
-    }
-    
-    func getFontSize() -> CGFloat {
-        return CGFloat(UserDefaults.standard.float(forKey: fontSizeKey))
     }
 }
 
+extension UserDefaults {
+    func color(forKey key: String) -> NSColor? {
+        guard let colorData = data(forKey: key) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData)
+    }
+    
+    func set(_ color: NSColor, forKey key: String) {
+        let colorData = try? NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: false)
+        set(colorData, forKey: key)
+    }
+}

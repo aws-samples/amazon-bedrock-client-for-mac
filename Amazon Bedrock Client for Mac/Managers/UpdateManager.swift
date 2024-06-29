@@ -6,14 +6,17 @@
 //
 
 import Foundation
-import AppKit  // Import AppKit to use NSAlert and NSWorkspace
+import AppKit
+import Combine
 
 class UpdateManager {
     private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     private let updateCheckURL = URL(string: "https://api.github.com/repos/aws-samples/amazon-bedrock-client-for-mac/releases/latest")!
     
+    private var cancellables = Set<AnyCancellable>()
+    
     func checkForUpdates() {
-        guard SettingManager.shared.getCheckForUpdates() else { return } // Only check if enabled
+        guard SettingManager.shared.checkForUpdates else { return }
         
         URLSession.shared.dataTask(with: updateCheckURL) { data, response, error in
             guard let data = data,
@@ -21,7 +24,7 @@ class UpdateManager {
                   let latestVersion = releaseInfo.tagName else {
                 return
             }
-
+            
             let updateAvailable = self.isNewVersionAvailable(currentVersion: self.currentVersion, latestVersion: latestVersion)
             let downloadURL = "https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest/download/Amazon.Bedrock.Client.for.Mac.dmg"
             
@@ -32,7 +35,7 @@ class UpdateManager {
             }
         }.resume()
     }
-
+    
     private func isNewVersionAvailable(currentVersion: String, latestVersion: String) -> Bool {
         let cleanedLatestVersion = latestVersion.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
         return currentVersion.compare(cleanedLatestVersion, options: .numeric) == .orderedAscending

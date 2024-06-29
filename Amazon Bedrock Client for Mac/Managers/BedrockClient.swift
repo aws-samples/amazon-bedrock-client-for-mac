@@ -14,109 +14,117 @@ import AWSBedrockRuntime
 import AWSClientRuntime
 import AppKit
 import AwsCommonRuntimeKit
+import AWSSDKIdentity
 
 // MARK: - Backend Class
 class BackendModel: ObservableObject {
     @Published var backend: Backend
-    
-    var cancellables = Set<AnyCancellable>()  // To hold subscription
+    private var cancellables = Set<AnyCancellable>()
+    private var logger = Logger(label: "BackendModel")
     
     init() {
-        self.backend = Backend(region: AWSRegion.usEast1.rawValue, endpoint: "", runtimeEndpoint: "")
+        self.backend = Backend(region: SettingManager.shared.selectedRegion.rawValue,
+                               profile: SettingManager.shared.selectedProfile,
+                               endpoint: SettingManager.shared.endpoint,
+                               runtimeEndpoint: SettingManager.shared.runtimeEndpoint)
         
-        updateBackend()
-        
-        // Assuming SettingManager.shared has a publisher that emits events when AWS region is saved
-        SettingManager.shared.awsRegionPublisher
-            .sink { [weak self] newRegion in
-                self?.updateBackend()
+        SettingManager.shared.$selectedRegion
+            .combineLatest(SettingManager.shared.$selectedProfile,
+                           SettingManager.shared.$endpoint,
+                           SettingManager.shared.$runtimeEndpoint)
+            .sink { [weak self] (region, profile, endpoint, runtimeEndpoint) in
+                self?.updateBackend(region: region.rawValue, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
             }
             .store(in: &cancellables)
     }
     
-    private func updateBackend() {
-        let region: String = SettingManager.shared.getAWSRegion()?.rawValue ?? AWSRegion.usEast1.rawValue // Default to "us-east-1"
-        let endpoint: String = SettingManager.shared.getEndpoint() ?? ""
-        let runtimeEndpoint: String = SettingManager.shared.getRuntimeEndpoint() ?? ""
-        self.backend = Backend(region: region, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
+    private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
+        self.backend = Backend(region: region, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
+        logger.info("Backend updated, region: \(region), profile: \(profile)")
     }
 }
 
-
-struct Backend {
-    
-    // MARK: - Properties
-    
+class Backend: Equatable {
     private var logger = Logger(label: "Backend")
-    private let credentials: AWSTemporaryCredentials?
     private let region: String
+    private let profile: String
     private let endpoint: String
     private let runtimeEndpoint: String
+    private let credentialsResolver: ProfileAWSCredentialIdentityResolver
     
-    // MARK: - Initializers
+    private lazy var bedrockClient: BedrockClient = createBedrockClient()
+    private lazy var bedrockRuntimeClient: BedrockRuntimeClient = createBedrockRuntimeClient()
     
-    init(withCredentials creds: AWSTemporaryCredentials? = nil, region: String, endpoint: String, runtimeEndpoint: String) {
-        self.credentials = creds
+    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
         self.region = region
-#if DEBUG
-        self.logger.logLevel = .debug
-#endif
+        self.profile = profile
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
-    }
-    
-    // MARK: - AWS Methods
-    
-    func getAWSCredentials(for stsParams: STSParameters, siwaToken token: String) async throws -> AWSTemporaryCredentials {
-        let stsClient = try STSClient(region: self.region) // Use injected region
-        let sessionDuration = 3600
-        let sessionName = "SwiftGenAI"
-        let roleArn = "arn:aws:iam::\(stsParams.awsAccountId):role/\(stsParams.roleName)"
         
-        let request = AssumeRoleWithWebIdentityInput(
-            durationSeconds: sessionDuration,
-            roleArn: roleArn,
-            roleSessionName: sessionName,
-            webIdentityToken: token)
-        let response = try await stsClient.assumeRoleWithWebIdentity(input: request)
-        
-        guard let credentials = response.credentials else {
-            logger.error("Invalid credentials (nil)")
-            throw STSError.invalidAssumeRoleWithWebIdentityResponse("credentials is nil")
+        do {
+            self.credentialsResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+        } catch {
+            logger.error("Failed to create credentials provider: \(error)")
+            fatalError("Unable to create credentials provider: \(error.localizedDescription)")
         }
         
-        return try AWSTemporaryCredentials(from: credentials)
+        logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
+    }
+    
+    static func == (lhs: Backend, rhs: Backend) -> Bool {
+        return lhs.region == rhs.region &&
+        lhs.profile == rhs.profile &&
+        lhs.endpoint == rhs.endpoint &&
+        lhs.runtimeEndpoint == rhs.runtimeEndpoint
+    }
+    
+    private func createBedrockClient() -> BedrockClient {
+        do {
+            let config = try BedrockClient.BedrockClientConfiguration(
+                awsCredentialIdentityResolver: self.credentialsResolver,
+                region: self.region,
+                signingRegion: self.region,
+                endpoint: self.endpoint.isEmpty ? nil : self.endpoint
+            )
+            logger.info("Bedrock client created with region: \(self.region), profile: \(self.profile), endpoint: \(self.endpoint)")
+            return BedrockClient(config: config)
+        } catch {
+            logger.error("Failed to create Bedrock client: \(error.localizedDescription)")
+            fatalError("Unable to create Bedrock client: \(error.localizedDescription)")
+        }
+    }
+    
+    private func createBedrockRuntimeClient() -> BedrockRuntimeClient {
+        do {
+            let config = try BedrockRuntimeClient.BedrockRuntimeClientConfiguration(
+                awsCredentialIdentityResolver: self.credentialsResolver,
+                region: self.region,
+                signingRegion: self.region,
+                endpoint: self.runtimeEndpoint.isEmpty ? nil : self.runtimeEndpoint
+            )
+            logger.info("BedrockRuntime client created with region: \(self.region), profile: \(self.profile), runtimeEndpoint: \(self.runtimeEndpoint)")
+            return BedrockRuntimeClient(config: config)
+        } catch {
+            logger.error("Failed to create Bedrock Runtime client: \(error.localizedDescription)")
+            fatalError("Unable to create Bedrock Runtime client: \(error.localizedDescription)")
+        }
     }
     
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
-        
         let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
-        
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         let encodedParams = try self.encode(params, strategy: strategy)
         
-        let request = InvokeModelInput(body: encodedParams,
-                                       contentType: "application/json",
-                                       modelId: modelId)
+        let request = InvokeModelInput(body: encodedParams, contentType: "application/json", modelId: modelId)
         
-        // Log the JSON-structured encoded request body
         if let requestJson = String(data: encodedParams, encoding: .utf8) {
             logger.info("Request: \(requestJson)")
         }
         
-        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
-        if !self.runtimeEndpoint.isEmpty {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
-        } else {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
-        }
+        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
         
-        let client = BedrockRuntimeClient(config: config)
-        let response = try await client.invokeModel(input: request)
-        
-        guard response.contentType == "application/json",
-              let data = response.body else {
+        guard response.contentType == "application/json", let data = response.body else {
             logger.error("Invalid Bedrock response: \(response)")
             throw BedrockRuntimeError.invalidResponse(response.body)
         }
@@ -124,54 +132,25 @@ struct Backend {
         return data
     }
     
-    // Add or modify this function in your Backend struct
     func invokeModelStream(withId modelId: String, prompt: String) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
-        // Determine the model type and parameters
         let modelType = getModelType(modelId)
-        
-        // Determine the appropriate key encoding strategy for the model type
         let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .claude3 || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
-        
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         
-        do {
-            // Encode parameters and create request using the appropriate key encoding strategy
-            let encodedParams = try self.encode(params, strategy: strategy)
-            let request = InvokeModelWithResponseStreamInput(
-                body: encodedParams,
-                contentType: "application/json",
-                modelId: modelId)
-            
-            // Log the JSON-structured encoded request body
-            if let requestJson = String(data: encodedParams, encoding: .utf8) {
-                logger.info("Request: \(requestJson)")
-            }
-            
-            // Create client and make the request
-            let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
-            if !self.runtimeEndpoint.isEmpty {
-                config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
-            } else {
-                config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
-            }
-            let client = BedrockRuntimeClient(config: config)
-            
-            // Invoke the model and get the response stream
-            let output = try await client.invokeModelWithResponseStream(input: request)
-            
-            return output.body ?? AsyncThrowingStream { _ in }
-            
-        } catch {
-            // Log other errors
-            logger.error("Error: \(error)")
-            throw error
+        let encodedParams = try self.encode(params, strategy: strategy)
+        let request = InvokeModelWithResponseStreamInput(body: encodedParams, contentType: "application/json", modelId: modelId)
+        
+        if let requestJson = String(data: encodedParams, encoding: .utf8) {
+            logger.info("Request: \(requestJson)")
         }
+        
+        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
+        return output.body ?? AsyncThrowingStream { _ in }
     }
     
     func invokeClaudeModel(withId modelId: String, messages: [ClaudeMessageRequest.Message]) async throws -> Data {
-        let anthropicVersion = "bedrock-2023-05-31"
         let requestBody = ClaudeMessageRequest(
-            anthropicVersion: anthropicVersion,
+            anthropicVersion: "bedrock-2023-05-31",
             maxTokens: 4096,
             system: nil,
             messages: messages,
@@ -182,39 +161,23 @@ struct Backend {
         )
         
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase // Since your CodingKeys are in snake_case
+        encoder.keyEncodingStrategy = .convertToSnakeCase
         let jsonData = try encoder.encode(requestBody)
         
-        let request = InvokeModelInput(
-            body: jsonData,
-            contentType: "application/json",
-            modelId: modelId
-        )
-
-        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
-        if !self.runtimeEndpoint.isEmpty {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
-        } else {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
-        }
+        let request = InvokeModelInput(body: jsonData, contentType: "application/json", modelId: modelId)
+        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
         
-        let client = BedrockRuntimeClient(config: config)
-        let response = try await client.invokeModel(input: request)
-        
-        guard response.contentType == "application/json",
-              let data = response.body else {
+        guard response.contentType == "application/json", let data = response.body else {
             logger.error("Invalid Bedrock response: \(response)")
             throw BedrockRuntimeError.invalidResponse(response.body)
         }
         
         return data
     }
-
+    
     func invokeClaudeModelStream(withId modelId: String, messages: [ClaudeMessageRequest.Message]) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
-        let anthropicVersion = "bedrock-2023-05-31"
-
         let requestBody = ClaudeMessageRequest(
-            anthropicVersion: anthropicVersion,
+            anthropicVersion: "bedrock-2023-05-31",
             maxTokens: 4096,
             system: nil,
             messages: messages,
@@ -225,25 +188,11 @@ struct Backend {
         )
         
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase // Since your CodingKeys are in snake_case
+        encoder.keyEncodingStrategy = .convertToSnakeCase
         let jsonData = try encoder.encode(requestBody)
-
-        let request = InvokeModelWithResponseStreamInput(
-            body: jsonData,
-            contentType: "application/json",
-            modelId: modelId
-        )
         
-        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
-        if !self.runtimeEndpoint.isEmpty {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
-        } else {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
-        }
-        
-        // Invoke the model and get the response stream
-        let client = BedrockRuntimeClient(config: config)
-        let output = try await client.invokeModelWithResponseStream(input: request)
+        let request = InvokeModelWithResponseStreamInput(body: jsonData, contentType: "application/json", modelId: modelId)
+        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
         
         return output.body ?? AsyncThrowingStream { _ in }
     }
@@ -256,40 +205,20 @@ struct Backend {
             "steps": 50
         ] as [String : Any]
         
-        let jsonData: Data
-        do {
-            jsonData = try JSONSerialization.data(withJSONObject: promptData)
-        } catch {
-            logger.error("Error serializing JSON: \(error)")
-            throw BedrockRuntimeError.requestFailed
-        }
+        let jsonData = try JSONSerialization.data(withJSONObject: promptData)
         
         if let jsonString = String(data: jsonData, encoding: .utf8) {
             logger.info("Serialized JSON: \(jsonString)")
         }
         
-        let contentType = "application/json"
-        let accept = "image/png"
-        
-        // Prepare the request
         let request = InvokeModelInput(
-            accept: accept,
+            accept: "image/png",
             body: jsonData,
-            contentType: contentType,
+            contentType: "application/json",
             modelId: modelId
         )
         
-        // Create client and make the request
-        // Create client and make the request
-        let config: BedrockRuntimeClient.BedrockRuntimeClientConfiguration
-        if !self.runtimeEndpoint.isEmpty {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region, endpoint: self.runtimeEndpoint)
-        } else {
-            config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: self.region)
-        }
-        let client = BedrockRuntimeClient(config: config)
-        
-        let response = try await client.invokeModel(input: request)
+        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
         
         guard response.contentType == "image/png", let data = response.body else {
             logger.error("Invalid Bedrock response: \(response)")
@@ -299,7 +228,44 @@ struct Backend {
         return data
     }
     
-    // Helper function to determine the model type based on modelId
+    func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
+                              byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
+                              byOutputModality: BedrockClientTypes.ModelModality? = nil,
+                              byProvider: String? = nil) async -> Result<[BedrockClientTypes.FoundationModelSummary], BedrockError> {
+        do {
+            let request = ListFoundationModelsInput(
+                byCustomizationType: byCustomizationType,
+                byInferenceType: byInferenceType,
+                byOutputModality: byOutputModality,
+                byProvider: byProvider)
+            
+            let response = try await self.bedrockClient.listFoundationModels(input: request)
+            
+            if let modelSummaries = response.modelSummaries {
+                return .success(modelSummaries)
+            } else {
+                logger.error("Invalid Bedrock response: \(response)")
+                return .failure(BedrockError.invalidResponse("Model summaries are missing"))
+            }
+        } catch let error as AWSClientRuntime.AWSServiceError {
+            switch error.typeName {
+            case "ExpiredTokenException":
+                logger.error("Token has expired")
+                return .failure(BedrockError.tokenExpired)
+            case "UnrecognizedClientException":
+                logger.error("The security token included in the request is invalid.")
+                return .failure(BedrockError.genericError("The security token included in the request is invalid."))
+            default:
+                logger.error("AWS Service Error: \(error)")
+                return .failure(BedrockError.genericError("AWS Service Error: \(error.message ?? "Unknown error")"))
+            }
+        } catch {
+            logger.error("Unexpected error occurred: \(error)")
+            return .failure(BedrockError.genericError("An unexpected error occurred: \(error)"))
+        }
+    }
+    
+    /// Helper function to determine the model type based on modelId
     func getModelType(_ modelId: String) -> ModelType {
         let parts = modelId.split(separator: ".")
         guard let modelName = parts.last else {
@@ -330,34 +296,23 @@ struct Backend {
             return .llama3
         } else if modelName.hasPrefix("mistral") || modelName.hasPrefix("mixtral") {
             return .mistral
+        } else if modelName.hasPrefix("jamba-instruct") {
+            return .jambaInstruct
         } else {
             return .unknown
         }
     }
     
-    // Function to get model parameters
+    /// Function to get model parameters
     func getModelParameters(modelType: ModelType, prompt: String) -> ModelParameters {
         switch modelType {
         case .claude:
             return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
-//        case .claude3:
-//            let userMessage = ClaudeMessageRequest.Message(role: "user", content: [.init(type: "text", text: prompt, source: nil)])
-//            let messages = [userMessage]
-//            return ClaudeMessageRequest(
-//                anthropicVersion: "bedrock-2023-05-31",
-//                maxTokens: 4096,
-//                system: nil,
-//                messages: messages,
-//                temperature: 0.7,
-//                topP: 0.9,
-//                topK: nil,
-//                stopSequences: nil
-//            )
         case .titan:
             let textGenerationConfig = TitanModelParameters.TextGenerationConfig(
                 temperature: 0,
                 topP: 1.0,
-                maxTokenCount: 4086,
+                maxTokenCount: 3072,
                 stopSequences: []
             )
             return TitanModelParameters(inputText: "User: \(prompt)\n\nBot:", textGenerationConfig: textGenerationConfig)
@@ -377,57 +332,18 @@ struct Backend {
             return Llama2ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
         case .llama3:
             return Llama3ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
+        case .jambaInstruct:
+            return JambaInstructModelParameters(
+                messages: [
+                    JambaInstructModelParameters.Message(role: "user", content: prompt)
+                ],
+                max_tokens: 4096,
+                temperature: 0.7,
+                top_p: 0.9
+            )
         default:
             return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
         }
-    }
-    
-    func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
-                              byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
-                              byOutputModality: BedrockClientTypes.ModelModality? = nil,
-                              byProvider: String? = nil) async -> Result<[BedrockClientTypes.FoundationModelSummary], BedrockError> {
-        
-        do {
-            let request = ListFoundationModelsInput(
-                byCustomizationType: byCustomizationType,
-                byInferenceType: byInferenceType,
-                byOutputModality: byOutputModality,
-                byProvider: byProvider)
-            
-            // Create client and make the request
-            let config: BedrockClient.BedrockClientConfiguration
-            if !self.runtimeEndpoint.isEmpty {
-                config = try await BedrockClient.BedrockClientConfiguration(region: self.region, endpoint: self.endpoint)
-            } else {
-                config = try await BedrockClient.BedrockClientConfiguration(region: self.region)
-            }
-            let client = BedrockClient(config: config)
-            
-            let response = try await client.listFoundationModels(input: request)
-            
-            if let modelSummaries = response.modelSummaries {
-                return .success(modelSummaries)
-            } else {
-                logger.error("Invalid Bedrock response: \(response)")
-                return .failure(BedrockError.invalidResponse("Model summaries are missing"))
-            }
-            
-        } catch {
-            if let awsError = error as? AWSClientRuntime.AWSServiceError {
-                if awsError.typeName == "ExpiredTokenException" {
-                    logger.error("Token has expired")
-                    return .failure(BedrockError.tokenExpired)
-                } else if awsError.typeName == "UnrecognizedClientException" {
-                    logger.error("The security token included in the request is invalid.")
-                    return .failure(BedrockError.genericError("The security token included in the request is invalid."))
-                }
-            } else {
-                logger.error("General error occurred: \(error)")
-                return .failure(BedrockError.genericError(error.localizedDescription))
-            }
-        }
-        
-        return .failure(BedrockError.genericError("An unexpected error occurred"))
     }
     
     public func decode<T: Decodable>(_ data: Data) throws -> T {
@@ -448,148 +364,10 @@ struct Backend {
         return String(data: data, encoding: .utf8) ?? "error when encoding the string"
     }
 }
-// MARK: - Data structures
-/**
- The required parameters for Sign In WIth Apple.  All these are coming from Apple's developer portal and
- Sign In With Apple configuration
- */
-struct STSParameters {
-    init(awsAccountId: String, roleName: String) {
-        self.awsAccountId = awsAccountId
-        self.roleName = roleName
-    }
-    let awsAccountId : String
-    let roleName : String
-}
-/**
- SDK agnostic represnetation of AWS Credentials
- */
-struct AWSTemporaryCredentials: Codable {
-    let accessKey: String
-    let secretAccessKey: String
-    let expiration: Date?
-    let sessionToken: String
-    
-    init(accessKey: String, secretAccessKey: String, expiration: Date? = nil, sessionToken: String) {
-        self.accessKey = accessKey
-        self.secretAccessKey = secretAccessKey
-        self.expiration = expiration
-        self.sessionToken = sessionToken
-    }
-    init(from credentials: STSClientTypes.Credentials) throws {
-        guard let accessKeyId = credentials.accessKeyId,
-              let secretAccessKey = credentials.secretAccessKey,
-              let sessionToken = credentials.sessionToken,
-              let expiration = credentials.expiration
-        else {
-            throw STSError.invalidAssumeRoleWithWebIdentityResponse("one of the access key or secret is nil")
-        }
-        self.init(
-            accessKey: accessKeyId,
-            secretAccessKey: secretAccessKey,
-            expiration: expiration,
-            sessionToken: sessionToken)
-    }
-}
-extension AWSTemporaryCredentials: CredentialsProviding {
-    func getCredentials() async throws -> Credentials {
-        return try Credentials(accessKey: self.accessKey,
-                           secret: self.secretAccessKey,
-                           sessionToken: self.sessionToken,
-                           expiration: self.expiration)
-    }
-}
-extension AWSTemporaryCredentials {
-    
-    /*
-     
-     Generated by Claude v2.
-     
-     I modified the generated code to return Static Credentials and
-     to provide a default value
-     
-     Prompt :
-     
-     Write a swift function that takes one parameter as input
-     (profile) and returns two values, an AWS access key and AWS secret key.
-     The function will read a files in ~/.aws/credentials. The file might
-     have multiple profiles identified as [profile_name]. For each profile,
-     there are two values to return aws_access_key_id is the aws access key
-     and aws_secret_access_key contains the AWS secret key.  Here is an
-     exemple of the file format :
-     [default]
-     aws_access_key_id=AKIA12344567890EYFQT
-     aws_secret_access_key=Us412344567890gtNW
-     
-     [seb]
-     aws_access_key_id=AKIA12344567890PQ
-     aws_secret_access_key=4Oa12344567890MRy
-     
-     */
-    
-    static func getEnvironmentVariable(named: String) -> String? {
-        return ProcessInfo.processInfo.environment[named]
-    }
-    
-    static func fromConfigurationFile(forProfile profile: String = "default",
-                                      filePath path: String = "~/.aws/credentials") -> AWSTemporaryCredentials {
-        
-        let credentialsURL = URL(fileURLWithPath: resolveFilePath(path))
-        
-        guard let credentialsString = try? String(contentsOf: credentialsURL) else {
-            fatalError("Unable to load AWS credentials file")
-        }
-        
-        var accessKey = ""
-        var secretKey = ""
-        var sessionToken = ""
-        
-        let profileLines = credentialsString.components(separatedBy: "\n")
-        
-        var inProfile = false
-        
-        for line in profileLines {
-            if line.hasPrefix("[") && line.hasSuffix("]") {
-                let currentProfile = line.trimmingCharacters(in: .init(charactersIn: "[]"))
-                inProfile = (currentProfile == profile)
-            } else if inProfile {
-                if line.hasPrefix("aws_access_key_id") {
-                    accessKey = line.components(separatedBy: " = ").last!.trimmingCharacters(in: .whitespaces)
-                } else if line.hasPrefix("aws_secret_access_key") {
-                    secretKey = line.components(separatedBy: " = ").last!.trimmingCharacters(in: .whitespaces)
-                } else if line.hasPrefix("aws_session_token") {
-                    sessionToken = line.components(separatedBy: " = ").last!.trimmingCharacters(in: .whitespaces)
-                }
-            }
-        }
-        
-        accessKey = getEnvironmentVariable(named: "AWS_ACCESS_KEY_ID") ?? accessKey
-        secretKey = getEnvironmentVariable(named: "AWS_SECRET_ACCESS_KEY") ?? secretKey
-        sessionToken = getEnvironmentVariable(named: "AWS_SESSION_TOKEN") ?? sessionToken
-        
-        guard !accessKey.isEmpty && !secretKey.isEmpty else {
-            fatalError("Unable to load AWS credentials file")
-        }
-        
-        return AWSTemporaryCredentials(accessKey: accessKey, secretAccessKey: secretKey, sessionToken: sessionToken)
-    }
-    
-    private static func resolveFilePath(_ path: String) -> String {
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-        
-        if path.starts(with: "~") {
-            let filePath = path.replacingOccurrences(of: "~", with: homeDir)
-            return filePath
-        }
-        
-        return path
-    }
-}
 
 enum ModelType {
-    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, unknown
+    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, unknown
 }
-
 
 public protocol ModelParameters: Encodable {
 }
@@ -600,6 +378,30 @@ public struct AI21ModelParameters: ModelParameters {
     let topP: Float
     let maxTokens: Int
     // Add additional parameters like penalties if needed
+}
+
+public struct JambaInstructModelParameters: ModelParameters {
+    public var messages: [Message]
+    public var max_tokens: Int
+    public var temperature: Double
+    public var top_p: Double
+    
+    public struct Message: Codable {
+        public let role: String
+        public let content: String
+    }
+    
+    public init(
+        messages: [Message],
+        max_tokens: Int = 4096,
+        temperature: Double = 0.7,
+        top_p: Double = 0.9
+    ) {
+        self.messages = messages
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+    }
 }
 
 public enum ReturnLikelihoods: String, Codable {
@@ -978,22 +780,22 @@ struct ClaudeMessageResponse: Codable {
     let stopReason: String
     let stopSequence: String?
     let usage: Usage
-
+    
     struct Content: Codable {
         let type: String
         let text: String?
     }
-
+    
     struct Usage: Codable {
         let inputTokens: Int
         let outputTokens: Int
-
+        
         enum CodingKeys: String, CodingKey {
             case inputTokens = "input_tokens"
             case outputTokens = "output_tokens"
         }
     }
-
+    
     enum CodingKeys: String, CodingKey {
         case id, model, type, role, content
         case stopReason = "stop_reason"
@@ -1021,6 +823,29 @@ public struct InvokeTitanResult: Decodable {
 
 public struct InvokeAI21Response: ModelResponse, Decodable {
     public let completions: [AI21Completion]
+}
+
+public struct InvokeJambaInstructResponse: ModelResponse, Decodable {
+    public let id: String
+    public let choices: [Choice]
+    public let usage: Usage
+    
+    public struct Choice: Decodable {
+        public let index: Int
+        public let message: Message
+        public let finishReason: String?
+        
+        public struct Message: Decodable {
+            public let role: String
+            public let content: String
+        }
+    }
+    
+    public struct Usage: Decodable {
+        public let promptTokens: Int?
+        public let completionTokens: Int?
+        public let totalTokens: Int?
+    }
 }
 
 public struct AI21Completion: Decodable {

@@ -14,14 +14,27 @@ struct MessageData: Identifiable, Equatable, Codable {
     let user: String
     var isError: Bool
     let sentTime: Date
-    var imageBase64Strings: [String]? // Stores Base64 string representations of images
-
-    static func == (lhs: MessageData, rhs: MessageData) -> Bool {
-        return lhs.id == rhs.id && lhs.text == rhs.text && lhs.user == rhs.user && lhs.isError == rhs.isError && lhs.imageBase64Strings == rhs.imageBase64Strings
+    var imageBase64Strings: [String]?
+    
+    init(id: UUID = UUID(), text: String, user: String, isError: Bool = false, sentTime: Date = Date(), imageBase64Strings: [String]? = nil) {
+        self.id = id
+        self.text = text
+        self.user = user
+        self.isError = isError
+        self.sentTime = sentTime
+        self.imageBase64Strings = imageBase64Strings
     }
     
-    // CodingKeys only need to include the properties you want to encode/decode
-    private enum CodingKeys: String, CodingKey {
+    static func == (lhs: MessageData, rhs: MessageData) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.text == rhs.text &&
+        lhs.user == rhs.user &&
+        lhs.isError == rhs.isError &&
+        lhs.sentTime == rhs.sentTime &&
+        lhs.imageBase64Strings == rhs.imageBase64Strings
+    }
+    
+    enum CodingKeys: String, CodingKey {
         case id, text, user, isError, sentTime, imageBase64Strings
     }
 }

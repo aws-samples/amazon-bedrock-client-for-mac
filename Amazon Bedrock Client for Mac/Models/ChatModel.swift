@@ -28,7 +28,7 @@ class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
     }
     
     static func == (lhs: ChatModel, rhs: ChatModel) -> Bool {
-        return lhs.id == rhs.id && lhs.chatId == rhs.chatId
+        lhs.id == rhs.id && lhs.chatId == rhs.chatId
     }
     
     func hash(into hasher: inout Hasher) {
@@ -37,7 +37,7 @@ class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
     }
     
     static func fromSummary(_ summary: BedrockClientTypes.FoundationModelSummary) -> ChatModel {
-        return ChatModel(
+        ChatModel(
             id: summary.modelId ?? "",
             chatId: UUID().uuidString,
             name: summary.modelName ?? "",

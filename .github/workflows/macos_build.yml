@@ -16,11 +16,11 @@ jobs:
 
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4  # Updated to v4
 
     # Import macOS code-signing certificates
     - name: Import Code-Signing Certificates
-      uses: Apple-Actions/import-codesign-certs@v2
+      uses: Apple-Actions/import-codesign-certs@v3
       with:
         p12-file-base64: ${{ secrets.MACOS_CERTS_P12 }}
         p12-password: ${{ secrets.P12_PASSWORD }}
@@ -59,7 +59,7 @@ jobs:
 
     # Upload Artifact
     - name: Upload Artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4  # Updated to v4
       with:
         name: "Amazon Bedrock Client for Mac"
         path: "Amazon Bedrock Client for Mac.dmg"
@@ -71,7 +71,7 @@ jobs:
     
     steps:
     - name: Download Artifact
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v4  # Updated to v3
       with:
         name: Amazon Bedrock Client for Mac
     

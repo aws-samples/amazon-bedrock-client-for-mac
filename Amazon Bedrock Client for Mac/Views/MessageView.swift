@@ -39,24 +39,34 @@ struct MessageView: View {
     @StateObject var viewModel = MessageViewModel()
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.fontSize) private var fontSize: CGFloat
+    @State private var isHovering = false
     
     private let imageSize: CGFloat = 100
     
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            userImage
-            
-            VStack(alignment: .leading, spacing: 2) {
-                messageHeader
-                messageContent
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .top, spacing: 12) {
+                userImage
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    messageHeader
+                    messageContent
+                    copyButton
+                        .opacity(isHovering ? 1 : 0)  // 호버 시 투명도 조절
+                        .animation(.easeInOut, value: isHovering)  // 애니메이션 적용
+                }
+                
+                Spacer()
             }
-            
-            Spacer()
-            
-            copyButton
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut) {
+                isHovering = hovering
+            }
         }
         .textSelection(.enabled)
     }
+    
     
     private var userImage: some View {
         Group {
@@ -131,8 +141,9 @@ struct MessageView: View {
         }) {
             Image(systemName: "doc.on.doc")
                 .foregroundColor(Color.secondary)
-                .font(.system(size: 15))
-                .padding(.horizontal, 10)
+                .font(.system(size: 12))
+                .padding(2)
+                .clipShape(Circle())
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -182,10 +193,22 @@ struct MessageView: View {
         } else if user.starts(with: "Llama") {
             imageName = "meta sq"
             isDefaultImage = false
+        } else if user.starts(with: "Jurrasic") {
+            imageName = "AI21"
+            isDefaultImage = false
+        } else if user.starts(with: "Jamba") {
+            imageName = "AI21"
+            isDefaultImage = false
+        } else if user.starts(with: "Titan") {
+            imageName = "amazon"
+            isDefaultImage = false
+        } else if user.starts(with: "SD") {
+            imageName = "stability ai"
+            isDefaultImage = false
         } else {
             imageName = "bedrock sq"
             isDefaultImage = true
-        }
+        } 
         
         let image = Image(imageName)
         return Group {
@@ -223,7 +246,8 @@ struct LazyImageView: View {
                 case .success(let image):
                     image
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: size)
                 case .failure:
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.red)
@@ -231,11 +255,27 @@ struct LazyImageView: View {
                     EmptyView()
                 }
             }
-            .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.2), lineWidth: 1))
         }
         .buttonStyle(PlainButtonStyle())
+        .contextMenu {
+            Button(action: {
+                copyImageToClipboard(imageData: imageData)
+            }) {
+                Text("Copy Image")
+                Image(systemName: "doc.on.doc")
+            }
+        }
+    }
+    
+    func copyImageToClipboard(imageData: String) {
+        if let data = Data(base64Encoded: imageData),
+           let image = NSImage(data: data) {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([image])
+        }
     }
 }
 
@@ -265,13 +305,21 @@ struct ImageViewerModal: View {
     
     var body: some View {
         ZStack {
-            Color.white.opacity(0.5).edgesIgnoringSafeArea(.all)
+            Color.black.opacity(0.8).edgesIgnoringSafeArea(.all)
             
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
                 .cornerRadius(10)
                 .padding()
+                .contextMenu {
+                    Button(action: {
+                        copyNSImageToClipboard(image: image)
+                    }) {
+                        Text("Copy Image")
+                        Image(systemName: "doc.on.doc")
+                    }
+                }
             
             VStack {
                 HStack {
@@ -288,23 +336,29 @@ struct ImageViewerModal: View {
             }
         }
     }
+    
+    func copyNSImageToClipboard(image: NSImage) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([image])
+    }
 }
 
 extension NSImage {
     func resized(to targetSize: NSSize) -> NSImage? {
         let newSize = NSSize(width: targetSize.width, height: targetSize.height)
         let newImage = NSImage(size: newSize)
-
+        
         newImage.lockFocus()
         self.draw(in: NSRect(origin: .zero, size: newSize),
                   from: NSRect(origin: .zero, size: self.size),
                   operation: .sourceOver,
                   fraction: 1.0)
         newImage.unlockFocus()
-
+        
         return newImage
     }
-
+    
     func resizedMaintainingAspectRatio(maxDimension: CGFloat) -> NSImage? {
         let aspectRatio = self.size.width / self.size.height
         let newSize: NSSize

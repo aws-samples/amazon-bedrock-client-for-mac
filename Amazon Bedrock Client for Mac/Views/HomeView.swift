@@ -4,11 +4,9 @@ struct HomeView: View {
     @Binding var selection: SidebarSelection?
     @Binding var menuSelection: SidebarSelection?
     
-    @State var showSettings = false
     @State var buttonHover = false
-    @State private var selectedRegion: AWSRegion = .usEast1  // Default region
     @State private var hasLoadedModels = false
-
+    
     let featureHighlightCards = [
         ("Choose from a range of leading foundation models", "Explore developer experience", "image1", "https://aws.amazon.com/bedrock/developer-experience/"),
         ("Build agents that dynamically invoke APIs to execute complex business tasks", "Explore agents", "image2", "https://aws.amazon.com/bedrock/agents/"),
@@ -39,9 +37,6 @@ struct HomeView: View {
             }
             .padding(EdgeInsets(top: 40, leading: 40, bottom: 40, trailing: 40))
             //            }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
         }
         .onAppear {
             // If menuSelection count is greater than zero and models are not loaded, load models.
