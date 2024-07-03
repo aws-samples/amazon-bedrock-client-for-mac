@@ -86,6 +86,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     @objc func openSettings() {
         SettingsWindowManager.shared.openSettings(view: SettingsView())
-        
     }
 }

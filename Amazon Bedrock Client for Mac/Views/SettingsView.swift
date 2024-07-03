@@ -7,32 +7,36 @@
 
 import SwiftUI
 import Foundation
+import WebKit
+import AWSSSOOIDC
+import Logging
+import AwsCommonRuntimeKit
 
 struct SettingsView: View {
     @StateObject private var settingsManager = SettingManager.shared
     @StateObject private var llmSettingsManager = LLMSettingsManager()
+    @StateObject private var ssoManager = SSOManager()
     @State private var searchText = ""
+    private var logger = Logger(label: "SettingsView")
     
     var body: some View {
         NavigationView {
             List {
-                NavigationLink(destination: GeneralSettingsView()) {
+                NavigationLink(destination: GeneralSettingsView(ssoManager: ssoManager)) {
                     Label("General", systemImage: "gear")
                 }
 //                NavigationLink(destination: AppearanceSettingsView()) {
 //                    Label("Appearance", systemImage: "paintbrush")
 //                }
-                NavigationLink(destination: AdvancedSettingsView()) {
-                    Label("Advanced", systemImage: "wrench.and.screwdriver")
-                }
 //                NavigationLink(destination: LLMSettingsView(settingsManager: llmSettingsManager)) {
 //                    Label("LLM Settings", systemImage: "cpu")
 //                }
+                NavigationLink(destination: AdvancedSettingsView()) {
+                    Label("Advanced", systemImage: "wrench.and.screwdriver")
+                }
             }
             .listStyle(SidebarListStyle())
             .frame(minWidth: 200)
-            
-            GeneralSettingsView()
         }
         .frame(width: 600, height: 400)
         .navigationTitle("Settings")
@@ -41,6 +45,9 @@ struct SettingsView: View {
 
 struct GeneralSettingsView: View {
     @ObservedObject private var settingsManager = SettingManager.shared
+    @ObservedObject var ssoManager: SSOManager
+    @State private var showingLoginSheet = false
+    @State private var loginError: String?
     
     var body: some View {
         Form {
@@ -51,14 +58,209 @@ struct GeneralSettingsView: View {
             }
             
             Picker("AWS Profile", selection: $settingsManager.selectedProfile) {
-                ForEach(settingsManager.profiles, id: \.self) { profile in
-                    Text(profile)
+                ForEach(settingsManager.profiles) { profile in
+                    Text(profile.name).tag(profile.name)
                 }
             }
             
+            // Note: TBU
+            if ssoManager.isLoggedIn {
+                HStack {
+                    Text("Logged in with AWS Identity Center")
+                        .foregroundColor(.secondary)
+//                    Spacer()
+//                    Button("Log out") {
+//                        ssoManager.logout()
+//                    }
+//                    .buttonStyle(.borderless)
+                }
+            } else {
+//                Button(action: {
+//                    showingLoginSheet = true
+//                }) {
+//                    HStack {
+//                        Image("amazon")
+//                            .resizable()
+//                            .aspectRatio(contentMode: .fit)
+//                            .frame(width: 16, height: 16)
+//                        Text("Sign in with AWS Identity Center")
+//                    }
+//                }
+//                .buttonStyle(AWSButtonStyle())
+            }
+
+
             Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
+            
+            if let error = loginError {
+                Text(error)
+                    .foregroundColor(.red)
+            }
         }
         .padding()
+        .sheet(isPresented: $showingLoginSheet) {
+            AwsIdentityCenterLoginView(ssoManager: ssoManager, isPresented: $showingLoginSheet, loginError: $loginError)
+        }
+    }
+}
+
+struct AWSButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(Color.orange)
+            .foregroundColor(.white)
+            .cornerRadius(6)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+    }
+}
+
+
+struct AwsIdentityCenterLoginView: View {
+    @ObservedObject var ssoManager: SSOManager
+    @Binding var isPresented: Bool
+    @Binding var loginError: String?
+    @State private var startUrl: String = ""
+    @State private var region: String = "us-west-2"
+    @State private var authUrl: String = ""
+    @State private var userCode: String = ""
+    @State private var isLoading = false
+    var logger = Logger(label: "AwsIdentityCenterLoginView")
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("AWS Identity Center Login")
+                .font(.headline)
+            
+            TextField("AWS SSO Start URL", text: $startUrl)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            
+            TextField("AWS Region", text: $region)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            
+            if isLoading {
+                VStack {
+                    ProgressView()
+                    if !authUrl.isEmpty && !userCode.isEmpty {
+                        Text("Open the following URL in your browser:")
+                            .padding(.top)
+                        Text(authUrl)
+                            .font(.footnote)
+                            .foregroundColor(.blue)
+                        Text("Then enter the code:")
+                            .padding(.top)
+                        Text(userCode)
+                            .font(.headline)
+                            .padding(.top)
+                    }
+                }
+            } else {
+                Button("Login") {
+                    startSSOLogin()
+                }
+                .buttonStyle(AWSButtonStyle())
+            }
+            
+            if let error = loginError {
+                Text(error)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding()
+        .frame(width: 300, height: 250)
+    }
+    
+    private func startSSOLogin() {
+        isLoading = true
+        loginError = nil
+        
+        Task {
+            do {
+                let (url, code) = try await ssoManager.startSSOLogin(startUrl: startUrl, region: region)
+                DispatchQueue.main.async {
+                    self.authUrl = url
+                    self.userCode = code
+                }
+                
+                if let url = URL(string: url) {
+                    NSWorkspace.shared.open(url)
+                }
+                
+                let tokenResponse = try await ssoManager.pollForTokens(deviceCode: code)
+                
+                try await ssoManager.completeLogin(tokenResponse: tokenResponse)
+                
+                DispatchQueue.main.async {
+                    self.isPresented = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                }
+                
+                // Handle specific SSO errors
+                if let ssoError = error as? AWSSSOOIDC.InvalidClientException {
+                    handleSSOError("Invalid Client", ssoError)
+                } else if let ssoError = error as? AWSSSOOIDC.AuthorizationPendingException {
+                    handleSSOError("Authorization Pending", ssoError)
+                } else if let ssoError = error as? AWSSSOOIDC.SlowDownException {
+                    handleSSOError("Slow Down", ssoError)
+                } else if let ssoError = error as? AWSSSOOIDC.ExpiredTokenException {
+                    handleSSOError("Token Expired", ssoError)
+                } else if let crtError = error as? AwsCommonRuntimeKit.CRTError {
+                    // Handle CRTError
+                    let errorMessage = "CRT Error: Code \(crtError.code), Message: \(crtError.message)"
+                    handleError(errorMessage, crtError)
+                } else {
+                    // Handle unknown errors
+                    handleError("Unknown error", error)
+                }
+            }
+            logger.info("Start URL: \(startUrl), Region: \(region)") // Changed to info level
+        }
+    }
+
+    private func handleSSOError(_ type: String, _ error: Error) {
+        let errorMessage = "\(type) Error: \(error.localizedDescription)"
+        handleError(errorMessage, error)
+    }
+
+    private func handleError(_ message: String, _ error: Error) {
+        DispatchQueue.main.async {
+            self.loginError = message
+        }
+        logger.error("SSO Login Error - \(message)")
+        logger.error("Error details: \(String(describing: error))")
+    }
+}
+
+
+extension AwsIdentityCenterLoginView {
+    class Coordinator: NSObject, WKNavigationDelegate {
+        var parent: AwsIdentityCenterLoginView
+        
+        init(parent: AwsIdentityCenterLoginView) {
+            self.parent = parent
+        }
+        
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let url = navigationAction.request.url, url.scheme == "amazonbedrock" {
+                parent.handleRedirect(url: url)
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    func handleRedirect(url: URL) {
+        // Handle the URL redirect here
+        print("젠장")
     }
 }
 
@@ -105,7 +307,7 @@ struct AdvancedSettingsView: View {
 
 struct LLMSettingsView: View {
     @ObservedObject var settingsManager: LLMSettingsManager
-
+    
     var body: some View {
         Form {
             Section(header: Text("Model Selection")) {
@@ -216,5 +418,11 @@ struct LLMModel: Identifiable, Hashable {
     
     static func == (lhs: LLMModel, rhs: LLMModel) -> Bool {
         lhs.id == rhs.id
+    }
+}
+
+extension BackendModel {
+    var isLoggedInWithSSO: Bool {
+        backend.isLoggedInWithSSO()
     }
 }

@@ -9,18 +9,24 @@ import Foundation
 import Combine
 import Logging
 import AWSSTS
+import AWSSSO
+import AWSSSOOIDC
 import AWSBedrock
 import AWSBedrockRuntime
 import AWSClientRuntime
 import AppKit
 import AwsCommonRuntimeKit
+import SmithyIdentity
 import AWSSDKIdentity
+import AWSClientRuntime
 
-// MARK: - Backend Class
 class BackendModel: ObservableObject {
     @Published var backend: Backend
     private var cancellables = Set<AnyCancellable>()
     private var logger = Logger(label: "BackendModel")
+    @Published var isLoggedIn = false
+    private var ssoOIDC: SSOOIDCClient?
+    private var sso: SSOClient?
     
     init() {
         self.backend = Backend(region: SettingManager.shared.selectedRegion.rawValue,
@@ -34,13 +40,106 @@ class BackendModel: ObservableObject {
                            SettingManager.shared.$runtimeEndpoint)
             .sink { [weak self] (region, profile, endpoint, runtimeEndpoint) in
                 self?.updateBackend(region: region.rawValue, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
+                self?.setupClients() // Added setupClients call
             }
             .store(in: &cancellables)
     }
     
-    private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
+    private func setupClients() { // New function added
+        do {
+            let region = "us-west-2" // Use desired region
+            let ssoOIDCConfiguration = try SSOOIDCClient.SSOOIDCClientConfiguration(region: region)
+            let ssoConfiguration = try SSOClient.SSOClientConfiguration(region: region)
+            
+            ssoOIDC = SSOOIDCClient(config: ssoOIDCConfiguration)
+            sso = SSOClient(config: ssoConfiguration)
+        } catch {
+            print("Error setting up clients: \(error)")
+        }
+    }
+    
+    private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) { // Added private to method
         self.backend = Backend(region: region, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
         logger.info("Backend updated, region: \(region), profile: \(profile)")
+    }
+    
+    func startSSOLogin(startUrl: String, region: String) async throws -> (authUrl: String, userCode: String) {
+        let registerClientRequest = RegisterClientInput(
+            clientName: "Amazon Bedrock",
+            clientType: "public",
+            scopes: ["sso:account:access"]
+        )
+        
+        let registerClientResponse = try await ssoOIDC!.registerClient(input: registerClientRequest)
+        
+        let startDeviceAuthRequest = StartDeviceAuthorizationInput(
+            clientId: registerClientResponse.clientId,
+            clientSecret: registerClientResponse.clientSecret,
+            startUrl: startUrl
+        )
+        
+        let startDeviceAuthResponse = try await ssoOIDC!.startDeviceAuthorization(input: startDeviceAuthRequest)
+        
+        return (startDeviceAuthResponse.verificationUriComplete!, startDeviceAuthResponse.userCode!)
+    }
+    
+    func pollForTokens(clientId: String, clientSecret: String, deviceCode: String) async throws -> CreateTokenOutput {
+        let createTokenRequest = CreateTokenInput(
+            clientId: clientId,
+            clientSecret: clientSecret,
+            deviceCode: deviceCode,
+            grantType: "urn:ietf:params:oauth:grant-type:device_code"
+        )
+        
+        while true {
+            do {
+                let tokenResponse = try await ssoOIDC!.createToken(input: createTokenRequest)
+                return tokenResponse
+            } catch let error as AuthorizationPendingException {
+                // User hasn't completed the authorization yet, wait and retry
+                try await Task.sleep(nanoseconds: 5_000_000_000) // Wait for 5 seconds
+            } catch {
+                throw error
+            }
+        }
+        
+    }
+    
+    func getAccountInfo(accessToken: String) async throws -> GetRoleCredentialsOutput {
+        let listAccountsRequest = ListAccountsInput(accessToken: accessToken, maxResults: 1)
+        let listAccountsResponse = try await sso!.listAccounts(input: listAccountsRequest)
+        
+        guard let account = listAccountsResponse.accountList?.first else {
+            throw NSError(domain: "SSOError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No accounts found"])
+        }
+        
+        let listAccountRolesRequest = ListAccountRolesInput(
+            accessToken: accessToken,
+            accountId: account.accountId!,
+            maxResults: 1
+        )
+        let listAccountRolesResponse = try await sso!.listAccountRoles(input: listAccountRolesRequest)
+        
+        guard let role = listAccountRolesResponse.roleList?.first else {
+            throw NSError(domain: "SSOError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No roles found"])
+        }
+        
+        let getRoleCredentialsRequest = GetRoleCredentialsInput(
+            accessToken: accessToken,
+            accountId: account.accountId!,
+            roleName: role.roleName!
+        )
+        return try await sso!.getRoleCredentials(input: getRoleCredentialsRequest)
+    }
+    
+    func completeLogin(tokenResponse: CreateTokenOutput) async throws {
+        let roleCredentials = try await getAccountInfo(accessToken: tokenResponse.accessToken!)
+        
+        // Save the credentials securely (you might want to use Keychain for this)
+        // For demonstration, we're just setting a flag
+        DispatchQueue.main.async {
+            self.isLoggedIn = true
+        }
     }
 }
 
@@ -50,7 +149,7 @@ class Backend: Equatable {
     private let profile: String
     private let endpoint: String
     private let runtimeEndpoint: String
-    private let credentialsResolver: ProfileAWSCredentialIdentityResolver
+    private var awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
     
     private lazy var bedrockClient: BedrockClient = createBedrockClient()
     private lazy var bedrockRuntimeClient: BedrockRuntimeClient = createBedrockRuntimeClient()
@@ -62,26 +161,60 @@ class Backend: Equatable {
         self.runtimeEndpoint = runtimeEndpoint
         
         do {
-            self.credentialsResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+            if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
+                if selectedProfile.type == .sso {
+                    self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+                } else {
+                    self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                }
+            } else {
+                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+            }
         } catch {
-            logger.error("Failed to create credentials provider: \(error)")
-            fatalError("Unable to create credentials provider: \(error.localizedDescription)")
+            logger.error("Failed to create credentials resolver: \(error). Using default credentials.")
+            self.awsCredentialIdentityResolver = try! ProfileAWSCredentialIdentityResolver(profileName: "default")
         }
         
         logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
     }
+
+    func loginWithSSO(profileName: String? = nil) async throws {
+        do {
+            let ssoResolver = try SSOAWSCredentialIdentityResolver(
+                profileName: profileName,
+                configFilePath: nil,
+                credentialsFilePath: nil
+            )
+            self.awsCredentialIdentityResolver = ssoResolver
+            // Bedrock 클라이언트들을 새로운 자격 증명으로 재생성
+            self.bedrockClient = createBedrockClient()
+            self.bedrockRuntimeClient = createBedrockRuntimeClient()
+            logger.info("Successfully logged in with SSO")
+        } catch {
+            logger.error("Failed to login with SSO: \(error)")
+            throw error
+        }
+    }
     
-    static func == (lhs: Backend, rhs: Backend) -> Bool {
-        return lhs.region == rhs.region &&
-        lhs.profile == rhs.profile &&
-        lhs.endpoint == rhs.endpoint &&
-        lhs.runtimeEndpoint == rhs.runtimeEndpoint
+    func isLoggedInWithSSO() -> Bool {
+        return awsCredentialIdentityResolver is SSOAWSCredentialIdentityResolver
+    }
+    
+    func logoutSSO() {
+        do {
+            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+            self.bedrockClient = createBedrockClient()
+            self.bedrockRuntimeClient = createBedrockRuntimeClient()
+            logger.info("Logged out from SSO and reverted to profile credentials")
+        } catch {
+            logger.error("Failed to revert to profile credentials after SSO logout: \(error)")
+        }
     }
     
     private func createBedrockClient() -> BedrockClient {
         do {
             let config = try BedrockClient.BedrockClientConfiguration(
-                awsCredentialIdentityResolver: self.credentialsResolver,
+                awsCredentialIdentityResolver: self.awsCredentialIdentityResolver,
                 region: self.region,
                 signingRegion: self.region,
                 endpoint: self.endpoint.isEmpty ? nil : self.endpoint
@@ -97,7 +230,7 @@ class Backend: Equatable {
     private func createBedrockRuntimeClient() -> BedrockRuntimeClient {
         do {
             let config = try BedrockRuntimeClient.BedrockRuntimeClientConfiguration(
-                awsCredentialIdentityResolver: self.credentialsResolver,
+                awsCredentialIdentityResolver: self.awsCredentialIdentityResolver,
                 region: self.region,
                 signingRegion: self.region,
                 endpoint: self.runtimeEndpoint.isEmpty ? nil : self.runtimeEndpoint
@@ -108,6 +241,13 @@ class Backend: Equatable {
             logger.error("Failed to create Bedrock Runtime client: \(error.localizedDescription)")
             fatalError("Unable to create Bedrock Runtime client: \(error.localizedDescription)")
         }
+    }
+    
+    static func == (lhs: Backend, rhs: Backend) -> Bool {
+        return lhs.region == rhs.region &&
+        lhs.profile == rhs.profile &&
+        lhs.endpoint == rhs.endpoint &&
+        lhs.runtimeEndpoint == rhs.runtimeEndpoint
     }
     
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
@@ -197,6 +337,7 @@ class Backend: Equatable {
         return output.body ?? AsyncThrowingStream { _ in }
     }
     
+    
     func invokeStableDiffusionModel(withId modelId: String, prompt: String) async throws -> Data {
         let promptData = [
             "text_prompts": [["text": prompt]],
@@ -231,7 +372,7 @@ class Backend: Equatable {
     func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
                               byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
                               byOutputModality: BedrockClientTypes.ModelModality? = nil,
-                              byProvider: String? = nil) async -> Result<[BedrockClientTypes.FoundationModelSummary], BedrockError> {
+                              byProvider: String? = nil) async -> Result<[BedrockClientTypes.FoundationModelSummary], Error> {
         do {
             let request = ListFoundationModelsInput(
                 byCustomizationType: byCustomizationType,
@@ -245,23 +386,11 @@ class Backend: Equatable {
                 return .success(modelSummaries)
             } else {
                 logger.error("Invalid Bedrock response: \(response)")
-                return .failure(BedrockError.invalidResponse("Model summaries are missing"))
-            }
-        } catch let error as AWSClientRuntime.AWSServiceError {
-            switch error.typeName {
-            case "ExpiredTokenException":
-                logger.error("Token has expired")
-                return .failure(BedrockError.tokenExpired)
-            case "UnrecognizedClientException":
-                logger.error("The security token included in the request is invalid.")
-                return .failure(BedrockError.genericError("The security token included in the request is invalid."))
-            default:
-                logger.error("AWS Service Error: \(error)")
-                return .failure(BedrockError.genericError("AWS Service Error: \(error.message ?? "Unknown error")"))
+                return .failure(NSError(domain: "BedrockError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Model summaries are missing"]))
             }
         } catch {
-            logger.error("Unexpected error occurred: \(error)")
-            return .failure(BedrockError.genericError("An unexpected error occurred: \(error)"))
+            logger.error("Error occurred: \(error)")
+            return .failure(error)
         }
     }
     

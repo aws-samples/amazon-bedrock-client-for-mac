@@ -14,16 +14,14 @@ class SettingManager: ObservableObject {
     private var logger = Logger(label: "SettingManager")
     
     @Published var selectedRegion: AWSRegion {
-        didSet {
-            saveSettings()
-        }
+        didSet { saveSettings() }
     }
     @Published var selectedProfile: String {
-        didSet {
-            saveSettings()
-        }
+        didSet { saveSettings() }
     }
-    @Published var profiles: [String]
+    @Published var profiles: [ProfileInfo] {
+        didSet { saveSettings() }
+    }
     @Published var checkForUpdates: Bool {
         didSet {
             saveSettings()
@@ -70,8 +68,8 @@ class SettingManager: ObservableObject {
     private init() {
         self.selectedRegion = UserDefaults.standard.string(forKey: "selectedRegion").flatMap { AWSRegion(rawValue: $0) } ?? .usEast1
         self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
-        self.checkForUpdates = UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true
         self.profiles = Self.readAWSProfiles()
+        self.checkForUpdates = UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true
         self.appearance = UserDefaults.standard.string(forKey: "appearance") ?? "auto"
         self.accentColor = UserDefaults.standard.color(forKey: "accentColor") ?? .systemBlue
         self.sidebarIconSize = UserDefaults.standard.string(forKey: "sidebarIconSize") ?? "Medium"
@@ -79,13 +77,13 @@ class SettingManager: ObservableObject {
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
         self.enableDebugLog = UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
-
+        
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
     
     private func saveSettings() {
         logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
-
+        
         UserDefaults.standard.set(selectedRegion.rawValue, forKey: "selectedRegion")
         UserDefaults.standard.set(selectedProfile, forKey: "selectedProfile")
         UserDefaults.standard.set(checkForUpdates, forKey: "checkForUpdates")
@@ -98,28 +96,102 @@ class SettingManager: ObservableObject {
         UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
     }
     
-    static func readAWSProfiles() -> [String] {
-        let fileManager = FileManager.default
-        let homeDirectory = fileManager.homeDirectoryForCurrentUser
-        let credentialsPath = homeDirectory.appendingPathComponent(".aws/credentials")
+    static func readAWSProfiles() -> [ProfileInfo] {
+        var profiles: [ProfileInfo] = []
         
-        do {
-            let contents = try String(contentsOf: credentialsPath, encoding: .utf8)
-            let lines = contents.components(separatedBy: .newlines)
-            var profiles: [String] = []
-            
-            for line in lines {
-                if line.starts(with: "[") && line.hasSuffix("]") {
-                    let profile = String(line.dropFirst().dropLast())
-                    profiles.append(profile)
-                }
-            }
-            
-            return profiles.isEmpty ? ["default"] : profiles
-        } catch {
-            print("Error reading AWS credentials file: \(error)")
-            return ["default"]
+        // Read regular profiles from ~/.aws/credentials
+        let credentialsProfiles = readProfilesFromFile(path: "~/.aws/credentials", type: .credentials)
+        profiles.append(contentsOf: credentialsProfiles)
+        
+        // Read SSO profiles from ~/.aws/config
+        let configProfiles = readSSOProfilesFromConfig(path: "~/.aws/config")
+        profiles.append(contentsOf: configProfiles)
+        
+        // Return unique profiles
+        return profiles.uniqued()
+    }
+    
+    // Read profiles from a file (used for ~/.aws/credentials)
+    static func readProfilesFromFile(path: String, type: ProfileInfo.ProfileType) -> [ProfileInfo] {
+        let fileManager = FileManager.default
+        let expandedPath = NSString(string: path).expandingTildeInPath
+        
+        // Attempt to read the file contents
+        guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
+            print("Error reading file: \(path)")
+            return []
         }
+        
+        let lines = contents.components(separatedBy: .newlines)
+        var profiles: [ProfileInfo] = []
+        
+        // Parse each line to find profile names
+        for line in lines {
+            if line.starts(with: "[") && line.hasSuffix("]") {
+                let profileName = String(line.dropFirst().dropLast())
+                profiles.append(ProfileInfo(name: profileName, type: type))
+            }
+        }
+        
+        return profiles
+    }
+    
+    // Read SSO profiles from ~/.aws/config
+    static func readSSOProfilesFromConfig(path: String) -> [ProfileInfo] {
+        let fileManager = FileManager.default
+        let expandedPath = NSString(string: path).expandingTildeInPath
+        
+        // Attempt to read the file contents
+        guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
+            print("Error reading file: \(path)")
+            return []
+        }
+        
+        let lines = contents.components(separatedBy: .newlines)
+        var profiles: [ProfileInfo] = []
+        var currentProfile: String?
+        var isSSO = false
+        
+        // Parse each line to find SSO profiles
+        for line in lines {
+            if line.starts(with: "[profile ") && line.hasSuffix("]") {
+                // If we've found a new profile, add the previous one if it was SSO
+                if let profile = currentProfile, isSSO {
+                    profiles.append(ProfileInfo(name: profile, type: .sso))
+                }
+                // Start tracking a new profile
+                currentProfile = String(line.dropFirst(9).dropLast())
+                isSSO = false
+            } else if line.trimmingCharacters(in: .whitespaces).starts(with: "sso_") {
+                // If we find an SSO-related setting, mark this profile as SSO
+                isSSO = true
+            }
+        }
+        
+        // Add the last profile if it was SSO
+        if let profile = currentProfile, isSSO {
+            profiles.append(ProfileInfo(name: profile, type: .sso))
+        }
+        
+        return profiles
+    }
+}
+
+struct ProfileInfo: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let type: ProfileType
+    
+    enum ProfileType {
+        case credentials
+        case sso
+    }
+}
+
+extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }
 

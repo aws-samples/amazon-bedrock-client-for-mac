@@ -14,18 +14,11 @@
 		790804242B99F0DA00930011 /* ImageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790804232B99F0DA00930011 /* ImageManager.swift */; };
 		79320FC92B469BAE0074090A /* ChatModelSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79320FC82B469BAE0074090A /* ChatModelSnapshot.swift */; };
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
+		7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7953C5AA2C345B8700663438 /* SSOManager.swift */; };
 		7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8422AD247CC008B03D3 /* AWSRegion.swift */; };
 		7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8442AD247DF008B03D3 /* SettingsView.swift */; };
 		7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8462AD249A7008B03D3 /* SettingManager.swift */; };
 		795D9C8F2BC57D3900DF38C0 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795D9C8E2BC57D3900DF38C0 /* MainView.swift */; };
-		79610D802AD2290300993D09 /* troubleshooting-3.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D782AD2290200993D09 /* troubleshooting-3.png */; };
-		79610D812AD2290300993D09 /* troubleshooting-2.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D792AD2290200993D09 /* troubleshooting-2.png */; };
-		79610D822AD2290300993D09 /* troubleshooting-1.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7A2AD2290200993D09 /* troubleshooting-1.png */; };
-		79610D832AD2290300993D09 /* troubleshooting-4.png in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7B2AD2290200993D09 /* troubleshooting-4.png */; };
-		79610D842AD2290300993D09 /* image4.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7C2AD2290200993D09 /* image4.jpg */; };
-		79610D852AD2290300993D09 /* image1.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7D2AD2290200993D09 /* image1.jpg */; };
-		79610D862AD2290300993D09 /* image2.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7E2AD2290200993D09 /* image2.jpg */; };
-		79610D872AD2290300993D09 /* image3.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 79610D7F2AD2290200993D09 /* image3.jpg */; };
 		79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DBD2AD22A2F00993D09 /* SidebarSelection.swift */; };
 		79610DD82AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DBE2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift */; };
 		79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC12AD22A2F00993D09 /* BedrockClient.swift */; };
@@ -48,6 +41,8 @@
 		797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */; };
 		798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = 798A9CE52AD3AB2E00E9D039 /* Vapor */; };
 		798A9CE82AD3AB4300E9D039 /* LocalHostServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */; };
+		79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78972C31691800BD6FB1 /* AWSSSO */; };
+		79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78992C31691800BD6FB1 /* AWSSSOOIDC */; };
 		79AFC17E2AD23B4800A75ED3 /* ToggleSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AFC17D2AD23B4800A75ED3 /* ToggleSidebar.swift */; };
 		79BF645F2ACFF8FD00383300 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 79BF645E2ACFF8FD00383300 /* README.md */; };
 		79BFF5102AD342710057BF3A /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BFF50F2AD342710057BF3A /* ChatManager.swift */; };
@@ -93,18 +88,11 @@
 		791461202AD0E51B00C454DC /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		79320FC82B469BAE0074090A /* ChatModelSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModelSnapshot.swift; sourceTree = "<group>"; };
 		7937953C2B46CAF1000C94A5 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
+		7953C5AA2C345B8700663438 /* SSOManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSOManager.swift; sourceTree = "<group>"; };
 		7954F8422AD247CC008B03D3 /* AWSRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSRegion.swift; sourceTree = "<group>"; };
 		7954F8442AD247DF008B03D3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7954F8462AD249A7008B03D3 /* SettingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingManager.swift; sourceTree = "<group>"; };
 		795D9C8E2BC57D3900DF38C0 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-		79610D782AD2290200993D09 /* troubleshooting-3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-3.png"; sourceTree = "<group>"; };
-		79610D792AD2290200993D09 /* troubleshooting-2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-2.png"; sourceTree = "<group>"; };
-		79610D7A2AD2290200993D09 /* troubleshooting-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-1.png"; sourceTree = "<group>"; };
-		79610D7B2AD2290200993D09 /* troubleshooting-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "troubleshooting-4.png"; sourceTree = "<group>"; };
-		79610D7C2AD2290200993D09 /* image4.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = image4.jpg; sourceTree = "<group>"; };
-		79610D7D2AD2290200993D09 /* image1.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = image1.jpg; sourceTree = "<group>"; };
-		79610D7E2AD2290200993D09 /* image2.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = image2.jpg; sourceTree = "<group>"; };
-		79610D7F2AD2290200993D09 /* image3.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = image3.jpg; sourceTree = "<group>"; };
 		79610DBC2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_Mac.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Amazon_Bedrock_Client_for_Mac.entitlements; sourceTree = "<group>"; };
 		79610DBD2AD22A2F00993D09 /* SidebarSelection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SidebarSelection.swift; sourceTree = "<group>"; };
 		79610DBE2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacApp.swift; sourceTree = "<group>"; };
@@ -140,6 +128,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */,
+				79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */,
 				79E63E1F2AD1F11B00C0880A /* Splash in Frameworks */,
 				79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */,
 				79E63E272AD1F11B00C0880A /* SplashTokenizer in Frameworks */,
@@ -172,7 +162,6 @@
 		7907BE8B2ACD87A000C4D500 = {
 			isa = PBXGroup;
 			children = (
-				79610D772AD2290200993D09 /* assets */,
 				791461202AD0E51B00C454DC /* LICENSE */,
 				79BF645E2ACFF8FD00383300 /* README.md */,
 				79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */,
@@ -208,21 +197,6 @@
 			);
 			path = "Amazon Bedrock Client for MacUITests";
 			sourceTree = "<group>";
-		};
-		79610D772AD2290200993D09 /* assets */ = {
-			isa = PBXGroup;
-			children = (
-				79610D782AD2290200993D09 /* troubleshooting-3.png */,
-				79610D792AD2290200993D09 /* troubleshooting-2.png */,
-				79610D7A2AD2290200993D09 /* troubleshooting-1.png */,
-				79610D7B2AD2290200993D09 /* troubleshooting-4.png */,
-				79610D7C2AD2290200993D09 /* image4.jpg */,
-				79610D7D2AD2290200993D09 /* image1.jpg */,
-				79610D7E2AD2290200993D09 /* image2.jpg */,
-				79610D7F2AD2290200993D09 /* image3.jpg */,
-			);
-			path = assets;
-			sourceTree = SOURCE_ROOT;
 		};
 		79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */ = {
 			isa = PBXGroup;
@@ -261,6 +235,7 @@
 				790804232B99F0DA00930011 /* ImageManager.swift */,
 				797A12B72C2DB33100494DD9 /* SettingsWindowManager.swift */,
 				79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */,
+				7953C5AA2C345B8700663438 /* SSOManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -340,6 +315,8 @@
 				79E63E242AD1F11B00C0880A /* SplashMarkdown */,
 				79E63E262AD1F11B00C0880A /* SplashTokenizer */,
 				798A9CE52AD3AB2E00E9D039 /* Vapor */,
+				79AC78972C31691800BD6FB1 /* AWSSSO */,
+				79AC78992C31691800BD6FB1 /* AWSSSOOIDC */,
 			);
 			productName = "Amazon Bedrock Client for Mac";
 			productReference = 7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */;
@@ -452,14 +429,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				79610D802AD2290300993D09 /* troubleshooting-3.png in Resources */,
-				79610D842AD2290300993D09 /* image4.jpg in Resources */,
-				79610D832AD2290300993D09 /* troubleshooting-4.png in Resources */,
-				79610D812AD2290300993D09 /* troubleshooting-2.png in Resources */,
-				79610D822AD2290300993D09 /* troubleshooting-1.png in Resources */,
-				79610D852AD2290300993D09 /* image1.jpg in Resources */,
-				79610D862AD2290300993D09 /* image2.jpg in Resources */,
-				79610D872AD2290300993D09 /* image3.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -480,6 +449,7 @@
 				797A12BC2C2EB4C300494DD9 /* CoreDataStack.swift in Sources */,
 				79320FC92B469BAE0074090A /* ChatModelSnapshot.swift in Sources */,
 				79AFC17E2AD23B4800A75ED3 /* ToggleSidebar.swift in Sources */,
+				7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */,
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,
 				5BC0DA4A2BC5BDE20019C74D /* CodeBlockView.swift in Sources */,
@@ -918,6 +888,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */;
 			productName = Vapor;
+		};
+		79AC78972C31691800BD6FB1 /* AWSSSO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = AWSSSO;
+		};
+		79AC78992C31691800BD6FB1 /* AWSSSOOIDC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = AWSSSOOIDC;
 		};
 		79E59FFD2ACDA88700DC6657 /* AWSBedrock */ = {
 			isa = XCSwiftPackageProductDependency;

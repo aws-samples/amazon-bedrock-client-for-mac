@@ -7,6 +7,9 @@
 
 import SwiftUI
 import Combine
+import AWSClientRuntime
+import AwsCommonRuntimeKit
+import Logging
 
 struct MainView: View {
     @State private var selection: SidebarSelection? = .newChat
@@ -15,6 +18,8 @@ struct MainView: View {
     @State private var alertMessage: String = ""
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var isHovering = false
+    @State private var alertInfo: AlertInfo?
+    private var logger = Logger(label: "MainView")
     
     @StateObject var backendModel: BackendModel = BackendModel()
     @StateObject var chatManager: ChatManager = ChatManager.shared
@@ -25,8 +30,12 @@ struct MainView: View {
             SidebarView(selection: $selection, menuSelection: $menuSelection)
             contentView()
         }
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+        .alert(item: $alertInfo) { info in
+            Alert(
+                title: Text(info.title),
+                message: Text(info.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
         .onAppear(perform: setup)
         .toolbar { toolbarContent() }
@@ -74,11 +83,53 @@ struct MainView: View {
                 }
             case .failure(let error):
                 DispatchQueue.main.async {
-                    self.alertMessage = error.localizedDescription
-                    self.showAlert = true
+                    self.handleFetchModelsError(error)
                 }
             }
         }
+    }
+    
+    private func handleFetchModelsError(_ error: Error) {
+        if let awsError = error as? AWSClientRuntime.AWSServiceError {
+            let errorType = awsError.typeName ?? "Unknown AWS Error"
+            var errorMessage = awsError.message ?? "No error message provided"
+            
+            if errorType == "ExpiredTokenException" {
+                errorMessage += "\nPlease log in again."
+            }
+            
+            self.alertInfo = AlertInfo(
+                title: "\(errorType)",
+                message: errorMessage
+            )
+        } else if let crtError = error as? AwsCommonRuntimeKit.CRTError {
+            self.alertInfo = AlertInfo(
+                title: "CRT Error",
+                message: "Code: \(crtError.code), Message: \(crtError.message)"
+            )
+        } else if let commonRunTimeError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
+            self.alertInfo = AlertInfo(
+                title: "CommonRunTime Error",
+                message: "Error: \(commonRunTimeError)"
+            )
+        } else {
+            // 알 수 없는 에러 타입에 대한 더 자세한 정보 제공
+            self.alertInfo = AlertInfo(
+                title: "Unknown Error",
+                message: "Type: \(type(of: error)), Description: \(error.localizedDescription)"
+            )
+        }
+        
+        // 로깅 추가
+        print("Error type: \(type(of: error))")
+        print("Error description: \(error)")
+        
+        if let alertInfo = self.alertInfo {
+            logger.error("Fetch Models Error - \(alertInfo.title): \(alertInfo.message)")
+        } else {
+            logger.error("Fetch Models Error occurred, but alertInfo is nil")
+        }
+        logger.error("Error details: \(String(describing: error))")
     }
     
     private func selectClaudeModel() {
@@ -162,51 +213,25 @@ struct MainView: View {
     }
     
     func customDropdownButton(_ title: String) -> some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 4) {
             Menu {
                 ForEach(organizedChatModels.keys.sorted(), id: \.self) { provider in
                     Section(header: Text(provider)) {
                         ForEach(organizedChatModels[provider] ?? [], id: \.self) { chat in
-                            Button(action: {
+                            Button(chat.id) {
                                 menuSelection = .chat(chat)
-                            }) {
-                                Text(chat.id)
                             }
                         }
                     }
                 }
             } label: {
-                Text(menuSelection.flatMap { menuSelection -> String? in
-                    if case let .chat(chat) = menuSelection {
-                        return chat.name
-                    }
-                    return nil
-                } ?? title)
-                .font(.title2)
-                .foregroundColor(isHovering ? .gray : .primary)
+                menuLabel(title)
             }
-            .background(isHovering ? Color.gray.opacity(0.2) : Color.clear)
+            .menuStyle(BorderlessButtonMenuStyle())
+            .background(hoverBackground)
             .cornerRadius(8)
-            .onHover { hover in
-                self.isHovering = hover
-            }
-            .buttonStyle(PlainButtonStyle())
-            .onChange(of: menuSelection) { newValue in
-                if case .chat(let selectedModel) = newValue,
-                   case .chat(let currentChat) = selection,
-                   chatManager.getMessages(for: currentChat.chatId).isEmpty {
-                    let updatedChat = currentChat
-                    updatedChat.description = selectedModel.id
-                    updatedChat.id = selectedModel.id
-                    updatedChat.name = selectedModel.name
-                    
-                    selection = .chat(updatedChat)
-                    
-                    if let index = chatManager.chats.firstIndex(where: { $0.chatId == currentChat.chatId }) {
-                        chatManager.chats[index] = updatedChat
-                    }
-                }
-            }
+            .onHover { self.isHovering = $0 }
+            .onChange(of: menuSelection, perform: handleMenuSelectionChange)
             
             if case let .chat(chat) = menuSelection {
                 Text(chat.id)
@@ -219,6 +244,40 @@ struct MainView: View {
         }
     }
     
+    private func menuLabel(_ title: String) -> some View {
+        Text(menuSelection.flatMap { menuSelection -> String? in
+            if case let .chat(chat) = menuSelection {
+                return chat.name
+            }
+            return nil
+        } ?? title)
+        .font(.title2)
+        .foregroundColor(isHovering ? .gray : .primary)
+    }
+    
+    private var hoverBackground: some View {
+        isHovering ? Color.gray.opacity(0.2) : Color.clear
+    }
+    
+    private func handleMenuSelectionChange(_ newValue: SidebarSelection?) {
+        guard case let .chat(selectedModel) = newValue,
+              case let .chat(currentChat) = selection,
+              chatManager.getMessages(for: currentChat.chatId).isEmpty else {
+            return
+        }
+        
+        let updatedChat = currentChat
+        updatedChat.description = selectedModel.id
+        updatedChat.id = selectedModel.id
+        updatedChat.name = selectedModel.name
+        
+        selection = .chat(updatedChat)
+        
+        if let index = chatManager.chats.firstIndex(where: { $0.chatId == currentChat.chatId }) {
+            chatManager.chats[index] = updatedChat
+        }
+    }
+    
     func deleteCurrentChat() {
         guard case .chat(let chat) = selection else { return }
         selection = chatManager.deleteChat(with: chat.chatId)
@@ -227,4 +286,10 @@ struct MainView: View {
     private func toggleSidebar() {
         NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
+}
+
+struct AlertInfo: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
 }
