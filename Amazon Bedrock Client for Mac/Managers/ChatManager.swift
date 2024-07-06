@@ -107,12 +107,12 @@ class ChatManager: ObservableObject {
         if let index = chats.firstIndex(where: { $0.chatId == chatId }) {
             chats.remove(at: index)
         }
-
+        
         // Delete associated files
         deleteMessagesFile(for: chatId)
         deleteHistoryFile(for: chatId)
         deleteClaudeHistoryFile(for: chatId)
-
+        
         // Return the most recent chat or a new chat
         if let mostRecentChat = chats.sorted(by: { $0.lastMessageDate > $1.lastMessageDate }).first {
             return .chat(mostRecentChat)
@@ -320,8 +320,38 @@ extension ChatManager {
     
     func addClaudeHistory(_ message: ClaudeMessageRequest.Message, for chatId: String) {
         var history = getClaudeHistory(for: chatId)
+        
+        // If the new message is from the "user", check previous messages
+        if message.role == "user" {
+            // Remove all "user" messages after the last "assistant" message
+            while let lastMessage = history.last, lastMessage.role == "user" {
+                history.removeLast()
+            }
+        }
+        
+        // Add the new message
         history.append(message)
+        
+        // Save the modified history
         saveClaudeHistoryToFile(chatId: chatId, history: history)
+    }
+    
+    func cleanupClaudeHistory(for chatId: String) {
+        var history = getClaudeHistory(for: chatId)
+        var cleanedHistory: [ClaudeMessageRequest.Message] = []
+        var lastRole: String?
+        
+        for message in history {
+            if message.role != lastRole {
+                cleanedHistory.append(message)
+                lastRole = message.role
+            } else if message.role == "user" {
+                // If the same role appears consecutively, replace only the "user" message with the latest one
+                cleanedHistory[cleanedHistory.count - 1] = message
+            }
+        }
+        
+        saveClaudeHistoryToFile(chatId: chatId, history: cleanedHistory)
     }
 }
 

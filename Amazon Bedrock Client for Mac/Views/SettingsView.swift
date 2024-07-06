@@ -17,29 +17,46 @@ struct SettingsView: View {
     @StateObject private var llmSettingsManager = LLMSettingsManager()
     @StateObject private var ssoManager = SSOManager()
     @State private var searchText = ""
+    @State private var selectedTab: SettingsTab = .general  // 기본값을 .general로 설정
     private var logger = Logger(label: "SettingsView")
     
+    enum SettingsTab: String, CaseIterable, Identifiable {
+        case general, advanced
+        // case appearance, llmSettings  // 주석 처리
+        var id: Self { self }
+        
+        var imageName: String {
+            switch self {
+            case .general: return "gear"
+            case .advanced: return "wrench.and.screwdriver"
+            // case .appearance: return "paintbrush"  // 주석 처리
+            // case .llmSettings: return "cpu"  // 주석 처리
+            }
+        }
+    }
+    
     var body: some View {
-        NavigationView {
-            List {
-                NavigationLink(destination: GeneralSettingsView(ssoManager: ssoManager)) {
-                    Label("General", systemImage: "gear")
-                }
-//                NavigationLink(destination: AppearanceSettingsView()) {
-//                    Label("Appearance", systemImage: "paintbrush")
-//                }
-//                NavigationLink(destination: LLMSettingsView(settingsManager: llmSettingsManager)) {
-//                    Label("LLM Settings", systemImage: "cpu")
-//                }
-                NavigationLink(destination: AdvancedSettingsView()) {
-                    Label("Advanced", systemImage: "wrench.and.screwdriver")
+        NavigationSplitView {
+            List(SettingsTab.allCases, selection: $selectedTab) { tab in
+                NavigationLink(value: tab) {
+                    Label(tab.rawValue.capitalized, systemImage: tab.imageName)
                 }
             }
             .listStyle(SidebarListStyle())
-            .frame(minWidth: 200)
+        } detail: {
+            switch selectedTab {
+            case .general:
+                GeneralSettingsView(ssoManager: ssoManager)
+            case .advanced:
+                AdvancedSettingsView()
+            // case .appearance:  // 주석 처리
+            //     AppearanceSettingsView()
+            // case .llmSettings:  // 주석 처리
+            //     LLMSettingsView(settingsManager: llmSettingsManager)
+            }
         }
-        .frame(width: 600, height: 400)
         .navigationTitle("Settings")
+        .frame(width: 600, height: 400)
     }
 }
 
@@ -64,17 +81,17 @@ struct GeneralSettingsView: View {
             }
             
             // Note: TBU
-            if ssoManager.isLoggedIn {
-                HStack {
-                    Text("Logged in with AWS Identity Center")
-                        .foregroundColor(.secondary)
+//            if ssoManager.isLoggedIn {
+//                HStack {
+//                    Text("Logged in with AWS Identity Center")
+//                        .foregroundColor(.secondary)
 //                    Spacer()
 //                    Button("Log out") {
 //                        ssoManager.logout()
 //                    }
 //                    .buttonStyle(.borderless)
-                }
-            } else {
+//                }
+//            } else {
 //                Button(action: {
 //                    showingLoginSheet = true
 //                }) {
@@ -87,7 +104,7 @@ struct GeneralSettingsView: View {
 //                    }
 //                }
 //                .buttonStyle(AWSButtonStyle())
-            }
+//            }
 
 
             Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)

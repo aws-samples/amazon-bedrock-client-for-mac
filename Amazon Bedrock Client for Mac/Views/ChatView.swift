@@ -16,7 +16,7 @@ struct ChatView: View {
     
     init(chatId: String, backendModel: BackendModel) {
         let sharedImageDataSource = SharedImageDataSource()
-        _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, backend: backendModel.backend, sharedImageDataSource: sharedImageDataSource))
+        _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, backendModel: backendModel, sharedImageDataSource: sharedImageDataSource))
         _sharedImageDataSource = StateObject(wrappedValue: sharedImageDataSource)
         self._backendModel = ObservedObject(wrappedValue: backendModel)
     }
@@ -37,9 +37,6 @@ struct ChatView: View {
             if !isUserScrolling {
                 viewModel.scrollToBottom()
             }
-        }
-        .onChange(of: backendModel.backend) { newBackend in
-            viewModel.updateBackend(newBackend)
         }
     }
     

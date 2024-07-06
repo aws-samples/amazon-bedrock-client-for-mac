@@ -9,59 +9,27 @@ import SwiftUI
 import Combine
 import Logging
 
+extension Notification.Name {
+    static let awsCredentialsChanged = Notification.Name("awsCredentialsChanged")
+}
+
 class SettingManager: ObservableObject {
     static let shared = SettingManager()
     private var logger = Logger(label: "SettingManager")
+    private var fileMonitors: [String: DispatchSourceFileSystemObject] = [:]
+    private let monitoringQueue = DispatchQueue(label: "com.amazonbedrock.fileMonitoring", attributes: .concurrent)
     
-    @Published var selectedRegion: AWSRegion {
-        didSet { saveSettings() }
-    }
-    @Published var selectedProfile: String {
-        didSet { saveSettings() }
-    }
-    @Published var profiles: [ProfileInfo] {
-        didSet { saveSettings() }
-    }
-    @Published var checkForUpdates: Bool {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var appearance: String {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var accentColor: NSColor {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var sidebarIconSize: String {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var allowWallpaperTinting: Bool {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var endpoint: String {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var runtimeEndpoint: String {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var enableDebugLog: Bool {
-        didSet {
-            saveSettings()
-        }
-    }
+    @Published var selectedRegion: AWSRegion { didSet { saveSettings() } }
+    @Published var selectedProfile: String { didSet { saveSettings() } }
+    @Published var profiles: [ProfileInfo] { didSet { saveSettings() } }
+    @Published var checkForUpdates: Bool { didSet { saveSettings() } }
+    @Published var appearance: String { didSet { saveSettings() } }
+    @Published var accentColor: NSColor { didSet { saveSettings() } }
+    @Published var sidebarIconSize: String { didSet { saveSettings() } }
+    @Published var allowWallpaperTinting: Bool { didSet { saveSettings() } }
+    @Published var endpoint: String { didSet { saveSettings() } }
+    @Published var runtimeEndpoint: String { didSet { saveSettings() } }
+    @Published var enableDebugLog: Bool { didSet { saveSettings() } }
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -78,12 +46,11 @@ class SettingManager: ObservableObject {
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
         self.enableDebugLog = UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
         
+        setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
     
     private func saveSettings() {
-        logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
-        
         UserDefaults.standard.set(selectedRegion.rawValue, forKey: "selectedRegion")
         UserDefaults.standard.set(selectedProfile, forKey: "selectedProfile")
         UserDefaults.standard.set(checkForUpdates, forKey: "checkForUpdates")
@@ -94,6 +61,66 @@ class SettingManager: ObservableObject {
         UserDefaults.standard.set(endpoint, forKey: "endpoint")
         UserDefaults.standard.set(runtimeEndpoint, forKey: "runtimeEndpoint")
         UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
+        
+        logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
+    }
+    
+    private func setupFileMonitoring() {
+        let credentialsURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aws/credentials")
+        let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aws/config")
+        
+        monitorFileChanges(at: credentialsURL)
+        monitorFileChanges(at: configURL)
+    }
+    
+    private func monitorFileChanges(at url: URL) {
+        stopMonitoring(for: url)
+        startMonitoring(for: url)
+    }
+    
+    private func startMonitoring(for url: URL) {
+        let fileDescriptor = open(url.path, O_EVTONLY)
+        guard fileDescriptor >= 0 else {
+            logger.error("Failed to open file descriptor for \(url.path)")
+            return
+        }
+        
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fileDescriptor, eventMask: [.write, .delete, .rename], queue: monitoringQueue)
+        source.setEventHandler { [weak self] in
+            self?.handleFileChange(at: url)
+        }
+        source.setCancelHandler {
+            close(fileDescriptor)
+        }
+        source.resume()
+        
+        fileMonitors[url.path] = source
+        logger.info("File monitoring started for \(url.path)")
+    }
+    
+    private func stopMonitoring(for url: URL) {
+        if let existingSource = fileMonitors.removeValue(forKey: url.path) {
+            existingSource.cancel()
+            logger.info("File monitoring stopped for \(url.path)")
+        }
+    }
+    
+    private func handleFileChange(at url: URL) {
+        logger.info("File change detected at \(url.path)")
+        DispatchQueue.main.async { [weak self] in
+            if url.lastPathComponent == "credentials" || url.lastPathComponent == "config" {
+                self?.refreshAWSProfiles()
+                NotificationCenter.default.post(name: .awsCredentialsChanged, object: nil)
+            }
+            
+            // Re-establish monitoring for the changed file
+            self?.monitorFileChanges(at: url)
+        }
+    }
+    
+    private func refreshAWSProfiles() {
+        self.profiles = Self.readAWSProfiles()
+        logger.info("AWS profiles refreshed")
     }
     
     static func readAWSProfiles() -> [ProfileInfo] {
@@ -152,28 +179,39 @@ class SettingManager: ObservableObject {
         var currentProfile: String?
         var isSSO = false
         
+        // Function to add the current profile if it's SSO
+        func addCurrentProfileIfSSO() {
+            if let profile = currentProfile, isSSO {
+                profiles.append(ProfileInfo(name: profile, type: .sso))
+            }
+        }
+        
         // Parse each line to find SSO profiles
         for line in lines {
-            if line.starts(with: "[profile ") && line.hasSuffix("]") {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            if trimmedLine.starts(with: "[profile ") && trimmedLine.hasSuffix("]") {
                 // If we've found a new profile, add the previous one if it was SSO
-                if let profile = currentProfile, isSSO {
-                    profiles.append(ProfileInfo(name: profile, type: .sso))
-                }
+                addCurrentProfileIfSSO()
+                
                 // Start tracking a new profile
-                currentProfile = String(line.dropFirst(9).dropLast())
+                currentProfile = String(trimmedLine.dropFirst(9).dropLast())
                 isSSO = false
-            } else if line.trimmingCharacters(in: .whitespaces).starts(with: "sso_") {
+            } else if trimmedLine.starts(with: "sso_") {
                 // If we find an SSO-related setting, mark this profile as SSO
                 isSSO = true
             }
         }
         
         // Add the last profile if it was SSO
-        if let profile = currentProfile, isSSO {
-            profiles.append(ProfileInfo(name: profile, type: .sso))
-        }
+        addCurrentProfileIfSSO()
         
         return profiles
+    }
+    
+    deinit {
+        for (_, monitor) in fileMonitors {
+            monitor.cancel()
+        }
     }
 }
 

@@ -13,7 +13,7 @@ class ChatViewModel: ObservableObject {
     let chatManager: ChatManager
     let sharedImageDataSource: SharedImageDataSource
     
-    @Published var backend: Backend
+    @ObservedObject var backendModel: BackendModel
     @Published var chatModel: ChatModel
     @Published var messages: [MessageData] = []
     @Published var userInput: String = ""
@@ -27,9 +27,9 @@ class ChatViewModel: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var messageTask: Task<Void, Never>?
     
-    init(chatId: String, backend: Backend, chatManager: ChatManager = .shared, sharedImageDataSource: SharedImageDataSource) {
+    init(chatId: String, backendModel: BackendModel, chatManager: ChatManager = .shared, sharedImageDataSource: SharedImageDataSource) {
         self.chatId = chatId
-        self.backend = backend
+        self.backendModel = backendModel
         self.chatManager = chatManager
         self.sharedImageDataSource = sharedImageDataSource
         
@@ -47,11 +47,6 @@ class ChatViewModel: ObservableObject {
         
         // 모든 프로퍼티 초기화 후에 setupBindings 호출
         setupBindings()
-    }
-    
-    func updateBackend(_ newBackend: Backend) {
-        self.backend = newBackend
-        // 필요한 경우 여기서 모델 목록을 다시 가져오거나 다른 업데이트 수행
     }
     
     @MainActor
@@ -238,7 +233,7 @@ class ChatViewModel: ObservableObject {
     func invokeClaudeModelStream(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         var isFirstChunk = true
         let modelId = chatModel.id
-        let response = try await backend.invokeClaudeModelStream(withId: modelId, messages: claudeMessages)
+        let response = try await backendModel.backend.invokeClaudeModelStream(withId: modelId, messages: claudeMessages)
         
         var streamedText = ""
         
@@ -317,7 +312,7 @@ class ChatViewModel: ObservableObject {
     /// Invokes the Claude model.
     func invokeClaudeModel(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         let modelId = chatModel.id
-        let data = try await backend.invokeClaudeModel(withId: modelId, messages: claudeMessages)
+        let data = try await backendModel.backend.invokeClaudeModel(withId: modelId, messages: claudeMessages)
         let response = try JSONDecoder().decode(ClaudeMessageResponse.self, from: data)
         
         if let firstText = response.content.first?.text {
@@ -334,8 +329,8 @@ class ChatViewModel: ObservableObject {
     private func invokeModelStream(prompt: String) async throws {
         var isFirstChunk = true
         let modelId = chatModel.id
-        let response = try await backend.invokeModelStream(withId: modelId, prompt: prompt)
-        let modelType = backend.getModelType(modelId)
+        let response = try await backendModel.backend.invokeModelStream(withId: modelId, prompt: prompt)
+        let modelType = backendModel.backend.getModelType(modelId)
         
         var streamedText = ""
         
@@ -421,13 +416,13 @@ class ChatViewModel: ObservableObject {
     
     private func invokeModel(prompt: String) async throws {
         let modelId = chatModel.id
-        let modelType = backend.getModelType(modelId)
+        let modelType = backendModel.backend.getModelType(modelId)
         
         if modelType != .stableDiffusion {
-            let data = try await backend.invokeModel(withId: modelId, prompt: prompt)
+            let data = try await backendModel.backend.invokeModel(withId: modelId, prompt: prompt)
             try handleModelResponse(data, modelType: modelType)
         } else {
-            let data = try await backend.invokeStableDiffusionModel(withId: modelId, prompt: prompt)
+            let data = try await backendModel.backend.invokeStableDiffusionModel(withId: modelId, prompt: prompt)
             try handleStableDiffusionResponse(data)
         }
     }
@@ -438,40 +433,40 @@ class ChatViewModel: ObservableObject {
         
         switch modelType {
         case .claude:
-            let response = try backend.decode(data) as InvokeClaudeResponse
+            let response = try backendModel.backend.decode(data) as InvokeClaudeResponse
             assistantMessage = MessageData(id: UUID(), text: response.completion.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
             
         case .titan:
-            let response = try backend.decode(data) as InvokeTitanResponse
+            let response = try backendModel.backend.decode(data) as InvokeTitanResponse
             assistantMessage = MessageData(id: UUID(), text: response.results[0].outputText.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
             
         case .j2:
-            let response = try backend.decode(data) as InvokeAI21Response
+            let response = try backendModel.backend.decode(data) as InvokeAI21Response
             assistantMessage = MessageData(id: UUID(), text: response.completions[0].data.text.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
             
         case .titanImage:
-            let response = try backend.decode(data) as InvokeTitanImageResponse
+            let response = try backendModel.backend.decode(data) as InvokeTitanImageResponse
             try handleTitanImageResponse(response)
             return // 이미지 응답은 별도로 처리되므로 여기서 반환
             
         case .titanEmbed:
-            let response = try backend.decode(data) as InvokeTitanEmbedResponse
+            let response = try backendModel.backend.decode(data) as InvokeTitanEmbedResponse
             assistantMessage = MessageData(id: UUID(), text: response.embedding.map({"\($0)"}).joined(separator: ","), user: chatModel.name, isError: false, sentTime: Date())
             
         case .cohereCommand:
-            let response = try backend.decode(data) as InvokeCommandResponse
+            let response = try backendModel.backend.decode(data) as InvokeCommandResponse
             assistantMessage = MessageData(id: UUID(), text: response.generations[0].text, user: chatModel.name, isError: false, sentTime: Date())
             
         case .cohereEmbed:
-            let response = try backend.decode(data) as InvokeCohereEmbedResponse
+            let response = try backendModel.backend.decode(data) as InvokeCohereEmbedResponse
             assistantMessage = MessageData(id: UUID(), text: response.embeddings.map({"\($0)"}).joined(separator: ","), user: chatModel.name, isError: false, sentTime: Date())
             
         case .llama2, .llama3, .mistral:
-            let response = try backend.decode(data) as InvokeLlama2Response
+            let response = try backendModel.backend.decode(data) as InvokeLlama2Response
             assistantMessage = MessageData(id: UUID(), text: response.generation, user: chatModel.name, isError: false, sentTime: Date())
             
         case .jambaInstruct:
-            let response = try backend.decode(data) as InvokeJambaInstructResponse
+            let response = try backendModel.backend.decode(data) as InvokeJambaInstructResponse
             if let firstChoice = response.choices.first {
                 assistantMessage = MessageData(
                     id: UUID(),
@@ -643,8 +638,8 @@ class ChatViewModel: ObservableObject {
         let message = ClaudeMessageRequest.Message(role: "user", content: [.init(type: "text", text: summaryPrompt)])
         
         do {
-            let data = try await backend.invokeClaudeModel(withId: haikuModelId, messages: [message])
-            let response = try backend.decode(data) as ClaudeMessageResponse
+            let data = try await backendModel.backend.invokeClaudeModel(withId: haikuModelId, messages: [message])
+            let response = try backendModel.backend.decode(data) as ClaudeMessageResponse
             
             if let firstText = response.content.first?.text {
                 chatManager.updateChatTitle(for: chatModel.chatId, title: firstText.trimmingCharacters(in: .whitespacesAndNewlines))

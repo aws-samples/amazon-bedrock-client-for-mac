@@ -27,22 +27,44 @@ class BackendModel: ObservableObject {
     @Published var isLoggedIn = false
     private var ssoOIDC: SSOOIDCClient?
     private var sso: SSOClient?
-    
+
     init() {
         self.backend = Backend(region: SettingManager.shared.selectedRegion.rawValue,
                                profile: SettingManager.shared.selectedProfile,
                                endpoint: SettingManager.shared.endpoint,
                                runtimeEndpoint: SettingManager.shared.runtimeEndpoint)
         
+        setupObservers()
+    }
+
+    private func setupObservers() {
         SettingManager.shared.$selectedRegion
             .combineLatest(SettingManager.shared.$selectedProfile,
                            SettingManager.shared.$endpoint,
                            SettingManager.shared.$runtimeEndpoint)
             .sink { [weak self] (region, profile, endpoint, runtimeEndpoint) in
                 self?.updateBackend(region: region.rawValue, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
-                self?.setupClients() // Added setupClients call
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .awsCredentialsChanged)
+            .sink { [weak self] _ in
+                self?.refreshBackend()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
+        self.backend = Backend(region: region, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
+        logger.info("Backend updated, region: \(region), profile: \(profile)")
+    }
+
+    private func refreshBackend() {
+        updateBackend(region: backend.region,
+                      profile: backend.profile,
+                      endpoint: backend.endpoint,
+                      runtimeEndpoint: backend.runtimeEndpoint)
+        logger.info("Backend refreshed due to credentials change")
     }
     
     private func setupClients() { // New function added
@@ -56,11 +78,6 @@ class BackendModel: ObservableObject {
         } catch {
             print("Error setting up clients: \(error)")
         }
-    }
-    
-    private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) { // Added private to method
-        self.backend = Backend(region: region, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
-        logger.info("Backend updated, region: \(region), profile: \(profile)")
     }
     
     func startSSOLogin(startUrl: String, region: String) async throws -> (authUrl: String, userCode: String) {
@@ -144,11 +161,11 @@ class BackendModel: ObservableObject {
 }
 
 class Backend: Equatable {
+    let region: String
+    let profile: String
+    let endpoint: String
+    let runtimeEndpoint: String
     private var logger = Logger(label: "Backend")
-    private let region: String
-    private let profile: String
-    private let endpoint: String
-    private let runtimeEndpoint: String
     private var awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
     
     private lazy var bedrockClient: BedrockClient = createBedrockClient()

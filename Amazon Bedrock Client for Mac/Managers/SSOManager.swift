@@ -22,14 +22,14 @@ class SSOManager: ObservableObject {
     
     private func setupClients() {
         do {
-            let region = "us-west-2" // 원하는 리전으로 설정
+            let region = "us-west-2"
             let ssoOIDCConfiguration = try SSOOIDCClient.SSOOIDCClientConfiguration(region: region)
             let ssoConfiguration = try SSOClient.SSOClientConfiguration(region: region)
             
-            ssoOIDC = try SSOOIDCClient(config: ssoOIDCConfiguration)
-            sso = try SSOClient(config: ssoConfiguration)
+            ssoOIDC = SSOOIDCClient(config: ssoOIDCConfiguration)
+            sso = SSOClient(config: ssoConfiguration)
         } catch {
-            print("Error setting up clients: \(error)")
+            logger.error("Error setting up clients: \(error)")
         }
     }
     
@@ -78,47 +78,59 @@ class SSOManager: ObservableObject {
         }
     }
     
-    func getAccountInfo(accessToken: String) async throws -> GetRoleCredentialsOutput {
-        let listAccountsRequest = ListAccountsInput(accessToken: accessToken, maxResults: 1)
-        let listAccountsResponse = try await sso!.listAccounts(input: listAccountsRequest)
+    func refreshToken(currentRefreshToken: String, clientId: String, clientSecret: String) async throws -> CreateTokenOutput {
+        let createTokenRequest = CreateTokenInput(
+            clientId: clientId,
+            clientSecret: clientSecret,
+            grantType: "refresh_token",
+            refreshToken: currentRefreshToken
+        )
         
-        guard let account = listAccountsResponse.accountList?.first else {
-            throw NSError(domain: "SSOError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No accounts found"])
+        do {
+            let tokenResponse = try await ssoOIDC!.createToken(input: createTokenRequest)
+            return tokenResponse
+        } catch {
+            logger.error("Token refresh error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func loadTokenFromCache() -> (refreshToken: String, clientId: String, clientSecret: String)? {
+        let fileManager = FileManager.default
+        let cachePath = NSString(string: "~/.aws/sso/cache").expandingTildeInPath
+        
+        do {
+            let directoryContents = try fileManager.contentsOfDirectory(atPath: cachePath)
+            for fileName in directoryContents {
+                if fileName.hasSuffix(".json") {
+                    let filePath = (cachePath as NSString).appendingPathComponent(fileName)
+                    let fileData = try Data(contentsOf: URL(fileURLWithPath: filePath))
+                    if let json = try JSONSerialization.jsonObject(with: fileData, options: []) as? [String: Any],
+                       let refreshToken = json["refreshToken"] as? String,
+                       let clientId = json["clientId"] as? String,
+                       let clientSecret = json["clientSecret"] as? String {
+                        return (refreshToken, clientId, clientSecret)
+                    }
+                }
+            }
+        } catch {
+            logger.error("Error loading token from cache: \(error.localizedDescription)")
         }
         
-        let listAccountRolesRequest = ListAccountRolesInput(
-            accessToken: accessToken,
-            accountId: account.accountId!,
-            maxResults: 1
-        )
-        let listAccountRolesResponse = try await sso!.listAccountRoles(input: listAccountRolesRequest)
-        
-        guard let role = listAccountRolesResponse.roleList?.first else {
-            throw NSError(domain: "SSOError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No roles found"])
-        }
-        
-        let getRoleCredentialsRequest = GetRoleCredentialsInput(
-            accessToken: accessToken,
-            accountId: account.accountId!,
-            roleName: role.roleName!
-        )
-        return try await sso!.getRoleCredentials(input: getRoleCredentialsRequest)
+        return nil
     }
     
     func completeLogin(tokenResponse: CreateTokenOutput) async throws {
-            let roleCredentials = try await getAccountInfo(accessToken: tokenResponse.accessToken!)
-            
-            // 자격 증명을 안전하게 저장 (Keychain 사용 권장)
-            // 여기서는 간단히 로그인 상태만 변경
-            DispatchQueue.main.async {
-                self.isLoggedIn = true
-            }
-        }
-        
-        func logout() {
-            // 로그아웃 로직 구현
-            DispatchQueue.main.async {
-                self.isLoggedIn = false
-            }
+        // 로그인 완료 로직 구현
+        DispatchQueue.main.async {
+            self.isLoggedIn = true
         }
     }
+    
+    func logout() {
+        // 로그아웃 로직 구현
+        DispatchQueue.main.async {
+            self.isLoggedIn = false
+        }
+    }
+}
