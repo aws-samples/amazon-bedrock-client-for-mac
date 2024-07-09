@@ -82,6 +82,10 @@ We welcome contributions! Here's how you can help:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=aws-samples/amazon-bedrock-client-for-mac&type=Date)](https://star-history.com/#aws-samples/amazon-bedrock-client-for-mac&Date)
+
 ---
 
 <div align="center">
