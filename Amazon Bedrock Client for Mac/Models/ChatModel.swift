@@ -28,11 +28,10 @@ class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
     }
     
     static func == (lhs: ChatModel, rhs: ChatModel) -> Bool {
-        lhs.id == rhs.id && lhs.chatId == rhs.chatId
+        lhs.chatId == rhs.chatId
     }
-    
+
     func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
         hasher.combine(chatId)
     }
     

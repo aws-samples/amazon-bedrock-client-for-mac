@@ -40,6 +40,8 @@ final class MyTextView: NSTextView {
     /// Handles the paste operation to intercept image pasting and custom text handling.
     override func paste(_ sender: Any?) {
         handlePaste()
+        self.inputContext?.discardMarkedText()
+        self.needsDisplay = true
     }
     
     /// Handles the entry of dragged items, checking for supported image formats.
@@ -197,8 +199,10 @@ final class MyTextView: NSTextView {
     // Implement the performKeyEquivalent to catch Command+V (paste)
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command) {
-            if event.keyCode == 9 {
+            if event.keyCode == 9 { // 'V' key
                 paste(nil)
+                self.inputContext?.discardMarkedText()
+                self.needsDisplay = true
                 return true
             }
         }

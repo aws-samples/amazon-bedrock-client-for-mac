@@ -7,12 +7,21 @@
 import SwiftUI
 import Combine
 
+struct ScrollViewOffsetPreferenceKey: PreferenceKey {
+    typealias Value = CGFloat
+    static var defaultValue = CGFloat.zero
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sharedImageDataSource = SharedImageDataSource()
     @ObservedObject var backendModel: BackendModel
     
     @State private var isUserScrolling = false
+    @State private var previousOffset: CGFloat = 0
     
     init(chatId: String, backendModel: BackendModel) {
         let sharedImageDataSource = SharedImageDataSource()
@@ -33,11 +42,6 @@ struct ChatView: View {
             }
         }
         .onAppear(perform: viewModel.loadInitialData)
-        .onChange(of: viewModel.messages) { _ in
-            if !isUserScrolling {
-                viewModel.scrollToBottom()
-            }
-        }
     }
     
     private var placeholderView: some View {
@@ -51,36 +55,42 @@ struct ChatView: View {
     }
     
     private var messageScrollView: some View {
-           ScrollView {
-               ScrollViewReader { proxy in
-                   LazyVStack(spacing: 2) {
-                       ForEach(viewModel.messages) { message in
-                           MessageView(message: message)
-                               .id(message.id)
-                       }
-                   }
-                   .background(GeometryReader { geometry in
-                       Color.clear.preference(key: ViewOffsetKey.self, value: geometry.frame(in: .named("scroll")).origin.y)
-                   })
-                   .onPreferenceChange(ViewOffsetKey.self) { value in
-                       if value > 50 {
-                           isUserScrolling = true
-                       } else {
-                           isUserScrolling = false
-                       }
-                   }
-                   .onChange(of: viewModel.scrollToBottomTrigger) { _ in
-                       if !isUserScrolling {
-                           withAnimation {
-                               proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
-                           }
-                       }
-                   }
-               }
-               .padding()
-           }
-           .coordinateSpace(name: "scroll")
-       }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(viewModel.messages) { message in
+                        MessageView(message: message)
+                            .id(message.id)
+                            .frame(maxWidth: .infinity)
+                    }
+                    // 맨 아래에 보이지 않는 뷰 추가
+                    Color.clear
+                        .frame(height: 1)
+                        .id("Bottom")
+                        .onAppear {
+                            isUserScrolling = false
+                        }
+                        .onDisappear {
+                            isUserScrolling = true
+                        }
+                }
+                .padding()
+            }
+            .onChange(of: viewModel.messages) { _ in
+                if !isUserScrolling {
+                    withAnimation {
+                        proxy.scrollTo("Bottom", anchor: .bottom)
+                    }
+                }
+            }
+            .task {
+                // 초기 로드 시 맨 아래로 스크롤
+                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3초 대기
+                proxy.scrollTo("Bottom", anchor: .bottom)
+            }
+        }
+    }
+    
     
     private var messageBarView: some View {
         MessageBarView(

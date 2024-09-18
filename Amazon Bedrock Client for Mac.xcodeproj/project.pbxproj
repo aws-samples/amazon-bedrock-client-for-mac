@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5BC0DA4A2BC5BDE20019C74D /* CodeBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC0DA492BC5BDE20019C74D /* CodeBlockView.swift */; };
 		7907BEAA2ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */; };
 		7907BEB42ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */; };
 		7907BEB62ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */; };
 		790804242B99F0DA00930011 /* ImageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790804232B99F0DA00930011 /* ImageManager.swift */; };
 		79320FC92B469BAE0074090A /* ChatModelSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79320FC82B469BAE0074090A /* ChatModelSnapshot.swift */; };
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
+		794C0A242C9A7800003B6E34 /* MarkdownKit in Frameworks */ = {isa = PBXBuildFile; productRef = 794C0A232C9A7800003B6E34 /* MarkdownKit */; };
 		7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7953C5AA2C345B8700663438 /* SSOManager.swift */; };
 		7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8422AD247CC008B03D3 /* AWSRegion.swift */; };
 		7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8442AD247DF008B03D3 /* SettingsView.swift */; };
@@ -24,8 +24,6 @@
 		79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC12AD22A2F00993D09 /* BedrockClient.swift */; };
 		79610DDB2AD22A2F00993D09 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DC22AD22A2F00993D09 /* Assets.xcassets */; };
 		79610DDD2AD22A2F00993D09 /* TextOutputFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC52AD22A2F00993D09 /* TextOutputFormat.swift */; };
-		79610DDE2AD22A2F00993D09 /* SplashCodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC62AD22A2F00993D09 /* SplashCodeSyntaxHighlighter.swift */; };
-		79610DDF2AD22A2F00993D09 /* GithubTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC72AD22A2F00993D09 /* GithubTheme.swift */; };
 		79610DE02AD22A2F00993D09 /* FirstResponderTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */; };
 		79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCA2AD22A2F00993D09 /* ChatModel.swift */; };
 		79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCB2AD22A2F00993D09 /* MessageData.swift */; };
@@ -49,10 +47,10 @@
 		79C4F01E2C30362100C488C2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C4F01D2C30362100C488C2 /* AppDelegate.swift */; };
 		79C4F0202C3048A300C488C2 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */; };
 		79C7F5ED2AD282EE008FBB35 /* EnvironmentExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C7F5EC2AD282EE008FBB35 /* EnvironmentExtensions.swift */; };
+		79D6E6A32C99BFF300314D86 /* GithubTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D6E6A22C99BFF300314D86 /* GithubTheme.swift */; };
 		79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFD2ACDA88700DC6657 /* AWSBedrock */; };
 		79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */; };
 		79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */ = {isa = PBXBuildFile; productRef = 79E5A0012ACDA88700DC6657 /* AWSSTS */; };
-		79E5A0082ACFB81700DC6657 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 79E5A0072ACFB81700DC6657 /* MarkdownUI */; };
 		79E63E1F2AD1F11B00C0880A /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E1E2AD1F11B00C0880A /* Splash */; };
 		79E63E212AD1F11B00C0880A /* SplashHTMLGen in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E202AD1F11B00C0880A /* SplashHTMLGen */; };
 		79E63E252AD1F11B00C0880A /* SplashMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E242AD1F11B00C0880A /* SplashMarkdown */; };
@@ -78,7 +76,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		5BC0DA492BC5BDE20019C74D /* CodeBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBlockView.swift; sourceTree = "<group>"; };
 		7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Amazon Bedrock Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA52ACD87A200C4D500 /* Amazon Bedrock Client for MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacTests.swift; sourceTree = "<group>"; };
@@ -100,8 +97,6 @@
 		79610DC12AD22A2F00993D09 /* BedrockClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BedrockClient.swift; sourceTree = "<group>"; };
 		79610DC22AD22A2F00993D09 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		79610DC52AD22A2F00993D09 /* TextOutputFormat.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextOutputFormat.swift; sourceTree = "<group>"; };
-		79610DC62AD22A2F00993D09 /* SplashCodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SplashCodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
-		79610DC72AD22A2F00993D09 /* GithubTheme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GithubTheme.swift; sourceTree = "<group>"; };
 		79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FirstResponderTextField.swift; sourceTree = "<group>"; };
 		79610DCA2AD22A2F00993D09 /* ChatModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		79610DCB2AD22A2F00993D09 /* MessageData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageData.swift; sourceTree = "<group>"; };
@@ -122,6 +117,7 @@
 		79C4F01D2C30362100C488C2 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		79C7F5EC2AD282EE008FBB35 /* EnvironmentExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentExtensions.swift; sourceTree = "<group>"; };
+		79D6E6A22C99BFF300314D86 /* GithubTheme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = GithubTheme.swift; path = "Amazon Bedrock Client for Mac/Utils/GithubTheme.swift"; sourceTree = SOURCE_ROOT; };
 		79FD1C252C3777180009E50F /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -132,6 +128,7 @@
 			files = (
 				79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */,
 				79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */,
+				794C0A242C9A7800003B6E34 /* MarkdownKit in Frameworks */,
 				79E63E1F2AD1F11B00C0880A /* Splash in Frameworks */,
 				79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */,
 				79E63E272AD1F11B00C0880A /* SplashTokenizer in Frameworks */,
@@ -140,7 +137,6 @@
 				79E63E252AD1F11B00C0880A /* SplashMarkdown in Frameworks */,
 				79E63E212AD1F11B00C0880A /* SplashHTMLGen in Frameworks */,
 				79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */,
-				79E5A0082ACFB81700DC6657 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -203,8 +199,8 @@
 		79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */ = {
 			isa = PBXGroup;
 			children = (
-				79610DC22AD22A2F00993D09 /* Assets.xcassets */,
 				79610DCD2AD22A2F00993D09 /* Preview Content */,
+				79610DC22AD22A2F00993D09 /* Assets.xcassets */,
 				79610DBB2AD22A2F00993D09 /* Core */,
 				79610DBF2AD22A2F00993D09 /* Managers */,
 				79610DC92AD22A2F00993D09 /* Models */,
@@ -247,11 +243,10 @@
 			children = (
 				79C7F5EC2AD282EE008FBB35 /* EnvironmentExtensions.swift */,
 				79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */,
-				79610DC72AD22A2F00993D09 /* GithubTheme.swift */,
 				798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */,
-				79610DC62AD22A2F00993D09 /* SplashCodeSyntaxHighlighter.swift */,
 				79610DC52AD22A2F00993D09 /* TextOutputFormat.swift */,
 				79AFC17D2AD23B4800A75ED3 /* ToggleSidebar.swift */,
+				79D6E6A22C99BFF300314D86 /* GithubTheme.swift */,
 				79FD1C252C3777180009E50F /* Markdown.swift */,
 			);
 			path = Utils;
@@ -281,7 +276,6 @@
 			isa = PBXGroup;
 			children = (
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
-				5BC0DA492BC5BDE20019C74D /* CodeBlockView.swift */,
 				79610DD12AD22A2F00993D09 /* HomeView.swift */,
 				795D9C8E2BC57D3900DF38C0 /* MainView.swift */,
 				79610DD02AD22A2F00993D09 /* MessageBarView.swift */,
@@ -312,7 +306,6 @@
 				79E59FFD2ACDA88700DC6657 /* AWSBedrock */,
 				79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */,
 				79E5A0012ACDA88700DC6657 /* AWSSTS */,
-				79E5A0072ACFB81700DC6657 /* MarkdownUI */,
 				79E63E1E2AD1F11B00C0880A /* Splash */,
 				79E63E202AD1F11B00C0880A /* SplashHTMLGen */,
 				79E63E242AD1F11B00C0880A /* SplashMarkdown */,
@@ -320,6 +313,7 @@
 				798A9CE52AD3AB2E00E9D039 /* Vapor */,
 				79AC78972C31691800BD6FB1 /* AWSSSO */,
 				79AC78992C31691800BD6FB1 /* AWSSSOOIDC */,
+				794C0A232C9A7800003B6E34 /* MarkdownKit */,
 			);
 			productName = "Amazon Bedrock Client for Mac";
 			productReference = 7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */;
@@ -395,9 +389,9 @@
 			mainGroup = 7907BE8B2ACD87A000C4D500;
 			packageReferences = (
 				79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
-				79E5A0062ACFB81700DC6657 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */,
 				798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */,
+				794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */,
 			);
 			productRefGroup = 7907BE952ACD87A100C4D500 /* Products */;
 			projectDirPath = "";
@@ -444,6 +438,7 @@
 			files = (
 				79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */,
 				7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */,
+				79D6E6A32C99BFF300314D86 /* GithubTheme.swift in Sources */,
 				79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */,
 				790804242B99F0DA00930011 /* ImageManager.swift in Sources */,
 				79610DE62AD22A2F00993D09 /* HomeView.swift in Sources */,
@@ -456,8 +451,6 @@
 				7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */,
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,
-				5BC0DA4A2BC5BDE20019C74D /* CodeBlockView.swift in Sources */,
-				79610DDF2AD22A2F00993D09 /* GithubTheme.swift in Sources */,
 				79610DDD2AD22A2F00993D09 /* TextOutputFormat.swift in Sources */,
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
 				79610DED2AD230A200993D09 /* ChatView.swift in Sources */,
@@ -473,7 +466,6 @@
 				797A12B82C2DB33100494DD9 /* SettingsWindowManager.swift in Sources */,
 				79610DE52AD22A2F00993D09 /* MessageBarView.swift in Sources */,
 				79BFF5102AD342710057BF3A /* ChatManager.swift in Sources */,
-				79610DDE2AD22A2F00993D09 /* SplashCodeSyntaxHighlighter.swift in Sources */,
 				797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */,
 				797A12BF2C2EB53800494DD9 /* ChatModel.xcdatamodeld in Sources */,
 			);
@@ -643,7 +635,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.2.1;
+				CURRENT_PROJECT_VERSION = 1.2.2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = B47A25FR9P;
@@ -666,7 +658,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.2;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -686,7 +678,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.2.1;
+				CURRENT_PROJECT_VERSION = 1.2.2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = B47A25FR9P;
@@ -709,7 +701,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -861,6 +853,14 @@
 				minimumVersion = 0.16.0;
 			};
 		};
+		794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/objecthub/swift-markdownkit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.9;
+			};
+		};
 		798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/vapor/vapor.git";
@@ -877,17 +877,14 @@
 				minimumVersion = 0.27.0;
 			};
 		};
-		79E5A0062ACFB81700DC6657 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui/";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.2.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		794C0A232C9A7800003B6E34 /* MarkdownKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */;
+			productName = MarkdownKit;
+		};
 		798A9CE52AD3AB2E00E9D039 /* Vapor */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */;
@@ -917,11 +914,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSSTS;
-		};
-		79E5A0072ACFB81700DC6657 /* MarkdownUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 79E5A0062ACFB81700DC6657 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
-			productName = MarkdownUI;
 		};
 		79E63E1E2AD1F11B00C0880A /* Splash */ = {
 			isa = XCSwiftPackageProductDependency;
