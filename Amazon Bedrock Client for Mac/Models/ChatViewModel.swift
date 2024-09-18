@@ -21,7 +21,6 @@ class ChatViewModel: ObservableObject {
     @Published var isSending: Bool = false
     @Published var isStreamingEnabled: Bool
     @Published var selectedPlaceholder: String
-    @Published var scrollToBottomTrigger: UUID?
     @Published var emptyText: String = ""
     
     private var cancellables: Set<AnyCancellable> = []
@@ -93,13 +92,8 @@ class ChatViewModel: ObservableObject {
     
     func loadInitialData() {
         messages = chatManager.getMessages(for: chatId)
-        scrollToBottom()
     }
-    
-    func scrollToBottom() {
-        scrollToBottomTrigger = UUID()
-    }
-    
+
     func sendMessage() {
         guard !userInput.isEmpty else { return }
         
@@ -216,7 +210,6 @@ class ChatViewModel: ObservableObject {
     private func addMessage(_ message: MessageData) {
         messages.append(message)
         chatManager.addMessage(message, for: chatId)
-        scrollToBottom()
     }
     
     private func handleModelError(_ error: Error) async {

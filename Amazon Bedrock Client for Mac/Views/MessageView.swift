@@ -1,234 +1,83 @@
+// MessageView.swift
+// Amazon Bedrock Client for Mac
 //
-//  MessageView.swift
-//  Amazon Bedrock Client for Mac
-//
-//  Created by Na, Sanghwa on 2023/10/06.
+// Created by Na, Sanghwa on 2023/10/06.
 //
 
-import MarkdownUI
-import Splash
 import SwiftUI
-import AppKit  // Import AppKit to use NSPasteboard
+import MarkdownKit
+import WebKit
 
-class MessageViewModel: ObservableObject {
-    @Published var selectedImageData: String? = nil
-    @Published var isShowingImageModal: Bool = false
-    
-    func selectImage(with data: String) {
-        self.selectedImageData = data
-        self.isShowingImageModal = true
-    }
-    
-    func clearSelection() {
-        self.selectedImageData = nil
-        self.isShowingImageModal = false
-    }
-}
+// MARK: - LazyMarkdownView
+struct LazyMarkdownView: View {
+    let text: String
+    let fontSize: CGFloat
+    @State private var height: CGFloat = .zero
 
-extension NSImage {
-    convenience init?(base64Encoded: String) {
-        guard let imageData = Data(base64Encoded: base64Encoded) else {
-            return nil
-        }
-        self.init(data: imageData)
-    }
-}
+    private let parser: ExtendedMarkdownParser
+    private let htmlGenerator: CustomHtmlGenerator
 
-struct MessageView: View {
-    var message: MessageData
-    @StateObject var viewModel = MessageViewModel()
-    @Environment(\.colorScheme) private var colorScheme: ColorScheme
-    @Environment(\.fontSize) private var fontSize: CGFloat
-    @State private var isHovering = false
-    
-    private let imageSize: CGFloat = 100
-    
+    init(text: String, fontSize: CGFloat) {
+        self.text = text
+        self.fontSize = fontSize
+        self.parser = ExtendedMarkdownParser()
+        self.htmlGenerator = CustomHtmlGenerator()
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .top, spacing: 12) {
-                userImage
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    messageHeader
-                    messageContent
-                    copyButton
-                        .opacity(isHovering ? 1 : 0)  // 호버 시 투명도 조절
-                        .animation(.easeInOut, value: isHovering)  // 애니메이션 적용
-                }
-                
-                Spacer()
-            }
-        }
-        .onHover { hovering in
-            withAnimation(.easeInOut) {
-                isHovering = hovering
-            }
-        }
-        .textSelection(.enabled)
+        HTMLStringView(
+            htmlContent: generateHTML(from: text),
+            fontSize: fontSize,
+            dynamicHeight: $height
+        )
+        .frame(height: height)
     }
-    
-    
-    private var userImage: some View {
-        Group {
-            if message.user == "User" {
-                Image(systemName: "person.crop.square.fill")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .foregroundColor(Color.link)
-                    .opacity(0.8)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.link, lineWidth: 2))
-            } else {
-                userImage(for: message.user)
-            }
-        }
-        .frame(width: 40, height: 40)
+
+    private func generateHTML(from markdown: String) -> String {
+        let document = parser.parse(markdown)
+        return htmlGenerator.generate(doc: document)
     }
-    
-    private var messageHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(message.user)
-                .font(.system(size: fontSize))
-                .bold()
-            
-            Text(format(date: message.sentTime))
-                .font(.callout)
-                .foregroundColor(Color.secondary)
+}
+
+class CustomHtmlGenerator: HtmlGenerator {
+    override func generate(block: Block, tight: Bool = false) -> String {
+        switch block {
+        case .fencedCode(let info, let lines):
+            return generateCustomCodeBlock(info: info, lines: lines)
+        default:
+            return super.generate(block: block, tight: tight)
         }
     }
     
-    @ViewBuilder
-    private var messageContent: some View {
-        if message.user != "User" {
-            LazyMarkdownView(text: message.text, fontSize: fontSize, theme: theme)
-        } else {
-            userMessageContent
-        }
-    }
-    
-    private var userMessageContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let imageBase64Strings = message.imageBase64Strings, !imageBase64Strings.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 10) {
-                        ForEach(imageBase64Strings, id: \.self) { imageData in
-                            LazyImageView(imageData: imageData, size: imageSize) {
-                                viewModel.selectImage(with: imageData)
-                            }
-                        }
-                    }
-                }
-                .frame(height: imageSize)
-            }
-            
-            Text(message.text)
-                .font(.system(size: fontSize))
-        }
-        .sheet(isPresented: $viewModel.isShowingImageModal) {
-            if let imageData = viewModel.selectedImageData,
-               let imageToShow = NSImage(base64Encoded: imageData) {
-                ImageViewerModal(image: imageToShow) {
-                    viewModel.clearSelection()
-                }
-            }
-        }
-    }
-    
-    private var copyButton: some View {
-        Button(action: {
-            copyMessageToClipboard()
-        }) {
-            Image(systemName: "doc.on.doc")
-                .foregroundColor(Color.secondary)
-                .font(.system(size: 12))
-                .padding(2)
-                .clipShape(Circle())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var theme: Splash.Theme {
-        colorScheme == .dark ? .wwdc17(withFont: .init(size: fontSize)) : .sunset(withFont: .init(size: fontSize))
-    }
-    
-    private func copyMessageToClipboard() {
-        if containsLocalhostImage {
-            if let urlRange = message.text.range(of: "http://localhost:[^)]+", options: .regularExpression),
-               let url = URL(string: String(message.text[urlRange])) {
-                NSWorkspace.shared.open(url)
-            }
-        } else {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(message.text, forType: .string)
-        }
-    }
-    
-    private var containsLocalhostImage: Bool {
-        message.text.contains("![](http://localhost:8080/")
-    }
-    
-    private func format(date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-    
-    private func userImage(for user: String) -> some View {
-        let imageName: String
-        let isDefaultImage: Bool
+    private func generateCustomCodeBlock(info: String?, lines: Lines) -> String {
+        let languageIdentifier = info?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let languageDisplay = languageIdentifier.isEmpty ? "Code" : languageIdentifier.capitalized
         
-        if user.starts(with: "Claude") {
-            imageName = "anthropic sq"
-            isDefaultImage = false
-        } else if user.starts(with: "Mistral") {
-            imageName = "mistral sq"
-            isDefaultImage = false
-        } else if user.starts(with: "Mixtral") {
-            imageName = "mistral sq"
-            isDefaultImage = false
-        } else if user.starts(with: "Command") {
-            imageName = "cohere sq"
-            isDefaultImage = false
-        } else if user.starts(with: "Llama") {
-            imageName = "meta sq"
-            isDefaultImage = false
-        } else if user.starts(with: "Jurrasic") {
-            imageName = "AI21"
-            isDefaultImage = false
-        } else if user.starts(with: "Jamba") {
-            imageName = "AI21"
-            isDefaultImage = false
-        } else if user.starts(with: "Titan") {
-            imageName = "amazon"
-            isDefaultImage = false
-        } else if user.starts(with: "SD") {
-            imageName = "stability ai"
-            isDefaultImage = false
-        } else {
-            imageName = "bedrock sq"
-            isDefaultImage = true
-        } 
+        let copyButtonSVG = """
+        <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
+            <path fill="currentColor" d="M3 2.5A1.5 1.5 0 014.5 1h6A1.5 1.5 0 0112 2.5V3h.5A1.5 1.5 0 0114 4.5v8A1.5 1.5 0 0112.5 14h-6A1.5 1.5 0 015 12.5V12H4.5A1.5 1.5 0 013 10.5v-8zM5 12.5a.5.5 0 00.5.5h6a.5.5 0 00.5-.5v-8a.5.5 0 00-.5-.5H12v6A1.5 1.5 0 0110.5 12H5v.5zM4 10.5v-8a.5.5 0 01.5-.5H5v6A1.5 1.5 0 006.5 9H12v1.5a.5.5 0 01-.5.5H5A1.5 1.5 0 013.5 9V4.5a.5.5 0 01.5-.5H4v6z"></path>
+        </svg>
+        """
         
-        let image = Image(imageName)
-        return Group {
-            if isDefaultImage {
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
-            } else {
-                image
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40, height: 40)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white, lineWidth: 2))
-            }
-        }
+        let codeHeader = """
+        <div class="code-header"><span class="language">\(languageDisplay)</span><button onclick="copyCode(this)">\(copyButtonSVG) Copy code</button></div>
+        """
+        
+        let code = lines.joined(separator: "")
+        let escapedCode = escapeHtml(code)
+        
+        return """
+        <pre>\(codeHeader)<code class="language-\(languageIdentifier)">\(escapedCode)</code></pre>
+        """.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func escapeHtml(_ string: String) -> String {
+        return string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 }
 
@@ -279,25 +128,483 @@ struct LazyImageView: View {
     }
 }
 
+// MARK: - CustomWKWebView
 
-struct LazyMarkdownView: View {
-    let text: String
-    let fontSize: CGFloat
-    let theme: Splash.Theme
-    
-    var body: some View {
-        Markdown(text)
-            .textSelection(.enabled)
-            .markdownTheme(
-                .gitHub
-                    .codeBlock { configuration in
-                        CodeBlockView(theme: theme, configuration: configuration)
-                    }
-            )
-            .markdownCodeSyntaxHighlighter(SplashCodeSyntaxHighlighter.splash(theme: theme))
-            .font(.system(size: fontSize))
+class CustomWKWebView: WKWebView {
+    override func scrollWheel(with event: NSEvent) {
+        if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
+            // Horizontal scrolling: handle in the web view
+            super.scrollWheel(with: event)
+        } else {
+            // Vertical scrolling: pass to the next responder
+            self.nextResponder?.scrollWheel(with: event)
+        }
     }
 }
+
+// MARK: - HTMLStringView
+
+struct HTMLStringView: NSViewRepresentable {
+    let htmlContent: String
+    let fontSize: CGFloat
+    @Binding var dynamicHeight: CGFloat
+    
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.suppressesIncrementalRendering = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        
+        // Set up message handler for copy action
+        config.userContentController.add(context.coordinator, name: "copyHandler")
+        
+        let webView = CustomWKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.setValue(false, forKey: "drawsBackground")
+        
+        // Disable WKWebView's scrolling
+        if let scrollView = webView.enclosingScrollView {
+            scrollView.hasVerticalScroller = false
+            scrollView.verticalScrollElasticity = .none
+            scrollView.scrollerStyle = .overlay
+        }
+        
+        return webView
+    }
+    
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        nsView.loadHTMLString(wrapHTMLContent(htmlContent), baseURL: nil)
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    // MARK: - Coordinator
+    
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        var parent: HTMLStringView
+        
+        init(_ parent: HTMLStringView) {
+            self.parent = parent
+        }
+        
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            webView.evaluateJavaScript("""
+                function getContentHeight() {
+                    var body = document.body;
+                    var html = document.documentElement;
+                    var height = Math.max(body.scrollHeight, body.offsetHeight,
+                                          html.clientHeight, html.scrollHeight, html.offsetHeight);
+                    return height;
+                }
+                getContentHeight();
+            """) { (result, error) in
+                if let height = result as? CGFloat {
+                    DispatchQueue.main.async {
+                        self.parent.dynamicHeight = height
+                    }
+                }
+            }
+        }
+        
+        // Handle messages from JavaScript
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "copyHandler", let code = message.body as? String {
+                // Copy code to clipboard
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(code, forType: .string)
+            }
+        }
+    }
+    
+    // MARK: - HTML Content Wrapping
+    
+    private func wrapHTMLContent(_ content: String) -> String {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link
+              rel="stylesheet"
+              href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/github-dark.min.css"
+            >
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
+            <style>
+                :root {
+                    --background-color: #ffffff;
+                    --text-color: #24292e;
+                    --secondary-text-color: #6a737d;
+                    --code-background-color: #f6f8fa;
+                    --code-text-color: #24292e;
+                    --border-color: #e1e4e8;
+                    --header-background-color: #f6f8fa;
+                    --inline-code-background-color: #f0f0f0;
+                    --inline-code-text-color: #24292e;
+                }
+        
+                @media (prefers-color-scheme: dark) {
+                    :root {
+                        --background-color: #0d1117;
+                        --text-color: #c9d1d9;
+                        --secondary-text-color: #8b949e;
+                        --code-background-color: #161b22;
+                        --code-text-color: #c9d1d9;
+                        --border-color: #30363d;
+                        --header-background-color: #21262d;
+                        --inline-code-background-color: #2d333b;
+                        --inline-code-text-color: #adbac7;
+                    }
+                }
+        
+                body {
+                    background-color: transparent;
+                    color: var(--text-color);
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+                    font-size: \(fontSize)px;
+                    line-height: 1.5;
+                    margin: 0;
+                    padding: 0;
+                    overflow-wrap: break-word;
+                }
+                p {
+                    margin: 0;
+                    padding: 0;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    margin: 0;
+                    padding: 0;
+                }
+                pre {
+                    position: relative;
+                    background-color: var(--code-background-color);
+                    padding: 0;
+                    border-radius: 6px;
+                    overflow: auto;
+                    white-space: pre;
+                    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+                    font-size: \(fontSize - 2)px;
+                    color: var(--code-text-color);
+                    margin: 16px 0;
+                    max-width: 100%;
+                }
+                pre code {
+                    display: block;
+                    padding: 12px;
+                    background-color: var(--code-background-color);
+                    color: var(--code-text-color);
+                    margin: 0;
+                }
+                .code-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    background-color: #21262d;
+                    padding: 4px 8px;
+                    font-size: 12px;
+                    color: #8b949e;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+                }
+                .code-header .language {
+                    font-weight: 500;
+                    margin-left: 8px; /* Added spacing for alignment */
+                }
+                .code-header button {
+                    background: none;
+                    border: none;
+                    color: #8b949e;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    font-size: 12px;
+                }
+                .code-header button svg {
+                    margin-right: 4px;
+                }
+                code {
+                    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+                    font-size: \(fontSize - 2)px;
+                    background-color: var(--inline-code-background-color);
+                    padding: 2px 4px;
+                    border-radius: 0 0 4px 4px;
+                    color: var(--inline-code-text-color);
+                }
+                table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin-bottom: 1em;
+                    word-wrap: break-word;
+                    table-layout: fixed;
+                    color: var(--text-color);
+                }
+                th, td {
+                    border: 1px solid var(--border-color);
+                    padding: 8px;
+                    text-align: left;
+                    vertical-align: top;
+                }
+                th {
+                    background-color: var(--header-background-color);
+                }
+        
+            
+                /* Scrollbar style */
+                ::-webkit-scrollbar {
+                    width: 8px;
+                    height: 8px;
+                }
+
+                ::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+
+                ::-webkit-scrollbar-thumb {
+                    background: rgba(0, 0, 0, 0.2);
+                    border-radius: 4px;
+                }
+
+                ::-webkit-scrollbar-thumb:hover {
+                    background: rgba(0, 0, 0, 0.4);
+                }
+
+                /* Hide scrollbars by default */
+                * {
+                    scrollbar-width: none;
+                    -ms-overflow-style: none;
+                }
+
+                *::-webkit-scrollbar {
+                    display: none;
+                }
+
+                /* Scroll style for pre elements (code blocks) */
+                pre {
+                    scrollbar-width: thin;
+                    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+                }
+
+                pre::-webkit-scrollbar {
+                    width: 8px;
+                    height: 8px;
+                }
+
+                pre::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+
+                pre::-webkit-scrollbar-thumb {
+                    background-color: rgba(0, 0, 0, 0.2);
+                    border-radius: 4px;
+                }
+
+                pre::-webkit-scrollbar-thumb:hover {
+                    background-color: rgba(0, 0, 0, 0.4);
+                }
+            </style>
+        </head>
+        <body>
+            \(content)
+            <script>
+                hljs.highlightAll();
+        
+                function copyCode(button) {
+                    var code = button.parentElement.nextElementSibling.innerText;
+                    window.webkit.messageHandlers.copyHandler.postMessage(code);
+        
+                    button.innerHTML = '<svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16"><path fill="currentColor" d="M3 2.5A1.5 1.5 0 014.5 1h6A1.5 1.5 0 0112 2.5V3h.5A1.5 1.5 0 0114 4.5v8A1.5 1.5 0 0112.5 14h-6A1.5 1.5 0 015 12.5V12H4.5A1.5 1.5 0 013 10.5v-8zM5 12.5a.5.5 0 00.5.5h6a.5.5 0 00.5-.5v-8a.5.5 0 00-.5-.5H12v6A1.5 1.5 0 0110.5 12H5v.5zM4 10.5v-8a.5.5 0 01.5-.5H5v6A1.5 1.5 0 006.5 9H12v1.5a.5.5 0 01-.5.5H5A1.5 1.5 0 013.5 9V4.5a.5.5 0 01.5-.5H4v6z"></path></svg> Copied';
+                    setTimeout(function() {
+                        button.innerHTML = '<svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16"><path fill="currentColor" d="M3 2.5A1.5 1.5 0 014.5 1h6A1.5 1.5 0 0112 2.5V3h.5A1.5 1.5 0 0114 4.5v8A1.5 1.5 0 0112.5 14h-6A1.5 1.5 0 015 12.5V12H4.5A1.5 1.5 0 013 10.5v-8zM5 12.5a.5.5 0 00.5.5h6a.5.5 0 00.5-.5v-8a.5.5 0 00-.5-.5H12v6A1.5 1.5 0 0110.5 12H5v.5zM4 10.5v-8a.5.5 0 01.5-.5H5v6A1.5 1.5 0 006.5 9H12v1.5a.5.5 0 01-.5.5H5A1.5 1.5 0 013.5 9V4.5a.5.5 0 01.5-.5H4v6z"></path></svg> Copy code';
+                    }, 2000);
+                }
+            </script>
+        </body>
+        </html>
+        """
+    }
+}
+
+// MARK: - MessageViewModel
+
+class MessageViewModel: ObservableObject {
+    @Published var selectedImageData: String? = nil
+    @Published var isShowingImageModal: Bool = false
+    
+    func selectImage(with data: String) {
+        self.selectedImageData = data
+        self.isShowingImageModal = true
+    }
+    
+    func clearSelection() {
+        self.selectedImageData = nil
+        self.isShowingImageModal = false
+    }
+}
+
+// MARK: - NSImage Extension
+
+extension NSImage {
+    convenience init?(base64Encoded: String) {
+        guard let imageData = Data(base64Encoded: base64Encoded) else {
+            return nil
+        }
+        self.init(data: imageData)
+    }
+}
+
+// MARK: - MessageView
+
+struct MessageView: View {
+    var message: MessageData
+    @StateObject var viewModel = MessageViewModel()
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @Environment(\.fontSize) private var fontSize: CGFloat
+    @State private var isHovering = false
+    
+    private let imageSize: CGFloat = 100
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if message.user == "User" {
+                HStack {
+                    Spacer()
+                    messageContent
+                        .padding(.horizontal)
+                }
+                .padding(.vertical, 4)
+            } else {
+                HStack {
+                    messageContent
+                        .padding(.horizontal)
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovering = hovering
+            }
+        }
+        .textSelection(.enabled)
+    }
+    
+    // MARK: - Message Content
+    
+    @ViewBuilder
+    private var messageContent: some View {
+        VStack(alignment: message.user == "User" ? .trailing : .leading, spacing: 4) {
+            if message.user != "User" {
+                messageHeader
+            }
+            contentBody
+            if message.user != "User" {
+                copyButton
+                    .opacity(isHovering ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: isHovering)
+            }
+        }
+        .padding()
+        .background(message.user == "User" ? Color.gray.opacity(0.2) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+    
+    // MARK: - Message Header
+    
+    private var messageHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(message.user)
+                .font(.system(size: fontSize))
+                .bold()
+            
+            Text(format(date: message.sentTime))
+                .font(.callout)
+                .foregroundColor(Color.secondary)
+        }
+    }
+    
+    // MARK: - Content Body
+    
+    @ViewBuilder
+    private var contentBody: some View {
+        if message.user != "User" {
+            LazyMarkdownView(text: message.text, fontSize: fontSize)
+                .frame(alignment: .leading)
+        } else {
+            userMessageContent
+        }
+    }
+    
+    private var userMessageContent: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            if let imageBase64Strings = message.imageBase64Strings, !imageBase64Strings.isEmpty {
+                ImageGridView(imageBase64Strings: imageBase64Strings, imageSize: imageSize) { imageData in
+                    viewModel.selectImage(with: imageData)
+                }
+                .frame(alignment: .trailing)
+            }
+            
+            Text(message.text)
+                .font(.system(size: fontSize))
+                .foregroundColor(.primary)
+        }
+        .sheet(isPresented: $viewModel.isShowingImageModal) {
+            if let imageData = viewModel.selectedImageData,
+               let imageToShow = NSImage(base64Encoded: imageData) {
+                ImageViewerModal(image: imageToShow) {
+                    viewModel.clearSelection()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Copy Button
+    
+    private var copyButton: some View {
+        Button(action: {
+            copyMessageToClipboard()
+        }) {
+            Image(systemName: "doc.on.doc")
+                .foregroundColor(Color.secondary)
+                .font(.system(size: 16))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func copyMessageToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message.text, forType: .string)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func format(date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - ImageGridView
+
+struct ImageGridView: View {
+    let imageBase64Strings: [String]
+    let imageSize: CGFloat
+    let onTapImage: (String) -> Void
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(imageBase64Strings, id: \.self) { imageData in
+                LazyImageView(imageData: imageData, size: imageSize) {
+                    onTapImage(imageData)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - ImageViewerModal
 
 struct ImageViewerModal: View {
     var image: NSImage
@@ -326,7 +633,7 @@ struct ImageViewerModal: View {
                     Spacer()
                     Button(action: closeModal) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                             .font(.title)
                     }
                     .padding([.top, .trailing])
@@ -344,31 +651,28 @@ struct ImageViewerModal: View {
     }
 }
 
+// MARK: - NSImage Resizing Extension
+
 extension NSImage {
     func resized(to targetSize: NSSize) -> NSImage? {
-        let newSize = NSSize(width: targetSize.width, height: targetSize.height)
-        let newImage = NSImage(size: newSize)
-        
+        let newImage = NSImage(size: targetSize)
         newImage.lockFocus()
-        self.draw(in: NSRect(origin: .zero, size: newSize),
+        defer { newImage.unlockFocus() }
+        self.draw(in: NSRect(origin: .zero, size: targetSize),
                   from: NSRect(origin: .zero, size: self.size),
-                  operation: .sourceOver,
+                  operation: .copy,
                   fraction: 1.0)
-        newImage.unlockFocus()
-        
         return newImage
     }
     
     func resizedMaintainingAspectRatio(maxDimension: CGFloat) -> NSImage? {
         let aspectRatio = self.size.width / self.size.height
         let newSize: NSSize
-        
         if self.size.width > self.size.height {
             newSize = NSSize(width: maxDimension, height: maxDimension / aspectRatio)
         } else {
             newSize = NSSize(width: maxDimension * aspectRatio, height: maxDimension)
         }
-        
         return resized(to: newSize)
     }
     
@@ -382,7 +686,6 @@ extension NSImage {
         var compressionFactor: CGFloat = 1.0
         var data = bitmapImage.representation(using: format, properties: [.compressionFactor: compressionFactor])
         
-        // 이미지 크기가 maxFileSize보다 클 때 압축률을 증가시키면서 파일 크기를 줄입니다.
         while let imageData = data, imageData.count > maxFileSize && compressionFactor > 0 {
             compressionFactor -= 0.1
             data = bitmapImage.representation(using: format, properties: [.compressionFactor: compressionFactor])
@@ -391,4 +694,3 @@ extension NSImage {
         return data
     }
 }
-

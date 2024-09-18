@@ -27,7 +27,7 @@ class BackendModel: ObservableObject {
     @Published var isLoggedIn = false
     private var ssoOIDC: SSOOIDCClient?
     private var sso: SSOClient?
-
+    
     init() {
         self.backend = Backend(region: SettingManager.shared.selectedRegion.rawValue,
                                profile: SettingManager.shared.selectedProfile,
@@ -36,7 +36,7 @@ class BackendModel: ObservableObject {
         
         setupObservers()
     }
-
+    
     private func setupObservers() {
         SettingManager.shared.$selectedRegion
             .combineLatest(SettingManager.shared.$selectedProfile,
@@ -46,19 +46,19 @@ class BackendModel: ObservableObject {
                 self?.updateBackend(region: region.rawValue, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
             }
             .store(in: &cancellables)
-
+        
         NotificationCenter.default.publisher(for: .awsCredentialsChanged)
             .sink { [weak self] _ in
                 self?.refreshBackend()
             }
             .store(in: &cancellables)
     }
-
+    
     private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
         self.backend = Backend(region: region, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
         logger.info("Backend updated, region: \(region), profile: \(profile)")
     }
-
+    
     private func refreshBackend() {
         updateBackend(region: backend.region,
                       profile: backend.profile,
@@ -194,7 +194,7 @@ class Backend: Equatable {
         
         logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
     }
-
+    
     func loginWithSSO(profileName: String? = nil) async throws {
         do {
             let ssoResolver = try SSOAWSCredentialIdentityResolver(
@@ -354,23 +354,31 @@ class Backend: Equatable {
         return output.body ?? AsyncThrowingStream { _ in }
     }
     
-    
     func invokeStableDiffusionModel(withId modelId: String, prompt: String) async throws -> Data {
-        let promptData = [
-            "text_prompts": [["text": prompt]],
-            "cfg_scale": 6,
-            "seed": Int.random(in: 0..<100),
-            "steps": 50
-        ] as [String : Any]
+        let isSD3 = modelId.contains("sd3")
+        let isCore = modelId.contains("stable-image-core")
+        let isUltra = modelId.contains("stable-image-ultra") || modelId.contains("sd3-ultra")
+        
+        let promptData: [String: Any]
+        
+        if isSD3 || isCore || isUltra {
+            // SD3, Core, Ultra
+            promptData = ["prompt": prompt]
+        } else {
+            // 기존 Stable Diffusion (SDXL 포함)
+            promptData = [
+                "text_prompts": [["text": prompt]],
+                "cfg_scale": 10,
+                "seed": 0,
+                "steps": 50,
+                "samples": 1,
+                "style_preset": "photographic"
+            ]
+        }
         
         let jsonData = try JSONSerialization.data(withJSONObject: promptData)
         
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-            logger.info("Serialized JSON: \(jsonString)")
-        }
-        
         let request = InvokeModelInput(
-            accept: "image/png",
             body: jsonData,
             contentType: "application/json",
             modelId: modelId
@@ -378,14 +386,42 @@ class Backend: Equatable {
         
         let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
         
-        guard response.contentType == "image/png", let data = response.body else {
-            logger.error("Invalid Bedrock response: \(response)")
-            throw BedrockRuntimeError.invalidResponse(response.body)
+        guard let responseBody = response.body else {
+            throw NSError(domain: "BedrockRuntime", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response: Empty body"])
         }
         
-        return data
+        let json = try JSONSerialization.jsonObject(with: responseBody, options: []) as? [String: Any]
+        
+        if let images = json?["images"] as? [String], let base64Image = images.first,
+           let imageData = Data(base64Encoded: base64Image) {
+            
+            // Ultra 모델의 경우 추가 정보 처리
+            if isUltra, let finishReasons = json?["finish_reasons"] as? [String?] {
+                if let finishReason = finishReasons.first, finishReason != nil {
+                    throw NSError(domain: "BedrockRuntime", code: 3, userInfo: [NSLocalizedDescriptionKey: "Image generation error: \(finishReason!)"])
+                }
+            }
+            
+            return imageData
+        } else if let artifacts = json?["artifacts"] as? [[String: Any]],
+                  let firstArtifact = artifacts.first,
+                  let base64Image = firstArtifact["base64"] as? String,
+                  let imageData = Data(base64Encoded: base64Image) {
+            
+            // 기존 Stable Diffusion (SDXL 포함) 응답 처리
+            if let finishReason = firstArtifact["finishReason"] as? String {
+                if finishReason == "ERROR" || finishReason == "CONTENT_FILTERED" {
+                    throw NSError(domain: "BedrockRuntime", code: 3, userInfo: [NSLocalizedDescriptionKey: "Image generation error: \(finishReason)"])
+                }
+                print("Stable Diffusion generation - Finish Reason: \(finishReason)")
+            }
+            
+            return imageData
+        } else {
+            throw NSError(domain: "BedrockRuntime", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to parse model response"])
+        }
     }
-    
+
     func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
                               byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
                               byOutputModality: BedrockClientTypes.ModelModality? = nil,
@@ -434,7 +470,7 @@ class Backend: Equatable {
             return .cohereCommand
         } else if modelName.hasPrefix("embed") {
             return .cohereEmbed
-        } else if modelName.hasPrefix("stable-diffusion") {
+        } else if modelName.hasPrefix("stable-") || modelName.hasPrefix("sd3-") {
             return .stableDiffusion
         } else if modelName.hasPrefix("llama2") {
             return .llama2

@@ -133,12 +133,19 @@ struct MainView: View {
     }
     
     private func selectClaudeModel() {
+        // Flatten all chat models into a single array
         let allModels = organizedChatModels.values.flatMap { $0 }
-        if let claudeModel = allModels.first(where: { $0.id.contains("claude-3") }) ??
-            allModels.first(where: { $0.id.contains("claude-v2") }) ??
-            allModels.first(where: { $0.name.contains("Claude") }) {
+        
+        // Claude model selection logic
+        if let claudeModel = allModels.first(where: { $0.id.contains("claude-3-5") }) ?? // 1. Prioritize Claude-3-5 model
+            allModels.first(where: { $0.id.contains("claude-3") }) ?? // 2. Select Claude-3 model
+            allModels.first(where: { $0.id.contains("claude-v2") }) ?? // 3. Select Claude-v2 model
+            allModels.first(where: { $0.name.contains("Claude") }) { // 4. Select any model with "Claude" in its name
+            
+            // Set menu selection to the chosen Claude model
             menuSelection = .chat(claudeModel)
         }
+        // Note: If no suitable Claude model is found, menuSelection remains unchanged
     }
     
     @ToolbarContentBuilder
