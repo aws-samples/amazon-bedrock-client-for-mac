@@ -14,151 +14,87 @@ import AWSSSOOIDC
 import AWSBedrock
 import AWSBedrockRuntime
 import AWSClientRuntime
-import AppKit
-import AwsCommonRuntimeKit
 import SmithyIdentity
 import AWSSDKIdentity
-import AWSClientRuntime
 
 class BackendModel: ObservableObject {
     @Published var backend: Backend
     private var cancellables = Set<AnyCancellable>()
     private var logger = Logger(label: "BackendModel")
     @Published var isLoggedIn = false
-    private var ssoOIDC: SSOOIDCClient?
-    private var sso: SSOClient?
-    
+
     init() {
-        self.backend = Backend(region: SettingManager.shared.selectedRegion.rawValue,
-                               profile: SettingManager.shared.selectedProfile,
-                               endpoint: SettingManager.shared.endpoint,
-                               runtimeEndpoint: SettingManager.shared.runtimeEndpoint)
-        
+        do {
+            let region = SettingManager.shared.selectedRegion.rawValue
+            let profile = SettingManager.shared.selectedProfile
+            let endpoint = SettingManager.shared.endpoint
+            let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
+            let isSSOLoggedIn = SettingManager.shared.isSSOLoggedIn
+
+            self.backend = try Backend(
+                region: region,
+                profile: profile,
+                endpoint: endpoint,
+                runtimeEndpoint: runtimeEndpoint,
+                isSSOLoggedIn: isSSOLoggedIn
+            )
+        } catch {
+            fatalError("Failed to initialize Backend: \(error)")
+        }
+
         setupObservers()
+        refreshBackend()
     }
-    
+
     private func setupObservers() {
-        SettingManager.shared.$selectedRegion
-            .combineLatest(SettingManager.shared.$selectedProfile,
-                           SettingManager.shared.$endpoint,
-                           SettingManager.shared.$runtimeEndpoint)
-            .sink { [weak self] (region, profile, endpoint, runtimeEndpoint) in
-                self?.updateBackend(region: region.rawValue, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
+        let regionPublisher = SettingManager.shared.$selectedRegion
+        let profilePublisher = SettingManager.shared.$selectedProfile
+        let endpointPublisher = SettingManager.shared.$endpoint
+        let runtimeEndpointPublisher = SettingManager.shared.$runtimeEndpoint
+        let isSSOLoggedInPublisher = SettingManager.shared.$isSSOLoggedIn
+
+        Publishers.CombineLatest(regionPublisher, profilePublisher)
+            .combineLatest(endpointPublisher)
+            .combineLatest(runtimeEndpointPublisher)
+            .combineLatest(isSSOLoggedInPublisher)
+            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
+            .sink { [weak self] combined in
+                let ((((region, profile), endpoint), runtimeEndpoint), isSSOLoggedIn) = combined
+                self?.refreshBackend()
             }
             .store(in: &cancellables)
-        
+
         NotificationCenter.default.publisher(for: .awsCredentialsChanged)
+            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshBackend()
             }
             .store(in: &cancellables)
     }
-    
-    private func updateBackend(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
-        self.backend = Backend(region: region, profile: profile, endpoint: endpoint, runtimeEndpoint: runtimeEndpoint)
-        logger.info("Backend updated, region: \(region), profile: \(profile)")
-    }
-    
+
     private func refreshBackend() {
-        updateBackend(region: backend.region,
-                      profile: backend.profile,
-                      endpoint: backend.endpoint,
-                      runtimeEndpoint: backend.runtimeEndpoint)
-        logger.info("Backend refreshed due to credentials change")
-    }
-    
-    private func setupClients() { // New function added
+        let region = SettingManager.shared.selectedRegion.rawValue
+        let profile = SettingManager.shared.selectedProfile
+        let endpoint = SettingManager.shared.endpoint
+        let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
+        let isSSOLoggedIn = SettingManager.shared.isSSOLoggedIn
+
         do {
-            let region = "us-west-2" // Use desired region
-            let ssoOIDCConfiguration = try SSOOIDCClient.SSOOIDCClientConfiguration(region: region)
-            let ssoConfiguration = try SSOClient.SSOClientConfiguration(region: region)
-            
-            ssoOIDC = SSOOIDCClient(config: ssoOIDCConfiguration)
-            sso = SSOClient(config: ssoConfiguration)
+            let newBackend = try Backend(
+                region: region,
+                profile: profile,
+                endpoint: endpoint,
+                runtimeEndpoint: runtimeEndpoint,
+                isSSOLoggedIn: isSSOLoggedIn
+            )
+            self.backend = newBackend
+            self.logger.info("Backend refreshed")
         } catch {
-            print("Error setting up clients: \(error)")
-        }
-    }
-    
-    func startSSOLogin(startUrl: String, region: String) async throws -> (authUrl: String, userCode: String) {
-        let registerClientRequest = RegisterClientInput(
-            clientName: "Amazon Bedrock",
-            clientType: "public",
-            scopes: ["sso:account:access"]
-        )
-        
-        let registerClientResponse = try await ssoOIDC!.registerClient(input: registerClientRequest)
-        
-        let startDeviceAuthRequest = StartDeviceAuthorizationInput(
-            clientId: registerClientResponse.clientId,
-            clientSecret: registerClientResponse.clientSecret,
-            startUrl: startUrl
-        )
-        
-        let startDeviceAuthResponse = try await ssoOIDC!.startDeviceAuthorization(input: startDeviceAuthRequest)
-        
-        return (startDeviceAuthResponse.verificationUriComplete!, startDeviceAuthResponse.userCode!)
-    }
-    
-    func pollForTokens(clientId: String, clientSecret: String, deviceCode: String) async throws -> CreateTokenOutput {
-        let createTokenRequest = CreateTokenInput(
-            clientId: clientId,
-            clientSecret: clientSecret,
-            deviceCode: deviceCode,
-            grantType: "urn:ietf:params:oauth:grant-type:device_code"
-        )
-        
-        while true {
-            do {
-                let tokenResponse = try await ssoOIDC!.createToken(input: createTokenRequest)
-                return tokenResponse
-            } catch let error as AuthorizationPendingException {
-                // User hasn't completed the authorization yet, wait and retry
-                try await Task.sleep(nanoseconds: 5_000_000_000) // Wait for 5 seconds
-            } catch {
-                throw error
-            }
-        }
-        
-    }
-    
-    func getAccountInfo(accessToken: String) async throws -> GetRoleCredentialsOutput {
-        let listAccountsRequest = ListAccountsInput(accessToken: accessToken, maxResults: 1)
-        let listAccountsResponse = try await sso!.listAccounts(input: listAccountsRequest)
-        
-        guard let account = listAccountsResponse.accountList?.first else {
-            throw NSError(domain: "SSOError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No accounts found"])
-        }
-        
-        let listAccountRolesRequest = ListAccountRolesInput(
-            accessToken: accessToken,
-            accountId: account.accountId!,
-            maxResults: 1
-        )
-        let listAccountRolesResponse = try await sso!.listAccountRoles(input: listAccountRolesRequest)
-        
-        guard let role = listAccountRolesResponse.roleList?.first else {
-            throw NSError(domain: "SSOError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No roles found"])
-        }
-        
-        let getRoleCredentialsRequest = GetRoleCredentialsInput(
-            accessToken: accessToken,
-            accountId: account.accountId!,
-            roleName: role.roleName!
-        )
-        return try await sso!.getRoleCredentials(input: getRoleCredentialsRequest)
-    }
-    
-    func completeLogin(tokenResponse: CreateTokenOutput) async throws {
-        let roleCredentials = try await getAccountInfo(accessToken: tokenResponse.accessToken!)
-        
-        // Save the credentials securely (you might want to use Keychain for this)
-        // For demonstration, we're just setting a flag
-        DispatchQueue.main.async {
-            self.isLoggedIn = true
+            self.logger.error("Failed to refresh backend: \(error)")
         }
     }
 }
+
 
 class Backend: Equatable {
     let region: String
@@ -166,93 +102,71 @@ class Backend: Equatable {
     let endpoint: String
     let runtimeEndpoint: String
     private var logger = Logger(label: "Backend")
-    private var awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
-    
-    private lazy var bedrockClient: BedrockClient = createBedrockClient()
-    private lazy var bedrockRuntimeClient: BedrockRuntimeClient = createBedrockRuntimeClient()
-    
-    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) {
+    public var awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
+    public var bearerTokenIdentityResolver: any BearerTokenIdentityResolver
+
+    private(set) lazy var bedrockClient: BedrockClient = createBedrockClient()
+    private(set) lazy var bedrockRuntimeClient: BedrockRuntimeClient = createBedrockRuntimeClient()
+
+    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, isSSOLoggedIn: Bool) throws {
         self.region = region
         self.profile = profile
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
+
+        self.awsCredentialIdentityResolver = try DefaultAWSCredentialIdentityResolverChain()
+        self.bearerTokenIdentityResolver = try DefaultBearerTokenIdentityResolverChain()
         
         do {
-            if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
-                if selectedProfile.type == .sso {
-                    self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+            if isSSOLoggedIn {
+                // Use SSOAWSCredentialIdentityResolver
+                self.bearerTokenIdentityResolver = try SSOBearerTokenIdentityResolver(profileName: profile)
+                logger.info("Using SSO credentials with profile: \(profile)")
+            } else {
+                // Use ProfileAWSCredentialIdentityResolver
+                if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
+                    if selectedProfile.type == .sso {
+                        self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+                    } else {
+                        self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                    }
                 } else {
                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
                 }
-            } else {
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
             }
         } catch {
             logger.error("Failed to create credentials resolver: \(error). Using default credentials.")
-            self.awsCredentialIdentityResolver = try! ProfileAWSCredentialIdentityResolver(profileName: "default")
-        }
-        
-        logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
-    }
-    
-    func loginWithSSO(profileName: String? = nil) async throws {
-        do {
-            let ssoResolver = try SSOAWSCredentialIdentityResolver(
-                profileName: profileName,
-                configFilePath: nil,
-                credentialsFilePath: nil
-            )
-            self.awsCredentialIdentityResolver = ssoResolver
-            // Bedrock 클라이언트들을 새로운 자격 증명으로 재생성
-            self.bedrockClient = createBedrockClient()
-            self.bedrockRuntimeClient = createBedrockRuntimeClient()
-            logger.info("Successfully logged in with SSO")
-        } catch {
-            logger.error("Failed to login with SSO: \(error)")
-            throw error
+
         }
     }
-    
-    func isLoggedInWithSSO() -> Bool {
-        return awsCredentialIdentityResolver is SSOAWSCredentialIdentityResolver
-    }
-    
-    func logoutSSO() {
-        do {
-            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-            self.bedrockClient = createBedrockClient()
-            self.bedrockRuntimeClient = createBedrockRuntimeClient()
-            logger.info("Logged out from SSO and reverted to profile credentials")
-        } catch {
-            logger.error("Failed to revert to profile credentials after SSO logout: \(error)")
-        }
-    }
-    
+
     private func createBedrockClient() -> BedrockClient {
         do {
             let config = try BedrockClient.BedrockClientConfiguration(
                 awsCredentialIdentityResolver: self.awsCredentialIdentityResolver,
                 region: self.region,
                 signingRegion: self.region,
-                endpoint: self.endpoint.isEmpty ? nil : self.endpoint
+                endpoint: self.endpoint.isEmpty ? nil : self.endpoint,
+                bearerTokenIdentityResolver: self.bearerTokenIdentityResolver
             )
-            logger.info("Bedrock client created with region: \(self.region), profile: \(self.profile), endpoint: \(self.endpoint)")
+            logger.info("Bedrock client created with region: \(self.region), endpoint: \(self.endpoint)")
             return BedrockClient(config: config)
         } catch {
             logger.error("Failed to create Bedrock client: \(error.localizedDescription)")
             fatalError("Unable to create Bedrock client: \(error.localizedDescription)")
         }
     }
-    
+
     private func createBedrockRuntimeClient() -> BedrockRuntimeClient {
         do {
             let config = try BedrockRuntimeClient.BedrockRuntimeClientConfiguration(
                 awsCredentialIdentityResolver: self.awsCredentialIdentityResolver,
                 region: self.region,
                 signingRegion: self.region,
-                endpoint: self.runtimeEndpoint.isEmpty ? nil : self.runtimeEndpoint
+                endpoint: self.runtimeEndpoint.isEmpty ? nil : self.runtimeEndpoint,
+                bearerTokenIdentityResolver: self.bearerTokenIdentityResolver
             )
-            logger.info("BedrockRuntime client created with region: \(self.region), profile: \(self.profile), runtimeEndpoint: \(self.runtimeEndpoint)")
+            logger.info("BedrockRuntime client created with region: \(self.region), runtimeEndpoint: \(self.runtimeEndpoint)")
             return BedrockRuntimeClient(config: config)
         } catch {
             logger.error("Failed to create Bedrock Runtime client: \(error.localizedDescription)")
@@ -262,11 +176,11 @@ class Backend: Equatable {
     
     static func == (lhs: Backend, rhs: Backend) -> Bool {
         return lhs.region == rhs.region &&
-        lhs.profile == rhs.profile &&
-        lhs.endpoint == rhs.endpoint &&
-        lhs.runtimeEndpoint == rhs.runtimeEndpoint
+               lhs.profile == rhs.profile &&
+               lhs.endpoint == rhs.endpoint &&
+               lhs.runtimeEndpoint == rhs.runtimeEndpoint
     }
-    
+
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
         let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
@@ -305,11 +219,11 @@ class Backend: Equatable {
         return output.body ?? AsyncThrowingStream { _ in }
     }
     
-    func invokeClaudeModel(withId modelId: String, messages: [ClaudeMessageRequest.Message]) async throws -> Data {
+    func invokeClaudeModel(withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?) async throws -> Data {
         let requestBody = ClaudeMessageRequest(
             anthropicVersion: "bedrock-2023-05-31",
             maxTokens: 4096,
-            system: nil,
+            system: systemPrompt,
             messages: messages,
             temperature: 0.7,
             topP: 0.9,
@@ -332,11 +246,11 @@ class Backend: Equatable {
         return data
     }
     
-    func invokeClaudeModelStream(withId modelId: String, messages: [ClaudeMessageRequest.Message]) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
+    func invokeClaudeModelStream(withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
         let requestBody = ClaudeMessageRequest(
             anthropicVersion: "bedrock-2023-05-31",
             maxTokens: 4096,
-            system: nil,
+            system: systemPrompt,
             messages: messages,
             temperature: 0.7,
             topP: 0.9,
@@ -421,7 +335,7 @@ class Backend: Equatable {
             throw NSError(domain: "BedrockRuntime", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to parse model response"])
         }
     }
-
+    
     func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
                               byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
                               byOutputModality: BedrockClientTypes.ModelModality? = nil,

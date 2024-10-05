@@ -219,15 +219,32 @@ class ChatViewModel: ObservableObject {
     }
     
     private func createPrompt(history: String, userInput: String) -> String {
-        // Implement prompt creation logic based on chat model
-        return "The following is a friendly conversation between a human and an AI.\nCurrent conversation:\n\(history)\n\nHuman: \(userInput)\nAI:"
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        var prompt = ""
+
+        if !systemPrompt.isEmpty {
+            prompt += "<system>\(systemPrompt)</system>\n\n"
+        } else {
+            prompt += "The following is a friendly conversation between a human and an AI assistant.\n"
+        }
+
+        prompt += "Current conversation:\n\(history)\n\n"
+        prompt += "Human: \(userInput)\nAssistant:"
+
+        return prompt
     }
     
     func invokeClaudeModelStream(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         var isFirstChunk = true
         let modelId = chatModel.id
-        let response = try await backendModel.backend.invokeClaudeModelStream(withId: modelId, messages: claudeMessages)
-        
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let response = try await backendModel.backend.invokeClaudeModelStream(
+            withId: modelId,
+            messages: claudeMessages,
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+        )
+
         var streamedText = ""
         
         for try await event in response {
@@ -305,7 +322,13 @@ class ChatViewModel: ObservableObject {
     /// Invokes the Claude model.
     func invokeClaudeModel(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         let modelId = chatModel.id
-        let data = try await backendModel.backend.invokeClaudeModel(withId: modelId, messages: claudeMessages)
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let data = try await backendModel.backend.invokeClaudeModel(
+            withId: modelId,
+            messages: claudeMessages,
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+        )
         let response = try JSONDecoder().decode(ClaudeMessageResponse.self, from: data)
         
         if let firstText = response.content.first?.text {
@@ -631,7 +654,7 @@ class ChatViewModel: ObservableObject {
         let message = ClaudeMessageRequest.Message(role: "user", content: [.init(type: "text", text: summaryPrompt)])
         
         do {
-            let data = try await backendModel.backend.invokeClaudeModel(withId: haikuModelId, messages: [message])
+            let data = try await backendModel.backend.invokeClaudeModel(withId: haikuModelId, messages: [message], systemPrompt: nil)
             let response = try backendModel.backend.decode(data) as ClaudeMessageResponse
             
             if let firstText = response.content.first?.text {

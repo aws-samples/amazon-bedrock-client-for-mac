@@ -30,6 +30,9 @@ class SettingManager: ObservableObject {
     @Published var endpoint: String { didSet { saveSettings() } }
     @Published var runtimeEndpoint: String { didSet { saveSettings() } }
     @Published var enableDebugLog: Bool { didSet { saveSettings() } }
+    @Published var systemPrompt: String { didSet { saveSettings() } }
+    @Published var isSSOLoggedIn: Bool = false
+    @Published var ssoAccessToken: String?
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -45,6 +48,7 @@ class SettingManager: ObservableObject {
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
         self.enableDebugLog = UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
+        self.systemPrompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? ""
         
         setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
@@ -61,6 +65,7 @@ class SettingManager: ObservableObject {
         UserDefaults.standard.set(endpoint, forKey: "endpoint")
         UserDefaults.standard.set(runtimeEndpoint, forKey: "runtimeEndpoint")
         UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
+        UserDefaults.standard.set(systemPrompt, forKey: "systemPrompt")
         
         logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
     }
