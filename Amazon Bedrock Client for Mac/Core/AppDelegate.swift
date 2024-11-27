@@ -5,33 +5,34 @@
 //  Created by Na, Sanghwa on 6/29/24.
 //
 
+import Cocoa
 import SwiftUI
 import Foundation
 import Combine
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var localhostServer: LocalhostServer?
-    
-    @objc func newTab() {
-    }
 
-    @objc func newWindow() {
-    }
-
-    func newChat() {
+    @objc func newChat(_ sender: Any?) {
         AppCoordinator.shared.shouldCreateNewChat = true
     }
     
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
-        NSApplication.shared.windows.forEach { window in
-            window.delegate = self
-            restoreWindowSize(window: window, id: window.windowNumber)
+    @objc func deleteChat(_ sender: Any?) {
+        // Set the flag in AppCoordinator to trigger deletion
+        DispatchQueue.main.async {
+            AppCoordinator.shared.shouldDeleteChat = true
         }
-        
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Disable automatic window tabbing
+        NSWindow.allowsAutomaticWindowTabbing = false
+
+        // Start the localhost server
         startLocalhostServer()
     }
-    
+
     private func startLocalhostServer() {
         DispatchQueue.global(qos: .background).async {
             do {
@@ -42,49 +43,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
     }
-    
-    func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        
-        if window == settingsWindow {
-            settingsWindow = nil
-        }
-        saveWindowSize(window: window, id: window.windowNumber)
-    }
-    
-    func restoreWindowSize(window: NSWindow, id: Int) {
-        if let sizeData = UserDefaults.standard.data(forKey: "windowSize_\(id)") {
-            do {
-                if let sizeDict = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSDictionary.self, from: sizeData) as? [String: CGFloat],
-                   let width = sizeDict["width"],
-                   let height = sizeDict["height"] {
-                    window.setContentSize(NSSize(width: width, height: height))
-                }
-            } catch {
-                print("Error unarchiving window size: \(error)")
-            }
-        }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Close the app when the window is closed
+        return false
     }
 
-    func saveWindowSize(window: NSWindow, id: Int) {
-        let size = window.frame.size
-        let sizeDict: [String: CGFloat] = ["width": size.width, "height": size.height]
-        do {
-            let data = try NSKeyedArchiver.archivedData(withRootObject: sizeDict, requiringSecureCoding: true)
-            UserDefaults.standard.set(data, forKey: "windowSize_\(id)")
-        } catch {
-            print("Error archiving window size: \(error)")
-        }
-    }
-    
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
-            NSApplication.shared.windows.forEach { $0.makeKeyAndOrderFront(self) }
-        }
-        return true
-    }
-    
-    @objc func openSettings() {
+    @objc func openSettings(_ sender: Any?) {
+        // Open the settings window
         SettingsWindowManager.shared.openSettings(view: SettingsView())
+        print("Open Settings action triggered")
     }
 }

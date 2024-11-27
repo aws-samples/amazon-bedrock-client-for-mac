@@ -93,6 +93,12 @@ struct SidebarView: View {
                 appCoordinator.shouldCreateNewChat = false
             }
         })
+        .onChange(of: appCoordinator.shouldDeleteChat) { newValue in
+            if newValue {
+                deleteSelectedChat()
+                appCoordinator.shouldDeleteChat = false
+            }
+        }
         .id(selectionId)
         .listStyle(SidebarListStyle())
         .frame(minWidth: 100, idealWidth: 150, maxWidth: .infinity, maxHeight: .infinity)
@@ -142,6 +148,22 @@ struct SidebarView: View {
                 self.selectionId = UUID()
             }
         }
+    }
+    
+    private func deleteSelectedChat() {
+        guard let selectedChat = getSelectedChat() else {
+            print("No chat selected to delete")
+            return
+        }
+        selection = chatManager.deleteChat(with: selectedChat.chatId)
+        organizeChatsByDate()
+    }
+    
+    private func getSelectedChat() -> ChatModel? {
+        if case .chat(let chat) = selection {
+            return chat
+        }
+        return nil
     }
     
     func organizeChatsByDate() {

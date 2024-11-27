@@ -32,7 +32,19 @@ class SettingManager: ObservableObject {
     @Published var enableDebugLog: Bool { didSet { saveSettings() } }
     @Published var systemPrompt: String { didSet { saveSettings() } }
     @Published var isSSOLoggedIn: Bool = false
-    @Published var ssoAccessToken: String?
+    @Published var defaultDirectory: String { didSet { saveSettings() } }
+//    @Published var ssoTokenInfo: SSOTokenInfo? {
+//        didSet {
+//            if let ssoTokenInfo = ssoTokenInfo {
+//                if let data = try? JSONEncoder().encode(ssoTokenInfo) {
+//                    UserDefaults.standard.set(data, forKey: "ssoTokenInfo")
+//                }
+//            } else {
+//                UserDefaults.standard.removeObject(forKey: "ssoTokenInfo")
+//            }
+//        }
+//    }
+    @Published var virtualProfile: AWSProfile?
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -49,7 +61,15 @@ class SettingManager: ObservableObject {
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
         self.enableDebugLog = UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
         self.systemPrompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? ""
-        
+        self.defaultDirectory = UserDefaults.standard.string(forKey: "defaultDirectory") ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Amazon Bedrock Client").path
+
+//        if let data = UserDefaults.standard.data(forKey: "ssoTokenInfo"),
+//           let tokenInfo = try? JSONDecoder().decode(SSOTokenInfo.self, from: data) {
+//            self.ssoTokenInfo = tokenInfo
+//        } else {
+//            self.ssoTokenInfo = nil
+//        }
+//        
         setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
@@ -66,7 +86,8 @@ class SettingManager: ObservableObject {
         UserDefaults.standard.set(runtimeEndpoint, forKey: "runtimeEndpoint")
         UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
         UserDefaults.standard.set(systemPrompt, forKey: "systemPrompt")
-        
+        UserDefaults.standard.set(defaultDirectory, forKey: "defaultDirectory")
+
         logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
     }
     
@@ -248,4 +269,13 @@ extension UserDefaults {
         let colorData = try? NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: false)
         set(colorData, forKey: key)
     }
+}
+
+struct AWSProfile {
+    var name: String
+    var ssoStartURL: String
+    var ssoRegion: String
+    var ssoAccountID: String
+    var ssoRoleName: String
+    var region: String
 }

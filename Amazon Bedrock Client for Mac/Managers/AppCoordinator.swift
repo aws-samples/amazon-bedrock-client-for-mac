@@ -12,4 +12,5 @@ class AppCoordinator: ObservableObject {
     private init() {}
 
     @Published var shouldCreateNewChat: Bool = false
+    @Published var shouldDeleteChat: Bool = false
 }

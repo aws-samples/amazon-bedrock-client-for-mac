@@ -10,6 +10,7 @@ import Foundation
 
 class LocalhostServer {
     let app: Application
+    private var settingManager = SettingManager.shared
 
     init() throws {
         // Create a new Vapor application
@@ -18,7 +19,7 @@ class LocalhostServer {
         app = Application(env)
         
         // Determine directory and create if necessary
-        let directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Amazon Bedrock Client")
+        let directoryURL = URL(fileURLWithPath: settingManager.defaultDirectory)
         let directoryPath = directoryURL.path
         
         if !FileManager.default.fileExists(atPath: directoryPath) {

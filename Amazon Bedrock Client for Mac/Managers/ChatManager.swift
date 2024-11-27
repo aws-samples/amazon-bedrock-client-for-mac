@@ -13,7 +13,12 @@ class ChatManager: ObservableObject {
     @Published var chats: [ChatModel] = []
     @Published var chatIsLoading: [String: Bool] = [:]
     
+    var hasChats: Bool {
+        return !chats.isEmpty
+    }
+    
     static let shared = ChatManager()
+    @StateObject private var settingManager = SettingManager.shared
     
     private let coreDataStack: CoreDataStack
     private let fileManager = FileManager.default
@@ -175,8 +180,8 @@ class ChatManager: ObservableObject {
     // MARK: - File Management
     
     private func getBaseDirectory() -> URL {
-        let tempDir = fileManager.homeDirectoryForCurrentUser
-        return tempDir.appendingPathComponent("Amazon Bedrock Client")
+        let tempDir = URL(fileURLWithPath: settingManager.defaultDirectory)
+        return tempDir
     }
     
     private func createDirectories() {

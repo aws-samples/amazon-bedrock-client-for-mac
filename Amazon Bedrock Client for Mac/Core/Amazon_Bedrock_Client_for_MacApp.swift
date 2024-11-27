@@ -11,7 +11,6 @@ import SwiftUI
 struct Amazon_Bedrock_Client_for_MacApp: App {
     @StateObject private var settingManager = SettingManager.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var alertIsPresented = false
 
     init() {
         if SettingManager.shared.enableDebugLog {
@@ -20,71 +19,84 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
     }
     
     var body: some Scene {
-        WindowGroup {
+        Window("Amazon Bedrock Client", id: "MainWindow") {
             MainView()
-                .frame(idealWidth: 1200, idealHeight: 800)
-                .onAppear(perform: setupWindow)
+                .frame(minWidth: 800, minHeight: 600)
                 .environmentObject(settingManager)
         }
         .windowStyle(DefaultWindowStyle())
         .commands {
-            SidebarCommands()
             customCommands
         }
     }
     
     @CommandsBuilder
     private var customCommands: some Commands {
-        CommandGroup(replacing: .help) {
-            Button("Version") {
-                alertIsPresented = true
+        // Remove default 'New Window' and 'New Tab' commands
+        CommandGroup(replacing: .newItem) {
+            Button("New Chat") {
+                // Send action to AppDelegate's newChat method
+                NSApp.sendAction(#selector(AppDelegate.newChat(_:)), to: nil, from: nil)
             }
-            .alert(isPresented: $alertIsPresented) {
-                Alert(title: Text("Alert Title"), message: Text("Alert Message"), dismissButton: .default(Text("OK")))
+            .keyboardShortcut("n", modifiers: [.command])
+            
+            Button("Delete Chat") {
+                NSApp.sendAction(#selector(AppDelegate.deleteChat(_:)), to: nil, from: nil)
             }
+            .keyboardShortcut("d", modifiers: [.command])
+//            .disabled(!ChatManager.shared.hasChats) // Disable if no chats
         }
         
-        CommandGroup(replacing: .newItem) {
-            Button("New Chat", action: appDelegate.newChat)
-                .keyboardShortcut("n", modifiers: [.command])
+        // Remove 'Show All Tabs' and 'Merge All Windows' menu items
+        CommandGroup(replacing: .windowArrangement) { }
+        
+        CommandGroup(replacing: .help) {
+            Button("Bedrock Help") {
+                openBedrockHelp()
+            }
+            .keyboardShortcut("?", modifiers: [.command, .shift])
         }
         
         CommandGroup(after: .appSettings) {
-            Button("Settings", action: appDelegate.openSettings)
-                .keyboardShortcut(",", modifiers: [.command])
+            Button("Settings") {
+                // Send action to AppDelegate's openSettings method
+                NSApp.sendAction(#selector(AppDelegate.openSettings), to: nil, from: nil)
+            }
+            .keyboardShortcut(",", modifiers: [.command])
         }
     }
     
-    private func setupWindow() {
-        guard let window = NSApplication.shared.keyWindow else { return }
-        window.delegate = appDelegate
-        appDelegate.restoreWindowSize(window: window, id: window.windowNumber)
+    private func openBedrockHelp() {
+        if let url = URL(string: "https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html") {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     private func redirectStdoutAndStderrToFile() {
         let fileManager = FileManager.default
-        let logsDir = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Amazon Bedrock Client/logs")
-        
+        let logsDir = URL(fileURLWithPath: settingManager.defaultDirectory).appendingPathComponent("logs")
+
         do {
+            // Create the logs directory if it doesn't exist
             try fileManager.createDirectory(at: logsDir, withIntermediateDirectories: true, attributes: nil)
             
-            // 날짜별 파일 이름 생성
+            // Generate a log file name based on the current date
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             let dateStr = dateFormatter.string(from: Date())
             let logFileURL = logsDir.appendingPathComponent("log-\(dateStr).log")
             
-            // 파일이 존재하면 열고, 없으면 생성
+            // Create the log file if it does not already exist
             if !fileManager.fileExists(atPath: logFileURL.path) {
                 fileManager.createFile(atPath: logFileURL.path, contents: nil, attributes: nil)
             }
             
-            // 파일 핸들을 얻음
+            // Obtain a file handle for writing to the log file
             let fileHandle = try FileHandle(forWritingTo: logFileURL)
-            // 파일의 끝으로 이동하여 추가 모드로 설정
+            // Move to the end of the file to append new logs
             fileHandle.seekToEndOfFile()
             
-            // stdout과 stderr을 파일로 리디렉션
+            // Redirect stdout and stderr to the log file
             let fileDescriptor = fileHandle.fileDescriptor
             dup2(fileDescriptor, STDOUT_FILENO)
             dup2(fileDescriptor, STDERR_FILENO)

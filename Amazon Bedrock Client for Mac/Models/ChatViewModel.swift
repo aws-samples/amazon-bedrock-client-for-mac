@@ -12,6 +12,7 @@ class ChatViewModel: ObservableObject {
     let chatId: String
     let chatManager: ChatManager
     let sharedImageDataSource: SharedImageDataSource
+    @StateObject private var settingManager = SettingManager.shared
     
     @ObservedObject var backendModel: BackendModel
     @Published var chatModel: ChatModel
@@ -527,8 +528,8 @@ class ChatViewModel: ObservableObject {
         formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"
         let timestamp = formatter.string(from: now)
         let fileName = "\(timestamp).png"
-        let tempDir = FileManager.default.homeDirectoryForCurrentUser
-        let fileURL = tempDir.appendingPathComponent("Amazon Bedrock Client").appendingPathComponent(fileName)
+        let tempDir = URL(fileURLWithPath: settingManager.defaultDirectory)
+        let fileURL = tempDir.appendingPathComponent(fileName)
         
         do {
             try image.write(to: fileURL)
@@ -558,8 +559,8 @@ class ChatViewModel: ObservableObject {
         formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"
         let timestamp = formatter.string(from: now)
         let fileName = "\(timestamp).png"
-        let tempDir = FileManager.default.homeDirectoryForCurrentUser
-        let fileURL = tempDir.appendingPathComponent("Amazon Bedrock Client").appendingPathComponent(fileName)
+        let tempDir = URL(fileURLWithPath: settingManager.defaultDirectory)
+        let fileURL = tempDir.appendingPathComponent(fileName)
         
         do {
             try data.write(to: fileURL)
