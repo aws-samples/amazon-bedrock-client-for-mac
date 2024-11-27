@@ -43,11 +43,17 @@ Get the latest version of Amazon Bedrock Client for Mac:
 1. Download the latest release
 2. Open the DMG file and drag the app to your Applications folder
 3. Launch the app and configure your AWS credentials
+4. Open System Preferences, click Security & Privacy, then put a checkmark to "Allow apps downloaded from anywhere" -> Click OK and enter your password
 
 ### Opening the Application
 
 If you see "'Amazon Bedrock Client for Mac.app' can't be opened because Apple cannot check it for malicious software":
 
+1. Open System Preferences
+2. Click Security & Privacy
+3. Put a checkmark to "Allow apps downloaded from anywhere" -> Click OK and enter your password
+
+Alternatively:
 1. In Finder, locate "Amazon Bedrock Client for Mac.app"
 2. Right-click (or Control-click) and select "Open"
 3. Click "Open" in the dialog
