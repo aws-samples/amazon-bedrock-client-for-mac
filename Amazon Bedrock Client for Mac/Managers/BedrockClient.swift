@@ -25,7 +25,7 @@ class BackendModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(label: "BackendModel")
     @Published var isLoggedIn = false
-
+    
     init() {
         do {
             self.backend = try BackendModel.createBackend()
@@ -37,13 +37,13 @@ class BackendModel: ObservableObject {
         }
         setupObservers()
     }
-
+    
     private static func createBackend() throws -> Backend {
         let region = SettingManager.shared.selectedRegion.rawValue
         let profile = SettingManager.shared.selectedProfile
         let endpoint = SettingManager.shared.endpoint
         let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
-
+        
         return try Backend(
             region: region,
             profile: profile,
@@ -51,13 +51,13 @@ class BackendModel: ObservableObject {
             runtimeEndpoint: runtimeEndpoint
         )
     }
-
+    
     private func setupObservers() {
         let regionPublisher = SettingManager.shared.$selectedRegion
         let profilePublisher = SettingManager.shared.$selectedProfile
         let endpointPublisher = SettingManager.shared.$endpoint
         let runtimeEndpointPublisher = SettingManager.shared.$runtimeEndpoint
-
+        
         Publishers.CombineLatest(regionPublisher, profilePublisher)
             .combineLatest(endpointPublisher)
             .combineLatest(runtimeEndpointPublisher)
@@ -67,14 +67,20 @@ class BackendModel: ObservableObject {
                 self?.refreshBackend()
             }
             .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: .awsCredentialsChanged)
+            .sink { [weak self] _ in
+                self?.refreshBackend()
+            }
+            .store(in: &cancellables)
     }
-
+    
     private func refreshBackend() {
         let region = SettingManager.shared.selectedRegion.rawValue
         let profile = SettingManager.shared.selectedProfile
         let endpoint = SettingManager.shared.endpoint
         let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
-
+        
         do {
             let newBackend = try Backend(
                 region: region,
@@ -98,7 +104,7 @@ class Backend: Equatable {
     let runtimeEndpoint: String
     private let logger = Logger(label: "Backend")
     public let awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
-
+    
     private(set) lazy var bedrockClient: BedrockClient = {
         do {
             return try createBedrockClient()
@@ -107,7 +113,7 @@ class Backend: Equatable {
             fatalError("Unable to initialize Bedrock client.") // This will rarely trigger now
         }
     }()
-
+    
     private(set) lazy var bedrockRuntimeClient: BedrockRuntimeClient = {
         do {
             return try createBedrockRuntimeClient()
@@ -116,13 +122,13 @@ class Backend: Equatable {
             fatalError("Unable to initialize Bedrock Runtime client.") // This will rarely trigger now
         }
     }()
-
+    
     init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) throws {
         self.region = region
         self.profile = profile
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
-
+        
         do {
             self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
         } catch {
@@ -130,7 +136,7 @@ class Backend: Equatable {
             throw error
         }
     }
-
+    
     /// Creates a fallback instance with default values
     static func fallbackInstance() -> Backend {
         do {
@@ -144,7 +150,7 @@ class Backend: Equatable {
             fatalError("Fallback Backend failed to initialize. Error: \(error.localizedDescription)")
         }
     }
-
+    
     private func createBedrockClient() throws -> BedrockClient {
         let config = try BedrockClient.BedrockClientConfiguration(
             awsCredentialIdentityResolver: self.awsCredentialIdentityResolver,
@@ -155,7 +161,7 @@ class Backend: Equatable {
         logger.info("Bedrock client created with region: \(self.region), endpoint: \(self.endpoint)")
         return BedrockClient(config: config)
     }
-
+    
     private func createBedrockRuntimeClient() throws -> BedrockRuntimeClient {
         let config = try BedrockRuntimeClient.BedrockRuntimeClientConfiguration(
             awsCredentialIdentityResolver: self.awsCredentialIdentityResolver,
@@ -166,14 +172,14 @@ class Backend: Equatable {
         logger.info("Bedrock Runtime client created with region: \(self.region), runtimeEndpoint: \(self.runtimeEndpoint)")
         return BedrockRuntimeClient(config: config)
     }
-
+    
     static func == (lhs: Backend, rhs: Backend) -> Bool {
         return lhs.region == rhs.region &&
-               lhs.profile == rhs.profile &&
-               lhs.endpoint == rhs.endpoint &&
-               lhs.runtimeEndpoint == rhs.runtimeEndpoint
+        lhs.profile == rhs.profile &&
+        lhs.endpoint == rhs.endpoint &&
+        lhs.runtimeEndpoint == rhs.runtimeEndpoint
     }
-
+    
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
         let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
