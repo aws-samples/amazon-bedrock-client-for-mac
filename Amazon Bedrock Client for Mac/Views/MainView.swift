@@ -47,6 +47,7 @@ struct MainView: View {
                 if !chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
                     selection = .newChat
                 }
+                menuSelection = .chat(chat)
             }
         }
     }
@@ -213,7 +214,7 @@ struct MainView: View {
     }
     
     func currentSelectedModelName() -> String {
-        guard case let .chat(chat) = selection else {
+        guard case let .chat(chat) = menuSelection else {
             return "Model Not Selected"
         }
         return chat.name
