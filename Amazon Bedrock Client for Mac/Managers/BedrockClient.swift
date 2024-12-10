@@ -110,7 +110,7 @@ class Backend: Equatable {
             return try createBedrockClient()
         } catch {
             logger.error("Failed to initialize Bedrock client: \(error.localizedDescription)")
-            fatalError("Unable to initialize Bedrock client.") // This will rarely trigger now
+            fatalError("Unable to initialize Bedrock client.")
         }
     }()
     
@@ -119,22 +119,33 @@ class Backend: Equatable {
             return try createBedrockRuntimeClient()
         } catch {
             logger.error("Failed to initialize Bedrock Runtime client: \(error.localizedDescription)")
-            fatalError("Unable to initialize Bedrock Runtime client.") // This will rarely trigger now
+            fatalError("Unable to initialize Bedrock Runtime client.")
         }
     }()
     
+    /// Initializes Backend with given parameters.
+    /// Uses SettingManager's profiles to determine if SSO or standard credentials should be used.
     init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) throws {
         self.region = region
         self.profile = profile
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
         
-        do {
-            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-        } catch {
-            logger.error("Failed to create AWS Credential Resolver: \(error.localizedDescription)")
-            throw error
+        // Find the selected profile from SettingManager
+        if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
+            // If the profile type is SSO, use SSOAWSCredentialIdentityResolver
+            if selectedProfile.type == .sso {
+                self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+            } else {
+                // Otherwise, it's a standard credentials profile
+                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+            }
+        } else {
+            // If profile not found, fallback to default
+            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
         }
+
+        logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
     }
     
     /// Creates a fallback instance with default values
