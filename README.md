@@ -50,8 +50,10 @@ Get the latest version of Amazon Bedrock Client for Mac:
 If you see "'Amazon Bedrock Client for Mac.app' can't be opened because Apple cannot check it for malicious software":
 
 1. Open System Preferences
-2. Click Security & Privacy
-3. Put a checkmark to "Allow apps downloaded from anywhere" -> Click OK and enter your password
+2. Click Privacy & Security
+3. Scroll down and click "Open Anyway" next to "Amazon Bedrock was blocked to protect your Mac."
+
+<img width="698" alt="open with setting" src="https://github.com/user-attachments/assets/358213a1-2237-4513-96fc-0dd7af9de5e7" />
 
 Alternatively:
 1. In Finder, locate "Amazon Bedrock Client for Mac.app"
