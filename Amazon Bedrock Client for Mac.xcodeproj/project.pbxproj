@@ -23,7 +23,6 @@
 		79610DD82AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DBE2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift */; };
 		79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC12AD22A2F00993D09 /* BedrockClient.swift */; };
 		79610DDB2AD22A2F00993D09 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DC22AD22A2F00993D09 /* Assets.xcassets */; };
-		79610DDD2AD22A2F00993D09 /* TextOutputFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC52AD22A2F00993D09 /* TextOutputFormat.swift */; };
 		79610DE02AD22A2F00993D09 /* FirstResponderTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */; };
 		79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCA2AD22A2F00993D09 /* ChatModel.swift */; };
 		79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCB2AD22A2F00993D09 /* MessageData.swift */; };
@@ -51,10 +50,6 @@
 		79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFD2ACDA88700DC6657 /* AWSBedrock */; };
 		79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */; };
 		79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */ = {isa = PBXBuildFile; productRef = 79E5A0012ACDA88700DC6657 /* AWSSTS */; };
-		79E63E1F2AD1F11B00C0880A /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E1E2AD1F11B00C0880A /* Splash */; };
-		79E63E212AD1F11B00C0880A /* SplashHTMLGen in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E202AD1F11B00C0880A /* SplashHTMLGen */; };
-		79E63E252AD1F11B00C0880A /* SplashMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E242AD1F11B00C0880A /* SplashMarkdown */; };
-		79E63E272AD1F11B00C0880A /* SplashTokenizer in Frameworks */ = {isa = PBXBuildFile; productRef = 79E63E262AD1F11B00C0880A /* SplashTokenizer */; };
 		79FD1C262C3777180009E50F /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FD1C252C3777180009E50F /* Markdown.swift */; };
 /* End PBXBuildFile section */
 
@@ -96,7 +91,6 @@
 		79610DBE2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacApp.swift; sourceTree = "<group>"; };
 		79610DC12AD22A2F00993D09 /* BedrockClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BedrockClient.swift; sourceTree = "<group>"; };
 		79610DC22AD22A2F00993D09 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		79610DC52AD22A2F00993D09 /* TextOutputFormat.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextOutputFormat.swift; sourceTree = "<group>"; };
 		79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FirstResponderTextField.swift; sourceTree = "<group>"; };
 		79610DCA2AD22A2F00993D09 /* ChatModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		79610DCB2AD22A2F00993D09 /* MessageData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageData.swift; sourceTree = "<group>"; };
@@ -129,13 +123,9 @@
 				79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */,
 				79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */,
 				794C0A242C9A7800003B6E34 /* MarkdownKit in Frameworks */,
-				79E63E1F2AD1F11B00C0880A /* Splash in Frameworks */,
 				79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */,
-				79E63E272AD1F11B00C0880A /* SplashTokenizer in Frameworks */,
 				798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */,
 				79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */,
-				79E63E252AD1F11B00C0880A /* SplashMarkdown in Frameworks */,
-				79E63E212AD1F11B00C0880A /* SplashHTMLGen in Frameworks */,
 				79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -165,6 +155,7 @@
 				79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */,
 				7907BEA82ACD87A200C4D500 /* Amazon Bedrock Client for MacTests */,
 				7907BEB22ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests */,
+				799703D82D100265009139F1 /* Frameworks */,
 				7907BE952ACD87A100C4D500 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -244,7 +235,6 @@
 				79C7F5EC2AD282EE008FBB35 /* EnvironmentExtensions.swift */,
 				79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */,
 				798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */,
-				79610DC52AD22A2F00993D09 /* TextOutputFormat.swift */,
 				79AFC17D2AD23B4800A75ED3 /* ToggleSidebar.swift */,
 				79D6E6A22C99BFF300314D86 /* GithubTheme.swift */,
 				79FD1C252C3777180009E50F /* Markdown.swift */,
@@ -286,6 +276,13 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		799703D82D100265009139F1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -306,10 +303,6 @@
 				79E59FFD2ACDA88700DC6657 /* AWSBedrock */,
 				79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */,
 				79E5A0012ACDA88700DC6657 /* AWSSTS */,
-				79E63E1E2AD1F11B00C0880A /* Splash */,
-				79E63E202AD1F11B00C0880A /* SplashHTMLGen */,
-				79E63E242AD1F11B00C0880A /* SplashMarkdown */,
-				79E63E262AD1F11B00C0880A /* SplashTokenizer */,
 				798A9CE52AD3AB2E00E9D039 /* Vapor */,
 				79AC78972C31691800BD6FB1 /* AWSSSO */,
 				79AC78992C31691800BD6FB1 /* AWSSSOOIDC */,
@@ -389,7 +382,6 @@
 			mainGroup = 7907BE8B2ACD87A000C4D500;
 			packageReferences = (
 				79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
-				791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */,
 				798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */,
 				794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */,
 			);
@@ -451,7 +443,6 @@
 				7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */,
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,
-				79610DDD2AD22A2F00993D09 /* TextOutputFormat.swift in Sources */,
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
 				79610DED2AD230A200993D09 /* ChatView.swift in Sources */,
 				798A9CE82AD3AB4300E9D039 /* LocalHostServer.swift in Sources */,
@@ -845,14 +836,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/JohnSundell/Splash";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.16.0;
-			};
-		};
 		794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/objecthub/swift-markdownkit";
@@ -914,26 +897,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSSTS;
-		};
-		79E63E1E2AD1F11B00C0880A /* Splash */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */;
-			productName = Splash;
-		};
-		79E63E202AD1F11B00C0880A /* SplashHTMLGen */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */;
-			productName = SplashHTMLGen;
-		};
-		79E63E242AD1F11B00C0880A /* SplashMarkdown */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */;
-			productName = SplashMarkdown;
-		};
-		79E63E262AD1F11B00C0880A /* SplashTokenizer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 791461212AD1EFE000C454DC /* XCRemoteSwiftPackageReference "Splash" */;
-			productName = SplashTokenizer;
 		};
 /* End XCSwiftPackageProductDependency section */
 
