@@ -57,7 +57,7 @@ jobs:
         --app-drop-link 600 185 \
         'Amazon Bedrock Client for Mac.dmg' "$APP_PATH"
 
-    # Upload Artifact
+    # Upload Artifact to GitHub Actions
     - name: Upload Artifact
       uses: actions/upload-artifact@v4  # Updated to v4
       with:

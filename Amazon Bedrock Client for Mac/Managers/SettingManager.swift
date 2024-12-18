@@ -5,9 +5,9 @@
 //  Created by Na, Sanghwa on 2023/10/08.
 //
 
-import SwiftUI
 import Combine
 import Logging
+import SwiftUI
 
 extension Notification.Name {
     static let awsCredentialsChanged = Notification.Name("awsCredentialsChanged")
@@ -17,7 +17,8 @@ class SettingManager: ObservableObject {
     static let shared = SettingManager()
     private var logger = Logger(label: "SettingManager")
     private var fileMonitors: [String: DispatchSourceFileSystemObject] = [:]
-    private let monitoringQueue = DispatchQueue(label: "com.amazonbedrock.fileMonitoring", attributes: .concurrent)
+    private let monitoringQueue = DispatchQueue(
+        label: "com.amazonbedrock.fileMonitoring", attributes: .concurrent)
     
     @Published var selectedRegion: AWSRegion { didSet { saveSettings() } }
     @Published var selectedProfile: String { didSet { saveSettings() } }
@@ -33,43 +34,55 @@ class SettingManager: ObservableObject {
     @Published var systemPrompt: String { didSet { saveSettings() } }
     @Published var isSSOLoggedIn: Bool = false
     @Published var defaultDirectory: String { didSet { saveSettings() } }
-//    @Published var ssoTokenInfo: SSOTokenInfo? {
-//        didSet {
-//            if let ssoTokenInfo = ssoTokenInfo {
-//                if let data = try? JSONEncoder().encode(ssoTokenInfo) {
-//                    UserDefaults.standard.set(data, forKey: "ssoTokenInfo")
-//                }
-//            } else {
-//                UserDefaults.standard.removeObject(forKey: "ssoTokenInfo")
-//            }
-//        }
-//    }
+    //    @Published var ssoTokenInfo: SSOTokenInfo? {
+    //        didSet {
+    //            if let ssoTokenInfo = ssoTokenInfo {
+    //                if let data = try? JSONEncoder().encode(ssoTokenInfo) {
+    //                    UserDefaults.standard.set(data, forKey: "ssoTokenInfo")
+    //                }
+    //            } else {
+    //                UserDefaults.standard.removeObject(forKey: "ssoTokenInfo")
+    //            }
+    //        }
+    //    }
     @Published var virtualProfile: AWSProfile?
+    @Published var defaultModelId: String { didSet { saveSettings() } }
+    @Published var availableModels: [ChatModel] = []
     
     private var cancellables = Set<AnyCancellable>()
     
     private init() {
-        self.selectedRegion = UserDefaults.standard.string(forKey: "selectedRegion").flatMap { AWSRegion(rawValue: $0) } ?? .usEast1
+        self.selectedRegion =
+        UserDefaults.standard.string(forKey: "selectedRegion").flatMap {
+            AWSRegion(rawValue: $0)
+        } ?? .usEast1
         self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
         self.profiles = Self.readAWSProfiles()
-        self.checkForUpdates = UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true
+        self.checkForUpdates =
+        UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true
         self.appearance = UserDefaults.standard.string(forKey: "appearance") ?? "auto"
         self.accentColor = UserDefaults.standard.color(forKey: "accentColor") ?? .systemBlue
         self.sidebarIconSize = UserDefaults.standard.string(forKey: "sidebarIconSize") ?? "Medium"
         self.allowWallpaperTinting = UserDefaults.standard.bool(forKey: "allowWallpaperTinting")
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
-        self.enableDebugLog = UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
+        self.enableDebugLog =
+        UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
         self.systemPrompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? ""
-        self.defaultDirectory = UserDefaults.standard.string(forKey: "defaultDirectory") ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Amazon Bedrock Client").path
-
-//        if let data = UserDefaults.standard.data(forKey: "ssoTokenInfo"),
-//           let tokenInfo = try? JSONDecoder().decode(SSOTokenInfo.self, from: data) {
-//            self.ssoTokenInfo = tokenInfo
-//        } else {
-//            self.ssoTokenInfo = nil
-//        }
-//        
+        self.defaultDirectory =
+        UserDefaults.standard.string(forKey: "defaultDirectory")
+        ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+            "Amazon Bedrock Client"
+        ).path
+        self.defaultModelId = UserDefaults.standard.string(forKey: "defaultModelId") ?? ""
+        
+        //        if let data = UserDefaults.standard.data(forKey: "ssoTokenInfo"),
+        //           let tokenInfo = try? JSONDecoder().decode(SSOTokenInfo.self, from: data) {
+        //            self.ssoTokenInfo = tokenInfo
+        //        } else {
+        //            self.ssoTokenInfo = nil
+        //        }
+        //
         setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
@@ -87,13 +100,16 @@ class SettingManager: ObservableObject {
         UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
         UserDefaults.standard.set(systemPrompt, forKey: "systemPrompt")
         UserDefaults.standard.set(defaultDirectory, forKey: "defaultDirectory")
-
+        UserDefaults.standard.set(defaultModelId, forKey: "defaultModelId")
+        
         logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
     }
     
     private func setupFileMonitoring() {
-        let credentialsURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aws/credentials")
-        let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aws/config")
+        let credentialsURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+            ".aws/credentials")
+        let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+            ".aws/config")
         
         monitorFileChanges(at: credentialsURL)
         monitorFileChanges(at: configURL)
@@ -111,7 +127,9 @@ class SettingManager: ObservableObject {
             return
         }
         
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fileDescriptor, eventMask: [.write, .delete, .rename], queue: monitoringQueue)
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fileDescriptor, eventMask: [.write, .delete, .rename],
+            queue: monitoringQueue)
         source.setEventHandler { [weak self] in
             self?.handleFileChange(at: url)
         }
@@ -153,7 +171,8 @@ class SettingManager: ObservableObject {
         var profiles: [ProfileInfo] = []
         
         // Read regular profiles from ~/.aws/credentials
-        let credentialsProfiles = readProfilesFromFile(path: "~/.aws/credentials", type: .credentials)
+        let credentialsProfiles = readProfilesFromFile(
+            path: "~/.aws/credentials", type: .credentials)
         profiles.append(contentsOf: credentialsProfiles)
         
         // Read SSO profiles from ~/.aws/config
@@ -266,7 +285,8 @@ extension UserDefaults {
     }
     
     func set(_ color: NSColor, forKey key: String) {
-        let colorData = try? NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: false)
+        let colorData = try? NSKeyedArchiver.archivedData(
+            withRootObject: color, requiringSecureCoding: false)
         set(colorData, forKey: key)
     }
 }

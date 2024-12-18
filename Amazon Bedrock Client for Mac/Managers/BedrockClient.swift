@@ -5,23 +5,23 @@
 //  Created by Na, Sanghwa on 2023/10/08.
 //
 
-import Foundation
-import Combine
-import Logging
-import AWSSTS
-import AWSSSO
-import AWSSSOOIDC
 import AWSBedrock
 import AWSBedrockRuntime
 import AWSClientRuntime
-import AwsCommonRuntimeKit
-import SmithyIdentity
 import AWSSDKIdentity
+import AWSSSO
+import AWSSSOOIDC
+import AWSSTS
+import AwsCommonRuntimeKit
+import Combine
+import Foundation
+import Logging
+import SmithyIdentity
 import SwiftUI
 
 class BackendModel: ObservableObject {
     @Published var backend: Backend
-    @Published var alertMessage: String? // Used to trigger alerts in the UI
+    @Published var alertMessage: String?  // Used to trigger alerts in the UI
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(label: "BackendModel")
     @Published var isLoggedIn = false
@@ -31,9 +31,12 @@ class BackendModel: ObservableObject {
             self.backend = try BackendModel.createBackend()
             logger.info("Backend initialized successfully")
         } catch {
-            logger.error("Failed to initialize Backend: \(error.localizedDescription). Using fallback Backend.")
+            logger.error(
+                "Failed to initialize Backend: \(error.localizedDescription). Using fallback Backend."
+            )
             self.backend = Backend.fallbackInstance()
-            alertMessage = "Backend initialization failed: \(error.localizedDescription). Using fallback settings."
+            alertMessage =
+            "Backend initialization failed: \(error.localizedDescription). Using fallback settings."
         }
         setupObservers()
     }
@@ -91,7 +94,9 @@ class BackendModel: ObservableObject {
             self.backend = newBackend
             logger.info("Backend refreshed successfully")
         } catch {
-            logger.error("Failed to refresh Backend: \(error.localizedDescription). Retaining current Backend.")
+            logger.error(
+                "Failed to refresh Backend: \(error.localizedDescription). Retaining current Backend."
+            )
             alertMessage = "Failed to refresh Backend: \(error.localizedDescription)."
         }
     }
@@ -118,7 +123,8 @@ class Backend: Equatable {
         do {
             return try createBedrockRuntimeClient()
         } catch {
-            logger.error("Failed to initialize Bedrock Runtime client: \(error.localizedDescription)")
+            logger.error(
+                "Failed to initialize Bedrock Runtime client: \(error.localizedDescription)")
             fatalError("Unable to initialize Bedrock Runtime client.")
         }
     }()
@@ -132,20 +138,26 @@ class Backend: Equatable {
         self.runtimeEndpoint = runtimeEndpoint
         
         // Find the selected profile from SettingManager
-        if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
+        if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile })
+        {
             // If the profile type is SSO, use SSOAWSCredentialIdentityResolver
             if selectedProfile.type == .sso {
-                self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+                self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(
+                    profileName: profile)
             } else {
                 // Otherwise, it's a standard credentials profile
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(
+                    profileName: profile)
             }
         } else {
             // If profile not found, fallback to default
-            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
+            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(
+                profileName: "default")
         }
-
-        logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
+        
+        logger.info(
+            "Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)"
+        )
     }
     
     /// Creates a fallback instance with default values
@@ -158,7 +170,8 @@ class Backend: Equatable {
                 runtimeEndpoint: ""
             )
         } catch {
-            fatalError("Fallback Backend failed to initialize. Error: \(error.localizedDescription)")
+            fatalError(
+                "Fallback Backend failed to initialize. Error: \(error.localizedDescription)")
         }
     }
     
@@ -169,7 +182,8 @@ class Backend: Equatable {
             signingRegion: self.region,
             endpoint: self.endpoint.isEmpty ? nil : self.endpoint
         )
-        logger.info("Bedrock client created with region: \(self.region), endpoint: \(self.endpoint)")
+        logger.info(
+            "Bedrock client created with region: \(self.region), endpoint: \(self.endpoint)")
         return BedrockClient(config: config)
     }
     
@@ -180,24 +194,27 @@ class Backend: Equatable {
             signingRegion: self.region,
             endpoint: self.runtimeEndpoint.isEmpty ? nil : self.runtimeEndpoint
         )
-        logger.info("Bedrock Runtime client created with region: \(self.region), runtimeEndpoint: \(self.runtimeEndpoint)")
+        logger.info(
+            "Bedrock Runtime client created with region: \(self.region), runtimeEndpoint: \(self.runtimeEndpoint)"
+        )
         return BedrockRuntimeClient(config: config)
     }
     
     static func == (lhs: Backend, rhs: Backend) -> Bool {
-        return lhs.region == rhs.region &&
-        lhs.profile == rhs.profile &&
-        lhs.endpoint == rhs.endpoint &&
-        lhs.runtimeEndpoint == rhs.runtimeEndpoint
+        return lhs.region == rhs.region && lhs.profile == rhs.profile
+        && lhs.endpoint == rhs.endpoint && lhs.runtimeEndpoint == rhs.runtimeEndpoint
     }
     
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy =
+        (modelType == .claude || modelType == .mistral || modelType == .llama2
+         || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         let encodedParams = try self.encode(params, strategy: strategy)
         
-        let request = InvokeModelInput(body: encodedParams, contentType: "application/json", modelId: modelId)
+        let request = InvokeModelInput(
+            body: encodedParams, contentType: "application/json", modelId: modelId)
         
         if let requestJson = String(data: encodedParams, encoding: .utf8) {
             logger.info("Request: \(requestJson)")
@@ -213,23 +230,32 @@ class Backend: Equatable {
         return data
     }
     
-    func invokeModelStream(withId modelId: String, prompt: String) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
+    func invokeModelStream(withId modelId: String, prompt: String) async throws
+    -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error>
+    {
         let modelType = getModelType(modelId)
-        let strategy: JSONEncoder.KeyEncodingStrategy = (modelType == .claude || modelType == .claude3 || modelType == .mistral || modelType == .llama2 || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy =
+        (modelType == .claude || modelType == .claude3 || modelType == .mistral
+         || modelType == .llama2 || modelType == .llama3)
+        ? .convertToSnakeCase : .useDefaultKeys
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         
         let encodedParams = try self.encode(params, strategy: strategy)
-        let request = InvokeModelWithResponseStreamInput(body: encodedParams, contentType: "application/json", modelId: modelId)
+        let request = InvokeModelWithResponseStreamInput(
+            body: encodedParams, contentType: "application/json", modelId: modelId)
         
         if let requestJson = String(data: encodedParams, encoding: .utf8) {
             logger.info("Request: \(requestJson)")
         }
         
-        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
+        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(
+            input: request)
         return output.body ?? AsyncThrowingStream { _ in }
     }
     
-    func invokeClaudeModel(withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?) async throws -> Data {
+    func invokeClaudeModel(
+        withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
+    ) async throws -> Data {
         let requestBody = ClaudeMessageRequest(
             anthropicVersion: "bedrock-2023-05-31",
             maxTokens: 4096,
@@ -245,7 +271,8 @@ class Backend: Equatable {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         let jsonData = try encoder.encode(requestBody)
         
-        let request = InvokeModelInput(body: jsonData, contentType: "application/json", modelId: modelId)
+        let request = InvokeModelInput(
+            body: jsonData, contentType: "application/json", modelId: modelId)
         let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
         
         guard response.contentType == "application/json", let data = response.body else {
@@ -256,7 +283,9 @@ class Backend: Equatable {
         return data
     }
     
-    func invokeClaudeModelStream(withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
+    func invokeClaudeModelStream(
+        withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
+    ) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
         let requestBody = ClaudeMessageRequest(
             anthropicVersion: "bedrock-2023-05-31",
             maxTokens: 4096,
@@ -272,8 +301,10 @@ class Backend: Equatable {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         let jsonData = try encoder.encode(requestBody)
         
-        let request = InvokeModelWithResponseStreamInput(body: jsonData, contentType: "application/json", modelId: modelId)
-        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
+        let request = InvokeModelWithResponseStreamInput(
+            body: jsonData, contentType: "application/json", modelId: modelId)
+        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(
+            input: request)
         
         return output.body ?? AsyncThrowingStream { _ in }
     }
@@ -296,7 +327,7 @@ class Backend: Equatable {
                 "seed": 0,
                 "steps": 50,
                 "samples": 1,
-                "style_preset": "photographic"
+                "style_preset": "photographic",
             ]
         }
         
@@ -311,18 +342,26 @@ class Backend: Equatable {
         let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
         
         guard let responseBody = response.body else {
-            throw NSError(domain: "BedrockRuntime", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response: Empty body"])
+            throw NSError(
+                domain: "BedrockRuntime", code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid response: Empty body"])
         }
         
-        let json = try JSONSerialization.jsonObject(with: responseBody, options: []) as? [String: Any]
+        let json =
+        try JSONSerialization.jsonObject(with: responseBody, options: []) as? [String: Any]
         
         if let images = json?["images"] as? [String], let base64Image = images.first,
-           let imageData = Data(base64Encoded: base64Image) {
+           let imageData = Data(base64Encoded: base64Image)
+        {
             
             // Ultra 모델의 경우 추가 정보 처리
             if isUltra, let finishReasons = json?["finish_reasons"] as? [String?] {
                 if let finishReason = finishReasons.first, finishReason != nil {
-                    throw NSError(domain: "BedrockRuntime", code: 3, userInfo: [NSLocalizedDescriptionKey: "Image generation error: \(finishReason!)"])
+                    throw NSError(
+                        domain: "BedrockRuntime", code: 3,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Image generation error: \(finishReason!)"
+                        ])
                 }
             }
             
@@ -330,26 +369,36 @@ class Backend: Equatable {
         } else if let artifacts = json?["artifacts"] as? [[String: Any]],
                   let firstArtifact = artifacts.first,
                   let base64Image = firstArtifact["base64"] as? String,
-                  let imageData = Data(base64Encoded: base64Image) {
+                  let imageData = Data(base64Encoded: base64Image)
+        {
             
             // 기존 Stable Diffusion (SDXL 포함) 응답 처리
             if let finishReason = firstArtifact["finishReason"] as? String {
                 if finishReason == "ERROR" || finishReason == "CONTENT_FILTERED" {
-                    throw NSError(domain: "BedrockRuntime", code: 3, userInfo: [NSLocalizedDescriptionKey: "Image generation error: \(finishReason)"])
+                    throw NSError(
+                        domain: "BedrockRuntime", code: 3,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Image generation error: \(finishReason)"
+                        ])
                 }
                 print("Stable Diffusion generation - Finish Reason: \(finishReason)")
             }
             
             return imageData
         } else {
-            throw NSError(domain: "BedrockRuntime", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to parse model response"])
+            throw NSError(
+                domain: "BedrockRuntime", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to parse model response"])
         }
     }
     
-    func listFoundationModels(byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
-                              byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType.onDemand,
-                              byOutputModality: BedrockClientTypes.ModelModality? = nil,
-                              byProvider: String? = nil) async -> Result<[BedrockClientTypes.FoundationModelSummary], Error> {
+    func listFoundationModels(
+        byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
+        byInferenceType: BedrockClientTypes.InferenceType? = BedrockClientTypes.InferenceType
+            .onDemand,
+        byOutputModality: BedrockClientTypes.ModelModality? = nil,
+        byProvider: String? = nil
+    ) async -> Result<[BedrockClientTypes.FoundationModelSummary], Error> {
         do {
             let request = ListFoundationModelsInput(
                 byCustomizationType: byCustomizationType,
@@ -363,7 +412,10 @@ class Backend: Equatable {
                 return .success(modelSummaries)
             } else {
                 logger.error("Invalid Bedrock response: \(response)")
-                return .failure(NSError(domain: "BedrockError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Model summaries are missing"]))
+                return .failure(
+                    NSError(
+                        domain: "BedrockError", code: 0,
+                        userInfo: [NSLocalizedDescriptionKey: "Model summaries are missing"]))
             }
         } catch {
             logger.error("Error occurred: \(error)")
@@ -421,7 +473,8 @@ class Backend: Equatable {
                 maxTokenCount: 3072,
                 stopSequences: []
             )
-            return TitanModelParameters(inputText: "User: \(prompt)\n\nBot:", textGenerationConfig: textGenerationConfig)
+            return TitanModelParameters(
+                inputText: "User: \(prompt)\n\nBot:", textGenerationConfig: textGenerationConfig)
         case .titanEmbed:
             return TitanEmbedModelParameters(inputText: prompt)
         case .titanImage:
@@ -429,15 +482,21 @@ class Backend: Equatable {
         case .j2:
             return AI21ModelParameters(prompt: prompt, temperature: 0.5, topP: 0.5, maxTokens: 200)
         case .cohereCommand:
-            return CohereModelParameters(prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
+            return CohereModelParameters(
+                prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
         case .cohereEmbed:
             return CohereEmbedModelParameters(texts: [prompt], inputType: .searchDocument)
         case .mistral:
-            return MistralModelParameters(prompt: "<s>[INST] \(prompt)[\\INST]", maxTokens: 4096, temperature: 0.9, topP: 0.9)
+            return MistralModelParameters(
+                prompt: "<s>[INST] \(prompt)[\\INST]", maxTokens: 4096, temperature: 0.9, topP: 0.9)
         case .llama2:
-            return Llama2ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
+            return Llama2ModelParameters(
+                prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9
+            )
         case .llama3:
-            return Llama3ModelParameters(prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9)
+            return Llama3ModelParameters(
+                prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9
+            )
         case .jambaInstruct:
             return JambaInstructModelParameters(
                 messages: [
@@ -460,13 +519,15 @@ class Backend: Equatable {
         let data = json.data(using: .utf8)!
         return try self.decode(data)
     }
-    private func encode<T: Encodable>(_ value: T, strategy: JSONEncoder.KeyEncodingStrategy = .useDefaultKeys) throws -> Data {
+    private func encode<T: Encodable>(
+        _ value: T, strategy: JSONEncoder.KeyEncodingStrategy = .useDefaultKeys
+    ) throws -> Data {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = strategy  // Use the provided strategy, default to .useDefaultKeys
         return try encoder.encode(value)
     }
     private func encode<T: Encodable>(_ value: T) throws -> String {
-        let data : Data =  try self.encode(value)
+        let data: Data = try self.encode(value)
         return String(data: data, encoding: .utf8) ?? "error when encoding the string"
     }
 }
@@ -487,7 +548,8 @@ extension NSAlert {
 }
 
 enum ModelType {
-    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, unknown
+    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand,
+         cohereEmbed, j2, stableDiffusion, jambaInstruct, unknown
 }
 
 public protocol ModelParameters: Encodable {
@@ -575,9 +637,11 @@ public struct CohereEmbedModelParameters: ModelParameters, Encodable {
     let inputType: EmbedInputType
     let truncate: TruncateOption?
     
-    init(texts: [String],
-         inputType: EmbedInputType,
-         truncate: TruncateOption? = nil) {
+    init(
+        texts: [String],
+        inputType: EmbedInputType,
+        truncate: TruncateOption? = nil
+    ) {
         self.texts = texts
         self.inputType = inputType
         self.truncate = truncate
@@ -634,10 +698,15 @@ struct TitanImageModelParameters: ModelParameters {
     }
     
     // Initialize with default values and the input text
-    init(inputText: String, numberOfImages: Int = 1, quality: String = "standard", cfgScale: Double = 8.0, height: Int = 512, width: Int = 512, seed: Int? = nil) {
+    init(
+        inputText: String, numberOfImages: Int = 1, quality: String = "standard",
+        cfgScale: Double = 8.0, height: Int = 512, width: Int = 512, seed: Int? = nil
+    ) {
         self.taskType = "TEXT_IMAGE"
         self.textToImageParams = TextToImageParams(text: inputText)
-        self.imageGenerationConfig = ImageGenerationConfig(numberOfImages: numberOfImages, quality: quality, cfgScale: cfgScale, height: height, width: width, seed: seed)
+        self.imageGenerationConfig = ImageGenerationConfig(
+            numberOfImages: numberOfImages, quality: quality, cfgScale: cfgScale, height: height,
+            width: width, seed: seed)
     }
 }
 
@@ -778,7 +847,7 @@ extension ClaudeMessageRequest.Message.Content.ImageSource {
         return [
             "type": type,
             "media_type": mediaType,
-            "data": data
+            "data": data,
         ]
     }
 }
@@ -987,14 +1056,13 @@ public struct InvokeCohereEmbedResponse: ModelResponse, Decodable {
 }
 
 public struct InvokeStableDiffusionResponse: ModelResponse, Decodable {
-    public let body: Data // Specify the type here
+    public let body: Data  // Specify the type here
 }
 
 public struct MistralData: Decodable {
     public let text: String
     public let stop_reason: String?
 }
-
 
 public struct InvokeMistralResponse: ModelResponse, Decodable {
     public let outputs: [MistralData]
@@ -1009,7 +1077,7 @@ public struct InvokeLlama3Response: ModelResponse, Decodable {
 }
 
 // MARK: - Errors
-enum STSError: Error  {
+enum STSError: Error {
     case invalidCredentialsResponse(String)
     case invalidAssumeRoleWithWebIdentityResponse(String)
 }

@@ -80,7 +80,8 @@ struct MainView: View {
                 let newOrganizedChatModels = Dictionary(grouping: modelSummaries.map(ChatModel.fromSummary)) { $0.provider }
                 DispatchQueue.main.async {
                     self.organizedChatModels = newOrganizedChatModels
-                    self.selectClaudeModel()
+                    self.selectDefaultModel()
+                    settingManager.availableModels = newOrganizedChatModels.values.flatMap { $0 }
                 }
             case .failure(let error):
                 DispatchQueue.main.async {
@@ -131,6 +132,16 @@ struct MainView: View {
             logger.error("Fetch Models Error occurred, but alertInfo is nil")
         }
         logger.error("Error details: \(String(describing: error))")
+    }
+    
+    private func selectDefaultModel() {
+        let defaultModelId = SettingManager.shared.defaultModelId
+        
+        if let defaultModel = organizedChatModels.values.flatMap({ $0 }).first(where: { $0.id == defaultModelId }) {
+            menuSelection = .chat(defaultModel)
+        } else {
+            selectClaudeModel()
+        }
     }
     
     private func selectClaudeModel() {

@@ -5,9 +5,9 @@
 //  Created by Na, Sanghwa on 2023/10/08.
 //
 
-import SwiftUI
 import Foundation
 import Logging
+import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var settingsManager = SettingManager.shared
@@ -65,7 +65,7 @@ struct MultilineRoundedTextField: View {
     @Binding var text: String
     var placeholder: String
     @FocusState private var isFocused: Bool
-
+    
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Multiline text editor
@@ -74,32 +74,34 @@ struct MultilineRoundedTextField: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 12)
                 .focused($isFocused)
-                .scrollContentBackground(.hidden) // Hide scroll background
-                .background(Color(nsColor: .textBackgroundColor)) // Gray background
+                .scrollContentBackground(.hidden)  // Hide scroll background
+                .background(Color(nsColor: .textBackgroundColor))  // Gray background
                 .cornerRadius(6)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(isFocused ? Color.accentColor : Color.gray.opacity(0.5), lineWidth: isFocused ? 2 : 1)
+                        .stroke(
+                            isFocused ? Color.accentColor : Color.gray.opacity(0.5),
+                            lineWidth: isFocused ? 2 : 1)
                 )
             
             // Placeholder
             if text.isEmpty {
                 Text(placeholder)
                     .font(.body)
-                    .foregroundColor(Color.gray) // Slightly darker placeholder color
+                    .foregroundColor(Color.gray)  // Slightly darker placeholder color
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .allowsHitTesting(false) // Placeholder is non-interactive
+                    .allowsHitTesting(false)  // Placeholder is non-interactive
             }
         }
-        .background(Color(nsColor: .textBackgroundColor)) // Match background to macOS design
+        .background(Color(nsColor: .textBackgroundColor))  // Match background to macOS design
         .cornerRadius(6)
     }
 }
 
 struct GeneralSettingsView: View {
     @ObservedObject private var settingsManager = SettingManager.shared
-//    @StateObject var ssoManager = SSOManager()
+    //    @StateObject var ssoManager = SSOManager()
     @State private var showingLoginSheet = false
     @State private var loginError: String?
     
@@ -122,9 +124,9 @@ struct GeneralSettingsView: View {
                         Text("Logged in with AWS Identity Center")
                         Spacer()
                         Button("Log Out") {
-//                            ssoManager.logout()
+                            //                            ssoManager.logout()
                         }
-//                        .buttonStyle(BorderlessButtonStyle())
+                        //                        .buttonStyle(BorderlessButtonStyle())
                     }
                 } else {
                     Picker("AWS Profile:", selection: $settingsManager.selectedProfile) {
@@ -134,20 +136,31 @@ struct GeneralSettingsView: View {
                     }
                     .pickerStyle(MenuPickerStyle())
                     
-//                    Button(action: {
-//                        showingLoginSheet = true
-//                    }) {
-//                        HStack {
-//                            Image(systemName: "person.crop.circle.badge.plus")
-//                            Text("Sign in with AWS Identity Center")
-//                        }
-//                    }
-//                    .buttonStyle(PlainButtonStyle())
+                    //                    Button(action: {
+                    //                        showingLoginSheet = true
+                    //                    }) {
+                    //                        HStack {
+                    //                            Image(systemName: "person.crop.circle.badge.plus")
+                    //                            Text("Sign in with AWS Identity Center")
+                    //                        }
+                    //                    }
+                    //                    .buttonStyle(PlainButtonStyle())
                 }
                 
                 Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
                 
                 Divider()
+            }
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Default Model")
+                    .font(.headline)
+                
+                Picker("Default Model", selection: $settingsManager.defaultModelId) {
+                    ForEach(settingsManager.availableModels, id: \.id) { model in
+                        Text(model.id).tag(model.id)
+                    }
+                }
             }
             
             VStack(alignment: .leading, spacing: 10) {
@@ -163,9 +176,9 @@ struct GeneralSettingsView: View {
             Spacer()
         }
         .padding()
-//        .sheet(isPresented: $showingLoginSheet) {
-//            AwsIdentityCenterLoginView(isPresented: $showingLoginSheet, loginError: $loginError)
-//        }
+        //        .sheet(isPresented: $showingLoginSheet) {
+        //            AwsIdentityCenterLoginView(isPresented: $showingLoginSheet, loginError: $loginError)
+        //        }
     }
 }
 
@@ -213,20 +226,20 @@ struct AppearanceSettingsView: View {
 
 struct AdvancedSettingsView: View {
     @ObservedObject private var settingsManager = SettingManager.shared
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Advanced Settings")
                 .font(.title2)
                 .bold()
                 .padding(.bottom, 10)
-
+            
             Form {
                 HStack {
                     TextField("Default directory", text: $settingsManager.defaultDirectory)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .disabled(true)
-
+                    
                     Button(action: {
                         let panel = NSOpenPanel()
                         panel.canChooseFiles = false
@@ -234,7 +247,7 @@ struct AdvancedSettingsView: View {
                         panel.allowsMultipleSelection = false
                         panel.canCreateDirectories = true
                         panel.prompt = "Select"
-
+                        
                         if panel.runModal() == .OK, let url = panel.url {
                             settingsManager.defaultDirectory = url.path
                         }
@@ -244,21 +257,21 @@ struct AdvancedSettingsView: View {
                     .buttonStyle(DefaultButtonStyle())
                 }
                 .frame(maxWidth: 400)
-
+                
                 Divider()
-
+                
                 TextField("Bedrock Endpoint:", text: $settingsManager.endpoint)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: 400)
-
+                
                 TextField("Bedrock Runtime Endpoint:", text: $settingsManager.runtimeEndpoint)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: 400)
-
+                
                 Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
             }
             .padding(.top, 10)
-
+            
             Spacer()
         }
         .padding(20)
@@ -277,18 +290,18 @@ struct AdvancedSettingsView: View {
 //    @State var interval: Int = 5
 //    @State var isLoading = false
 //    var logger = Logger(label: "AwsIdentityCenterLoginView")
-//    
+//
 //    var body: some View {
 //        VStack(spacing: 20) {
 //            Text("AWS Identity Center Login")
 //                .font(.headline)
-//            
+//
 //            TextField("AWS SSO Start URL", text: $startUrl)
 //                .textFieldStyle(RoundedBorderTextFieldStyle())
-//            
+//
 //            TextField("AWS SSO Region (e.g., us-west-2)", text: $region)
 //                .textFieldStyle(RoundedBorderTextFieldStyle())
-//            
+//
 //            if isLoading {
 //                ProgressView()
 //                if !authUrl.isEmpty && !userCode.isEmpty {
@@ -313,7 +326,7 @@ struct AdvancedSettingsView: View {
 //                    .buttonStyle(DefaultButtonStyle())
 //                    .disabled(startUrl.isEmpty || region.isEmpty) // Disable button if inputs are empty
 //                }
-//            
+//
 //            if let error = loginError {
 //                Text("Login Error: \(error)")
 //                    .foregroundColor(.red)
@@ -324,33 +337,33 @@ struct AdvancedSettingsView: View {
 //        .padding()
 //        .frame(width: 400)
 //    }
-//    
+//
 //    private func startSSOLogin() {
 //        isLoading = true
 //        loginError = nil
-//        
+//
 //        Task {
 //            do {
 //                let loginInfo = try await ssoManager.startSSOLogin(startUrl: startUrl, region: region)
-//                
+//
 //                // Update variables immediately
 //                self.authUrl = loginInfo.authUrl
 //                self.userCode = loginInfo.userCode
 //                self.deviceCode = loginInfo.deviceCode
 //                self.interval = loginInfo.interval
-//                
+//
 //                if let authURL = URL(string: self.authUrl) {
 //                    NSWorkspace.shared.open(authURL)
 //                } else {
 //                    logger.error("Invalid authUrl: \(self.authUrl)")
 //                }
-//                
+//
 //                logger.info("Using deviceCode: \(self.deviceCode)")
-//                
+//
 //                let tokenResponse = try await ssoManager.pollForTokens(deviceCode: self.deviceCode, interval: self.interval)
-//                
+//
 //                ssoManager.completeLogin(tokenResponse: tokenResponse)
-//                
+//
 //                DispatchQueue.main.async {
 //                    self.isLoading = false
 //                    self.isPresented = false
