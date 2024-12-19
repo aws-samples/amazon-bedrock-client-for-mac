@@ -17,6 +17,7 @@ import Combine
 import Foundation
 import Logging
 import SmithyIdentity
+import SmithyIdentityAPI
 import SwiftUI
 
 class BackendModel: ObservableObject {
@@ -207,9 +208,16 @@ class Backend: Equatable {
     
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
-        let strategy: JSONEncoder.KeyEncodingStrategy =
-        (modelType == .claude || modelType == .mistral || modelType == .llama2
-         || modelType == .llama3) ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (
+            modelType == .claude ||
+            modelType == .mistral ||
+            modelType == .llama2 ||
+            modelType == .llama3 ||
+            modelType == .novaPro ||
+            modelType == .novaLite ||
+            modelType == .novaMicro
+        ) ? .convertToSnakeCase : .useDefaultKeys
+        
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         let encodedParams = try self.encode(params, strategy: strategy)
         
@@ -234,10 +242,17 @@ class Backend: Equatable {
     -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error>
     {
         let modelType = getModelType(modelId)
-        let strategy: JSONEncoder.KeyEncodingStrategy =
-        (modelType == .claude || modelType == .claude3 || modelType == .mistral
-         || modelType == .llama2 || modelType == .llama3)
-        ? .convertToSnakeCase : .useDefaultKeys
+        let strategy: JSONEncoder.KeyEncodingStrategy = (
+            modelType == .claude ||
+            modelType == .claude3 ||
+            modelType == .mistral ||
+            modelType == .llama2 ||
+            modelType == .llama3 ||
+            modelType == .novaPro ||
+            modelType == .novaLite ||
+            modelType == .novaMicro
+        ) ? .convertToSnakeCase : .useDefaultKeys
+        
         let params = getModelParameters(modelType: modelType, prompt: prompt)
         
         let encodedParams = try self.encode(params, strategy: strategy)
@@ -295,6 +310,53 @@ class Backend: Equatable {
             topP: 0.9,
             topK: nil,
             stopSequences: nil
+        )
+                
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let jsonData = try encoder.encode(requestBody)
+        
+        let request = InvokeModelWithResponseStreamInput(body: jsonData, contentType: "application/json", modelId: modelId)
+        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
+        
+        return output.body ?? AsyncThrowingStream { _ in }
+    }
+        
+    //    MARK: -- Invoke Nova Model
+    func invokeNovaModel(withId modelId: String, messages: [NovaModelParameters.Message], systemPrompt: String?) async throws -> Data {
+        let requestBody = NovaModelParameters(
+            system: systemPrompt.map { [NovaModelParameters.SystemMessage(text: $0)] },
+            messages: messages
+        )
+        
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let jsonData = try encoder.encode(requestBody)
+        
+        let request = InvokeModelInput(
+            body: jsonData,
+            contentType: "application/json",
+            modelId: modelId
+        )
+        
+        if let requestJson = String(data: jsonData, encoding: .utf8) {
+            logger.info("[BedrockClient] Nova Request: \(requestJson)")
+        }
+        
+        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
+        
+        guard response.contentType == "application/json", let data = response.body else {
+            logger.error("Invalid Bedrock response: \(response)")
+            throw BedrockRuntimeError.invalidResponse(response.body)
+        }
+        
+        return data
+    }
+    
+    func invokeNovaModelStream(withId modelId: String, messages: [NovaModelParameters.Message], systemPrompt: String?) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Error> {
+        let requestBody = NovaModelParameters(
+            system: systemPrompt.map { [NovaModelParameters.SystemMessage(text: $0)] },
+            messages: messages
         )
         
         let encoder = JSONEncoder()
@@ -470,6 +532,12 @@ class Backend: Equatable {
             return .titanImage
         } else if modelName.hasPrefix("titan") {
             return .titan
+        } else if modelName.hasPrefix("nova-pro"){
+            return .novaPro
+        } else if modelName.hasPrefix("nova-lite"){
+            return .novaLite
+        } else if modelName.hasPrefix("nova-micro"){
+            return .novaMicro
         } else if modelName.hasPrefix("nova-canvas") {
             return .novaCanvas
         } else if modelName.hasPrefix("j2") {
@@ -511,6 +579,11 @@ class Backend: Equatable {
             return TitanEmbedModelParameters(inputText: prompt)
         case .titanImage:
             return TitanImageModelParameters(inputText: prompt)
+        case .novaPro, .novaLite, .novaMicro:
+            // ADDED Amazon Nova ModelParameters. https://docs.aws.amazon.com/nova/latest/userguide/invoke.html
+            let message = NovaModelParameters.Message(role: "user", content: [NovaModelParameters.Message.MessageContent(text: prompt)])
+            let systemMessage = NovaModelParameters.SystemMessage(text: "You are a helpful AI assistant.") // Optional: Add system message if needed
+            return NovaModelParameters(system: [systemMessage], messages: [message])
         case .novaCanvas:
             return NovaCanvasModelParameters(
                 taskType: "TEXT_IMAGE",
@@ -585,8 +658,7 @@ extension NSAlert {
 }
 
 enum ModelType {
-    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand,
-         cohereEmbed, j2, stableDiffusion, jambaInstruct, novaCanvas, unknown
+    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, unknown
 }
 
 public protocol ModelParameters: Encodable {
@@ -1011,6 +1083,103 @@ public struct Llama3ModelParameters: ModelParameters {
     }
 }
 
+// MARK: - Amazon Nova Model Parameters
+public struct NovaModelParameters: ModelParameters {
+    public let system: [SystemMessage]?
+    public let messages: [Message]
+    public let inferenceConfig: InferenceConfig?
+    
+    public struct SystemMessage: Codable {
+        public let text: String
+        
+        public init(text: String) {
+            self.text = text
+        }
+    }
+    
+    public struct Message: Codable {
+        public let role: String
+        public let content: [MessageContent]
+        
+        public init(role: String, content: [MessageContent]) {
+            self.role = role
+            self.content = content
+        }
+        
+        public struct MessageContent: Codable {
+            public var text: String?
+            public var image: ImageContent?
+            
+            public init(text: String? = nil, image: ImageContent? = nil) {
+                self.text = text
+                self.image = image
+            }
+            
+            public struct ImageContent: Codable {
+                public let format: ImageFormat
+                public let source: ImageSource
+                
+                public init(format: ImageFormat, source: ImageSource) {
+                    self.format = format
+                    self.source = source
+                }
+                
+                public enum ImageFormat: String, Codable {
+                    case jpeg, png, gif, webp
+                }
+                
+                public struct ImageSource: Codable {
+                    public let bytes: String
+                    
+                    public init(bytes: String) {
+                        self.bytes = bytes
+                    }
+                }
+            }
+        }
+    }
+    
+    public struct InferenceConfig: Codable {
+        public let maxNewTokens: Int?
+        public let temperature: Float?
+        public let topP: Float?
+        public let topK: Int?
+        public let stopSequences: [String]?
+        
+        enum CodingKeys: String, CodingKey {
+            case maxNewTokens = "max_new_tokens"
+            case temperature
+            case topP = "top_p"
+            case topK = "top_k"
+            case stopSequences = "stop_sequences"
+        }
+        
+        public init(
+            maxNewTokens: Int? = nil,
+            temperature: Float? = nil,
+            topP: Float? = nil,
+            topK: Int? = nil,
+            stopSequences: [String]? = nil
+        ) {
+            self.maxNewTokens = maxNewTokens
+            self.temperature = temperature
+            self.topP = topP
+            self.topK = topK
+            self.stopSequences = stopSequences
+        }
+    }
+    
+    public init(
+        system: [SystemMessage]? = nil,
+        messages: [Message],
+        inferenceConfig: InferenceConfig? = nil
+    ) {
+        self.system = system
+        self.messages = messages
+        self.inferenceConfig = inferenceConfig
+    }
+}
+
 // MARK: - TitanModelParameters
 
 public struct TitanModelParameters: ModelParameters {
@@ -1070,6 +1239,37 @@ struct ClaudeMessageResponse: Codable {
         case id, model, type, role, content
         case stopReason = "stop_reason"
         case stopSequence = "stop_sequence"
+        case usage
+    }
+}
+
+public struct InvokeNovaResponse: ModelResponse, Decodable {
+    public let output: Output
+    public let stopReason: String
+    public let usage: Usage
+    
+    public struct Output: Decodable {
+        public let message: Message
+    }
+    
+    public struct Message: Decodable {
+        public let content: [Content]
+        public let role: String
+        
+        public struct Content: Decodable {
+            public let text: String
+        }
+    }
+    
+    public struct Usage: Decodable {
+        public let inputTokens: Int
+        public let outputTokens: Int
+        public let totalTokens: Int
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case output
+        case stopReason = "stopReason"
         case usage
     }
 }

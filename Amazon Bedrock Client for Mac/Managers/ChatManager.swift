@@ -117,6 +117,7 @@ class ChatManager: ObservableObject {
         deleteMessagesFile(for: chatId)
         deleteHistoryFile(for: chatId)
         deleteClaudeHistoryFile(for: chatId)
+        deleteNovaHistoryFile(for: chatId) // Add support for deleting Nova History
         
         // Return the most recent chat or a new chat
         if let mostRecentChat = chats.sorted(by: { $0.lastMessageDate > $1.lastMessageDate }).first {
@@ -342,7 +343,7 @@ extension ChatManager {
     }
     
     func cleanupClaudeHistory(for chatId: String) {
-        var history = getClaudeHistory(for: chatId)
+        let history = getClaudeHistory(for: chatId)
         var cleanedHistory: [ClaudeMessageRequest.Message] = []
         var lastRole: String?
         
@@ -360,7 +361,81 @@ extension ChatManager {
     }
 }
 
+// MARK: - Nova History Management Extensions
+
 extension ChatManager {
+    // Add new file URL getter for Nova history
+    private func getNovaHistoryFileURL(chatId: String) -> URL {
+        return getBaseDirectory().appendingPathComponent("history/\(chatId)_nova_history.json")
+    }
+    
+    // Save Nova history
+    private func saveNovaHistoryToFile(chatId: String, history: [NovaModelParameters.Message]) {
+        let fileURL = getNovaHistoryFileURL(chatId: chatId)
+        do {
+            let data = try JSONEncoder().encode(history)
+            try data.write(to: fileURL)
+        } catch {
+            print("Failed to save Nova history: \(error)")
+        }
+    }
+    
+    // Load Nova history
+    private func loadNovaHistoryFromFile(chatId: String) -> [NovaModelParameters.Message] {
+        let fileURL = getNovaHistoryFileURL(chatId: chatId)
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return try JSONDecoder().decode([NovaModelParameters.Message].self, from: data)
+        } catch {
+            print("Failed to load Nova history: \(error)")
+            return []
+        }
+    }
+    
+    // Public functions for Nova history management
+    func getNovaHistory(for chatId: String) -> [NovaModelParameters.Message] {
+        return loadNovaHistoryFromFile(chatId: chatId)
+    }
+    
+    func addNovaHistory(_ message: NovaModelParameters.Message, for chatId: String) {
+        var history = getNovaHistory(for: chatId)
+        
+        // If the new message is from the "user", remove all "user" messages after the last "assistant" message
+        if message.role == "user" {
+            while let lastMessage = history.last, lastMessage.role == "user" {
+                history.removeLast()
+            }
+        }
+        
+        // Add the new message
+        history.append(message)
+        
+        // Save the modified history
+        saveNovaHistoryToFile(chatId: chatId, history: history)
+    }
+    
+    func cleanupNovaHistory(for chatId: String) {
+        let history = getNovaHistory(for: chatId)
+        var cleanedHistory: [NovaModelParameters.Message] = []
+        var lastRole: String?
+        
+        for message in history {
+            if message.role != lastRole {
+                cleanedHistory.append(message)
+                lastRole = message.role
+            } else if message.role == "user" {
+                // If same role appears consecutively, replace only "user" message with latest
+                cleanedHistory[cleanedHistory.count - 1] = message
+            }
+        }
+        saveNovaHistoryToFile(chatId: chatId, history: cleanedHistory)
+    }
+    
+}
+
+// MARK: - Update Existing Functions to Handle Nova
+extension ChatManager {
+    
     func getChatModel(for chatId: String) -> ChatModel? {
         return chats.first { $0.chatId == chatId }
     }
@@ -379,6 +454,13 @@ extension ChatManager {
         let fileURL = getClaudeHistoryFileURL(chatId: chatId)
         try? fileManager.removeItem(at: fileURL)
     }
+    
+    // Update delete functions to include Nova history
+    private func deleteNovaHistoryFile(for chatId: String) {
+        let fileURL = getNovaHistoryFileURL(chatId: chatId)
+        try? fileManager.removeItem(at: fileURL)
+    }
+    
 }
 
 extension ChatManager {

@@ -40,7 +40,7 @@ class ChatViewModel: ObservableObject {
         
         let key = "isStreamingEnabled_\(chatId)"
         let savedValue = UserDefaults.standard.bool(forKey: key)
-        let defaultValue = model.id.contains("mistral") || model.id.contains("claude") || model.id.contains("llama")
+        let defaultValue = model.id.contains("mistral") || model.id.contains("claude") || model.id.contains("llama") || model.id.contains("nova")
         self.isStreamingEnabled = savedValue ? savedValue : defaultValue
         
         self.selectedPlaceholder = ChatViewModel.placeholderMessages.randomElement() ?? "No messages"
@@ -68,7 +68,7 @@ class ChatViewModel: ObservableObject {
     private func setupStreamingEnabled() {
         let key = "isStreamingEnabled_\(chatId)"
         let savedValue = UserDefaults.standard.bool(forKey: key)
-        let defaultValue = chatModel.id.contains("mistral") || chatModel.id.contains("claude") || chatModel.id.contains("llama")
+        let defaultValue = chatModel.id.contains("mistral") || chatModel.id.contains("claude") || chatModel.id.contains("llama") || chatModel.id.contains("nova")
         self.isStreamingEnabled = savedValue ? savedValue : defaultValue
     }
     
@@ -125,7 +125,11 @@ class ChatViewModel: ObservableObject {
         do {
             if chatModel.id.contains("claude-3") {
                 try await handleClaudeMessage(userMessage)
-            } else {
+            }
+            else if chatModel.id.contains("nova-pro") || chatModel.id.contains("nova-lite") {
+                try await handleNovaMessage(userMessage) // Add this case
+            }
+            else {
                 try await handleStandardMessage(userMessage)
             }
         } catch {
@@ -175,6 +179,92 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    // MARK: -- Step 3: (AMAZON NOVA MODEL SPECIFIC)
+    // MARK: -- Handle Nova Message
+    private func handleNovaMessage(_ userMessage: MessageData) async throws {
+        let contentBlocks = createNovaContentBlocks(from: userMessage)
+        let message = NovaModelParameters.Message(role: "user", content: contentBlocks)
+        
+        // Use Nova-specific history management
+        chatManager.addNovaHistory(message, for: chatId)
+        
+        // Get Nova message history
+        let novaMessages = chatManager.getNovaHistory(for: chatId)
+        
+        if isStreamingEnabled {
+            try await invokeNovaModelStream(novaMessages: novaMessages)
+        } else {
+            try await invokeNovaModel(novaMessages: novaMessages)
+        }
+    }
+    
+    private func convertClaudeToNovaMessage(_ claudeMessage: ClaudeMessageRequest.Message) -> NovaModelParameters.Message {
+        let novaContents = claudeMessage.content.map { claudeContent -> NovaModelParameters.Message.MessageContent in
+            if claudeContent.type == "text" {
+                return NovaModelParameters.Message.MessageContent(
+                    text: claudeContent.text
+                )
+            } else if claudeContent.type == "image",
+                      let source = claudeContent.source {
+                return NovaModelParameters.Message.MessageContent(
+                    image: NovaModelParameters.Message.MessageContent.ImageContent(
+                        format: .jpeg,
+                        source: NovaModelParameters.Message.MessageContent.ImageContent.ImageSource(
+                            bytes: source.data
+                        )
+                    )
+                )
+            }
+            // Default fallback
+            return NovaModelParameters.Message.MessageContent(text: "")
+        }
+        
+        return NovaModelParameters.Message(
+            role: claudeMessage.role,
+            content: novaContents
+        )
+    }
+
+    // Helper function to create Nova content blocks
+    private func createNovaContentBlocks(from message: MessageData) -> [NovaModelParameters.Message.MessageContent] {
+        var contents: [NovaModelParameters.Message.MessageContent] = []
+        
+        // Add text content if present
+        if !message.text.isEmpty {
+            contents.append(NovaModelParameters.Message.MessageContent(
+                text: message.text
+            ))
+        }
+        
+        // Add image content if present
+        if let imageBase64Strings = message.imageBase64Strings {
+            for (index, base64String) in imageBase64Strings.enumerated() {
+                let fileExtension = sharedImageDataSource.fileExtensions.indices.contains(index)
+                    ? sharedImageDataSource.fileExtensions[index].lowercased()
+                    : "jpeg"
+                
+                let format: NovaModelParameters.Message.MessageContent.ImageContent.ImageFormat
+                switch fileExtension {
+                    case "jpg", "jpeg": format = .jpeg
+                    case "png": format = .png
+                    case "gif": format = .gif
+                    case "webp": format = .webp
+                    default: format = .jpeg
+                }
+                
+                contents.append(NovaModelParameters.Message.MessageContent(
+                    image: NovaModelParameters.Message.MessageContent.ImageContent(
+                        format: format,
+                        source: NovaModelParameters.Message.MessageContent.ImageContent.ImageSource(
+                            bytes: base64String
+                        )
+                    )
+                ))
+            }
+        }
+        return contents
+    }
+
     private func handleStandardMessage(_ userMessage: MessageData) async throws {
         var history = chatManager.getHistory(for: chatId)
         let trimmedHistory = trimHistory(history)
@@ -235,6 +325,69 @@ class ChatViewModel: ObservableObject {
         return prompt
     }
     
+    /// Invokes the Nova model (Streaming)
+    func invokeNovaModelStream(novaMessages: [NovaModelParameters.Message]) async throws {
+        var isFirstChunk = true
+        let modelId = chatModel.id
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let response = try await backendModel.backend.invokeNovaModelStream(
+            withId: modelId,
+            messages: novaMessages,
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+        )
+        
+        var streamedText = ""
+        
+        for try await event in response {
+            switch event {
+            case .chunk(let part):
+                guard let jsonObject = try JSONSerialization.jsonObject(with: part.bytes!, options: []) as? [String: Any] else {
+                    print("Failed to decode JSON chunk")
+                    continue
+                }
+                
+                // Debug print
+                print("Received chunk:", jsonObject)
+                
+                // Transform Nova's response format to match the expected format for handleContentBlockDelta
+                if let contentBlockDelta = jsonObject["contentBlockDelta"] as? [String: Any],
+                   let delta = contentBlockDelta["delta"] as? [String: Any],
+                   let text = delta["text"] as? String {
+                    streamedText += text
+                    
+                    // Create a transformed jsonObject that matches the expected format
+                    let transformedDelta: [String: Any] = [
+                        "delta": [
+                            "type": "text_delta",
+                            "text": text
+                        ]
+                    ]
+                    
+                    handleContentBlockDelta(transformedDelta, isFirstChunk: &isFirstChunk)
+                }
+                
+            case .sdkUnknown(let unknown):
+                print("Unknown SDK event:", unknown)
+            }
+        }
+        
+        let assistantMessage = MessageData(
+            id: UUID(),
+            text: streamedText.trimmingCharacters(in: .whitespacesAndNewlines),
+            user: chatModel.name,
+            isError: false,
+            sentTime: Date()
+        )
+        chatManager.addMessage(assistantMessage, for: chatId)
+        
+        let assistantNovaMessage = NovaModelParameters.Message(
+            role: "assistant",
+            content: [NovaModelParameters.Message.MessageContent(text: assistantMessage.text)]
+        )
+        chatManager.addNovaHistory(assistantNovaMessage, for: chatId)
+    }
+
     func invokeClaudeModelStream(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         var isFirstChunk = true
         let modelId = chatModel.id
@@ -342,6 +495,40 @@ class ChatViewModel: ObservableObject {
             chatManager.addClaudeHistory(assistantClaudeMessage, for: chatId)
         }
     }
+
+    // MARK: -- Invoke Nova Model
+    /// Invokes the Nova model (Non-Streaming)
+    func invokeNovaModel(novaMessages: [NovaModelParameters.Message]) async throws {
+        let modelId = chatModel.id
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let data = try await backendModel.backend.invokeNovaModel(
+            withId: modelId,
+            messages: novaMessages,
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+        )
+        
+        let response = try JSONDecoder().decode(InvokeNovaResponse.self, from: data)
+        
+        if let firstText = response.output.message.content.first?.text {
+            let assistantMessage = MessageData(
+                id: UUID(),
+                text: firstText.trimmingCharacters(in: .whitespacesAndNewlines),
+                user: chatModel.name,
+                isError: false,
+                sentTime: Date()
+            )
+            messages.append(assistantMessage)
+            chatManager.addMessage(assistantMessage, for: chatId)
+            
+            // Add assistant message to Nova history
+            let assistantNovaMessage = NovaModelParameters.Message(
+                role: "assistant",
+                content: [NovaModelParameters.Message.MessageContent(text: assistantMessage.text)]
+            )
+            chatManager.addNovaHistory(assistantNovaMessage, for: chatId) // Add NovaHistory
+        }
+    }
     
     private func invokeModelStream(prompt: String) async throws {
         var isFirstChunk = true
@@ -380,6 +567,12 @@ class ChatViewModel: ObservableObject {
     private func extractTextFromChunk(_ jsonObject: Any, modelType: ModelType) -> String? {
         if let dict = jsonObject as? [String: Any] {
             switch modelType {
+            case .novaPro, .novaLite, .novaMicro:
+                if let contentBlockDelta = dict["contentBlockDelta"] as? [String: Any],
+                   let delta = contentBlockDelta["delta"] as? [String: Any],
+                   let text = delta["text"] as? String {
+                    return text
+                }
             case .titan:
                 return dict["outputText"] as? String
             case .claude:
@@ -452,7 +645,10 @@ class ChatViewModel: ObservableObject {
         case .claude:
             let response = try backendModel.backend.decode(data) as InvokeClaudeResponse
             assistantMessage = MessageData(id: UUID(), text: response.completion.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
-            
+        case .novaPro, .novaLite, .novaMicro:
+            let response = try backendModel.backend.decode(data) as InvokeNovaResponse
+            let text = response.output.message.content.first?.text ?? "No response text found in Nova model output." // Add Message Data
+            assistantMessage = MessageData(id: UUID(), text: text.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
         case .titan:
             let response = try backendModel.backend.decode(data) as InvokeTitanResponse
             assistantMessage = MessageData(id: UUID(), text: response.results[0].outputText.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
