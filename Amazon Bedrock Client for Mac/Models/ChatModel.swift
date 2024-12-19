@@ -46,4 +46,16 @@ class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
             lastMessageDate: Date()
         )
     }
+    
+    static func fromInferenceProfile(_ profileSummary: BedrockClientTypes.InferenceProfileSummary) -> ChatModel {
+        return ChatModel(
+            id: profileSummary.inferenceProfileArn ?? "Unknown ARN",  // Provide default if nil
+            chatId: UUID().uuidString,  // Generate unique chatId
+            name: profileSummary.inferenceProfileName ?? "Unknown Profile",  // Provide default if nil
+            title: "Inference Profile: \(profileSummary.inferenceProfileName ?? "Unknown")",  // Provide default if nil
+            description: profileSummary.description ?? "No description available",  // Provide default if nil
+            provider: profileSummary.type?.rawValue ?? "Unknown Type",  // Use rawValue or default if nil
+            lastMessageDate: profileSummary.updatedAt ?? Date()  // Use current date as default
+        )
+    }
 }

@@ -466,6 +466,11 @@ class ChatViewModel: ObservableObject {
             try handleTitanImageResponse(response)
             return // 이미지 응답은 별도로 처리되므로 여기서 반환
             
+        case .novaCanvas:
+            let response = try backendModel.backend.decode(data) as InvokeNovaCanvasResponse
+            try handleNovaCanvasResponse(response)
+            return // 이미지 응답은 별도로 처리되므로 여기서 반환
+            
         case .titanEmbed:
             let response = try backendModel.backend.decode(data) as InvokeTitanEmbedResponse
             assistantMessage = MessageData(id: UUID(), text: response.embedding.map({"\($0)"}).joined(separator: ","), user: chatModel.name, isError: false, sentTime: Date())
@@ -541,6 +546,44 @@ class ChatViewModel: ObservableObject {
                 chatManager.addMessage(imageMessage, for: chatId)
                 
                 // 이미지 응답에 대한 히스토리 업데이트
+                var history = chatManager.getHistory(for: chatId)
+                history += "\nAssistant: [Generated Image]\n"
+                chatManager.setHistory(history, for: chatId)
+            } else {
+                throw NSError(domain: "ImageEncodingError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to encode image filename"])
+            }
+        } catch {
+            throw error
+        }
+    }
+    
+    private func handleNovaCanvasResponse(_ response: InvokeNovaCanvasResponse) throws {
+        // 에러 필드가 있으면 예외 처리
+        if let errorMessage = response.error, !errorMessage.isEmpty {
+            throw NSError(domain: "NovaCanvasError", code: 0, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+        }
+
+        guard let image = response.images.first else {
+            throw NSError(domain: "NovaCanvasError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No images returned"])
+        }
+
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"
+        let timestamp = formatter.string(from: now)
+        let fileName = "\(timestamp).png"
+        let tempDir = URL(fileURLWithPath: settingManager.defaultDirectory)
+        let fileURL = tempDir.appendingPathComponent(fileName)
+        
+        do {
+            try image.write(to: fileURL)
+            
+            if let encoded = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                let markdownImage = "![](http://localhost:8080/\(encoded))"
+                let imageMessage = MessageData(id: UUID(), text: markdownImage, user: chatModel.name, isError: false, sentTime: Date())
+                messages.append(imageMessage)
+                chatManager.addMessage(imageMessage, for: chatId)
+                
                 var history = chatManager.getHistory(for: chatId)
                 history += "\nAssistant: [Generated Image]\n"
                 chatManager.setHistory(history, for: chatId)

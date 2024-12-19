@@ -423,6 +423,36 @@ class Backend: Equatable {
         }
     }
     
+    func listInferenceProfiles(
+        maxResults: Int? = nil,
+        nextToken: String? = nil,
+        typeEquals: BedrockClientTypes.InferenceProfileType? = nil
+    ) async throws -> [BedrockClientTypes.InferenceProfileSummary] {
+        do {
+            // Prepare the request input
+            let input = AWSBedrock.ListInferenceProfilesInput(
+                maxResults: maxResults,
+                nextToken: nextToken,
+                typeEquals: typeEquals
+            )
+            
+            // Execute the API call
+            let response = try await self.bedrockClient.listInferenceProfiles(input: input)
+            
+            // Validate and process the response
+            guard let summaries = response.inferenceProfileSummaries else {
+                logger.warning("No inference profiles found in the response.")
+                return []
+            }
+            
+            logger.info("Fetched \(summaries.count) inference profiles.")
+            return summaries
+        } catch {
+            logger.error("Failed to fetch inference profiles: \(error.localizedDescription)")
+            throw BedrockError.invalidResponse(error.localizedDescription)
+        }
+    }
+    
     /// Helper function to determine the model type based on modelId
     func getModelType(_ modelId: String) -> ModelType {
         let parts = modelId.split(separator: ".")
@@ -440,6 +470,8 @@ class Backend: Equatable {
             return .titanImage
         } else if modelName.hasPrefix("titan") {
             return .titan
+        } else if modelName.hasPrefix("nova-canvas") {
+            return .novaCanvas
         } else if modelName.hasPrefix("j2") {
             return .j2
         } else if modelName.hasPrefix("command") {
@@ -479,6 +511,11 @@ class Backend: Equatable {
             return TitanEmbedModelParameters(inputText: prompt)
         case .titanImage:
             return TitanImageModelParameters(inputText: prompt)
+        case .novaCanvas:
+            return NovaCanvasModelParameters(
+                taskType: "TEXT_IMAGE",
+                text: prompt
+            )
         case .j2:
             return AI21ModelParameters(prompt: prompt, temperature: 0.5, topP: 0.5, maxTokens: 200)
         case .cohereCommand:
@@ -549,7 +586,7 @@ extension NSAlert {
 
 enum ModelType {
     case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand,
-         cohereEmbed, j2, stableDiffusion, jambaInstruct, unknown
+         cohereEmbed, j2, stableDiffusion, jambaInstruct, novaCanvas, unknown
 }
 
 public protocol ModelParameters: Encodable {
@@ -707,6 +744,49 @@ struct TitanImageModelParameters: ModelParameters {
         self.imageGenerationConfig = ImageGenerationConfig(
             numberOfImages: numberOfImages, quality: quality, cfgScale: cfgScale, height: height,
             width: width, seed: seed)
+    }
+}
+
+struct NovaCanvasModelParameters: ModelParameters {
+    var taskType: String
+    var textToImageParams: TextToImageParams
+    var imageGenerationConfig: ImageGenerationConfig
+
+    struct TextToImageParams: Codable {
+        var text: String
+        var negativeText: String?
+    }
+
+    struct ImageGenerationConfig: Codable {
+        var width: Int
+        var height: Int
+        var quality: String
+        var cfgScale: Float
+        var seed: Int
+        var numberOfImages: Int
+    }
+
+    init(
+        taskType: String = "TEXT_IMAGE",
+        text: String,
+        negativeText: String? = nil,
+        width: Int = 1024,
+        height: Int = 1024,
+        quality: String = "premium",
+        cfgScale: Float = 8.0,
+        seed: Int = 0,
+        numberOfImages: Int = 1
+    ) {
+        self.taskType = taskType
+        self.textToImageParams = TextToImageParams(text: text, negativeText: negativeText)
+        self.imageGenerationConfig = ImageGenerationConfig(
+            width: width,
+            height: height,
+            quality: quality,
+            cfgScale: cfgScale,
+            seed: seed,
+            numberOfImages: numberOfImages
+        )
     }
 }
 
@@ -1004,6 +1084,37 @@ public struct InvokeTitanEmbedResponse: ModelResponse, Decodable {
 
 public struct InvokeTitanImageResponse: ModelResponse, Decodable {
     public let images: [Data]
+}
+
+public struct InvokeNovaCanvasResponse: ModelResponse, Decodable {
+    public let images: [Data]
+    public let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case images
+        case error
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Decode base64-encoded images and convert them to Data
+        let base64Images = try container.decode([String].self, forKey: .images)
+        self.images = try base64Images.map { base64Str in
+            guard let imageData = Data(base64Encoded: base64Str) else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: container.codingPath,
+                        debugDescription: "Invalid base64 image string."
+                    )
+                )
+            }
+            return imageData
+        }
+
+        // Decode optional error field
+        self.error = try container.decodeIfPresent(String.self, forKey: .error)
+    }
 }
 
 public struct InvokeTitanResult: Decodable {

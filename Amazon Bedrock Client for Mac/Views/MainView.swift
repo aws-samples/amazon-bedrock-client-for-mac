@@ -74,16 +74,41 @@ struct MainView: View {
     private func fetchModels() {
         Task {
             print("Fetching models...")
-            let result = await backendModel.backend.listFoundationModels()
-            switch result {
-            case .success(let modelSummaries):
-                let newOrganizedChatModels = Dictionary(grouping: modelSummaries.map(ChatModel.fromSummary)) { $0.provider }
-                DispatchQueue.main.async {
-                    self.organizedChatModels = newOrganizedChatModels
-                    self.selectDefaultModel()
-                    settingManager.availableModels = newOrganizedChatModels.values.flatMap { $0 }
+            
+            // Fetch foundation models and inference profiles concurrently
+            async let foundationModelsResult = backendModel.backend.listFoundationModels()
+            async let inferenceProfilesResult = backendModel.backend.listInferenceProfiles()
+            
+            do {
+                // Wait for both results
+                let (foundationModels, inferenceProfiles) = try await (
+                    foundationModelsResult,
+                    inferenceProfilesResult
+                )
+                
+                // Process foundation models
+                let foundationChatModels = Dictionary(
+                    grouping: try foundationModels.get().map(ChatModel.fromSummary)
+                ) { $0.provider }
+                
+                // Process inference profiles
+                let inferenceChatModels = Dictionary(
+                    grouping: inferenceProfiles.map { profileSummary in
+                        ChatModel.fromInferenceProfile(profileSummary)
+                    }
+                ) { $0.provider }
+                
+                // Merge both dictionaries
+                let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
+                    current
                 }
-            case .failure(let error):
+                
+                DispatchQueue.main.async {
+                    self.organizedChatModels = mergedChatModels
+                    self.selectDefaultModel()
+                    settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
+                }
+            } catch {
                 DispatchQueue.main.async {
                     self.handleFetchModelsError(error)
                 }
