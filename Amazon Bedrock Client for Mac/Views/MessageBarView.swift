@@ -96,7 +96,7 @@ struct MessageBarView: View {
     private var inputArea: some View {
         FirstResponderTextView(
             text: $userInput,
-            isDisabled: $isLoading,
+            isDisabled: .constant(false),
             calculatedHeight: $calculatedHeight,
             onCommit: {             if !userInput.isEmpty {
                 Task { await sendMessage() }

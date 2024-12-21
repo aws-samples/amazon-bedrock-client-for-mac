@@ -7,9 +7,10 @@
 import SwiftUI
 import Combine
 
-struct ScrollViewOffsetPreferenceKey: PreferenceKey {
+/// A preference key that stores the vertical position of the bottom anchor in global space.
+struct BottomAnchorPreferenceKey: PreferenceKey {
     typealias Value = CGFloat
-    static var defaultValue = CGFloat.zero
+    static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
@@ -20,12 +21,18 @@ struct ChatView: View {
     @StateObject private var sharedImageDataSource = SharedImageDataSource()
     @ObservedObject var backendModel: BackendModel
     
-    @State private var isUserScrolling = false
-    @State private var previousOffset: CGFloat = 0
+    /// Tracks if the user is currently at the bottom of the message list
+    @State private var isAtBottom: Bool = true
     
     init(chatId: String, backendModel: BackendModel) {
         let sharedImageDataSource = SharedImageDataSource()
-        _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, backendModel: backendModel, sharedImageDataSource: sharedImageDataSource))
+        _viewModel = StateObject(
+            wrappedValue: ChatViewModel(
+                chatId: chatId,
+                backendModel: backendModel,
+                sharedImageDataSource: sharedImageDataSource
+            )
+        )
         _sharedImageDataSource = StateObject(wrappedValue: sharedImageDataSource)
         self._backendModel = ObservedObject(wrappedValue: backendModel)
     }
@@ -44,54 +51,117 @@ struct ChatView: View {
         .onAppear(perform: viewModel.loadInitialData)
     }
     
+    /// Displays a placeholder if there are no messages.
     private var placeholderView: some View {
         VStack(alignment: .center) {
             if viewModel.messages.isEmpty {
                 Spacer()
-                Text(viewModel.selectedPlaceholder).font(.title2).foregroundColor(.secondary)
+                Text(viewModel.selectedPlaceholder)
+                    .font(.title2)
+                    .foregroundColor(.secondary)
             }
         }
         .textSelection(.disabled)
     }
     
+    /// Main scrollable message area with anchor-based detection of the bottom.
     private var messageScrollView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 2) {
-                    ForEach(viewModel.messages) { message in
-                        MessageView(message: message)
-                            .id(message.id)
-                            .frame(maxWidth: .infinity)
+        GeometryReader { outerGeo in
+            ScrollViewReader { proxy in
+                ZStack {
+                    ScrollView {
+                        VStack(spacing: 2) {
+                            ForEach(viewModel.messages) { message in
+                                MessageView(message: message)
+                                    .id(message.id)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            Color.clear
+                                .frame(height: 1)
+                                .id("Bottom")
+                                .anchorPreference(
+                                    key: BottomAnchorPreferenceKey.self,
+                                    value: .bottom
+                                ) { anchor in
+                                    // Return the y-coordinate of the bottom anchor in global space
+                                    outerGeo[anchor].y
+                                }
+                        }
+                        .padding()
                     }
-                    // 맨 아래에 보이지 않는 뷰 추가
-                    Color.clear
-                        .frame(height: 1)
-                        .id("Bottom")
-                        .onAppear {
-                            isUserScrolling = false
+                    .onChange(of: viewModel.messages) { _ in
+                        // If the user was at bottom, wait briefly for layout and scroll down again
+                        if isAtBottom {
+                            Task {
+                                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
+                                withAnimation {
+                                    proxy.scrollTo("Bottom", anchor: .bottom)
+                                }
+                            }
                         }
-                        .onDisappear {
-                            isUserScrolling = true
+                    }
+                    // Scroll to bottom whenever the count of messages changes
+                    .onChange(of: viewModel.messages.count) { _ in
+                        withAnimation {
+                            proxy.scrollTo("Bottom", anchor: .bottom)
                         }
-                }
-                .padding()
-            }
-            .onChange(of: viewModel.messages) { _ in
-                if !isUserScrolling {
-                    withAnimation {
+                    }
+                    
+                    .task {
+                        // Initial delay before scrolling down to let content load
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                         proxy.scrollTo("Bottom", anchor: .bottom)
+                        isAtBottom = true
+                    }
+                    
+                    // A floating scroll-to-bottom button that appears if the user isn't at the bottom
+                    if !isAtBottom {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    withAnimation {
+                                        proxy.scrollTo("Bottom", anchor: .bottom)
+                                        isAtBottom = true
+                                    }
+                                }) {
+                                    Image(systemName: "arrow.down")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.blue)
+                                        .frame(width: 36, height: 36)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.white)
+                                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                        )
+                                }
+                                .padding(.horizontal, (outerGeo.size.width - 36) / 2)
+                                .padding(.bottom, 16)
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
-            }
-            .task {
-                // 초기 로드 시 맨 아래로 스크롤
-                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3초 대기
-                proxy.scrollTo("Bottom", anchor: .bottom)
+                .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
+                    // Compare bottomY to the visible height of the container.
+                    // If the bottom anchor is within a threshold of the container height, the user is at the bottom.
+                    let visibleHeight = outerGeo.size.height
+                    let threshold: CGFloat = 50
+                    if bottomY <= visibleHeight + threshold {
+                        isAtBottom = true
+                    } else {
+                        isAtBottom = false
+                    }
+                }
+                
+                
             }
         }
     }
     
-    
+    /// The message input area at the bottom.
     private var messageBarView: some View {
         MessageBarView(
             chatID: viewModel.chatId,
@@ -103,6 +173,7 @@ struct ChatView: View {
         )
     }
     
+    /// A toggle to enable or disable streaming mode.
     private var streamingToggle: some View {
         HStack {
             Text("Streaming")
@@ -112,15 +183,10 @@ struct ChatView: View {
                 .labelsHidden()
         }
         .onChange(of: viewModel.isStreamingEnabled) { newValue in
-            UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(viewModel.chatId)")
+            UserDefaults.standard.set(
+                newValue,
+                forKey: "isStreamingEnabled_\(viewModel.chatId)"
+            )
         }
-    }
-}
-
-struct ViewOffsetKey: PreferenceKey {
-    typealias Value = CGFloat
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
