@@ -12,7 +12,7 @@
 
 A sleek and powerful macOS client for Amazon Bedrock, bringing AI models to your desktop.
 
-[Download](#-download) • [Features](#-features) • [Getting Started](#-getting-started) • [Troubleshooting](#-troubleshooting) • [Contributing](#-contributing)
+[Download](#-download) • [Features](#-features) • [Getting Started](#-getting-started) • [Troubleshooting](#%EF%B8%8F-troubleshooting) • [Contributing](#-contributing)
 
 </div>
 
