@@ -120,6 +120,7 @@ struct ChatView: View {
                             Spacer()
                             HStack {
                                 Spacer()
+
                                 Button(action: {
                                     withAnimation {
                                         proxy.scrollTo("Bottom", anchor: .bottom)
@@ -136,14 +137,14 @@ struct ChatView: View {
                                                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                         )
                                 }
-                                .padding(.horizontal, (outerGeo.size.width - 36) / 2)
-                                .padding(.bottom, 16)
                                 .buttonStyle(PlainButtonStyle())
+
+                                Spacer()
                             }
+                            .padding(.bottom, 16)
                         }
                         .transition(.scale.combined(with: .opacity))
-                    }
-                }
+                    }                }
                 .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
                     // Compare bottomY to the visible height of the container.
                     // If the bottom anchor is within a threshold of the container height, the user is at the bottom.
