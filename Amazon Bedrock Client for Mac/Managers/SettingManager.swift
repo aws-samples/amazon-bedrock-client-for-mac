@@ -48,6 +48,7 @@ class SettingManager: ObservableObject {
     @Published var virtualProfile: AWSProfile?
     @Published var defaultModelId: String { didSet { saveSettings() } }
     @Published var availableModels: [ChatModel] = []
+    @Published var allowImagePasting: Bool = true
     
     private var cancellables = Set<AnyCancellable>()
     

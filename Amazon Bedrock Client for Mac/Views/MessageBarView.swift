@@ -27,6 +27,7 @@ struct ImageViewer: View {
 struct MessageBarView: View {
     var chatID: String
     @Binding var userInput: String
+    @StateObject private var settingManager = SettingManager.shared
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @StateObject var sharedImageDataSource: SharedImageDataSource
     
@@ -102,14 +103,17 @@ struct MessageBarView: View {
                 Task { await sendMessage() }
             } },
             onPaste: { image in
-                if let compressedData = image.compressedData(maxFileSize: 1024 * 1024, format: .jpeg),
-                   let compressedImage = NSImage(data: compressedData) {
-                    sharedImageDataSource.images.append(compressedImage)
-                    sharedImageDataSource.fileExtensions.append("jpeg")
-                } else {
-                    sharedImageDataSource.images.append(image)
-                    sharedImageDataSource.fileExtensions.append("png")
-                }
+                // Only process the pasted image if image pasting is allowed.
+                 if settingManager.allowImagePasting {
+                     if let compressedData = image.compressedData(maxFileSize: 1024 * 1024, format: .jpeg),
+                        let compressedImage = NSImage(data: compressedData) {
+                         sharedImageDataSource.images.append(compressedImage)
+                         sharedImageDataSource.fileExtensions.append("jpeg")
+                     } else {
+                         sharedImageDataSource.images.append(image)
+                         sharedImageDataSource.fileExtensions.append("png")
+                     }
+                 }
             }
         )
         .frame(minHeight: 40, maxHeight: calculatedHeight)

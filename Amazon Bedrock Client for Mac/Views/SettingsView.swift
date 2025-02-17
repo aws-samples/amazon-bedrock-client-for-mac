@@ -268,6 +268,7 @@ struct AdvancedSettingsView: View {
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: 400)
                 
+                Toggle("Allow Image Pasting", isOn: $settingsManager.allowImagePasting)
                 Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
             }
             .padding(.top, 10)
