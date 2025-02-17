@@ -14,8 +14,6 @@ import Logging
 struct MainView: View {
     @State private var selection: SidebarSelection? = .newChat
     @State private var menuSelection: SidebarSelection? = nil
-    @State private var showAlert: Bool = false
-    @State private var alertMessage: String = ""
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var isHovering = false
     @State private var alertInfo: AlertInfo?
@@ -42,7 +40,8 @@ struct MainView: View {
         .navigationTitle("")
         .onChange(of: backendModel.backend) { _ in
             fetchModels()
-        }.onChange(of: selection) { newValue in
+        }
+        .onChange(of: selection) { newValue in
             if case .chat(let chat) = newValue {
                 if !chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
                     selection = .newChat
@@ -117,46 +116,27 @@ struct MainView: View {
     }
     
     private func handleFetchModelsError(_ error: Error) {
-        if let awsError = error as? AWSClientRuntime.AWSServiceError {
-            let errorType = awsError.typeName ?? "Unknown AWS Error"
-            var errorMessage = awsError.message ?? "No error message provided"
-            
-            if errorType == "ExpiredTokenException" {
-                errorMessage += "\nPlease log in again."
-            }
-            
+        let bedrockError = BedrockError(error: error)
+        switch bedrockError {
+        case .expiredToken(let message):
             self.alertInfo = AlertInfo(
-                title: "\(errorType)",
-                message: errorMessage
+                title: "Expired Token",
+                message: message ?? "Your AWS credentials have expired. Please log in again."
             )
-        } else if let crtError = error as? AwsCommonRuntimeKit.CRTError {
+        case .invalidResponse(let message):
             self.alertInfo = AlertInfo(
-                title: "CRT Error",
-                message: "Code: \(crtError.code), Message: \(crtError.message)"
+                title: "Invalid Response",
+                message: message ?? "The response from Bedrock was invalid."
             )
-        } else if let commonRunTimeError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
-            self.alertInfo = AlertInfo(
-                title: "CommonRunTime Error",
-                message: "Error: \(commonRunTimeError)"
-            )
-        } else {
-            // 알 수 없는 에러 타입에 대한 더 자세한 정보 제공
+        case .unknown(let message):
             self.alertInfo = AlertInfo(
                 title: "Unknown Error",
-                message: "Type: \(type(of: error)), Description: \(error.localizedDescription)"
+                message: message ?? "An unknown error occurred."
             )
         }
-        
-        // 로깅 추가
+        logger.error("Fetch Models Error - \(self.alertInfo?.title ?? "Error"): \(self.alertInfo?.message ?? "No message")")
         print("Error type: \(type(of: error))")
         print("Error description: \(error)")
-        
-        if let alertInfo = self.alertInfo {
-            logger.error("Fetch Models Error - \(alertInfo.title): \(alertInfo.message)")
-        } else {
-            logger.error("Fetch Models Error occurred, but alertInfo is nil")
-        }
-        logger.error("Error details: \(String(describing: error))")
     }
     
     private func selectDefaultModel() {

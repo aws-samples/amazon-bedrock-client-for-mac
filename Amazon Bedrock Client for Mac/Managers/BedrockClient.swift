@@ -32,12 +32,13 @@ class BackendModel: ObservableObject {
             self.backend = try BackendModel.createBackend()
             logger.info("Backend initialized successfully")
         } catch {
-            logger.error(
-                "Failed to initialize Backend: \(error.localizedDescription). Using fallback Backend."
-            )
+            logger.error("Failed to initialize Backend: \(error.localizedDescription). Using fallback Backend.")
             self.backend = Backend.fallbackInstance()
-            alertMessage =
-            "Backend initialization failed: \(error.localizedDescription). Using fallback settings."
+            if error.localizedDescription.lowercased().contains("expired") {
+                alertMessage = "Your AWS credentials have expired. Please log in again."
+            } else {
+                alertMessage = "Backend initialization failed: \(error.localizedDescription). Using fallback settings."
+            }
         }
         setupObservers()
     }
@@ -489,29 +490,23 @@ class Backend: Equatable {
         maxResults: Int? = nil,
         nextToken: String? = nil,
         typeEquals: BedrockClientTypes.InferenceProfileType? = nil
-    ) async throws -> [BedrockClientTypes.InferenceProfileSummary] {
+    ) async -> [BedrockClientTypes.InferenceProfileSummary] {
         do {
-            // Prepare the request input
             let input = AWSBedrock.ListInferenceProfilesInput(
                 maxResults: maxResults,
                 nextToken: nextToken,
                 typeEquals: typeEquals
             )
-            
-            // Execute the API call
             let response = try await self.bedrockClient.listInferenceProfiles(input: input)
-            
-            // Validate and process the response
             guard let summaries = response.inferenceProfileSummaries else {
                 logger.warning("No inference profiles found in the response.")
                 return []
             }
-            
             logger.info("Fetched \(summaries.count) inference profiles.")
             return summaries
         } catch {
             logger.error("Failed to fetch inference profiles: \(error.localizedDescription)")
-            throw BedrockError.invalidResponse(error.localizedDescription)
+            return []
         }
     }
     
@@ -1399,7 +1394,24 @@ enum BedrockRuntimeError: Error {
     case decodingFailed
 }
 enum BedrockError: Error {
+    /// The response from Bedrock was invalid.
     case invalidResponse(String?)
-    case genericError(String)
-    case tokenExpired
+    /// The AWS credentials have expired.
+    case expiredToken(String?)
+    /// An unknown error occurred.
+    case unknown(String?)
+    
+    init(error: Error) {
+        if let awsError = error as? AWSClientRuntime.AWSServiceError {
+            if let typeName = awsError.typeName?.lowercased(), typeName.contains("expiredtoken") {
+                self = .expiredToken(awsError.message)
+            } else {
+                self = .unknown(awsError.message)
+            }
+        } else if let commonError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
+            self = .invalidResponse(commonError.localizedDescription)
+        } else {
+            self = .unknown(error.localizedDescription)
+        }
+    }
 }
