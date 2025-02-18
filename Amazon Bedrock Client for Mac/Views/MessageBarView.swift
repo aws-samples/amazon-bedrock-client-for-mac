@@ -9,10 +9,8 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
-/// A view that displays a resizable image with rounded corners and a shadow effect.
 struct ImageViewer: View {
     var image: NSImage
-    
     var body: some View {
         Image(nsImage: image)
             .resizable()
@@ -23,17 +21,20 @@ struct ImageViewer: View {
     }
 }
 
-/// Main user interface for managing text input and image uploads for messaging.
 struct MessageBarView: View {
     var chatID: String
     @Binding var userInput: String
     @StateObject private var settingManager = SettingManager.shared
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @StateObject var sharedImageDataSource: SharedImageDataSource
+    var transcribeManager: TranscribeStreamingManager
     
     @State private var calculatedHeight: CGFloat = 40
     @State private var isImagePickerPresented: Bool = false
     @State private var isLoading: Bool = false
+    
+    // Track previously appended transcript text.
+    @State private var previousTranscript: String = ""
     
     var sendMessage: () async -> Void
     var cancelSending: () -> Void
@@ -44,28 +45,30 @@ struct MessageBarView: View {
             if !sharedImageDataSource.images.isEmpty {
                 imagePreview
             }
-            
-            HStack(alignment: .bottom) {
+            // The main message bar with file upload, mic, input, and send buttons.
+            HStack(alignment: .center, spacing: 8) {
                 fileUploadButton
-                    .padding(.bottom, 4)
-                Spacer()
+                micButton
                 inputArea
-                    .background(RoundedRectangle(cornerRadius: 30).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
-                    .padding(.top, 4)
-                Spacer()
                 sendButton
-                    .padding(.bottom, 4)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(NSColor.windowBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
         }
         .foregroundColor(Color.text)
-        .onExitCommand(perform: {
-            if isLoading {
-                cancelSending()
-            }
-        })
-        //        .animation(.default, value: calculatedHeight)
+        .onExitCommand {
+            if isLoading { cancelSending() }
+        }
     }
     
     private var imagePreview: some View {
@@ -94,57 +97,125 @@ struct MessageBarView: View {
         .padding(2)
     }
     
-    private var inputArea: some View {
-        FirstResponderTextView(
-            text: $userInput,
-            isDisabled: .constant(false),
-            calculatedHeight: $calculatedHeight,
-            onCommit: {             if !userInput.isEmpty {
-                Task { await sendMessage() }
-            } },
-            onPaste: { image in
-                // Only process the pasted image if image pasting is allowed.
-                 if settingManager.allowImagePasting {
-                     if let compressedData = image.compressedData(maxFileSize: 1024 * 1024, format: .jpeg),
-                        let compressedImage = NSImage(data: compressedData) {
-                         sharedImageDataSource.images.append(compressedImage)
-                         sharedImageDataSource.fileExtensions.append("jpeg")
-                     } else {
-                         sharedImageDataSource.images.append(image)
-                         sharedImageDataSource.fileExtensions.append("png")
-                     }
-                 }
-            }
-        )
-        .frame(minHeight: 40, maxHeight: calculatedHeight)
-        .padding(.horizontal, 12)
-    }
-    
     private var fileUploadButton: some View {
         Button(action: {
             isImagePickerPresented = true
         }) {
             Image(systemName: "paperclip")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Color.text)
+                .foregroundColor(.primary)
         }
         .buttonStyle(PlainButtonStyle())
         .frame(width: 32, height: 32)
         .clipShape(Circle())
-        .fileImporter(isPresented: $isImagePickerPresented, allowedContentTypes: [.jpeg, .png], allowsMultipleSelection: true) { result in
+        .fileImporter(
+            isPresented: $isImagePickerPresented,
+            allowedContentTypes: [.jpeg, .png],
+            allowsMultipleSelection: true
+        ) { result in
             switch result {
             case .success(let urls):
                 urls.forEach { url in
                     if let image = NSImage(contentsOf: url) {
-                        self.sharedImageDataSource.images.append(image)
-                        
-                        // Extract and append file extension
-                        let fileExtension = url.pathExtension
-                        self.sharedImageDataSource.fileExtensions.append(fileExtension)
+                        sharedImageDataSource.images.append(image)
+                        sharedImageDataSource.fileExtensions.append(url.pathExtension)
                     }
                 }
             case .failure(let error):
                 print("Failed to import images: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private var micButton: some View {
+        Button(action: {
+            Task {
+                if transcribeManager.isTranscribing {
+                    transcribeManager.stopTranscription()
+                } else {
+                    await transcribeManager.startTranscription()
+                }
+            }
+        }) {
+            Image(systemName: transcribeManager.isTranscribing ? "mic.fill" : "mic.slash")
+                .font(.system(size: 20))
+                .foregroundColor(transcribeManager.isTranscribing ? .red : .primary)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .frame(width: 32, height: 32)
+        .clipShape(Circle())
+    }
+    
+    private var inputArea: some View {
+        FirstResponderTextView(
+            text: $userInput,
+            isDisabled: .constant(false),
+            calculatedHeight: $calculatedHeight,
+            onCommit: {
+                if !userInput.isEmpty {
+                    Task { await sendMessage()
+                        transcribeManager.resetTranscript()
+                    }
+                }
+            },
+            onPaste: { image in
+                if settingManager.allowImagePasting {
+                    if let compressedData = image.compressedData(maxFileSize: 1024 * 1024, maxDimension: 1024, format: .jpeg),
+                       let compressedImage = NSImage(data: compressedData) {
+                        sharedImageDataSource.images.append(compressedImage)
+                        sharedImageDataSource.fileExtensions.append("jpeg")
+                    } else {
+                        sharedImageDataSource.images.append(image)
+                        sharedImageDataSource.fileExtensions.append("png")
+                    }
+                }
+            }
+        )
+        .frame(minHeight: 40, maxHeight: calculatedHeight)
+        .padding(.horizontal, 4)
+        .onReceive(transcribeManager.$transcript) { newTranscript in
+            guard !newTranscript.isEmpty else { return }
+            
+            DispatchQueue.main.async {
+                // 현재 커서 위치 저장
+                let currentPosition = userInput.count
+                
+                // 새로운 텍스트 추가 시 기본 공백 처리
+                if !userInput.isEmpty && !userInput.hasSuffix(" ") {
+                    userInput += " "
+                }
+                
+                // 실시간으로 텍스트 추가
+                let words = newTranscript.split(separator: " ")
+                if let lastWord = words.last {
+                    // 마지막 단어가 반복되는 경우 제거
+                    let previousWords = userInput.split(separator: " ")
+                    if let prevWord = previousWords.last,
+                       prevWord.lowercased() == lastWord.lowercased() {
+                        // Skip duplicate word
+                    } else {
+                        userInput = newTranscript
+                    }
+                } else {
+                    userInput = newTranscript
+                }
+                
+                // 커서 위치 조정
+                NotificationCenter.default.post(
+                    name: .transcriptUpdated,
+                    object: nil
+                )
+            }
+        }
+        .onAppear {
+            // Listen for transcript updates to handle cursor position
+            NotificationCenter.default.addObserver(
+                forName: .transcriptUpdated,
+                object: nil,
+                queue: .main
+            ) { _ in
+                // Implement in FirstResponderTextView to move cursor to end
+                // You'll need to add a method to your NSTextView to handle this
             }
         }
     }
@@ -154,45 +225,20 @@ struct MessageBarView: View {
             if isLoading {
                 cancelSending()
             } else {
-                Task { await sendMessage() }
+                Task { await sendMessage()
+                    transcribeManager.resetTranscript()
+                }
             }
         }) {
             Image(systemName: isLoading ? "stop.fill" : "arrow.up")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Color.background)
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(Color.black)
+                .clipShape(Circle())
         }
         .buttonStyle(PlainButtonStyle())
-        .frame(width: 32, height: 32)
-        .background(Color.text)
-        .clipShape(Circle())
         .disabled(userInput.isEmpty && !isLoading)
         .onChange(of: chatManager.getIsLoading(for: chatID)) { isLoading = $0 }
-    }
-    
-    /// Determines if the user's device or server model corresponds to "claude-3".
-    private func isClaude3Model() -> Bool {
-        return modelId.contains("claude-3")
-    }
-}
-
-extension NSImage {
-    func compressedData(maxFileSize: Int, format: NSBitmapImageRep.FileType = .jpeg) -> Data? {
-        guard let tiffRepresentation = self.tiffRepresentation,
-              let bitmapImage = NSBitmapImageRep(data: tiffRepresentation) else { return nil }
-        
-        var compressionFactor: CGFloat = 1.0
-        var compressedData: Data?
-        
-        while compressionFactor > 0.0 {
-            let properties: [NSBitmapImageRep.PropertyKey: Any] = [.compressionFactor: compressionFactor]
-            compressedData = bitmapImage.representation(using: format, properties: properties)
-            
-            if let data = compressedData, data.count <= maxFileSize {
-                return data
-            }
-            compressionFactor -= 0.1
-        }
-        
-        return compressedData
     }
 }

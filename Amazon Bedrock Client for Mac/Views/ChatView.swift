@@ -1,3 +1,4 @@
+//
 //  ChatView.swift
 //  Amazon Bedrock Client for Mac
 //
@@ -7,7 +8,6 @@
 import SwiftUI
 import Combine
 
-/// A preference key that stores the vertical position of the bottom anchor in global space.
 struct BottomAnchorPreferenceKey: PreferenceKey {
     typealias Value = CGFloat
     static var defaultValue: CGFloat = 0
@@ -19,9 +19,9 @@ struct BottomAnchorPreferenceKey: PreferenceKey {
 struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sharedImageDataSource = SharedImageDataSource()
+    @StateObject private var transcribeManager = TranscribeStreamingManager()
     @ObservedObject var backendModel: BackendModel
     
-    /// Tracks if the user is currently at the bottom of the message list
     @State private var isAtBottom: Bool = true
     
     init(chatId: String, backendModel: BackendModel) {
@@ -43,17 +43,11 @@ struct ChatView: View {
             messageScrollView
             messageBarView
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                streamingToggle
-            }
-        }
         .onAppear(perform: viewModel.loadInitialData)
     }
     
-    /// Displays a placeholder if there are no messages.
     private var placeholderView: some View {
-        VStack(alignment: .center) {
+        VStack {
             if viewModel.messages.isEmpty {
                 Spacer()
                 Text(viewModel.selectedPlaceholder)
@@ -64,7 +58,6 @@ struct ChatView: View {
         .textSelection(.disabled)
     }
     
-    /// Main scrollable message area with anchor-based detection of the bottom.
     private var messageScrollView: some View {
         GeometryReader { outerGeo in
             ScrollViewReader { proxy in
@@ -79,48 +72,34 @@ struct ChatView: View {
                             Color.clear
                                 .frame(height: 1)
                                 .id("Bottom")
-                                .anchorPreference(
-                                    key: BottomAnchorPreferenceKey.self,
-                                    value: .bottom
-                                ) { anchor in
-                                    // Return the y-coordinate of the bottom anchor in global space
+                                .anchorPreference(key: BottomAnchorPreferenceKey.self, value: .bottom) { anchor in
                                     outerGeo[anchor].y
                                 }
                         }
                         .padding()
                     }
                     .onChange(of: viewModel.messages) { _ in
-                        // If the user was at bottom, wait briefly for layout and scroll down again
                         if isAtBottom {
                             Task {
-                                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
-                                withAnimation {
-                                    proxy.scrollTo("Bottom", anchor: .bottom)
-                                }
+                                try? await Task.sleep(nanoseconds: 50_000_000)
+                                withAnimation { proxy.scrollTo("Bottom", anchor: .bottom) }
                             }
                         }
                     }
-                    // Scroll to bottom whenever the count of messages changes
                     .onChange(of: viewModel.messages.count) { _ in
-                        withAnimation {
-                            proxy.scrollTo("Bottom", anchor: .bottom)
-                        }
+                        withAnimation { proxy.scrollTo("Bottom", anchor: .bottom) }
                     }
-                    
                     .task {
-                        // Initial delay before scrolling down to let content load
-                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                         proxy.scrollTo("Bottom", anchor: .bottom)
                         isAtBottom = true
                     }
                     
-                    // A floating scroll-to-bottom button that appears if the user isn't at the bottom
                     if !isAtBottom {
                         VStack {
                             Spacer()
                             HStack {
                                 Spacer()
-
                                 Button(action: {
                                     withAnimation {
                                         proxy.scrollTo("Bottom", anchor: .bottom)
@@ -138,56 +117,31 @@ struct ChatView: View {
                                         )
                                 }
                                 .buttonStyle(PlainButtonStyle())
-
                                 Spacer()
                             }
                             .padding(.bottom, 16)
                         }
                         .transition(.scale.combined(with: .opacity))
-                    }                }
-                .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
-                    // Compare bottomY to the visible height of the container.
-                    // If the bottom anchor is within a threshold of the container height, the user is at the bottom.
-                    let visibleHeight = outerGeo.size.height
-                    let threshold: CGFloat = 50
-                    if bottomY <= visibleHeight + threshold {
-                        isAtBottom = true
-                    } else {
-                        isAtBottom = false
                     }
                 }
-                
-                
+                .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
+                    let visibleHeight = outerGeo.size.height
+                    let threshold: CGFloat = 50
+                    isAtBottom = (bottomY <= visibleHeight + threshold)
+                }
             }
         }
     }
     
-    /// The message input area at the bottom.
     private var messageBarView: some View {
         MessageBarView(
             chatID: viewModel.chatId,
             userInput: $viewModel.userInput,
             sharedImageDataSource: sharedImageDataSource,
+            transcribeManager: transcribeManager,
             sendMessage: viewModel.sendMessage,
             cancelSending: viewModel.cancelSending,
             modelId: viewModel.chatModel.id
         )
-    }
-    
-    /// A toggle to enable or disable streaming mode.
-    private var streamingToggle: some View {
-        HStack {
-            Text("Streaming")
-                .font(.caption)
-            Toggle("Stream", isOn: $viewModel.isStreamingEnabled)
-                .toggleStyle(SwitchToggleStyle())
-                .labelsHidden()
-        }
-        .onChange(of: viewModel.isStreamingEnabled) { newValue in
-            UserDefaults.standard.set(
-                newValue,
-                forKey: "isStreamingEnabled_\(viewModel.chatId)"
-            )
-        }
     }
 }

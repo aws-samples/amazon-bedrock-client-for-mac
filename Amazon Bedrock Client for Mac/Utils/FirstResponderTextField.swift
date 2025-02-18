@@ -21,6 +21,12 @@ final class MyTextView: NSTextView {
         }
     }
     
+    func moveCursorToEnd() {
+        let length = string.count
+        setSelectedRange(NSRange(location: length, length: 0))
+        scrollRangeToVisible(NSRange(location: length, length: 0))
+    }
+    
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         
@@ -236,7 +242,17 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
     var onPaste: ((NSImage) -> Void)?
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(self, onPaste: onPaste)
+        let coordinator = Coordinator(self, onPaste: onPaste)
+        
+        // Add observer for transcript updates
+        NotificationCenter.default.addObserver(
+            coordinator,
+            selector: #selector(Coordinator.handleTranscriptUpdate(_:)),
+            name: .transcriptUpdated,
+            object: nil
+        )
+        
+        return coordinator
     }
     
     static func == (lhs: FirstResponderTextView, rhs: FirstResponderTextView) -> Bool {
@@ -273,6 +289,8 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
             updateHeight(textView: textView)
             
             NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.textDidChange(_:)), name: NSText.didChangeNotification, object: textView)
+            
+            context.coordinator.textView = textView
         }
         
         DispatchQueue.main.async {
@@ -313,6 +331,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
 public class Coordinator: NSObject, NSTextViewDelegate {
     var parent: FirstResponderTextView
     var onPaste: ((NSImage) -> Void)?
+    weak var textView: MyTextView?
     
     init(_ parent: FirstResponderTextView, onPaste: ((NSImage) -> Void)?) {
         self.parent = parent
@@ -327,6 +346,12 @@ public class Coordinator: NSObject, NSTextViewDelegate {
     private func updateText(_ textView: MyTextView) {
         parent.text = textView.string
         parent.updateHeight(textView: textView)
+    }
+    
+    @objc func handleTranscriptUpdate(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            self?.textView?.moveCursorToEnd()
+        }
     }
 }
 
