@@ -18,7 +18,7 @@ class ChatManager: ObservableObject {
     }
     
     static let shared = ChatManager()
-    @StateObject private var settingManager = SettingManager.shared
+    @ObservedObject private var settingManager = SettingManager.shared
     
     private let coreDataStack: CoreDataStack
     private let fileManager = FileManager.default

@@ -111,32 +111,36 @@ struct SidebarView: View {
     var newChatSection: some View {
         Button(action: {
             createNewChat()
+            // 임의로 0.5초 후 buttonHover 해제 (기존 로직)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.buttonHover = false
             }
         }) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "square.and.pencil")
-                    .font(.title)
+                    .font(.system(size: 18, weight: .semibold))
                 Text("New Chat")
-                    .font(.title2)
-                    .fontWeight(.medium)
+                    .font(.system(size: 16, weight: .medium))
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
+            .background(buttonHover ? Color.gray.opacity(0.15) : Color.clear)
+            .cornerRadius(8)
+            // 살짝 확대되는 애니메이션
+            .scaleEffect(buttonHover ? 1.02 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: buttonHover)
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hover in
+            buttonHover = hover
             if hover {
                 NSCursor.pointingHand.set()
             } else {
                 NSCursor.arrow.set()
             }
         }
-        .background(buttonHover ? Color.gray.opacity(0.2) : Color.clear)
-        .cornerRadius(8)
     }
     
     private func createNewChat() {
@@ -201,28 +205,23 @@ struct SidebarView: View {
     }
     
     func chatRowView(for chat: ChatModel) -> some View {
-        HStack {
-            if hoverStates[chat.chatId, default: false] {
-                withAnimation {
-                    getIcon(for: chat)
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                        .padding(.trailing, 8)
-                }
-            }
-            
-            VStack(alignment: .leading) {
+        let isHovered = hoverStates[chat.chatId, default: false]
+
+        return HStack(spacing: 8) {
+            // Main text content (now using chat.name)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(chat.title)
                     .font(.headline)
                     .lineLimit(1)
-                Text(chat.description)
+                Text(chat.name)
                     .font(.subheadline)
-                    .lineLimit(1)
                     .foregroundColor(.gray)
+                    .lineLimit(1)
             }
             
             Spacer()
             
+            // Loading indicator
             if chatManager.getIsLoading(for: chat.chatId) {
                 Text("…")
                     .font(.headline)
@@ -231,18 +230,30 @@ struct SidebarView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
-        .contentShape(Rectangle())
-        .background(hoverStates[chat.chatId, default: false] || selection == .chat(chat) ? Color.gray.opacity(0.2) : Color.clear)
+        // Background color when hovered or selected
+        .background(isHovered || selection == .chat(chat) ? Color.gray.opacity(0.15) : Color.clear)
         .cornerRadius(8)
+        // Slight scale up on hover
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isHovered)
+        .contentShape(Rectangle())
+        // Update cursor and hover states on hover
         .onHover { hover in
-            withAnimation {
+            withAnimation(.easeInOut(duration: 0.2)) {
                 hoverStates[chat.chatId] = hover
             }
+            if hover {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
         }
+        // Select chat on tap
         .onTapGesture {
             selection = .chat(chat)
         }
     }
+
     
     private func getIcon(for chat: ChatModel) -> Image {
         switch chat.id {

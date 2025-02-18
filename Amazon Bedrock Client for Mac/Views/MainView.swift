@@ -36,12 +36,22 @@ struct MainView: View {
             )
         }
         .onAppear(perform: setup)
-        .toolbar { toolbarContent() }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: toggleSidebar) {
+                    Label("Toggle Sidebar", systemImage: "sidebar.left")
+                        .labelStyle(IconOnlyLabelStyle())
+                }
+            }
+            
+            toolbarContent()
+        }
         .navigationTitle("")
         .onChange(of: backendModel.backend) { _ in
             fetchModels()
         }
         .onChange(of: selection) { newValue in
+            // If the selected chat doesn't exist, revert to newChat
             if case .chat(let chat) = newValue {
                 if !chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
                     selection = .newChat
@@ -50,6 +60,8 @@ struct MainView: View {
             }
         }
     }
+    
+    // MARK: - Content
     
     @ViewBuilder
     private func contentView() -> some View {
@@ -65,6 +77,8 @@ struct MainView: View {
         }
     }
     
+    // MARK: - Lifecycle
+    
     private func setup() {
         fetchModels()
         UpdateManager().checkForUpdates()
@@ -74,30 +88,24 @@ struct MainView: View {
         Task {
             print("Fetching models...")
             
-            // Fetch foundation models and inference profiles concurrently
             async let foundationModelsResult = backendModel.backend.listFoundationModels()
             async let inferenceProfilesResult = backendModel.backend.listInferenceProfiles()
             
             do {
-                // Wait for both results
                 let (foundationModels, inferenceProfiles) = try await (
                     foundationModelsResult,
                     inferenceProfilesResult
                 )
                 
-                // Process foundation models
                 let foundationChatModels = Dictionary(
                     grouping: try foundationModels.get().map(ChatModel.fromSummary)
                 ) { $0.provider }
                 
-                // Process inference profiles
                 let inferenceChatModels = Dictionary(
-                    grouping: inferenceProfiles.map { profileSummary in
-                        ChatModel.fromInferenceProfile(profileSummary)
-                    }
+                    grouping: inferenceProfiles.map { ChatModel.fromInferenceProfile($0) }
                 ) { $0.provider }
                 
-                // Merge both dictionaries
+                // Merge
                 let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
                     current
                 }
@@ -141,54 +149,47 @@ struct MainView: View {
     
     private func selectDefaultModel() {
         let defaultModelId = SettingManager.shared.defaultModelId
+        let allModels = organizedChatModels.values.flatMap { $0 }
         
-        if let defaultModel = organizedChatModels.values.flatMap({ $0 }).first(where: { $0.id == defaultModelId }) {
+        if let defaultModel = allModels.first(where: { $0.id == defaultModelId }) {
             menuSelection = .chat(defaultModel)
         } else {
-            selectClaudeModel()
+            // Try to pick a "Claude" model if any
+            if let claudeModel = allModels.first(where: { $0.id.contains("claude-3-5") })
+                ?? allModels.first(where: { $0.id.contains("claude-3") })
+                ?? allModels.first(where: { $0.id.contains("claude-v2") })
+                ?? allModels.first(where: { $0.name.contains("Claude") }) {
+                menuSelection = .chat(claudeModel)
+            }
         }
     }
     
-    private func selectClaudeModel() {
-        // Flatten all chat models into a single array
-        let allModels = organizedChatModels.values.flatMap { $0 }
-        
-        // Claude model selection logic
-        if let claudeModel = allModels.first(where: { $0.id.contains("claude-3-5") }) ?? // 1. Prioritize Claude-3-5 model
-            allModels.first(where: { $0.id.contains("claude-3") }) ?? // 2. Select Claude-3 model
-            allModels.first(where: { $0.id.contains("claude-v2") }) ?? // 3. Select Claude-v2 model
-            allModels.first(where: { $0.name.contains("Claude") }) { // 4. Select any model with "Claude" in its name
-            
-            // Set menu selection to the chosen Claude model
-            menuSelection = .chat(claudeModel)
-        }
-        // Note: If no suitable Claude model is found, menuSelection remains unchanged
-    }
+    // MARK: - Toolbar
     
     @ToolbarContentBuilder
     private func toolbarContent() -> some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            Button(action: {}) {
-                HStack(spacing: 0) {
-                    selectedModelImage()
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 40, height: 40)
-                    
-                    customDropdownButton(currentSelectedModelName())
-                }
+            HStack(spacing: 0) {
+                selectedModelImage()
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                
+                // A custom hover button that opens the SwiftUI Menu
+                HoveringMenuLabel(
+                    title: currentSelectedModelName(),
+                    organizedChatModels: organizedChatModels,
+                    menuSelection: $menuSelection,
+                    handleSelectionChange: handleMenuSelectionChange
+                )
             }
-            .buttonStyle(PlainButtonStyle())
         }
         
         ToolbarItem(placement: .primaryAction) {
             HStack {
-                Button(action: toggleSidebar) {
-                    Label("Toggle Sidebar", systemImage: "sidebar.left")
-                        .labelStyle(IconOnlyLabelStyle())
-                }
                 
-                if case .chat(let chat) = selection, chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
+                if case .chat(let chat) = selection,
+                   chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
                     Button(action: deleteCurrentChat) {
                         Image(systemName: "trash")
                     }
@@ -231,59 +232,23 @@ struct MainView: View {
     
     func currentSelectedModelName() -> String {
         guard case let .chat(chat) = menuSelection else {
-            return "Model Not Selected"
+            return "Select Model"
         }
         return chat.name
     }
     
-    func customDropdownButton(_ title: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Menu {
-                ForEach(organizedChatModels.keys.sorted(), id: \.self) { provider in
-                    Section(header: Text(provider)) {
-                        ForEach(organizedChatModels[provider] ?? [], id: \.self) { chat in
-                            Button(chat.id) {
-                                menuSelection = .chat(chat)
-                            }
-                        }
-                    }
-                }
-            } label: {
-                menuLabel(title)
-            }
-            .menuStyle(BorderlessButtonMenuStyle())
-            .background(hoverBackground)
-            .cornerRadius(8)
-            .onHover { self.isHovering = $0 }
-            .onChange(of: menuSelection, perform: handleMenuSelectionChange)
-            
-            if case let .chat(chat) = menuSelection {
-                Text(chat.id)
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.leading, 4)
-            }
-        }
+    func deleteCurrentChat() {
+        guard case .chat(let chat) = selection else { return }
+        selection = chatManager.deleteChat(with: chat.chatId)
     }
     
-    private func menuLabel(_ title: String) -> some View {
-        Text(menuSelection.flatMap { menuSelection -> String? in
-            if case let .chat(chat) = menuSelection {
-                return chat.name
-            }
-            return nil
-        } ?? title)
-        .font(.title2)
-        .foregroundColor(isHovering ? .gray : .primary)
-    }
-    
-    private var hoverBackground: some View {
-        isHovering ? Color.gray.opacity(0.2) : Color.clear
+    private func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?
+            .tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
     
     private func handleMenuSelectionChange(_ newValue: SidebarSelection?) {
+        // If the chat is brand-new, update it when user picks a model
         guard case let .chat(selectedModel) = newValue,
               case let .chat(currentChat) = selection,
               chatManager.getMessages(for: currentChat.chatId).isEmpty else {
@@ -301,17 +266,72 @@ struct MainView: View {
             chatManager.chats[index] = updatedChat
         }
     }
+}
+
+// MARK: - HoveringMenuLabel
+/// A simple label that hovers with minor animation, opening a SwiftUI Menu with provider submenus.
+fileprivate struct HoveringMenuLabel: View {
+    let title: String
+    let organizedChatModels: [String: [ChatModel]]
+    @Binding var menuSelection: SidebarSelection?
+    let handleSelectionChange: (SidebarSelection?) -> Void
     
-    func deleteCurrentChat() {
-        guard case .chat(let chat) = selection else { return }
-        selection = chatManager.deleteChat(with: chat.chatId)
+    @State private var isHovering = false
+    
+    var body: some View {
+        Menu {
+            ForEach(organizedChatModels.keys.sorted(), id: \.self) { provider in
+                Menu(provider) {
+                    ForEach(organizedChatModels[provider] ?? [], id: \.id) { model in
+                        Button {
+                            menuSelection = .chat(model)
+                            handleSelectionChange(menuSelection)
+                        } label: {
+                            Text(model.name)
+                            Text(model.id)
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
+                }
+            }
+        } label: {
+            modelInfoView
+        }
+        .menuStyle(BorderlessButtonMenuStyle())
     }
     
-    private func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+    private var modelInfoView: some View {
+        Group {
+            if case let .chat(model) = menuSelection {
+                HStack(spacing: 8) {
+                    Text(model.name)
+                        .fontWeight(.semibold)
+                    Text(model.id)
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+            } else {
+                Text("Select Model")
+                    .fontWeight(.medium)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? Color.gray.opacity(0.2) : Color.clear)
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
     }
 }
 
+
+// MARK: - AlertInfo
 struct AlertInfo: Identifiable {
     let id = UUID()
     let title: String

@@ -12,7 +12,7 @@ class ChatViewModel: ObservableObject {
     let chatId: String
     let chatManager: ChatManager
     let sharedImageDataSource: SharedImageDataSource
-    @StateObject private var settingManager = SettingManager.shared
+    @ObservedObject private var settingManager = SettingManager.shared
     
     @ObservedObject var backendModel: BackendModel
     @Published var chatModel: ChatModel

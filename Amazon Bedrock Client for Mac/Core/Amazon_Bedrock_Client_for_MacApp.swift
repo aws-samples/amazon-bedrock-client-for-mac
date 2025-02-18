@@ -9,7 +9,7 @@ import SwiftUI
 
 @main
 struct Amazon_Bedrock_Client_for_MacApp: App {
-    @StateObject private var settingManager = SettingManager.shared
+    @ObservedObject private var settingManager = SettingManager.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     init() {

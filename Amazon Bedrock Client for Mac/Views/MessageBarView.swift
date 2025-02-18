@@ -24,7 +24,7 @@ struct ImageViewer: View {
 struct MessageBarView: View {
     var chatID: String
     @Binding var userInput: String
-    @StateObject private var settingManager = SettingManager.shared
+    @ObservedObject private var settingManager = SettingManager.shared
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @StateObject var sharedImageDataSource: SharedImageDataSource
     var transcribeManager: TranscribeStreamingManager
@@ -35,6 +35,7 @@ struct MessageBarView: View {
     
     // Track previously appended transcript text.
     @State private var previousTranscript: String = ""
+    @FocusState private var isInputFocused: Bool
     
     var sendMessage: () async -> Void
     var cancelSending: () -> Void
@@ -48,8 +49,8 @@ struct MessageBarView: View {
             // The main message bar with file upload, mic, input, and send buttons.
             HStack(alignment: .center, spacing: 8) {
                 fileUploadButton
-                micButton
                 inputArea
+                micButton
                 sendButton
             }
             .padding(.horizontal, 12)
@@ -68,6 +69,11 @@ struct MessageBarView: View {
         .foregroundColor(Color.text)
         .onExitCommand {
             if isLoading { cancelSending() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            DispatchQueue.main.async {
+                isInputFocused = true
+            }
         }
     }
     
@@ -171,6 +177,7 @@ struct MessageBarView: View {
                 }
             }
         )
+        .focused($isInputFocused)
         .frame(minHeight: 40, maxHeight: calculatedHeight)
         .padding(.horizontal, 4)
         .onReceive(transcribeManager.$transcript) { newTranscript in

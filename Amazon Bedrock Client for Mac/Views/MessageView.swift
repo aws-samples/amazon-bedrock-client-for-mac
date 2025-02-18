@@ -1,7 +1,8 @@
-// MessageView.swift
-// Amazon Bedrock Client for Mac
 //
-// Created by Na, Sanghwa on 2023/10/06.
+//  MessageView.swift
+//  Amazon Bedrock Client for Mac
+//
+//  Created by Na, Sanghwa on 2023/10/06.
 //
 
 import SwiftUI
@@ -13,17 +14,17 @@ struct LazyMarkdownView: View {
     let text: String
     let fontSize: CGFloat
     @State private var height: CGFloat = .zero
-
+    
     private let parser: ExtendedMarkdownParser
     private let htmlGenerator: CustomHtmlGenerator
-
+    
     init(text: String, fontSize: CGFloat) {
         self.text = text
         self.fontSize = fontSize
         self.parser = ExtendedMarkdownParser()
         self.htmlGenerator = CustomHtmlGenerator()
     }
-
+    
     var body: some View {
         HTMLStringView(
             htmlContent: generateHTML(from: text),
@@ -32,13 +33,14 @@ struct LazyMarkdownView: View {
         )
         .frame(height: height)
     }
-
+    
     private func generateHTML(from markdown: String) -> String {
         let document = parser.parse(markdown)
         return htmlGenerator.generate(doc: document)
     }
 }
 
+// MARK: - CustomHtmlGenerator
 class CustomHtmlGenerator: HtmlGenerator {
     override func generate(block: Block, tight: Bool = false) -> String {
         switch block {
@@ -81,6 +83,7 @@ class CustomHtmlGenerator: HtmlGenerator {
     }
 }
 
+// MARK: - LazyImageView
 struct LazyImageView: View {
     let imageData: String
     let size: CGFloat
@@ -105,7 +108,10 @@ struct LazyImageView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.2), lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+            )
         }
         .buttonStyle(PlainButtonStyle())
         .contextMenu {
@@ -118,13 +124,173 @@ struct LazyImageView: View {
         }
     }
     
-    func copyImageToClipboard(imageData: String) {
+    private func copyImageToClipboard(imageData: String) {
         if let data = Data(base64Encoded: imageData),
            let image = NSImage(data: data) {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.writeObjects([image])
         }
+    }
+}
+
+// MARK: - MessageView
+struct MessageView: View {
+    let message: MessageData
+    let searchQuery: String  // For user messages partial highlight
+    
+    @StateObject var viewModel = MessageViewModel()
+    @Environment(\.fontSize) private var fontSize: CGFloat
+    @State private var isHovering = false
+    
+    private let imageSize: CGFloat = 100
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if message.user == "User" {
+                // Right-aligned bubble for user
+                HStack {
+                    Spacer()
+                    userMessageBubble
+                        .padding(.horizontal)
+                }
+                .padding(.vertical, 4)
+            } else {
+                // Left-aligned bubble for non-user
+                HStack {
+                    nonUserMessageBubble
+                        .padding(.horizontal)
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovering = hovering
+            }
+        }
+        .textSelection(.enabled)
+    }
+    
+    // MARK: - Non-user bubble (HTML-based)
+    private var nonUserMessageBubble: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            messageHeader
+            nonUserContent
+            copyButton
+                .opacity(isHovering ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: isHovering)
+        }
+        .padding()
+        .background(Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+    
+    @ViewBuilder
+    private var nonUserContent: some View {
+        if let imageBase64Strings = message.imageBase64Strings,
+           !imageBase64Strings.isEmpty {
+            ImageGridView(
+                imageBase64Strings: imageBase64Strings,
+                imageSize: imageSize
+            ) { imageData in
+                viewModel.selectImage(with: imageData)
+            }
+        }
+        LazyMarkdownView(text: message.text, fontSize: fontSize)
+            .sheet(isPresented: $viewModel.isShowingImageModal) {
+                if let data = viewModel.selectedImageData,
+                   let imageToShow = NSImage(base64Encoded: data) {
+                    ImageViewerModal(image: imageToShow) {
+                        viewModel.clearSelection()
+                    }
+                }
+            }
+    }
+    
+    // MARK: - User bubble (possible partial highlight + images)
+    private var userMessageBubble: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            if let imageBase64Strings = message.imageBase64Strings, !imageBase64Strings.isEmpty {
+                ImageGridView(imageBase64Strings: imageBase64Strings, imageSize: imageSize) { imageData in
+                    viewModel.selectImage(with: imageData)
+                }
+                .frame(alignment: .trailing)
+            }
+            
+            highlightedText(message.text)
+                .font(.system(size: fontSize))
+                .foregroundColor(.primary)
+        }
+        .sheet(isPresented: $viewModel.isShowingImageModal) {
+            if let imageData = viewModel.selectedImageData,
+               let imageToShow = NSImage(base64Encoded: imageData) {
+                ImageViewerModal(image: imageToShow) {
+                    viewModel.clearSelection()
+                }
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.2))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+    
+    @available(macOS 12.0, *)
+    private func highlightedText(_ text: String) -> SwiftUI.Text {
+        var attributed = AttributedString(text)
+        let lowerSearch = searchQuery.lowercased()
+        
+        guard !lowerSearch.isEmpty else {
+            return SwiftUI.Text(attributed)
+        }
+        
+        let lowerText = text.lowercased()
+        var searchStartIndex = lowerText.startIndex
+        while let range = lowerText.range(of: lowerSearch, options: .caseInsensitive, range: searchStartIndex..<lowerText.endIndex) {
+            if let start = AttributedString.Index(range.lowerBound, within: attributed),
+               let end = AttributedString.Index(range.upperBound, within: attributed) {
+                let attrRange = start..<end
+                attributed[attrRange].backgroundColor = .yellow.opacity(0.8)
+                attributed[attrRange].foregroundColor = .black
+            }
+            searchStartIndex = range.upperBound
+        }
+        
+        return SwiftUI.Text(attributed)
+    }
+    
+    // MARK: - Shared for non-user and user
+    private var messageHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(message.user)
+                .font(.system(size: fontSize))
+                .bold()
+            Text(format(date: message.sentTime))
+                .font(.callout)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private var copyButton: some View {
+        Button(action: copyMessageToClipboard) {
+            Image(systemName: "doc.on.doc")
+                .foregroundColor(.secondary)
+                .font(.system(size: 16))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func copyMessageToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message.text, forType: .string)
+    }
+    
+    private func format(date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
@@ -354,50 +520,50 @@ struct HTMLStringView: NSViewRepresentable {
                     width: 8px;
                     height: 8px;
                 }
-
+        
                 ::-webkit-scrollbar-track {
                     background: transparent;
                 }
-
+        
                 ::-webkit-scrollbar-thumb {
                     background: rgba(0, 0, 0, 0.2);
                     border-radius: 4px;
                 }
-
+        
                 ::-webkit-scrollbar-thumb:hover {
                     background: rgba(0, 0, 0, 0.4);
                 }
-
+        
                 /* Hide scrollbars by default */
                 * {
                     scrollbar-width: none;
                     -ms-overflow-style: none;
                 }
-
+        
                 *::-webkit-scrollbar {
                     display: none;
                 }
-
+        
                 /* Scroll style for pre elements (code blocks) */
                 pre {
                     scrollbar-width: thin;
                     scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
                 }
-
+        
                 pre::-webkit-scrollbar {
                     width: 8px;
                     height: 8px;
                 }
-
+        
                 pre::-webkit-scrollbar-track {
                     background: transparent;
                 }
-
+        
                 pre::-webkit-scrollbar-thumb {
                     background-color: rgba(0, 0, 0, 0.2);
                     border-radius: 4px;
                 }
-
+        
                 pre::-webkit-scrollbar-thumb:hover {
                     background-color: rgba(0, 0, 0, 0.4);
                 }
@@ -449,140 +615,6 @@ extension NSImage {
             return nil
         }
         self.init(data: imageData)
-    }
-}
-
-// MARK: - MessageView
-
-struct MessageView: View {
-    var message: MessageData
-    @StateObject var viewModel = MessageViewModel()
-    @Environment(\.colorScheme) private var colorScheme: ColorScheme
-    @Environment(\.fontSize) private var fontSize: CGFloat
-    @State private var isHovering = false
-    
-    private let imageSize: CGFloat = 100
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if message.user == "User" {
-                HStack {
-                    Spacer()
-                    messageContent
-                        .padding(.horizontal)
-                }
-                .padding(.vertical, 4)
-            } else {
-                HStack {
-                    messageContent
-                        .padding(.horizontal)
-                    Spacer()
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovering = hovering
-            }
-        }
-        .textSelection(.enabled)
-    }
-    
-    // MARK: - Message Content
-    
-    @ViewBuilder
-    private var messageContent: some View {
-        VStack(alignment: message.user == "User" ? .trailing : .leading, spacing: 4) {
-            if message.user != "User" {
-                messageHeader
-            }
-            contentBody
-            if message.user != "User" {
-                copyButton
-                    .opacity(isHovering ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.2), value: isHovering)
-            }
-        }
-        .padding()
-        .background(message.user == "User" ? Color.gray.opacity(0.2) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-    
-    // MARK: - Message Header
-    
-    private var messageHeader: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(message.user)
-                .font(.system(size: fontSize))
-                .bold()
-            
-            Text(format(date: message.sentTime))
-                .font(.callout)
-                .foregroundColor(Color.secondary)
-        }
-    }
-    
-    // MARK: - Content Body
-    
-    @ViewBuilder
-    private var contentBody: some View {
-        if message.user != "User" {
-            LazyMarkdownView(text: message.text, fontSize: fontSize)
-                .frame(alignment: .leading)
-        } else {
-            userMessageContent
-        }
-    }
-    
-    private var userMessageContent: some View {
-        VStack(alignment: .trailing, spacing: 10) {
-            if let imageBase64Strings = message.imageBase64Strings, !imageBase64Strings.isEmpty {
-                ImageGridView(imageBase64Strings: imageBase64Strings, imageSize: imageSize) { imageData in
-                    viewModel.selectImage(with: imageData)
-                }
-                .frame(alignment: .trailing)
-            }
-            
-            Text(message.text)
-                .font(.system(size: fontSize))
-                .foregroundColor(.primary)
-        }
-        .sheet(isPresented: $viewModel.isShowingImageModal) {
-            if let imageData = viewModel.selectedImageData,
-               let imageToShow = NSImage(base64Encoded: imageData) {
-                ImageViewerModal(image: imageToShow) {
-                    viewModel.clearSelection()
-                }
-            }
-        }
-    }
-    
-    // MARK: - Copy Button
-    
-    private var copyButton: some View {
-        Button(action: {
-            copyMessageToClipboard()
-        }) {
-            Image(systemName: "doc.on.doc")
-                .foregroundColor(Color.secondary)
-                .font(.system(size: 16))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private func copyMessageToClipboard() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(message.text, forType: .string)
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func format(date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
     }
 }
 
