@@ -139,15 +139,17 @@ struct ChatView: View {
             messageList
         }
         .onChange(of: viewModel.messages) { _ in
-            guard isAtBottom else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                if isAtBottom { 
+            // If the user was at bottom, wait briefly for layout and scroll down again
+            if isAtBottom {
+                Task {
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
                     withAnimation {
                         proxy.scrollTo("Bottom", anchor: .bottom)
                     }
                 }
             }
         }
+        // Scroll to bottom whenever the count of messages changes
         .onChange(of: viewModel.messages.count) { _ in
             withAnimation {
                 proxy.scrollTo("Bottom", anchor: .bottom)
