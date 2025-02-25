@@ -182,6 +182,12 @@ struct MainView: View {
                     menuSelection: $menuSelection,
                     handleSelectionChange: handleMenuSelectionChange
                 )
+                
+                Toggle(isOn: $settingManager.enableModelThinking) {
+                    Text("Thinking (if available)")
+                }
+                .toggleStyle(.checkbox)
+                .keyboardShortcut(thinkingShortcut)
             }
         }
         

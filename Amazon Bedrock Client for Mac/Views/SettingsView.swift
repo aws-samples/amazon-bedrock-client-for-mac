@@ -154,7 +154,8 @@ struct GeneralSettingsView: View {
                         }
                     }
                     
-                    Toggle("Enable thinking (if available)", isOn: $settingsManager.enableModelThinking)
+                    Toggle("Enable thinking (if available) ⌘⇧T", isOn: $settingsManager.enableModelThinking)
+                        .keyboardShortcut(thinkingShortcut)
                 }
                 
                 Divider()
