@@ -134,6 +134,39 @@ struct LazyImageView: View {
     }
 }
 
+struct ExpandableMarkdownItem: View {
+    @State private var isExpanded = true
+    
+    let header: String
+    let text: String
+    let fontSize: CGFloat
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Button(action: {
+                    isExpanded.toggle()
+                }) {
+                    Text(header)
+                        .font(.system(size: fontSize))
+                        .bold()
+                    
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                
+                Spacer()
+            }
+            
+            if isExpanded {
+                LazyMarkdownView(text: text, fontSize: fontSize - 2)
+            }
+        }
+        .buttonStyle(.borderless)
+        .animation(.spring, value: isExpanded)
+    }
+}
+
 // MARK: - MessageView
 struct MessageView: View {
     let message: MessageData
@@ -147,23 +180,18 @@ struct MessageView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if message.user == "User" {
-                // Right-aligned bubble for user
-                HStack {
+            HStack {
+                if message.user == "User" {
                     Spacer()
                     userMessageBubble
                         .padding(.horizontal)
-                }
-                .padding(.vertical, 4)
-            } else {
-                // Left-aligned bubble for non-user
-                HStack {
+                } else {
                     nonUserMessageBubble
                         .padding(.horizontal)
                     Spacer()
                 }
-                .padding(.vertical, 4)
             }
+            .padding(.vertical, 4)
         }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -198,15 +226,24 @@ struct MessageView: View {
                 viewModel.selectImage(with: imageData)
             }
         }
-        LazyMarkdownView(text: message.text, fontSize: fontSize)
-            .sheet(isPresented: $viewModel.isShowingImageModal) {
-                if let data = viewModel.selectedImageData,
-                   let imageToShow = NSImage(base64Encoded: data) {
-                    ImageViewerModal(image: imageToShow) {
-                        viewModel.clearSelection()
+        VStack {
+            if message.thinking != nil {
+                ExpandableMarkdownItem(
+                    header: "Thinking",
+                    text: message.thinking!.split(separator: "\n").map { "> " + $0 }.joined(separator: "\n"),
+                    fontSize: fontSize
+                )
+            }
+            LazyMarkdownView(text: message.text, fontSize: fontSize)
+                .sheet(isPresented: $viewModel.isShowingImageModal) {
+                    if let data = viewModel.selectedImageData,
+                       let imageToShow = NSImage(base64Encoded: data) {
+                        ImageViewerModal(image: imageToShow) {
+                            viewModel.clearSelection()
+                        }
                     }
                 }
-            }
+        }
     }
     
     // MARK: - User bubble (possible partial highlight + images)

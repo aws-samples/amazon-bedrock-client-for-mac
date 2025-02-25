@@ -269,23 +269,31 @@ class Backend: Equatable {
         return output.body ?? AsyncThrowingStream { _ in }
     }
     
-    func invokeClaudeModel(
-        withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
-    ) async throws -> Data {
-        let requestBody = ClaudeMessageRequest(
-            anthropicVersion: "bedrock-2023-05-31",
+    func buildClaudeMessageRequest(
+        modelId: String,
+        systemPrompt: String?,
+        messages: [ClaudeMessageRequest.Message]
+    ) -> ClaudeMessageRequest {
+        let thinking = SettingManager.shared.enableModelThinking && modelId.contains("3-7") ? ClaudeMessageRequest.Thinking(budgetTokens: 2048, type: "enabled") : nil
+        
+        return ClaudeMessageRequest(
             maxTokens: 4096,
+            thinking: thinking,
             system: systemPrompt,
             messages: messages,
-            temperature: 0.7,
-            topP: 0.9,
+            temperature: 1,
+            topP: nil,
             topK: nil,
             stopSequences: nil
         )
+    }
+    
+    func invokeClaudeModel(
+        withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
+    ) async throws -> Data {
+        let requestBody = buildClaudeMessageRequest(modelId: modelId, systemPrompt: systemPrompt, messages: messages)
         
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let jsonData = try encoder.encode(requestBody)
+        let jsonData = try requestBody.encode(strategy: .convertToSnakeCase)
         
         let request = InvokeModelInput(
             body: jsonData, contentType: "application/json", modelId: modelId)
@@ -302,20 +310,9 @@ class Backend: Equatable {
     func invokeClaudeModelStream(
         withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
     ) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
-        let requestBody = ClaudeMessageRequest(
-            anthropicVersion: "bedrock-2023-05-31",
-            maxTokens: 4096,
-            system: systemPrompt,
-            messages: messages,
-            temperature: 0.7,
-            topP: 0.9,
-            topK: nil,
-            stopSequences: nil
-        )
-                
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let jsonData = try encoder.encode(requestBody)
+        let requestBody = buildClaudeMessageRequest(modelId: modelId, systemPrompt: systemPrompt, messages: messages)
+        
+        let jsonData = try requestBody.encode(strategy: .convertToSnakeCase)
         
         let request = InvokeModelWithResponseStreamInput(body: jsonData, contentType: "application/json", modelId: modelId)
         let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
@@ -657,7 +654,19 @@ enum ModelType {
 }
 
 public protocol ModelParameters: Encodable {
+    func encode(strategy: JSONEncoder.KeyEncodingStrategy?) throws -> Data
 }
+
+extension ModelParameters {
+    public func encode(strategy: JSONEncoder.KeyEncodingStrategy? = nil) throws -> Data {
+        let encoder = JSONEncoder()
+        if let strategy {
+            encoder.keyEncodingStrategy = strategy
+        }
+        return try encoder.encode(self)
+    }
+}
+
 // Extend structs to include AI21 and Cohere model parameters
 public struct AI21ModelParameters: ModelParameters {
     let prompt: String
@@ -880,34 +889,24 @@ public struct ClaudeModelParameters: ModelParameters {
         self.maxTokensToSample = maxTokensToSample
         self.stopSequences = stopSequences
     }
-    
-    public func encodeModel() throws -> Data {
-        let encoder = JSONEncoder()
-        return try encoder.encode(self)
-    }
 }
 
 public struct ClaudeMessageRequest: ModelParameters {
-    public let anthropicVersion: String
+    public struct Thinking: ModelParameters {
+        public let budgetTokens: Int
+        public let type: String
+    }
+
+    public let anthropicVersion: String = "bedrock-2023-05-31"
     public let maxTokens: Int
+    public let thinking: Thinking?
     public let system: String?
     public let messages: [Message]
     public let temperature: Float?
     public let topP: Float?
     public let topK: Int?
     public let stopSequences: [String]?
-    
-    enum CodingKeys: String, CodingKey {
-        case anthropicVersion = "anthropic_version"
-        case maxTokens = "max_tokens"
-        case system
-        case messages
-        case temperature
-        case topP = "top_p"
-        case topK = "top_k"
-        case stopSequences = "stop_sequences"
-    }
-    
+
     // 메시지 구조체 정의
     public struct Message: Codable {
         let role: String
@@ -932,70 +931,6 @@ public struct ClaudeMessageRequest: ModelParameters {
                 }
             }
         }
-    }
-    
-    public init(
-        anthropicVersion: String = "bedrock-2023-05-31",
-        maxTokens: Int,
-        system: String? = nil,
-        messages: [Message],
-        temperature: Float? = nil,
-        topP: Float? = nil,
-        topK: Int? = nil,
-        stopSequences: [String]? = nil
-    ) {
-        self.anthropicVersion = anthropicVersion
-        self.maxTokens = maxTokens
-        self.system = system
-        self.messages = messages
-        self.temperature = temperature
-        self.topP = topP
-        self.topK = topK
-        self.stopSequences = stopSequences
-    }
-}
-
-extension ClaudeMessageRequest {
-    var dictionaryRepresentation: [String: Any] {
-        var dict = [String: Any]()
-        dict["anthropic_version"] = anthropicVersion
-        dict["max_tokens"] = maxTokens
-        if let system = system { dict["system"] = system }
-        dict["messages"] = messages.map { $0.dictionaryRepresentation }
-        if let temperature = temperature { dict["temperature"] = temperature }
-        if let topP = topP { dict["top_p"] = topP }
-        if let topK = topK { dict["top_k"] = topK }
-        if let stopSequences = stopSequences { dict["stop_sequences"] = stopSequences }
-        return dict
-    }
-}
-
-extension ClaudeMessageRequest.Message {
-    var dictionaryRepresentation: [String: Any] {
-        var dict = [String: Any]()
-        dict["role"] = role
-        dict["content"] = content.map { $0.dictionaryRepresentation }
-        return dict
-    }
-}
-
-extension ClaudeMessageRequest.Message.Content {
-    var dictionaryRepresentation: [String: Any] {
-        var dict = [String: Any]()
-        dict["type"] = type
-        if let text = text { dict["text"] = text }
-        if let source = source { dict["source"] = source.dictionaryRepresentation }
-        return dict
-    }
-}
-
-extension ClaudeMessageRequest.Message.Content.ImageSource {
-    var dictionaryRepresentation: [String: Any] {
-        return [
-            "type": type,
-            "media_type": mediaType,
-            "data": data,
-        ]
     }
 }
 
@@ -1023,11 +958,6 @@ public struct MistralModelParameters: ModelParameters {
         self.topP = topP
         self.topK = topK
     }
-    
-    public func encodeModel() throws -> Data {
-        let encoder = JSONEncoder()
-        return try encoder.encode(self)
-    }
 }
 
 public struct Llama2ModelParameters: ModelParameters {
@@ -1047,11 +977,6 @@ public struct Llama2ModelParameters: ModelParameters {
         self.topP = topP
         self.temperature = temperature
     }
-    
-    public func encodeModel() throws -> Data {
-        let encoder = JSONEncoder()
-        return try encoder.encode(self)
-    }
 }
 
 public struct Llama3ModelParameters: ModelParameters {
@@ -1070,11 +995,6 @@ public struct Llama3ModelParameters: ModelParameters {
         self.maxGenLen = maxGenLen
         self.topP = topP
         self.temperature = temperature
-    }
-    
-    public func encodeModel() throws -> Data {
-        let encoder = JSONEncoder()
-        return try encoder.encode(self)
     }
 }
 
@@ -1180,11 +1100,6 @@ public struct NovaModelParameters: ModelParameters {
 public struct TitanModelParameters: ModelParameters {
     public let inputText: String  // Changed from `prompt`
     public let textGenerationConfig: TextGenerationConfig
-    
-    public func encodeModel() throws -> Data {
-        let encoder = JSONEncoder()
-        return try encoder.encode(self)
-    }
     
     public struct TextGenerationConfig: Encodable {
         let temperature: Double

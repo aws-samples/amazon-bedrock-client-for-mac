@@ -107,70 +107,64 @@ struct GeneralSettingsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("General Settings")
-                .font(.title2)
-                .bold()
-            
             Form {
-                Picker("AWS Region:", selection: $settingsManager.selectedRegion) {
-                    ForEach(AWSRegion.allCases, id: \.self) { region in
-                        Text(region.rawValue).tag(region)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-                
-                if settingsManager.isSSOLoggedIn {
-                    HStack {
-                        Text("Logged in with AWS Identity Center")
-                        Spacer()
-                        Button("Log Out") {
-                            //                            ssoManager.logout()
-                        }
-                        //                        .buttonStyle(BorderlessButtonStyle())
-                    }
-                } else {
-                    Picker("AWS Profile:", selection: $settingsManager.selectedProfile) {
-                        ForEach(settingsManager.profiles) { profile in
-                            Text(profile.name).tag(profile.name)
+                Section("General Settings") {
+                    Picker("AWS Region:", selection: $settingsManager.selectedRegion) {
+                        ForEach(AWSRegion.allCases, id: \.self) { region in
+                            Text(region.rawValue).tag(region)
                         }
                     }
-                    .pickerStyle(MenuPickerStyle())
                     
-                    //                    Button(action: {
-                    //                        showingLoginSheet = true
-                    //                    }) {
-                    //                        HStack {
-                    //                            Image(systemName: "person.crop.circle.badge.plus")
-                    //                            Text("Sign in with AWS Identity Center")
-                    //                        }
-                    //                    }
-                    //                    .buttonStyle(PlainButtonStyle())
-                }
+                    if settingsManager.isSSOLoggedIn {
+                        HStack {
+                            Text("Logged in with AWS Identity Center")
+                            Spacer()
+                            Button("Log Out") {
+                                //                            ssoManager.logout()
+                            }
+                            //                        .buttonStyle(BorderlessButtonStyle())
+                        }
+                    } else {
+                        Picker("AWS Profile:", selection: $settingsManager.selectedProfile) {
+                            ForEach(settingsManager.profiles) { profile in
+                                Text(profile.name).tag(profile.name)
+                            }
+                        }
+                        //                    Button(action: {
+                        //                        showingLoginSheet = true
+                        //                    }) {
+                        //                        HStack {
+                        //                            Image(systemName: "person.crop.circle.badge.plus")
+                        //                            Text("Sign in with AWS Identity Center")
+                        //                        }
+                        //                    }
+                        //                    .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                    Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
+                }.pickerStyle(MenuPickerStyle())
                 
-                Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
                 
                 Divider()
-            }
-            
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Default Model")
-                    .font(.headline)
                 
-                Picker("Default Model", selection: $settingsManager.defaultModelId) {
-                    ForEach(settingsManager.availableModels, id: \.id) { model in
-                        Text(model.id).tag(model.id)
+                Section("Model configuration") {
+                    Picker("Default Model", selection: $settingsManager.defaultModelId) {
+                        ForEach(settingsManager.availableModels, id: \.id) { model in
+                            Text(model.id).tag(model.id)
+                        }
                     }
+                    
+                    Toggle("Enable thinking (if available)", isOn: $settingsManager.enableModelThinking)
                 }
-            }
-            
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Customize Bedrock")
-                    .font(.headline)
                 
-                MultilineRoundedTextField(
-                    text: $settingsManager.systemPrompt,
-                    placeholder: "Tell me more about yourself or how you want me to respond"
-                )
+                Divider()
+                
+                Section("Sytem prompt") {
+                    MultilineRoundedTextField(
+                        text: $settingsManager.systemPrompt,
+                        placeholder: "Tell me more about yourself or how you want me to respond"
+                    )
+                }
             }
             
             Spacer()

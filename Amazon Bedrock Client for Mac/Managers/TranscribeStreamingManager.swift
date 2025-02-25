@@ -57,7 +57,6 @@ class TranscribeStreamingManager: ObservableObject {
         }
         
         isTranscribing = true
-        let previousTranscript = transcript
         transcript = ""
         
         do {

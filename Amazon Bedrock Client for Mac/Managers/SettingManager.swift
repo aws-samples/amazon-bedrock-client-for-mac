@@ -20,20 +20,26 @@ class SettingManager: ObservableObject {
     private let monitoringQueue = DispatchQueue(
         label: "com.amazonbedrock.fileMonitoring", attributes: .concurrent)
     
+    @AppStorage("checkForUpdates") var checkForUpdates: Bool = true
+    @AppStorage("appearance") var appearance: String = "auto"
+    @AppStorage("sidebarIconSize") var sidebarIconSize: String = "Medium"
+    @AppStorage("allowWallpaperTinting") var allowWallpaperTinting: Bool = false
+    @AppStorage("enableDebugLog") var enableDebugLog: Bool = true
+    @AppStorage("enableModelThinking") var enableModelThinking: Bool = true
+    @AppStorage("systemPrompt") var systemPrompt: String = ""
+    @AppStorage("defaultDirector") var defaultDirectory: String = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+        "Amazon Bedrock Client"
+    ).path
+    @AppStorage("defaultModelId") var defaultModelId: String = ""
+
+    // TODO: these should be converted to AppStorage, but are used from BedrockClient with Combine, which does not support AppStorage.
     @Published var selectedRegion: AWSRegion { didSet { saveSettings() } }
     @Published var selectedProfile: String { didSet { saveSettings() } }
-    @Published var profiles: [ProfileInfo] { didSet { saveSettings() } }
-    @Published var checkForUpdates: Bool { didSet { saveSettings() } }
-    @Published var appearance: String { didSet { saveSettings() } }
-    @Published var accentColor: NSColor { didSet { saveSettings() } }
-    @Published var sidebarIconSize: String { didSet { saveSettings() } }
-    @Published var allowWallpaperTinting: Bool { didSet { saveSettings() } }
     @Published var endpoint: String { didSet { saveSettings() } }
     @Published var runtimeEndpoint: String { didSet { saveSettings() } }
-    @Published var enableDebugLog: Bool { didSet { saveSettings() } }
-    @Published var systemPrompt: String { didSet { saveSettings() } }
+
     @Published var isSSOLoggedIn: Bool = false
-    @Published var defaultDirectory: String { didSet { saveSettings() } }
+    @Published var profiles: [ProfileInfo] = []
     //    @Published var ssoTokenInfo: SSOTokenInfo? {
     //        didSet {
     //            if let ssoTokenInfo = ssoTokenInfo {
@@ -46,36 +52,20 @@ class SettingManager: ObservableObject {
     //        }
     //    }
     @Published var virtualProfile: AWSProfile?
-    @Published var defaultModelId: String { didSet { saveSettings() } }
     @Published var availableModels: [ChatModel] = []
     @Published var allowImagePasting: Bool = true
     
     private var cancellables = Set<AnyCancellable>()
     
     private init() {
-        self.selectedRegion =
-        UserDefaults.standard.string(forKey: "selectedRegion").flatMap {
+        self.selectedRegion = UserDefaults.standard.string(forKey: "selectedRegion").flatMap {
             AWSRegion(rawValue: $0)
         } ?? .usEast1
         self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
-        self.profiles = Self.readAWSProfiles()
-        self.checkForUpdates =
-        UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true
-        self.appearance = UserDefaults.standard.string(forKey: "appearance") ?? "auto"
-        self.accentColor = UserDefaults.standard.color(forKey: "accentColor") ?? .systemBlue
-        self.sidebarIconSize = UserDefaults.standard.string(forKey: "sidebarIconSize") ?? "Medium"
-        self.allowWallpaperTinting = UserDefaults.standard.bool(forKey: "allowWallpaperTinting")
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
-        self.enableDebugLog =
-        UserDefaults.standard.object(forKey: "enableDebugLog") as? Bool ?? true
-        self.systemPrompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? ""
-        self.defaultDirectory =
-        UserDefaults.standard.string(forKey: "defaultDirectory")
-        ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            "Amazon Bedrock Client"
-        ).path
-        self.defaultModelId = UserDefaults.standard.string(forKey: "defaultModelId") ?? ""
+
+        self.profiles = Self.readAWSProfiles()
         
         //        if let data = UserDefaults.standard.data(forKey: "ssoTokenInfo"),
         //           let tokenInfo = try? JSONDecoder().decode(SSOTokenInfo.self, from: data) {
@@ -91,17 +81,8 @@ class SettingManager: ObservableObject {
     private func saveSettings() {
         UserDefaults.standard.set(selectedRegion.rawValue, forKey: "selectedRegion")
         UserDefaults.standard.set(selectedProfile, forKey: "selectedProfile")
-        UserDefaults.standard.set(checkForUpdates, forKey: "checkForUpdates")
-        UserDefaults.standard.set(appearance, forKey: "appearance")
-        UserDefaults.standard.set(accentColor, forKey: "accentColor")
-        UserDefaults.standard.set(sidebarIconSize, forKey: "sidebarIconSize")
-        UserDefaults.standard.set(allowWallpaperTinting, forKey: "allowWallpaperTinting")
         UserDefaults.standard.set(endpoint, forKey: "endpoint")
         UserDefaults.standard.set(runtimeEndpoint, forKey: "runtimeEndpoint")
-        UserDefaults.standard.set(enableDebugLog, forKey: "enableDebugLog")
-        UserDefaults.standard.set(systemPrompt, forKey: "systemPrompt")
-        UserDefaults.standard.set(defaultDirectory, forKey: "defaultDirectory")
-        UserDefaults.standard.set(defaultModelId, forKey: "defaultModelId")
         
         logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
     }
@@ -186,7 +167,6 @@ class SettingManager: ObservableObject {
     
     // Read profiles from a file (used for ~/.aws/credentials)
     static func readProfilesFromFile(path: String, type: ProfileInfo.ProfileType) -> [ProfileInfo] {
-        let fileManager = FileManager.default
         let expandedPath = NSString(string: path).expandingTildeInPath
         
         // Attempt to read the file contents
@@ -211,7 +191,6 @@ class SettingManager: ObservableObject {
     
     // Read SSO profiles from ~/.aws/config
     static func readSSOProfilesFromConfig(path: String) -> [ProfileInfo] {
-        let fileManager = FileManager.default
         let expandedPath = NSString(string: path).expandingTildeInPath
         
         // Attempt to read the file contents
@@ -276,19 +255,6 @@ extension Array where Element: Hashable {
     func uniqued() -> [Element] {
         var seen = Set<Element>()
         return filter { seen.insert($0).inserted }
-    }
-}
-
-extension UserDefaults {
-    func color(forKey key: String) -> NSColor? {
-        guard let colorData = data(forKey: key) else { return nil }
-        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData)
-    }
-    
-    func set(_ color: NSColor, forKey key: String) {
-        let colorData = try? NSKeyedArchiver.archivedData(
-            withRootObject: color, requiringSecureCoding: false)
-        set(colorData, forKey: key)
     }
 }
 

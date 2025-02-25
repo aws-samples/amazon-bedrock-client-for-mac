@@ -114,7 +114,7 @@ class ChatViewModel: ObservableObject {
         }
         
         let userMessage = createUserMessage()
-        await addMessage(userMessage)
+        addMessage(userMessage)
         
         await MainActor.run {
             userInput = ""
@@ -306,7 +306,7 @@ class ChatViewModel: ObservableObject {
     private func handleModelError(_ error: Error) async {
         print("Error invoking the model: \(error)")
         let errorMessage = MessageData(id: UUID(), text: "Error invoking the model: \(error)", user: "System", isError: true, sentTime: Date())
-        await addMessage(errorMessage)
+        addMessage(errorMessage)
     }
     
     private func createPrompt(history: String, userInput: String) -> String {
@@ -327,7 +327,6 @@ class ChatViewModel: ObservableObject {
     
     /// Invokes the Nova model (Streaming)
     func invokeNovaModelStream(novaMessages: [NovaModelParameters.Message]) async throws {
-        var isFirstChunk = true
         let modelId = chatModel.id
         let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -339,6 +338,7 @@ class ChatViewModel: ObservableObject {
         
         var streamedText = ""
         
+        var isFirstChunk = true
         for try await event in response {
             switch event {
             case .chunk(let part):
@@ -356,15 +356,8 @@ class ChatViewModel: ObservableObject {
                    let text = delta["text"] as? String {
                     streamedText += text
                     
-                    // Create a transformed jsonObject that matches the expected format
-                    let transformedDelta: [String: Any] = [
-                        "delta": [
-                            "type": "text_delta",
-                            "text": text
-                        ]
-                    ]
-                    
-                    handleContentBlockDelta(transformedDelta, isFirstChunk: &isFirstChunk)
+                    appendTextToMessage(text, shouldCreateNewMessage: isFirstChunk)
+                    isFirstChunk = false
                 }
                 
             case .sdkUnknown(let unknown):
@@ -389,7 +382,6 @@ class ChatViewModel: ObservableObject {
     }
 
     func invokeClaudeModelStream(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
-        var isFirstChunk = true
         let modelId = chatModel.id
         let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -400,7 +392,9 @@ class ChatViewModel: ObservableObject {
         )
 
         var streamedText = ""
+        var thinking: String? = nil
         
+        var isFirstChunk = true
         for try await event in response {
             switch event {
             case .chunk(let part):
@@ -415,21 +409,27 @@ class ChatViewModel: ObservableObject {
                     case "text_delta":
                         if let text = delta["text"] as? String {
                             streamedText += text
-                            handleContentBlockDelta(jsonObject, isFirstChunk: &isFirstChunk)
+                            appendTextToMessage(text, shouldCreateNewMessage: isFirstChunk)
                         }
+                        isFirstChunk = false
                     case "message_delta":
                         handleMessageDelta(jsonObject)
+                    case "thinking_delta":
+                        if let thinkingChunk = delta["thinking"] as? String {
+                            thinking = (thinking ?? "") + thinkingChunk
+                            appendTextToMessage("", thinking: thinkingChunk, shouldCreateNewMessage: isFirstChunk)
+                        }
+                        isFirstChunk = false
                     default:
                         print("Unhandled event type: \(type)")
                     }
                 }
-                
             case .sdkUnknown(let unknown):
                 print("Unknown SDK event: \"\(unknown)\"")
             }
         }
         
-        let assistantMessage = MessageData(id: UUID(), text: streamedText.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
+        let assistantMessage = MessageData(id: UUID(), text: streamedText.trimmingCharacters(in: .whitespacesAndNewlines), thinking: thinking, user: chatModel.name, isError: false, sentTime: Date())
         chatManager.addMessage(assistantMessage, for: chatId)
         
         let assistantClaudeMessage = ClaudeMessageRequest.Message(role: "assistant", content: [.init(type: "text", text: assistantMessage.text)])
@@ -451,25 +451,22 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    /// Handles content block delta events.
-    private func handleContentBlockDelta(_ jsonObject: [String: Any], isFirstChunk: inout Bool) {
-        if let delta = jsonObject["delta"] as? [String: Any],
-           let type = delta["type"] as? String, type == "text_delta",
-           let text = delta["text"] as? String {
-            let shouldCreateNewMessage = isFirstChunk
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                if shouldCreateNewMessage {
-                    self.messages.append(MessageData(id: UUID(), text: text, user: self.chatModel.name, isError: false, sentTime: Date()))
-                } else {
-                    if var lastMessage = self.messages.last {
-                        lastMessage.text += text
-                        self.messages[self.messages.count - 1] = lastMessage
+    /// Append the text to the last message, or create a new one.
+    private func appendTextToMessage(_ text: String, thinking: String? = nil, shouldCreateNewMessage: Bool = false) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if shouldCreateNewMessage {
+                self.messages.append(MessageData(id: UUID(), text: text, thinking: thinking, user: self.chatModel.name, isError: false, sentTime: Date()))
+            } else {
+                if var lastMessage = self.messages.last {
+                    lastMessage.text += text
+                    if let thinking {
+                        lastMessage.thinking = (lastMessage.thinking ?? "") + thinking
                     }
+                    self.messages[self.messages.count - 1] = lastMessage
                 }
-                self.objectWillChange.send()
             }
-            isFirstChunk = false
+            self.objectWillChange.send()
         }
     }
     
@@ -542,7 +539,8 @@ class ChatViewModel: ObservableObject {
             switch event {
             case .chunk(let part):
                 let jsonObject = try JSONSerialization.jsonObject(with: part.bytes!, options: [])
-                handleModelChunk(jsonObject, modelType: modelType, isFirstChunk: &isFirstChunk)
+                appendTextToMessage(extractTextFromChunk(jsonObject, modelType: modelType)!, shouldCreateNewMessage: isFirstChunk)
+                isFirstChunk = false
                 if let chunkText = extractTextFromChunk(jsonObject, modelType: modelType) {
                     streamedText += chunkText
                 }
@@ -589,27 +587,6 @@ class ChatViewModel: ObservableObject {
             }
         }
         return nil
-    }
-    
-    /// Handles model chunk events.
-    private func handleModelChunk(_ jsonObject: Any, modelType: ModelType, isFirstChunk: inout Bool) {
-        if let chunkText = extractTextFromChunk(jsonObject, modelType: modelType) {
-            let shouldCreateNewMessage = isFirstChunk
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                if shouldCreateNewMessage {
-                    let newMessage = MessageData(id: UUID(), text: chunkText, user: self.chatModel.name, isError: false, sentTime: Date())
-                    self.messages.append(newMessage)
-                } else {
-                    if var lastMessage = self.messages.last {
-                        lastMessage.text += chunkText
-                        self.messages[self.messages.count - 1] = lastMessage
-                    }
-                }
-                self.objectWillChange.send()
-            }
-            isFirstChunk = false
-        }
     }
     
     /// Handles processed text.
