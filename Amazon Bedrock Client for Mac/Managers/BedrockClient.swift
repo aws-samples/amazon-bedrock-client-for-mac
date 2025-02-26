@@ -209,11 +209,15 @@ class Backend: Equatable {
     
     func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
         let modelType = getModelType(modelId)
+        
+        // Use Converse API for supported models
+        if modelType.usesConverseAPI {
+            return try await converse(withId: modelId, prompt: prompt)
+        }
+        
         let strategy: JSONEncoder.KeyEncodingStrategy = (
             modelType == .claude ||
-            modelType == .mistral ||
-            modelType == .llama2 ||
-            modelType == .llama3 ||
+            modelType == .claude3 ||
             modelType == .novaPro ||
             modelType == .novaLite ||
             modelType == .novaMicro
@@ -239,16 +243,79 @@ class Backend: Equatable {
         return data
     }
     
+    /// Invokes a model using the Converse API (non-streaming)
+    /// For Llama and Mistral models
+    func converse(withId modelId: String, prompt: String) async throws -> Data {
+        let modelType = getModelType(modelId)
+        
+        // ContentBlock은 enum 케이스 사용
+        let contentBlock = BedrockRuntimeClientTypes.ContentBlock.text(prompt)
+        
+        // userMessage는 var로 선언하여 수정 가능하게 함
+        var userMessage = BedrockRuntimeClientTypes.Message(role: .user)
+        userMessage.content = [contentBlock]
+        
+        let inferenceConfig = BedrockRuntimeClientTypes.InferenceConfiguration(
+            maxTokens: 2048,
+            temperature: 0.7,
+            topp: 0.9
+        )
+        
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        var systemBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
+        if !systemPrompt.isEmpty && modelType.supportsSystemPrompt {
+            // SystemContentBlock도 enum 케이스 사용
+            let systemBlock = BedrockRuntimeClientTypes.SystemContentBlock.text(systemPrompt)
+            systemBlocks = [systemBlock]
+        }
+        
+        let request = ConverseInput(
+            inferenceConfig: inferenceConfig,
+            messages: [userMessage],
+            modelId: modelId,
+            system: systemBlocks
+        )
+        
+        logger.info("Converse API Request for model: \(modelId)")
+        
+        let response = try await self.bedrockRuntimeClient.converse(input: request)
+        
+        // 수정: output.message를 안전하게 추출
+        var standardResponse: [String: Any] = [:]
+        if case let .message(convMessage) = response.output,
+           convMessage.role == .assistant,
+           let content = convMessage.content {
+            var contentItems: [[String: String]] = []
+            for item in content {
+                if case let BedrockRuntimeClientTypes.ContentBlock.text(text) = item {
+                    contentItems.append(["type": "text", "text": text])
+                }
+            }
+            standardResponse["message"] = [
+                "role": "assistant",
+                "content": contentItems
+            ]
+        } else {
+            standardResponse["message"] = [
+                "role": "assistant",
+                "content": [
+                    ["type": "text", "text": "No valid response from model"]
+                ]
+            ]
+        }
+        
+        let processedData = try JSONSerialization.data(withJSONObject: standardResponse)
+        return processedData
+    }
+    
     func invokeModelStream(withId modelId: String, prompt: String) async throws
     -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error>
     {
         let modelType = getModelType(modelId)
+        
         let strategy: JSONEncoder.KeyEncodingStrategy = (
             modelType == .claude ||
             modelType == .claude3 ||
-            modelType == .mistral ||
-            modelType == .llama2 ||
-            modelType == .llama3 ||
             modelType == .novaPro ||
             modelType == .novaLite ||
             modelType == .novaMicro
@@ -267,6 +334,61 @@ class Backend: Equatable {
         let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(
             input: request)
         return output.body ?? AsyncThrowingStream { _ in }
+    }
+    
+    /// Invokes a model using the Converse API (streaming)
+    /// For Llama and Mistral models
+    func converseStream(withId modelId: String, prompt: String) async throws
+    -> AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Swift.Error> {
+        let modelType = getModelType(modelId)
+        
+        // userMessage 생성
+        var userMessage = BedrockRuntimeClientTypes.Message(role: .user)
+        let contentBlock = BedrockRuntimeClientTypes.ContentBlock.text(prompt)
+        userMessage.content = [contentBlock]
+        
+        let inferenceConfig = BedrockRuntimeClientTypes.InferenceConfiguration(
+            maxTokens: 2048,
+            temperature: 0.7,
+            topp: 0.9
+        )
+        
+        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        var systemBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
+        if !systemPrompt.isEmpty && modelType.supportsSystemPrompt {
+            let systemBlock = BedrockRuntimeClientTypes.SystemContentBlock.text(systemPrompt)
+            systemBlocks = [systemBlock]
+        }
+        
+        let request = ConverseStreamInput(
+            inferenceConfig: inferenceConfig,
+            messages: [userMessage],
+            modelId: modelId,
+            system: systemBlocks
+        )
+        
+        logger.info("Converse API Stream Request for model: \(modelId)")
+        
+        let output = try await self.bedrockRuntimeClient.converseStream(input: request)
+        
+        return AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Error> { continuation in
+            Task {
+                do {
+                    guard let stream = output.stream else {
+                        continuation.finish()
+                        return
+                    }
+                    
+                    for try await event in stream {
+                        // 이미 event는 ResponseStream 타입이므로 그대로 전달합니다.
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
     
     func buildClaudeMessageRequest(
@@ -319,7 +441,7 @@ class Backend: Equatable {
         
         return output.body ?? AsyncThrowingStream { _ in }
     }
-        
+    
     //    MARK: -- Invoke Nova Model
     func invokeNovaModel(withId modelId: String, messages: [NovaModelParameters.Message], systemPrompt: String?) async throws -> Data {
         let requestBody = NovaModelParameters(
@@ -380,7 +502,7 @@ class Backend: Equatable {
             // SD3, Core, Ultra
             promptData = ["prompt": prompt]
         } else {
-            // 기존 Stable Diffusion (SDXL 포함)
+            // Standard Stable Diffusion (including SDXL)
             promptData = [
                 "text_prompts": [["text": prompt]],
                 "cfg_scale": 10,
@@ -414,7 +536,7 @@ class Backend: Equatable {
            let imageData = Data(base64Encoded: base64Image)
         {
             
-            // Ultra 모델의 경우 추가 정보 처리
+            // Process additional information for Ultra model
             if isUltra, let finishReasons = json?["finish_reasons"] as? [String?] {
                 if let finishReason = finishReasons.first, finishReason != nil {
                     throw NSError(
@@ -432,7 +554,7 @@ class Backend: Equatable {
                   let imageData = Data(base64Encoded: base64Image)
         {
             
-            // 기존 Stable Diffusion (SDXL 포함) 응답 처리
+            // Process response for standard Stable Diffusion (including SDXL)
             if let finishReason = firstArtifact["finishReason"] as? String {
                 if finishReason == "ERROR" || finishReason == "CONTENT_FILTERED" {
                     throw NSError(
@@ -568,8 +690,14 @@ class Backend: Equatable {
             return TitanModelParameters(
                 inputText: "User: \(prompt)\n\nBot:", textGenerationConfig: textGenerationConfig)
         case .titanEmbed:
+            // No system prompt for embedding models
             return TitanEmbedModelParameters(inputText: prompt)
         case .titanImage:
+            // No system prompt for image generation models
+            // Create TitanImageModelParameters with prompt length validation
+            if prompt.count > 512 {
+                logger.info("Titan image prompt truncated from \(prompt.count) to 512 characters")
+            }
             return TitanImageModelParameters(inputText: prompt)
         case .novaPro, .novaLite, .novaMicro:
             // ADDED Amazon Nova ModelParameters. https://docs.aws.amazon.com/nova/latest/userguide/invoke.html
@@ -577,6 +705,7 @@ class Backend: Equatable {
             let systemMessage = NovaModelParameters.SystemMessage(text: "You are a helpful AI assistant.") // Optional: Add system message if needed
             return NovaModelParameters(system: [systemMessage], messages: [message])
         case .novaCanvas:
+            // No system prompt for image generation models
             return NovaCanvasModelParameters(
                 taskType: "TEXT_IMAGE",
                 text: prompt
@@ -587,18 +716,12 @@ class Backend: Equatable {
             return CohereModelParameters(
                 prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
         case .cohereEmbed:
+            // No system prompt for embedding models
             return CohereEmbedModelParameters(texts: [prompt], inputType: .searchDocument)
-        case .mistral:
-            return MistralModelParameters(
-                prompt: "<s>[INST] \(prompt)[\\INST]", maxTokens: 4096, temperature: 0.9, topP: 0.9)
-        case .llama2:
-            return Llama2ModelParameters(
-                prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9
-            )
-        case .llama3:
-            return Llama3ModelParameters(
-                prompt: "Prompt: \(prompt)\n\nAnswer:", maxGenLen: 2048, topP: 0.9, temperature: 0.9
-            )
+        case .mistral, .llama2, .llama3:
+            // These models now use the Converse API instead
+            // Handled in separate methods: invokeConverseModel and invokeConverseModelStream
+            return ClaudeModelParameters(prompt: "Placeholder - should not be used")  // This won't actually be used
         case .jambaInstruct:
             return JambaInstructModelParameters(
                 messages: [
@@ -651,6 +774,24 @@ extension NSAlert {
 
 enum ModelType {
     case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, unknown
+    
+    var usesConverseAPI: Bool {
+        switch self {
+        case .llama2, .llama3, .mistral:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    var supportsSystemPrompt: Bool {
+        switch self {
+        case .claude, .claude3, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro, .titan, .cohereCommand, .jambaInstruct:
+            return true
+        case .titanEmbed, .titanImage, .cohereEmbed, .stableDiffusion, .novaCanvas, .j2, .unknown:
+            return false
+        }
+    }
 }
 
 public protocol ModelParameters: Encodable {
@@ -816,10 +957,18 @@ struct TitanImageModelParameters: ModelParameters {
         cfgScale: Double = 8.0, height: Int = 512, width: Int = 512, seed: Int? = nil
     ) {
         self.taskType = "TEXT_IMAGE"
-        self.textToImageParams = TextToImageParams(text: inputText)
+        
+        // Titan Image Generator has a 512 character limit for prompts
+        let limitedText = inputText.count > 512 ? String(inputText.prefix(512)) : inputText
+        self.textToImageParams = TextToImageParams(text: limitedText)
+        
         self.imageGenerationConfig = ImageGenerationConfig(
             numberOfImages: numberOfImages, quality: quality, cfgScale: cfgScale, height: height,
             width: width, seed: seed)
+        
+        if limitedText.count < inputText.count {
+            print("Warning: Titan image prompt truncated to 512 characters (original: \(inputText.count) characters)")
+        }
     }
 }
 
@@ -827,12 +976,12 @@ struct NovaCanvasModelParameters: ModelParameters {
     var taskType: String
     var textToImageParams: TextToImageParams
     var imageGenerationConfig: ImageGenerationConfig
-
+    
     struct TextToImageParams: Codable {
         var text: String
         var negativeText: String?
     }
-
+    
     struct ImageGenerationConfig: Codable {
         var width: Int
         var height: Int
@@ -841,7 +990,7 @@ struct NovaCanvasModelParameters: ModelParameters {
         var seed: Int
         var numberOfImages: Int
     }
-
+    
     init(
         taskType: String = "TEXT_IMAGE",
         text: String,
@@ -896,7 +1045,7 @@ public struct ClaudeMessageRequest: ModelParameters {
         public let budgetTokens: Int
         public let type: String
     }
-
+    
     public let anthropicVersion: String = "bedrock-2023-05-31"
     public let maxTokens: Int
     public let thinking: Thinking?
@@ -906,19 +1055,19 @@ public struct ClaudeMessageRequest: ModelParameters {
     public let topP: Float?
     public let topK: Int?
     public let stopSequences: [String]?
-
-    // 메시지 구조체 정의
+    
+    // Message structure definition
     public struct Message: Codable {
         let role: String
         let content: [Content]
         
-        // 컨텐츠 구조체 정의
+        // Content structure definition
         struct Content: Codable {
             var type: String
             var text: String?
             var source: ImageSource?
             
-            // 이미지 소스 구조체 정의
+            // Image source structure definition
             struct ImageSource: Codable {
                 let type: String = "base64"
                 let mediaType: String
@@ -934,11 +1083,9 @@ public struct ClaudeMessageRequest: ModelParameters {
     }
 }
 
-public struct MistralModelParameters: ModelParameters {
+public struct LLamaMistralModelParameters: ModelParameters {
     public var prompt: String
-    // Updated maxTokens maximum value to 4096.
     public var maxTokens: Int
-    public var stop: [String]?
     public var temperature: Double
     public var topP: Double
     public var topK: Double?
@@ -957,44 +1104,6 @@ public struct MistralModelParameters: ModelParameters {
         self.temperature = temperature
         self.topP = topP
         self.topK = topK
-    }
-}
-
-public struct Llama2ModelParameters: ModelParameters {
-    public var prompt: String
-    public var maxGenLen: Int
-    public var topP: Double
-    public var temperature: Double
-    
-    public init(
-        prompt: String,
-        maxGenLen: Int = 512,
-        topP: Double = 0.9,
-        temperature: Double = 1.0
-    ) {
-        self.prompt = prompt
-        self.maxGenLen = maxGenLen
-        self.topP = topP
-        self.temperature = temperature
-    }
-}
-
-public struct Llama3ModelParameters: ModelParameters {
-    public var prompt: String
-    public var maxGenLen: Int
-    public var topP: Double
-    public var temperature: Double
-    
-    public init(
-        prompt: String,
-        maxGenLen: Int = 2048,
-        topP: Double = 0.9,
-        temperature: Double = 0.9
-    ) {
-        self.prompt = prompt
-        self.maxGenLen = maxGenLen
-        self.topP = topP
-        self.temperature = temperature
     }
 }
 
@@ -1199,15 +1308,15 @@ public struct InvokeTitanImageResponse: ModelResponse, Decodable {
 public struct InvokeNovaCanvasResponse: ModelResponse, Decodable {
     public let images: [Data]
     public let error: String?
-
+    
     enum CodingKeys: String, CodingKey {
         case images
         case error
     }
-
+    
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
+        
         // Decode base64-encoded images and convert them to Data
         let base64Images = try container.decode([String].self, forKey: .images)
         self.images = try base64Images.map { base64Str in
@@ -1221,7 +1330,7 @@ public struct InvokeNovaCanvasResponse: ModelResponse, Decodable {
             }
             return imageData
         }
-
+        
         // Decode optional error field
         self.error = try container.decodeIfPresent(String.self, forKey: .error)
     }

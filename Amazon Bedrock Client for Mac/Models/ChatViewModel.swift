@@ -20,7 +20,7 @@ class ChatViewModel: ObservableObject {
     @Published var userInput: String = ""
     @Published var isMessageBarDisabled: Bool = false
     @Published var isSending: Bool = false
-    @Published var isStreamingEnabled: Bool
+    @Published var isStreamingEnabled: Bool = false
     @Published var selectedPlaceholder: String
     @Published var emptyText: String = ""
     
@@ -38,38 +38,63 @@ class ChatViewModel: ObservableObject {
         }
         self.chatModel = model
         
-        let key = "isStreamingEnabled_\(chatId)"
-        let savedValue = UserDefaults.standard.bool(forKey: key)
-        let defaultValue = model.id.contains("mistral") || model.id.contains("claude") || model.id.contains("llama") || model.id.contains("nova")
-        self.isStreamingEnabled = savedValue ? savedValue : defaultValue
-        
+        // Enable streaming only for text generation models
+        let id = model.id.lowercased()
+
         self.selectedPlaceholder = ChatViewModel.placeholderMessages.randomElement() ?? "No messages"
         
-        // 모든 프로퍼티 초기화 후에 setupBindings 호출
+        setupStreamingEnabled()
+        
+        // Setup bindings after all properties are initialized
         setupBindings()
     }
     
     @MainActor
     private func loadChatModel() async {
-        // 채팅 모델이 준비될 때까지 대기
-        for _ in 0..<10 { // 최대 10번 시도
+        // Wait for chat model to be ready
+        for _ in 0..<10 { // Try up to 10 times
             if let model = chatManager.getChatModel(for: chatId) {
                 self.chatModel = model
                 setupStreamingEnabled()
                 setupBindings()
                 return
             }
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1초 대기
+            try? await Task.sleep(nanoseconds: 100_000_000) // Wait 0.1 second
         }
-        // 채팅 모델을 찾지 못한 경우
+        // Chat model not found
         print("Error: Chat model not found for id: \(chatId)")
     }
     
     private func setupStreamingEnabled() {
-        let key = "isStreamingEnabled_\(chatId)"
-        let savedValue = UserDefaults.standard.bool(forKey: key)
-        let defaultValue = chatModel.id.contains("mistral") || chatModel.id.contains("claude") || chatModel.id.contains("llama") || chatModel.id.contains("nova")
-        self.isStreamingEnabled = savedValue ? savedValue : defaultValue
+        self.isStreamingEnabled = isTextGenerationModel(chatModel.id)
+    }
+    
+    /// Determines if the model ID represents a text generation model that can support streaming
+    private func isTextGenerationModel(_ modelId: String) -> Bool {
+        let id = modelId.lowercased()
+        
+        // Special case: check for non-text generation models first
+        if id.contains("embed") ||
+           id.contains("image") ||
+           id.contains("video") ||
+           id.contains("stable-") ||
+           id.contains("-canvas") ||
+           id.contains("titan-embed") ||
+           id.contains("titan-e1t") {
+            return false
+        } else {
+            // Text generation models - be more specific with nova to exclude nova-canvas
+            let isNova = id.contains("nova") && !id.contains("canvas")
+            
+            return id.contains("mistral") ||
+                                      id.contains("claude") ||
+                                      id.contains("llama") ||
+                                      isNova ||
+                                      id.contains("titan") ||
+                                      id.contains("command") ||
+                                      id.contains("jurassic") ||
+                                      id.contains("jamba")
+        }
     }
     
     private func setupBindings() {
@@ -82,11 +107,12 @@ class ChatViewModel: ObservableObject {
             .assign(to: \.chatModel, on: self)
             .store(in: &cancellables)
         
-        $isStreamingEnabled
+        // Update streaming status when chat model changes
+        $chatModel
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] newValue in
+            .sink { [weak self] model in
                 guard let self = self else { return }
-                UserDefaults.standard.set(newValue, forKey: "isStreamingEnabled_\(self.chatId)")
+                self.isStreamingEnabled = self.isTextGenerationModel(model.id)
             }
             .store(in: &cancellables)
     }
@@ -132,8 +158,23 @@ class ChatViewModel: ObservableObject {
             else {
                 try await handleStandardMessage(userMessage)
             }
-        } catch {
-            await handleModelError(error)
+        } catch let error {
+            // Special handling for Titan Image validation exception
+            if let nsError = error as NSError?,
+               nsError.localizedDescription.contains("ValidationException") && 
+               nsError.localizedDescription.contains("maxLength: 512") {
+                // Create a more user-friendly error message
+                let errorMessage = MessageData(
+                    id: UUID(), 
+                    text: "Error: Your prompt is too long. Titan Image Generator has a 512 character limit for prompts. Please try again with a shorter prompt.", 
+                    user: "System", 
+                    isError: true, 
+                    sentTime: Date()
+                )
+                await addMessage(errorMessage)
+            } else {
+                await handleModelError(error)
+            }
         }
         
         await MainActor.run {
@@ -155,7 +196,7 @@ class ChatViewModel: ObservableObject {
             let (base64String, _) = base64EncodeImage(image, withExtension: fileExtension)
             
             if let base64String = base64String {
-                print("Image at index \(index) encoded successfully: \(base64String.prefix(30))...") // base64String의 앞 30글자만 출력
+                print("Image at index \(index) encoded successfully: \(base64String.prefix(30))...")
             } else {
                 print("Failed to encode image at index \(index)")
             }
@@ -271,7 +312,9 @@ class ChatViewModel: ObservableObject {
         
         history += formatHistoryAddition(userInput: userMessage.text)
         
-        let prompt = createPrompt(history: trimmedHistory, userInput: userMessage.text)
+        let isTextGenerationModel = isTextGenerationModel(chatModel.id)
+        
+        let prompt = createPrompt(history: trimmedHistory, userInput: userMessage.text, isTextGenerationModel: isTextGenerationModel)
         
         chatManager.setHistory(history, for: chatId)
         
@@ -309,19 +352,22 @@ class ChatViewModel: ObservableObject {
         addMessage(errorMessage)
     }
     
-    private func createPrompt(history: String, userInput: String) -> String {
-        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func createPrompt(history: String, userInput: String, isTextGenerationModel: Bool) -> String {
         var prompt = ""
-
-        if !systemPrompt.isEmpty {
-            prompt += "<system>\(systemPrompt)</system>\n\n"
+        
+        if isTextGenerationModel {
+            let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !systemPrompt.isEmpty {
+                prompt += "<system>\(systemPrompt)</system>\n\n"
+            } else {
+                prompt += "The following is a friendly conversation between a human and an AI assistant.\n"
+            }
+            prompt += "Current conversation:\n\(history)\n\n"
+            prompt += "Human: \(userInput)\nAssistant:"
         } else {
-            prompt += "The following is a friendly conversation between a human and an AI assistant.\n"
+            prompt = userInput
         }
-
-        prompt += "Current conversation:\n\(history)\n\n"
-        prompt += "Human: \(userInput)\nAssistant:"
-
+        
         return prompt
     }
     
@@ -530,22 +576,52 @@ class ChatViewModel: ObservableObject {
     private func invokeModelStream(prompt: String) async throws {
         var isFirstChunk = true
         let modelId = chatModel.id
-        let response = try await backendModel.backend.invokeModelStream(withId: modelId, prompt: prompt)
         let modelType = backendModel.backend.getModelType(modelId)
         
         var streamedText = ""
         
-        for try await event in response {
-            switch event {
-            case .chunk(let part):
-                let jsonObject = try JSONSerialization.jsonObject(with: part.bytes!, options: [])
-                appendTextToMessage(extractTextFromChunk(jsonObject, modelType: modelType)!, shouldCreateNewMessage: isFirstChunk)
-                isFirstChunk = false
-                if let chunkText = extractTextFromChunk(jsonObject, modelType: modelType) {
-                    streamedText += chunkText
+        // Use Converse API for supported models
+        if modelType.usesConverseAPI {
+            let converseResponse = try await backendModel.backend.converseStream(withId: modelId, prompt: prompt)
+            
+            for try await output in converseResponse {
+                switch output {
+                case .contentblockdelta(let deltaEvent):
+                    // ContentBlockDelta 구조에 맞게 처리
+                    if let delta = deltaEvent.delta {
+                        // delta가 enum일 경우 switch로 처리
+                        switch delta {
+                        case .text(let textContent):
+                            appendTextToMessage(textContent, shouldCreateNewMessage: isFirstChunk)
+                            isFirstChunk = false
+                            streamedText += textContent
+                        default:
+                            // 다른 delta 타입 처리
+                            break
+                        }
+                    }
+                case .messagestart, .contentblockstart, .contentblockstop, .messagestop, .metadata:
+                    // 필요한 경우 이러한 이벤트도 처리할 수 있습니다
+                    break
+                case .sdkUnknown(let unknown):
+                    print("Unknown ConverseStream event: \"\(unknown)\"")
                 }
-            case .sdkUnknown(let unknown):
-                print("Unknown: \"\(unknown)\"")
+            }
+        } else {
+            let invokeResponse = try await backendModel.backend.invokeModelStream(withId: modelId, prompt: prompt)
+            
+            for try await event in invokeResponse {
+                switch event {
+                case .chunk(let part):
+                    let jsonObject = try JSONSerialization.jsonObject(with: part.bytes!, options: [])
+                    appendTextToMessage(extractTextFromChunk(jsonObject, modelType: modelType)!, shouldCreateNewMessage: isFirstChunk)
+                    isFirstChunk = false
+                    if let chunkText = extractTextFromChunk(jsonObject, modelType: modelType) {
+                        streamedText += chunkText
+                    }
+                case .sdkUnknown(let unknown):
+                    print("Unknown ResponseStream event: \"\(unknown)\"")
+                }
             }
         }
         
@@ -561,6 +637,7 @@ class ChatViewModel: ObservableObject {
         }
         chatManager.setHistory(history, for: chatId)
     }
+
     
     private func extractTextFromChunk(_ jsonObject: Any, modelType: ModelType) -> String? {
         if let dict = jsonObject as? [String: Any] {
@@ -576,7 +653,14 @@ class ChatViewModel: ObservableObject {
             case .claude:
                 return dict["completion"] as? String
             case .llama2, .llama3, .mistral:
-                if let generation = dict["generation"] as? String {
+                // Check for Converse API response format
+                if let message = dict["message"] as? [String: Any],
+                   let content = message["content"] as? [[String: Any]],
+                   let text = content.first?["text"] as? String {
+                    return text
+                }
+                // Check for old API response format
+                else if let generation = dict["generation"] as? String {
                     return generation
                 } else if let outputs = dict["outputs"] as? [[String: Any]],
                           let text = outputs.first?["text"] as? String {
@@ -657,8 +741,32 @@ class ChatViewModel: ObservableObject {
             assistantMessage = MessageData(id: UUID(), text: response.embeddings.map({"\($0)"}).joined(separator: ","), user: chatModel.name, isError: false, sentTime: Date())
             
         case .llama2, .llama3, .mistral:
-            let response = try backendModel.backend.decode(data) as InvokeLlama2Response
-            assistantMessage = MessageData(id: UUID(), text: response.generation, user: chatModel.name, isError: false, sentTime: Date())
+            // Handle Converse API response format
+            if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+               let outputMessage = json["output"] as? [String: Any],
+               let message = outputMessage["message"] as? [String: Any],
+               let content = message["content"] as? [[String: Any]],
+               let text = content.first?["text"] as? String {
+                
+                assistantMessage = MessageData(
+                    id: UUID(), 
+                    text: text.trimmingCharacters(in: .whitespacesAndNewlines), 
+                    user: chatModel.name, 
+                    isError: false, 
+                    sentTime: Date()
+                )
+            }
+            // Fallback to old API format
+            else {
+                let response = try backendModel.backend.decode(data) as InvokeLlama2Response
+                assistantMessage = MessageData(
+                    id: UUID(), 
+                    text: response.generation, 
+                    user: chatModel.name, 
+                    isError: false, 
+                    sentTime: Date()
+                )
+            }
             
         case .jambaInstruct:
             let response = try backendModel.backend.decode(data) as InvokeJambaInstructResponse

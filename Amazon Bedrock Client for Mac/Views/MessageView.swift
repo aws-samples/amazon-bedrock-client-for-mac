@@ -136,34 +136,61 @@ struct LazyImageView: View {
 
 struct ExpandableMarkdownItem: View {
     @State private var isExpanded = true
+    @State private var isAnimating = false
     
     let header: String
     let text: String
     let fontSize: CGFloat
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Button(action: {
-                    isExpanded.toggle()
-                }) {
+        VStack(alignment: .leading, spacing: 6) {
+            // Header button with animation
+            Button(action: {
+                isExpanded.toggle()
+            }) {
+                HStack(spacing: 4) {
                     Text(header)
                         .font(.system(size: fontSize))
-                        .bold()
+                        .fontWeight(.medium)
+                        .foregroundColor(Color.secondary)
+                    
+                    // Animated indicator
+                    if !isExpanded {
+                        Text(">")
+                            .fontWeight(.medium)
+                            .foregroundColor(Color.secondary.opacity(isAnimating ? 0.4 : 0.8))
+                            .onAppear {
+                                withAnimation(Animation.easeInOut(duration: 0.8).repeatForever()) {
+                                    isAnimating = true
+                                }
+                            }
+                    }
+                    
+                    Spacer()
                     
                     Image(systemName: "chevron.down")
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .foregroundColor(Color.secondary)
                 }
-                
-                Spacer()
             }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(Color.secondary.opacity(0.1))
+            .cornerRadius(6)
+            .buttonStyle(.borderless)
             
+            // Content area with animation
             if isExpanded {
-                LazyMarkdownView(text: text, fontSize: fontSize - 2)
+                VStack(alignment: .leading) {
+                    LazyMarkdownView(text: text, fontSize: fontSize - 1)
+                        .padding(10)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .buttonStyle(.borderless)
-        .animation(.spring, value: isExpanded)
+        .animation(.spring(response: 0.3), value: isExpanded)
     }
 }
 
@@ -227,10 +254,10 @@ struct MessageView: View {
             }
         }
         VStack {
-            if message.thinking != nil {
+            if let thinking = message.thinking, !thinking.isEmpty {
                 ExpandableMarkdownItem(
-                    header: "Thinking",
-                    text: message.thinking!.split(separator: "\n").map { "> " + $0 }.joined(separator: "\n"),
+                    header: "Thinking Process",
+                    text: thinking.split(separator: "\n").map { "> " + $0 }.joined(separator: "\n"),
                     fontSize: fontSize
                 )
             }

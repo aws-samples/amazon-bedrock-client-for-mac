@@ -20,7 +20,7 @@ A sleek and powerful macOS client for Amazon Bedrock, bringing AI models to your
 
 - 🤖 Seamless interaction with multiple Amazon Bedrock models including Claude 3 Sonnet
 - 💬 Real-time chat interface with message history
-- 🔄 Easy model switching and streaming toggle
+- 🔄 Easy model switching
 - 📊 Support for various AI tasks including code generation and explanation
 - 🌓 Native Dark Mode support
 - 🚀 Built with SwiftUI for optimal performance and modern UI
@@ -66,7 +66,6 @@ Alternatively:
 2. Type your message or query in the input field
 3. Press Enter or click the send button to interact with the AI
 4. View the AI's response in the chat interface
-5. Toggle streaming on/off for real-time or batch responses
 
 ## 🛠️ Troubleshooting
 

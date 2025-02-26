@@ -86,7 +86,7 @@ struct MainView: View {
     
     private func fetchModels() {
         Task {
-            print("Fetching models...")
+            logger.info("Fetching models...")
             
             async let foundationModelsResult = backendModel.backend.listFoundationModels()
             async let inferenceProfilesResult = backendModel.backend.listInferenceProfiles()
@@ -143,8 +143,8 @@ struct MainView: View {
             )
         }
         logger.error("Fetch Models Error - \(self.alertInfo?.title ?? "Error"): \(self.alertInfo?.message ?? "No message")")
-        print("Error type: \(type(of: error))")
-        print("Error description: \(error)")
+        logger.error("Error type: \(type(of: error))")
+        logger.error("Error description: \(error)")
     }
     
     private func selectDefaultModel() {
@@ -182,12 +182,6 @@ struct MainView: View {
                     menuSelection: $menuSelection,
                     handleSelectionChange: handleMenuSelectionChange
                 )
-                
-                Toggle(isOn: $settingManager.enableModelThinking) {
-                    Text("Thinking (if available)")
-                }
-                .toggleStyle(.checkbox)
-                .keyboardShortcut(thinkingShortcut)
             }
         }
         

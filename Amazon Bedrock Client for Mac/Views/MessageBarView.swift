@@ -48,6 +48,7 @@ struct MessageBarView: View {
             }
             // The main message bar with file upload, mic, input, and send buttons.
             HStack(alignment: .center, spacing: 8) {
+                advancedOptionsButton
                 fileUploadButton
                 inputArea
                 micButton
@@ -103,6 +104,44 @@ struct MessageBarView: View {
         .padding(2)
     }
     
+    private var advancedOptionsButton: some View {
+        Menu {
+            if modelId.contains("3-7") {
+                Toggle("Enable Thinking", isOn: $settingManager.enableModelThinking)
+                    .help("Allow Claude 3.7 to show its thinking process")
+            }
+            
+            Divider()
+            
+            Text("AI Options")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
+            Toggle("Allow Image Pasting", isOn: $settingManager.allowImagePasting)
+                .help("Enable or disable image pasting functionality")
+            
+            if !settingManager.systemPrompt.isEmpty {
+                Button(action: {
+                    // Create alert to view system prompt
+                    let alert = NSAlert()
+                    alert.messageText = "System Prompt"
+                    alert.informativeText = settingManager.systemPrompt
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }) {
+                    Label("View System Prompt", systemImage: "info.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "plus.circle")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+        }
+        .menuIndicator(.hidden)
+        .frame(width: 32, height: 32)
+        .clipShape(Circle())
+    }
+
     private var fileUploadButton: some View {
         Button(action: {
             isImagePickerPresented = true

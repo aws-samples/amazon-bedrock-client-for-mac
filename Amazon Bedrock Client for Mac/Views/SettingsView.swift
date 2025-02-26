@@ -101,7 +101,6 @@ struct MultilineRoundedTextField: View {
 
 struct GeneralSettingsView: View {
     @ObservedObject private var settingsManager = SettingManager.shared
-    //    @StateObject var ssoManager = SSOManager()
     @State private var showingLoginSheet = false
     @State private var loginError: String?
     
@@ -120,9 +119,8 @@ struct GeneralSettingsView: View {
                             Text("Logged in with AWS Identity Center")
                             Spacer()
                             Button("Log Out") {
-                                //                            ssoManager.logout()
+                                // SSO logout functionality
                             }
-                            //                        .buttonStyle(BorderlessButtonStyle())
                         }
                     } else {
                         Picker("AWS Profile:", selection: $settingsManager.selectedProfile) {
@@ -155,7 +153,7 @@ struct GeneralSettingsView: View {
                     }
                     
                     Toggle("Enable thinking (if available) ⌘⇧T", isOn: $settingsManager.enableModelThinking)
-                        .keyboardShortcut(thinkingShortcut)
+                        .keyboardShortcut("t", modifiers: [.shift, .command])
                 }
                 
                 Divider()
@@ -221,6 +219,7 @@ struct AppearanceSettingsView: View {
 
 struct AdvancedSettingsView: View {
     @ObservedObject private var settingsManager = SettingManager.shared
+    @State private var selectedModel = ""
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -262,6 +261,8 @@ struct AdvancedSettingsView: View {
                 TextField("Bedrock Runtime Endpoint:", text: $settingsManager.runtimeEndpoint)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: 400)
+                
+                Divider()
                 
                 Toggle("Allow Image Pasting", isOn: $settingsManager.allowImagePasting)
                 Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
