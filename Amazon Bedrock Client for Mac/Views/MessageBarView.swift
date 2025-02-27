@@ -47,14 +47,14 @@ struct MessageBarView: View {
                 imagePreview
             }
             // The main message bar with file upload, mic, input, and send buttons.
-            HStack(alignment: .center, spacing: 8) {
-                advancedOptionsButton
+            HStack(alignment: .center, spacing: 2) {
                 fileUploadButton
+                advancedOptionsButton
                 inputArea
                 micButton
                 sendButton
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 20)
@@ -64,7 +64,7 @@ struct MessageBarView: View {
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(Color.gray.opacity(0.2), lineWidth: 1)
             )
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 24)
             .padding(.bottom, 8)
         }
         .foregroundColor(Color.text)
@@ -106,19 +106,18 @@ struct MessageBarView: View {
     
     private var advancedOptionsButton: some View {
         Menu {
+            Text("More Options")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
             if modelId.contains("3-7") {
                 Toggle("Enable Thinking", isOn: $settingManager.enableModelThinking)
                     .help("Allow Claude 3.7 to show its thinking process")
             }
             
-            Divider()
-            
-            Text("AI Options")
-                .font(.headline)
-                .foregroundColor(.secondary)
-            
             Toggle("Allow Image Pasting", isOn: $settingManager.allowImagePasting)
                 .help("Enable or disable image pasting functionality")
+            
             
             if !settingManager.systemPrompt.isEmpty {
                 Button(action: {
@@ -137,11 +136,13 @@ struct MessageBarView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.primary)
         }
+        .buttonStyle(PlainButtonStyle())
         .menuIndicator(.hidden)
         .frame(width: 32, height: 32)
         .clipShape(Circle())
+        
     }
-
+    
     private var fileUploadButton: some View {
         Button(action: {
             isImagePickerPresented = true

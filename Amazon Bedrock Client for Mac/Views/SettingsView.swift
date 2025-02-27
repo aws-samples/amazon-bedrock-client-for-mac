@@ -107,53 +107,48 @@ struct GeneralSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Form {
-                Section("General Settings") {
-                    Picker("AWS Region:", selection: $settingsManager.selectedRegion) {
-                        ForEach(AWSRegion.allCases, id: \.self) { region in
-                            Text(region.rawValue).tag(region)
+                
+                Picker("AWS Region:", selection: $settingsManager.selectedRegion) {
+                    ForEach(AWSRegion.allCases, id: \.self) { region in
+                        Text(region.rawValue).tag(region)
+                    }
+                }
+                
+                if settingsManager.isSSOLoggedIn {
+                    HStack {
+                        Text("Logged in with AWS Identity Center")
+                        Spacer()
+                        Button("Log Out") {
+                            // SSO logout functionality
                         }
                     }
-                    
-                    if settingsManager.isSSOLoggedIn {
-                        HStack {
-                            Text("Logged in with AWS Identity Center")
-                            Spacer()
-                            Button("Log Out") {
-                                // SSO logout functionality
-                            }
+                } else {
+                    Picker("AWS Profile:", selection: $settingsManager.selectedProfile) {
+                        ForEach(settingsManager.profiles) { profile in
+                            Text(profile.name).tag(profile.name)
                         }
-                    } else {
-                        Picker("AWS Profile:", selection: $settingsManager.selectedProfile) {
-                            ForEach(settingsManager.profiles) { profile in
-                                Text(profile.name).tag(profile.name)
-                            }
-                        }
-                        //                    Button(action: {
-                        //                        showingLoginSheet = true
-                        //                    }) {
-                        //                        HStack {
-                        //                            Image(systemName: "person.crop.circle.badge.plus")
-                        //                            Text("Sign in with AWS Identity Center")
-                        //                        }
-                        //                    }
-                        //                    .buttonStyle(PlainButtonStyle())
                     }
-                    
-                    Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
-                }.pickerStyle(MenuPickerStyle())
+                    //                    Button(action: {
+                    //                        showingLoginSheet = true
+                    //                    }) {
+                    //                        HStack {
+                    //                            Image(systemName: "person.crop.circle.badge.plus")
+                    //                            Text("Sign in with AWS Identity Center")
+                    //                        }
+                    //                    }
+                    //                    .buttonStyle(PlainButtonStyle())
+                }
+                
+                Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
+                
                 
                 
                 Divider()
                 
-                Section("Model configuration") {
-                    Picker("Default Model", selection: $settingsManager.defaultModelId) {
-                        ForEach(settingsManager.availableModels, id: \.id) { model in
-                            Text(model.id).tag(model.id)
-                        }
+                Picker("Default Model", selection: $settingsManager.defaultModelId) {
+                    ForEach(settingsManager.availableModels, id: \.id) { model in
+                        Text(model.id).tag(model.id)
                     }
-                    
-                    Toggle("Enable thinking (if available) ⌘⇧T", isOn: $settingsManager.enableModelThinking)
-                        .keyboardShortcut("t", modifiers: [.shift, .command])
                 }
                 
                 Divider()
@@ -264,7 +259,6 @@ struct AdvancedSettingsView: View {
                 
                 Divider()
                 
-                Toggle("Allow Image Pasting", isOn: $settingsManager.allowImagePasting)
                 Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
             }
             .padding(.top, 10)

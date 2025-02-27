@@ -333,8 +333,9 @@ class ChatViewModel: ObservableObject {
     }
     
     private func formatHistoryAddition(userInput: String) -> String {
-        if chatModel.id.contains("llama3") {
-            return "user\n\n\(userInput)"
+        let modelId = chatModel.id.lowercased()
+        if modelId.contains("llama3") {
+            return "user\n\n\(userInput)\n\n"
         } else {
             return "\nHuman: \(userInput)"
         }

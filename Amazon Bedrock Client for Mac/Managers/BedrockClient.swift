@@ -399,7 +399,7 @@ class Backend: Equatable {
         let thinking = SettingManager.shared.enableModelThinking && modelId.contains("3-7") ? ClaudeMessageRequest.Thinking(budgetTokens: 2048, type: "enabled") : nil
         
         return ClaudeMessageRequest(
-            maxTokens: 4096,
+            maxTokens: 8192,
             thinking: thinking,
             system: systemPrompt,
             messages: messages,

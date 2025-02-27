@@ -135,62 +135,36 @@ struct LazyImageView: View {
 }
 
 struct ExpandableMarkdownItem: View {
-    @State private var isExpanded = true
-    @State private var isAnimating = false
+    @State private var isExpanded = false
     
     let header: String
     let text: String
     let fontSize: CGFloat
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Header button with animation
+        VStack(alignment: .leading, spacing: 4) {
+            // 접기/펼치기 버튼
             Button(action: {
-                isExpanded.toggle()
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isExpanded.toggle()
+                }
             }) {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Text(header)
-                        .font(.system(size: fontSize))
-                        .fontWeight(.medium)
-                        .foregroundColor(Color.secondary)
-                    
-                    // Animated indicator
-                    if !isExpanded {
-                        Text(">")
-                            .fontWeight(.medium)
-                            .foregroundColor(Color.secondary.opacity(isAnimating ? 0.4 : 0.8))
-                            .onAppear {
-                                withAnimation(Animation.easeInOut(duration: 0.8).repeatForever()) {
-                                    isAnimating = true
-                                }
-                            }
-                    }
-                    
+                        .font(.system(size: fontSize, weight: .semibold))
+                        .foregroundColor(.gray)  // 좀 더 연한 회색
                     Spacer()
-                    
-                    Image(systemName: "chevron.down")
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .foregroundColor(Color.secondary)
                 }
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(6)
             .buttonStyle(.borderless)
             
-            // Content area with animation
+            // 펼쳐졌을 때 내용 표시
             if isExpanded {
-                VStack(alignment: .leading) {
-                    LazyMarkdownView(text: text, fontSize: fontSize - 1)
-                        .padding(10)
-                        .background(Color.secondary.opacity(0.05))
-                        .cornerRadius(6)
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                // 추가 문구를 원한다면 text 끝에 이어붙입니다
+                
+                LazyMarkdownView(text: text, fontSize: fontSize - 2)
             }
         }
-        .animation(.spring(response: 0.3), value: isExpanded)
     }
 }
 
@@ -256,9 +230,9 @@ struct MessageView: View {
         VStack {
             if let thinking = message.thinking, !thinking.isEmpty {
                 ExpandableMarkdownItem(
-                    header: "Thinking Process",
-                    text: thinking.split(separator: "\n").map { "> " + $0 }.joined(separator: "\n"),
-                    fontSize: fontSize
+                    header: "thinking",
+                    text: thinking,
+                    fontSize: fontSize - 2
                 )
             }
             LazyMarkdownView(text: message.text, fontSize: fontSize)
