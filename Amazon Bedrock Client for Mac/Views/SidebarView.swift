@@ -271,6 +271,8 @@ struct SidebarView: View {
             return Image("amazon")
         case let id where id.contains("stability"):
             return Image("stability ai")
+        case let id where id.contains("deepseek"):
+            return Image("deepseek")
         default:
             return Image("bedrock")
         }

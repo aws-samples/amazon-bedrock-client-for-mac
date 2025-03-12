@@ -40,7 +40,7 @@ class ChatViewModel: ObservableObject {
         
         // Enable streaming only for text generation models
         let id = model.id.lowercased()
-
+        
         self.selectedPlaceholder = ChatViewModel.placeholderMessages.randomElement() ?? "No messages"
         
         setupStreamingEnabled()
@@ -75,25 +75,26 @@ class ChatViewModel: ObservableObject {
         
         // Special case: check for non-text generation models first
         if id.contains("embed") ||
-           id.contains("image") ||
-           id.contains("video") ||
-           id.contains("stable-") ||
-           id.contains("-canvas") ||
-           id.contains("titan-embed") ||
-           id.contains("titan-e1t") {
+            id.contains("image") ||
+            id.contains("video") ||
+            id.contains("stable-") ||
+            id.contains("-canvas") ||
+            id.contains("titan-embed") ||
+            id.contains("titan-e1t") {
             return false
         } else {
             // Text generation models - be more specific with nova to exclude nova-canvas
             let isNova = id.contains("nova") && !id.contains("canvas")
             
             return id.contains("mistral") ||
-                                      id.contains("claude") ||
-                                      id.contains("llama") ||
-                                      isNova ||
-                                      id.contains("titan") ||
-                                      id.contains("command") ||
-                                      id.contains("jurassic") ||
-                                      id.contains("jamba")
+            id.contains("claude") ||
+            id.contains("llama") ||
+            isNova ||
+            id.contains("titan") ||
+            id.contains("deepseek") ||
+            id.contains("command") ||
+            id.contains("jurassic") ||
+            id.contains("jamba")
         }
     }
     
@@ -120,7 +121,7 @@ class ChatViewModel: ObservableObject {
     func loadInitialData() {
         messages = chatManager.getMessages(for: chatId)
     }
-
+    
     func sendMessage() {
         guard !userInput.isEmpty else { return }
         
@@ -161,14 +162,14 @@ class ChatViewModel: ObservableObject {
         } catch let error {
             // Special handling for Titan Image validation exception
             if let nsError = error as NSError?,
-               nsError.localizedDescription.contains("ValidationException") && 
-               nsError.localizedDescription.contains("maxLength: 512") {
+               nsError.localizedDescription.contains("ValidationException") &&
+                nsError.localizedDescription.contains("maxLength: 512") {
                 // Create a more user-friendly error message
                 let errorMessage = MessageData(
-                    id: UUID(), 
-                    text: "Error: Your prompt is too long. Titan Image Generator has a 512 character limit for prompts. Please try again with a shorter prompt.", 
-                    user: "System", 
-                    isError: true, 
+                    id: UUID(),
+                    text: "Error: Your prompt is too long. Titan Image Generator has a 512 character limit for prompts. Please try again with a shorter prompt.",
+                    user: "System",
+                    isError: true,
                     sentTime: Date()
                 )
                 await addMessage(errorMessage)
@@ -265,7 +266,7 @@ class ChatViewModel: ObservableObject {
             content: novaContents
         )
     }
-
+    
     // Helper function to create Nova content blocks
     private func createNovaContentBlocks(from message: MessageData) -> [NovaModelParameters.Message.MessageContent] {
         var contents: [NovaModelParameters.Message.MessageContent] = []
@@ -281,16 +282,16 @@ class ChatViewModel: ObservableObject {
         if let imageBase64Strings = message.imageBase64Strings {
             for (index, base64String) in imageBase64Strings.enumerated() {
                 let fileExtension = sharedImageDataSource.fileExtensions.indices.contains(index)
-                    ? sharedImageDataSource.fileExtensions[index].lowercased()
-                    : "jpeg"
+                ? sharedImageDataSource.fileExtensions[index].lowercased()
+                : "jpeg"
                 
                 let format: NovaModelParameters.Message.MessageContent.ImageContent.ImageFormat
                 switch fileExtension {
-                    case "jpg", "jpeg": format = .jpeg
-                    case "png": format = .png
-                    case "gif": format = .gif
-                    case "webp": format = .webp
-                    default: format = .jpeg
+                case "jpg", "jpeg": format = .jpeg
+                case "png": format = .png
+                case "gif": format = .gif
+                case "webp": format = .webp
+                default: format = .jpeg
                 }
                 
                 contents.append(NovaModelParameters.Message.MessageContent(
@@ -305,7 +306,7 @@ class ChatViewModel: ObservableObject {
         }
         return contents
     }
-
+    
     private func handleStandardMessage(_ userMessage: MessageData) async throws {
         var history = chatManager.getHistory(for: chatId)
         let trimmedHistory = trimHistory(history)
@@ -376,7 +377,7 @@ class ChatViewModel: ObservableObject {
     func invokeNovaModelStream(novaMessages: [NovaModelParameters.Message]) async throws {
         let modelId = chatModel.id
         let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-
+        
         let response = try await backendModel.backend.invokeNovaModelStream(
             withId: modelId,
             messages: novaMessages,
@@ -427,17 +428,17 @@ class ChatViewModel: ObservableObject {
         )
         chatManager.addNovaHistory(assistantNovaMessage, for: chatId)
     }
-
+    
     func invokeClaudeModelStream(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         let modelId = chatModel.id
         let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-
+        
         let response = try await backendModel.backend.invokeClaudeModelStream(
             withId: modelId,
             messages: claudeMessages,
             systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
         )
-
+        
         var streamedText = ""
         var thinking: String? = nil
         
@@ -521,7 +522,7 @@ class ChatViewModel: ObservableObject {
     func invokeClaudeModel(claudeMessages: [ClaudeMessageRequest.Message]) async throws {
         let modelId = chatModel.id
         let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-
+        
         let data = try await backendModel.backend.invokeClaudeModel(
             withId: modelId,
             messages: claudeMessages,
@@ -539,7 +540,7 @@ class ChatViewModel: ObservableObject {
             chatManager.addClaudeHistory(assistantClaudeMessage, for: chatId)
         }
     }
-
+    
     // MARK: -- Invoke Nova Model
     /// Invokes the Nova model (Non-Streaming)
     func invokeNovaModel(novaMessages: [NovaModelParameters.Message]) async throws {
@@ -580,6 +581,7 @@ class ChatViewModel: ObservableObject {
         let modelType = backendModel.backend.getModelType(modelId)
         
         var streamedText = ""
+        var thinking: String? = nil
         
         // Use Converse API for supported models
         if modelType.usesConverseAPI {
@@ -588,16 +590,31 @@ class ChatViewModel: ObservableObject {
             for try await output in converseResponse {
                 switch output {
                 case .contentblockdelta(let deltaEvent):
-                    // ContentBlockDelta 구조에 맞게 처리
+                    // Handle ContentBlockDelta structure
                     if let delta = deltaEvent.delta {
-                        // delta가 enum일 경우 switch로 처리
+                        // Handle delta enum with switch
                         switch delta {
                         case .text(let textContent):
                             appendTextToMessage(textContent, shouldCreateNewMessage: isFirstChunk)
                             isFirstChunk = false
                             streamedText += textContent
+                        case .reasoningcontent(let reasoningContent):
+                            switch reasoningContent {
+                            case .text(let textContent):
+                                thinking = (thinking ?? "") + textContent
+                                appendTextToMessage("", thinking: textContent, shouldCreateNewMessage: isFirstChunk)
+                                isFirstChunk = false
+                            case .redactedcontent(let data):
+                                // Handle redacted content if needed
+                                break
+                            case .signature(let signature):
+                                // Handle signature if needed
+                                break
+                            case .sdkUnknown(let unknown):
+                                print("Unknown reasoning content: \(unknown)")
+                            }
                         default:
-                            // 다른 delta 타입 처리
+                            // Handle other delta types
                             break
                         }
                     }
@@ -627,7 +644,7 @@ class ChatViewModel: ObservableObject {
         }
         
         // After streaming is complete, update the history
-        let assistantMessage = MessageData(id: UUID(), text: streamedText.trimmingCharacters(in: .whitespacesAndNewlines), user: chatModel.name, isError: false, sentTime: Date())
+        let assistantMessage = MessageData(id: UUID(), text: streamedText.trimmingCharacters(in: .whitespacesAndNewlines), thinking: thinking, user: chatModel.name, isError: false, sentTime: Date())
         chatManager.addMessage(assistantMessage, for: chatId)
         
         var history = chatManager.getHistory(for: chatId)
@@ -638,7 +655,7 @@ class ChatViewModel: ObservableObject {
         }
         chatManager.setHistory(history, for: chatId)
     }
-
+    
     
     private func extractTextFromChunk(_ jsonObject: Any, modelType: ModelType) -> String? {
         if let dict = jsonObject as? [String: Any] {
@@ -750,10 +767,10 @@ class ChatViewModel: ObservableObject {
                let text = content.first?["text"] as? String {
                 
                 assistantMessage = MessageData(
-                    id: UUID(), 
-                    text: text.trimmingCharacters(in: .whitespacesAndNewlines), 
-                    user: chatModel.name, 
-                    isError: false, 
+                    id: UUID(),
+                    text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                    user: chatModel.name,
+                    isError: false,
                     sentTime: Date()
                 )
             }
@@ -761,10 +778,10 @@ class ChatViewModel: ObservableObject {
             else {
                 let response = try backendModel.backend.decode(data) as InvokeLlama2Response
                 assistantMessage = MessageData(
-                    id: UUID(), 
-                    text: response.generation, 
-                    user: chatModel.name, 
-                    isError: false, 
+                    id: UUID(),
+                    text: response.generation,
+                    user: chatModel.name,
+                    isError: false,
                     sentTime: Date()
                 )
             }
@@ -844,11 +861,11 @@ class ChatViewModel: ObservableObject {
         if let errorMessage = response.error, !errorMessage.isEmpty {
             throw NSError(domain: "NovaCanvasError", code: 0, userInfo: [NSLocalizedDescriptionKey: errorMessage])
         }
-
+        
         guard let image = response.images.first else {
             throw NSError(domain: "NovaCanvasError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No images returned"])
         }
-
+        
         let now = Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"

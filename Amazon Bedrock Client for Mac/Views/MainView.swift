@@ -223,6 +223,8 @@ struct MainView: View {
             return Image("AI21")
         case let id where id.contains("amazon"):
             return Image("amazon")
+        case let id where id.contains("deepseek"):
+            return Image("deepseek")
         case let id where id.contains("stability"):
             return Image("stability ai")
         default:

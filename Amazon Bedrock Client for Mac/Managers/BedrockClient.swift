@@ -633,7 +633,8 @@ class Backend: Equatable {
     func getModelType(_ modelId: String) -> ModelType {
         let parts = modelId.split(separator: ".")
         guard let modelName = parts.last else {
-            fatalError("Invalid modelId: \(modelId)")
+            print("Error: Invalid modelId: \(modelId)")
+            return .unknown
         }
         
         if modelName.hasPrefix("claude") {
@@ -670,6 +671,8 @@ class Backend: Equatable {
             return .mistral
         } else if modelName.hasPrefix("jamba-instruct") {
             return .jambaInstruct
+        } else if modelName.hasPrefix("r1") {
+            return .deepseekr1
         } else {
             return .unknown
         }
@@ -773,11 +776,11 @@ extension NSAlert {
 }
 
 enum ModelType {
-    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, unknown
+    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, deepseekr1, unknown
     
     var usesConverseAPI: Bool {
         switch self {
-        case .llama2, .llama3, .mistral:
+        case .llama2, .llama3, .mistral, .deepseekr1:
             return true
         default:
             return false
@@ -786,7 +789,7 @@ enum ModelType {
     
     var supportsSystemPrompt: Bool {
         switch self {
-        case .claude, .claude3, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro, .titan, .cohereCommand, .jambaInstruct:
+        case .claude, .claude3, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro, .titan, .cohereCommand, .jambaInstruct, .deepseekr1:
             return true
         case .titanEmbed, .titanImage, .cohereEmbed, .stableDiffusion, .novaCanvas, .j2, .unknown:
             return false

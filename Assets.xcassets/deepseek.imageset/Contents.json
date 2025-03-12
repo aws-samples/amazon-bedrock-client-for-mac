@@ -1,12 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "bedrock-color.png",
+      "filename" : "deepseek.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "bedrock-color 1.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
