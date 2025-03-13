@@ -685,10 +685,10 @@ class ChatViewModel: ObservableObject {
                     return text
                 }
             default:
-                return nil
+                return ""
             }
         }
-        return nil
+        return ""
     }
     
     /// Handles processed text.
