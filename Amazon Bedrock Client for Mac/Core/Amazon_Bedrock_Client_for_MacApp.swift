@@ -64,6 +64,13 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
             }
             .keyboardShortcut(",", modifiers: [.command])
         }
+        
+        // Add on the menu "View"
+        CommandGroup(before: .toolbar) {
+            Button("View sidebar") {
+                Amazon_Bedrock_Client_for_MacApp.toggleSidebar()
+            }.keyboardShortcut("b", modifiers: [.command])
+        }
     }
     
     private func openBedrockHelp() {
@@ -105,5 +112,9 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
         } catch {
             print("Failed to redirect stdout and stderr to file: \(error)")
         }
+    }
+    
+    static func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
 }
