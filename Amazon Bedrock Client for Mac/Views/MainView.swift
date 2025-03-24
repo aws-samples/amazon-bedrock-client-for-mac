@@ -38,7 +38,7 @@ struct MainView: View {
         .onAppear(perform: setup)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(action: toggleSidebar) {
+                Button(action: Amazon_Bedrock_Client_for_MacApp.toggleSidebar) {
                     Label("Toggle Sidebar", systemImage: "sidebar.left")
                         .labelStyle(IconOnlyLabelStyle())
                 }
@@ -242,11 +242,6 @@ struct MainView: View {
     func deleteCurrentChat() {
         guard case .chat(let chat) = selection else { return }
         selection = chatManager.deleteChat(with: chat.chatId)
-    }
-    
-    private func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?
-            .tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
     
     private func handleMenuSelectionChange(_ newValue: SidebarSelection?) {
