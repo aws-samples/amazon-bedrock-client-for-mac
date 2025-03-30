@@ -62,5 +62,3 @@ Steps to Manually Update AWS Credentials from Environment Variables:
 2. Click "Manage Model Access"
 3. Navigate to the "Model access" tab
 4. Edit settings and ensure necessary models (e.g., Anthropic) are selected
-
-I apologize for the confusion. I'll provide the entire section in English, including the content of the error message:
