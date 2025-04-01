@@ -11,6 +11,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let awsCredentialsChanged = Notification.Name("awsCredentialsChanged")
+    static let mcpEnabledChanged = Notification.Name("mcpEnabledChanged")  // 추가
 }
 
 class SettingManager: ObservableObject {
@@ -31,6 +32,21 @@ class SettingManager: ObservableObject {
         "Amazon Bedrock Client"
     ).path
     @AppStorage("defaultModelId") var defaultModelId: String = ""
+
+    var mcpEnabled: Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: "mcpEnabled")
+        }
+        set {
+            let oldValue = UserDefaults.standard.bool(forKey: "mcpEnabled")
+            if oldValue != newValue {
+                UserDefaults.standard.set(newValue, forKey: "mcpEnabled")
+                // 값이 변경되었을 때만 커스텀 알림 전송
+                logger.info("MCP enabled changed: \(oldValue) -> \(newValue)")
+                NotificationCenter.default.post(name: .mcpEnabledChanged, object: nil)
+            }
+        }
+    }
 
     // TODO: these should be converted to AppStorage, but are used from BedrockClient with Combine, which does not support AppStorage.
     @Published var selectedRegion: AWSRegion { didSet { saveSettings() } }
@@ -54,7 +70,17 @@ class SettingManager: ObservableObject {
     @Published var virtualProfile: AWSProfile?
     @Published var availableModels: [ChatModel] = []
     @Published var allowImagePasting: Bool = true
-    
+    @Published var mcpServers: [MCPServerConfig] = [] {
+        didSet {
+            saveMCPServers()
+        }
+    }
+    @Published var favoriteModelIds: [String] = [] {
+        didSet {
+            saveFavoriteModels()
+        }
+    }
+
     private var cancellables = Set<AnyCancellable>()
     
     private init() {
@@ -74,9 +100,23 @@ class SettingManager: ObservableObject {
         //            self.ssoTokenInfo = nil
         //        }
         //
+        
+        if let data = UserDefaults.standard.data(forKey: "favoriteModelIds"),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            self.favoriteModelIds = decoded
+        } else {
+            self.favoriteModelIds = []
+        }
         setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
+    
+     private func saveFavoriteModels() {
+         if let encoded = try? JSONEncoder().encode(favoriteModelIds) {
+             UserDefaults.standard.set(encoded, forKey: "favoriteModelIds")
+         }
+         logger.info("Saved favorite models: \(favoriteModelIds)")
+     }
     
     private func saveSettings() {
         UserDefaults.standard.set(selectedRegion.rawValue, forKey: "selectedRegion")
@@ -85,6 +125,28 @@ class SettingManager: ObservableObject {
         UserDefaults.standard.set(runtimeEndpoint, forKey: "runtimeEndpoint")
         
         logger.info("Settings saved: \(selectedRegion.rawValue), \(selectedProfile)")
+    }
+    
+    func addModelToFavorites(_ modelId: String) {
+        if !favoriteModelIds.contains(modelId) {
+            favoriteModelIds.append(modelId)
+        }
+    }
+    
+    func removeModelFromFavorites(_ modelId: String) {
+        favoriteModelIds.removeAll { $0 == modelId }
+    }
+    
+    func isModelFavorite(_ modelId: String) -> Bool {
+        return favoriteModelIds.contains(modelId)
+    }
+    
+    func toggleFavoriteModel(_ modelId: String) {
+        if isModelFavorite(modelId) {
+            removeModelFromFavorites(modelId)
+        } else {
+            addModelToFavorites(modelId)
+        }
     }
     
     private func setupFileMonitoring() {
@@ -231,6 +293,54 @@ class SettingManager: ObservableObject {
         addCurrentProfileIfSSO()
         
         return profiles
+    }
+    
+    private func saveMCPServers() {
+        if let encoded = try? JSONEncoder().encode(mcpServers) {
+            UserDefaults.standard.set(encoded, forKey: "mcpServers")
+        }
+    }
+
+    func loadMCPServers() {
+        if let data = UserDefaults.standard.data(forKey: "mcpServers"),
+           let decoded = try? JSONDecoder().decode([MCPServerConfig].self, from: data) {
+            self.mcpServers = decoded
+        }
+    }
+
+    // MCP 서버 구성 JSON 파일 경로 가져오기
+    func getMCPConfigPath() -> String {
+        return URL(fileURLWithPath: defaultDirectory)
+            .appendingPathComponent("mcp_config.json")
+            .path
+    }
+
+    // MCP 구성 파일 저장
+    func saveMCPConfigFile() {
+        let configDict: [String: [String: MCPServerInfo]] = [
+            "mcpServers": Dictionary(uniqueKeysWithValues: mcpServers.compactMap { server in
+                guard server.enabled else { return nil }
+                return (server.name, MCPServerInfo(command: server.command, args: server.args))
+            })
+        ]
+        
+        struct MCPServerInfo: Codable {
+            var command: String
+            var args: [String]
+        }
+        
+        if let jsonData = try? JSONEncoder().encode(configDict),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            do {
+                try jsonString.write(
+                    toFile: getMCPConfigPath(),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            } catch {
+                logger.error("Failed to save MCP config file: \(error)")
+            }
+        }
     }
     
     deinit {

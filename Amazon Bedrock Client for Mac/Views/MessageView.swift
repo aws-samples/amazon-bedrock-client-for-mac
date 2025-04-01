@@ -227,14 +227,39 @@ struct MessageView: View {
                 viewModel.selectImage(with: imageData)
             }
         }
-        VStack {
+        VStack(spacing: 8) {
+            // Expandable "thinking" section
             if let thinking = message.thinking, !thinking.isEmpty {
                 ExpandableMarkdownItem(
-                    header: "thinking",
+                    header: "Thinking",
                     text: thinking,
                     fontSize: fontSize - 2
                 )
+                .padding(.vertical, 2)
             }
+            
+            // Expandable tool result section
+            if let toolResult = message.toolResult, !toolResult.isEmpty {
+                ExpandableMarkdownItem(
+                    header: "Tool Result",
+                    text: toolResult,
+                    fontSize: fontSize - 2
+                )
+                .padding(.vertical, 2)
+                .cornerRadius(8)
+            }
+            
+            // Tool use information display
+            if let toolUse = message.toolUse {
+                ExpandableMarkdownItem(
+                    header: "Using tool: \(toolUse.name)",
+                    text: formatToolInput(toolUse.input),
+                    fontSize: fontSize - 2
+                )
+                .padding(.vertical, 2)
+            }
+            
+            // Main message content
             LazyMarkdownView(text: message.text, fontSize: fontSize)
                 .sheet(isPresented: $viewModel.isShowingImageModal) {
                     if let data = viewModel.selectedImageData,
@@ -245,6 +270,21 @@ struct MessageView: View {
                     }
                 }
         }
+    }
+
+    // Helper function to format tool input parameters
+    private func formatToolInput(_ input: [String: String]) -> String {
+        var result = "```json\n"
+        result += "{\n"
+        for (key, value) in input.sorted(by: { $0.key < $1.key }) {
+            result += "  \"\(key)\": \"\(value)\",\n"
+        }
+        if !input.isEmpty {
+            result.removeLast(2)  // Remove the last comma and newline
+            result += "\n"
+        }
+        result += "}\n```"
+        return result
     }
     
     // MARK: - User bubble (possible partial highlight + images)
@@ -633,6 +673,7 @@ struct HTMLStringView: NSViewRepresentable {
 class MessageViewModel: ObservableObject {
     @Published var selectedImageData: String? = nil
     @Published var isShowingImageModal: Bool = false
+    @Published var currentHighlightedMatch: (messageIndex: Int, matchPositionIndex: Int)? = nil
     
     func selectImage(with data: String) {
         self.selectedImageData = data

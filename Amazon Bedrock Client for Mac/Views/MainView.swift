@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 import Combine
 import AWSClientRuntime
 import AwsCommonRuntimeKit
@@ -37,13 +38,6 @@ struct MainView: View {
         }
         .onAppear(perform: setup)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(action: Amazon_Bedrock_Client_for_MacApp.toggleSidebar) {
-                    Label("Toggle Sidebar", systemImage: "sidebar.left")
-                        .labelStyle(IconOnlyLabelStyle())
-                }
-            }
-            
             toolbarContent()
         }
         .navigationTitle("")
@@ -60,9 +54,8 @@ struct MainView: View {
             }
         }
     }
-    
+
     // MARK: - Content
-    
     @ViewBuilder
     private func contentView() -> some View {
         switch selection {
@@ -169,25 +162,25 @@ struct MainView: View {
     @ToolbarContentBuilder
     private func toolbarContent() -> some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                // Model logo image (maintained from original code)
                 selectedModelImage()
                     .resizable()
                     .scaledToFit()
                     .frame(width: 40, height: 40)
                 
-                // A custom hover button that opens the SwiftUI Menu
-                HoveringMenuLabel(
-                    title: currentSelectedModelName(),
+                // Custom dropdown model selector
+                ModelSelectorDropdown(
                     organizedChatModels: organizedChatModels,
                     menuSelection: $menuSelection,
                     handleSelectionChange: handleMenuSelectionChange
                 )
+                .frame(width: 300)
             }
         }
         
-        ToolbarItem(placement: .primaryAction) {
-            HStack {
-                
+        ToolbarItem(placement: .automatic) {
+            HStack {                
                 if case .chat(let chat) = selection,
                    chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
                     Button(action: deleteCurrentChat) {
@@ -265,69 +258,288 @@ struct MainView: View {
     }
 }
 
-// MARK: - HoveringMenuLabel
-/// A simple label that hovers with minor animation, opening a SwiftUI Menu with provider submenus.
-fileprivate struct HoveringMenuLabel: View {
-    let title: String
+// MARK: - ModelSelectorDropdown
+/// A custom dropdown menu for model selection with search and favorites
+struct ModelSelectorDropdown: View {
     let organizedChatModels: [String: [ChatModel]]
     @Binding var menuSelection: SidebarSelection?
     let handleSelectionChange: (SidebarSelection?) -> Void
     
-    @State private var isHovering = false
+    @State private var isShowingPopover = false
+    @State private var searchText = ""
+    @ObservedObject private var settingManager = SettingManager.shared
     
     var body: some View {
-        Menu {
-            ForEach(organizedChatModels.keys.sorted(), id: \.self) { provider in
-                Menu(provider) {
-                    ForEach(organizedChatModels[provider] ?? [], id: \.id) { model in
-                        Button {
-                            menuSelection = .chat(model)
-                            handleSelectionChange(menuSelection)
-                        } label: {
-                            Text(model.name)
-                            Text(model.id)
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
+        Button(action: {
+            isShowingPopover.toggle()
+        }) {
+            HStack(spacing: 8) {
+                if case let .chat(model) = menuSelection {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.provider)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text(model.name)
+                            .fontWeight(.medium)
                     }
+                } else {
+                    Text("Select Model")
+                        .fontWeight(.medium)
                 }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.down")
+                    .foregroundColor(.secondary)
+                    .rotationEffect(isShowingPopover ? Angle(degrees: 180) : Angle(degrees: 0))
             }
-        } label: {
-            modelInfoView
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
         }
-        .menuStyle(BorderlessButtonMenuStyle())
-    }
-    
-    private var modelInfoView: some View {
-        Group {
-            if case let .chat(model) = menuSelection {
-                HStack(spacing: 8) {
-                    Text(model.name)
-                        .fontWeight(.semibold)
-                    Text(model.id)
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                }
-            } else {
-                Text("Select Model")
-                    .fontWeight(.medium)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovering ? Color.gray.opacity(0.2) : Color.clear)
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovering = hovering
-            }
+        .buttonStyle(PlainButtonStyle())
+        .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
+            ModelSelectorPopoverContent(
+                organizedChatModels: organizedChatModels,
+                searchText: $searchText,
+                menuSelection: $menuSelection,
+                handleSelectionChange: { selection in
+                    handleSelectionChange(selection)
+                    isShowingPopover = false
+                },
+                isShowingPopover: $isShowingPopover
+            )
+            .frame(width: 300, height: 400)
         }
     }
 }
 
+// MARK: - ModelSelectorPopoverContent
+struct ModelSelectorPopoverContent: View {
+    let organizedChatModels: [String: [ChatModel]]
+    @Binding var searchText: String
+    @Binding var menuSelection: SidebarSelection?
+    let handleSelectionChange: (SidebarSelection?) -> Void
+    @Binding var isShowingPopover: Bool
+    @ObservedObject private var settingManager = SettingManager.shared
+    
+    @FocusState private var isSearchFocused: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // 검색 필드
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                
+                TextField("Search models...", text: $searchText)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .focused($isSearchFocused)
+                
+                if !searchText.isEmpty {
+                    Button(action: {
+                        searchText = ""
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(10)
+            
+            Divider()
+            
+            // 모델 목록
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    // 즐겨찾기 섹션
+                    if !filteredFavorites.isEmpty {
+                        SectionHeader(title: "Favorites")
+                        
+                        ForEach(filteredFavorites, id: \.id) { model in
+                            ModelRowView(
+                                model: model,
+                                isSelected: isModelSelected(model),
+                                isFavorite: true,
+                                toggleFavorite: {
+                                    settingManager.toggleFavoriteModel(model.id)
+                                },
+                                selectModel: {
+                                    selectModel(model)
+                                }
+                            )
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 5)
+                    }
+                    
+                    // 제공자별 섹션
+                    ForEach(filteredProviders, id: \.self) { provider in
+                        SectionHeader(title: provider)
+                        
+                        ForEach(filteredModelsByProvider[provider] ?? [], id: \.id) { model in
+                            ModelRowView(
+                                model: model,
+                                isSelected: isModelSelected(model),
+                                isFavorite: settingManager.isModelFavorite(model.id),
+                                toggleFavorite: {
+                                    settingManager.toggleFavoriteModel(model.id)
+                                },
+                                selectModel: {
+                                    selectModel(model)
+                                }
+                            )
+                        }
+                        
+                        if provider != filteredProviders.last {
+                            Divider()
+                                .padding(.vertical, 5)
+                        }
+                    }
+                }
+                .padding(.bottom, 10)
+            }
+        }
+        .onAppear {
+            // 팝오버가 나타날 때 검색 필드에 포커스
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isSearchFocused = true
+            }
+        }
+    }
+    
+    // Helper methods
+    private func isModelSelected(_ model: ChatModel) -> Bool {
+        if case let .chat(selectedModel) = menuSelection {
+            return selectedModel.id == model.id
+        }
+        return false
+    }
+    
+    private func selectModel(_ model: ChatModel) {
+        menuSelection = .chat(model)
+        handleSelectionChange(menuSelection)
+    }
+    
+    // Filtering methods
+    private var filteredModelsByProvider: [String: [ChatModel]] {
+        var result: [String: [ChatModel]] = [:]
+        
+        for (provider, models) in organizedChatModels {
+            let filteredModels = models.filter { model in
+                searchText.isEmpty ||
+                model.name.localizedCaseInsensitiveContains(searchText) ||
+                model.id.localizedCaseInsensitiveContains(searchText) ||
+                provider.localizedCaseInsensitiveContains(searchText)
+            }
+            
+            if !filteredModels.isEmpty {
+                result[provider] = filteredModels
+            }
+        }
+        
+        return result
+    }
+    
+    private var filteredProviders: [String] {
+        return filteredModelsByProvider.keys.sorted()
+    }
+    
+    private var filteredFavorites: [ChatModel] {
+        var favorites: [ChatModel] = []
+        
+        for models in organizedChatModels.values {
+            for model in models {
+                if settingManager.isModelFavorite(model.id) &&
+                   (searchText.isEmpty ||
+                    model.name.localizedCaseInsensitiveContains(searchText) ||
+                    model.id.localizedCaseInsensitiveContains(searchText)) {
+                    favorites.append(model)
+                }
+            }
+        }
+        
+        return favorites
+    }
+}
 
+// MARK: - Helper Views
+
+struct SectionHeader: View {
+    let title: String
+    
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 5)
+    }
+}
+
+struct ModelRowView: View {
+    let model: ChatModel
+    let isSelected: Bool
+    let isFavorite: Bool
+    let toggleFavorite: () -> Void
+    let selectModel: () -> Void
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(model.name)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                    }
+                }
+                
+                Text(model.id)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            Button(action: toggleFavorite) {
+                Image(systemName: isFavorite ? "star.fill" : "star")
+                    .foregroundColor(isFavorite ? .yellow : .gray)
+                    .font(.system(size: 14))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .contentShape(Rectangle())
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .cornerRadius(4)
+        .onTapGesture(perform: selectModel)
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+}
 // MARK: - AlertInfo
 struct AlertInfo: Identifiable {
     let id = UUID()

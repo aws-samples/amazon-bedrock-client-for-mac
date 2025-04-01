@@ -10,16 +10,32 @@ import AppKit
 import Combine
 import UniformTypeIdentifiers
 
-/// A subclass of `NSTextView` that handles paste operations and drag-and-drop for images,
-/// and commits text entries with custom actions.
+/**
+ * A specialized NSTextView that handles image paste operations, drag-and-drop,
+ * and custom text entry behaviors for the Bedrock client.
+ *
+ * Features:
+ * - Multi-image paste support (limited to 10 images)
+ * - Order-preserving image processing
+ * - Loading indicator during paste operations
+ * - Placeholder text support
+ * - Custom keyboard shortcuts handling
+ */
 final class MyTextView: NSTextView {
     var onPaste: ((NSImage) -> Void)?
     var onCommit: (() -> Void)?
+    var onPasteStarted: (() -> Void)?
+    var onPasteCompleted: (() -> Void)?
     var placeholderString: String? {
         didSet {
             needsDisplay = true
         }
     }
+    
+    // Maximum number of images allowed for paste operation
+    private let maxImagesAllowed = 10
+    // Track if a paste operation is in progress
+    private var isPasteInProgress = false
     
     func moveCursorToEnd() {
         let length = string.count
@@ -45,7 +61,12 @@ final class MyTextView: NSTextView {
     
     /// Handles the paste operation to intercept image pasting and custom text handling.
     override func paste(_ sender: Any?) {
+        // Indicate paste operation has started
+        notifyPasteStarted()
+        
+        // Perform paste handling
         handlePaste()
+        
         self.inputContext?.discardMarkedText()
         self.needsDisplay = true
     }
@@ -59,15 +80,44 @@ final class MyTextView: NSTextView {
         let pasteboard = sender.draggingPasteboard
         let supportedTypes = [UTType.jpeg, UTType.png, UTType.gif, UTType.webP]
         
-        if let fileURL = pasteboard.readObjects(forClasses: [NSURL.self], options: nil)?.first as? URL,
-           supportedTypes.contains(UTType(filenameExtension: fileURL.pathExtension) ?? .data),
-           let image = NSImage(contentsOf: fileURL),
-           image.isValidImage(fileURL: fileURL, maxSize: 10 * 1024 * 1024, maxWidth: 8000, maxHeight: 8000) {
-            DispatchQueue.main.async {
-                self.onPaste?(image)
+        // Indicate paste operation has started
+        notifyPasteStarted()
+        
+        // Process multiple dragged files with order preservation
+        if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            let validURLs = fileURLs.filter { url in
+                let fileType = UTType(filenameExtension: url.pathExtension) ?? .data
+                return supportedTypes.contains(fileType)
             }
-            return true
+            
+            if !validURLs.isEmpty {
+                // Limit to maximum allowed images
+                let imagesToProcess = validURLs.prefix(maxImagesAllowed)
+                
+                // Process images sequentially to preserve order
+                DispatchQueue.global(qos: .userInitiated).async {
+                    var processedImages = 0
+                    
+                    for url in imagesToProcess {
+                        if let image = NSImage(contentsOf: url),
+                           image.isValidImage(fileURL: url, maxSize: 10 * 1024 * 1024, maxWidth: 8000, maxHeight: 8000) {
+                            DispatchQueue.main.sync {
+                                self.onPaste?(image)
+                                processedImages += 1
+                            }
+                        }
+                    }
+                    
+                    DispatchQueue.main.async {
+                        self.notifyPasteCompleted()
+                    }
+                }
+                
+                return true
+            }
         }
+        
+        notifyPasteCompleted()
         return false
     }
     
@@ -89,66 +139,110 @@ final class MyTextView: NSTextView {
         let pasteboard = NSPasteboard.general
         var pastedImages: [NSImage] = []
         var pastedText: String = ""
+        var imageProcessed = false // Track if image was already processed
         
-        // 지원하는 이미지 확장자 목록
+        // List of supported image extensions
         let supportedExtensions = ["jpg", "jpeg", "png", "gif", "tiff", "bmp", "webp", "heic"]
         
-        // 파일 URL 처리
+        // 1. Process file URLs first - maintain order
         if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
             for url in fileURLs {
+                // Check maximum image count
+                if pastedImages.count >= maxImagesAllowed {
+                    break
+                }
+                
                 let ext = url.pathExtension.lowercased()
                 if supportedExtensions.contains(ext), let image = NSImage(contentsOf: url) {
                     pastedImages.append(image)
+                    imageProcessed = true // Set image processed flag
                 }
             }
         }
         
-        // 이미지 데이터 직접 처리
-        let types: [NSPasteboard.PasteboardType] = [
-            .tiff,
-            .png,
-            NSPasteboard.PasteboardType("public.jpeg"),
-            NSPasteboard.PasteboardType("com.compuserve.gif"),
-            NSPasteboard.PasteboardType("com.microsoft.bmp"),
-            NSPasteboard.PasteboardType("org.webmproject.webp"),
-            NSPasteboard.PasteboardType("public.heic")
-        ]
-        
-        for type in types {
-            if pastedImages.isEmpty, let imageData = pasteboard.data(forType: type), let image = NSImage(data: imageData) {
-                pastedImages.append(image)
-                break // 첫 번째 유효한 이미지만 추가
+        // 2. Process image data directly - only if no images processed yet
+        if !imageProcessed && pastedImages.isEmpty {
+            let types: [NSPasteboard.PasteboardType] = [
+                .tiff,
+                .png,
+                NSPasteboard.PasteboardType("public.jpeg"),
+                NSPasteboard.PasteboardType("com.compuserve.gif"),
+                NSPasteboard.PasteboardType("com.microsoft.bmp"),
+                NSPasteboard.PasteboardType("org.webmproject.webp"),
+                NSPasteboard.PasteboardType("public.heic")
+            ]
+            
+            for type in types {
+                if let imageData = pasteboard.data(forType: type),
+                   let image = NSImage(data: imageData) {
+                    pastedImages.append(image)
+                    imageProcessed = true // Set image processed flag
+                    break // Add only first valid image
+                }
             }
         }
         
-        // HTML 내용에서 이미지 URL 추출 시도
-        if pastedImages.isEmpty, let htmlString = pasteboard.string(forType: .html) {
+        // 3. Try to extract image URLs from HTML content - only if no images processed yet
+        if !imageProcessed && pastedImages.isEmpty,
+           let htmlString = pasteboard.string(forType: .html) {
             let (imageUrls, extractedText) = extractContentFromHTML(htmlString)
             pastedText = extractedText
             
-            let group = DispatchGroup()
-            for imageURL in imageUrls {
-                group.enter()
-                URLSession.shared.dataTask(with: imageURL) { data, response, error in
-                    defer { group.leave() }
-                    if let data = data, let image = NSImage(data: data) {
-                        DispatchQueue.main.async {
-                            pastedImages.append(image)
-                        }
+            if !imageUrls.isEmpty {
+                // Limit to maximum allowed images
+                let urlsToProcess = imageUrls.prefix(maxImagesAllowed)
+                
+                // Process sequentially to preserve order
+                let group = DispatchGroup()
+                let queue = DispatchQueue(label: "com.amazon.bedrock.imagefetching", qos: .userInitiated)
+                
+                // Array to process image URLs sequentially
+                var orderedImages = [(Int, NSImage)]()
+                
+                for (index, imageURL) in urlsToProcess.enumerated() {
+                    group.enter()
+                    
+                    queue.async {
+                        URLSession.shared.dataTask(with: imageURL) { data, response, error in
+                            defer { group.leave() }
+                            
+                            if let data = data, let image = NSImage(data: data) {
+                                // Store image with index
+                                orderedImages.append((index, image))
+                            }
+                        }.resume()
                     }
-                }.resume()
+                }
+                
+                group.notify(queue: .main) {
+                    // Sort images by original order
+                    let sortedImages = orderedImages.sorted { $0.0 < $1.0 }.map { $0.1 }
+                    
+                    // Check for duplication (ignore if already processed)
+                    if !imageProcessed {
+                        pastedImages.append(contentsOf: sortedImages)
+                        imageProcessed = true
+                    }
+                    
+                    self.handlePastedContent(images: pastedImages, text: pastedText, imageProcessed: imageProcessed)
+                    self.notifyPasteCompleted()
+                }
+                
+                // Return early if HTML processing is in progress
+                if !urlsToProcess.isEmpty {
+                    return
+                }
             }
-            
-            group.notify(queue: .main) {
-                self.handlePastedContent(images: pastedImages, text: pastedText)
-            }
-        } else {
-            handlePastedContent(images: pastedImages, text: pastedText)
         }
+        
+        // 4. Process immediately if no HTML handling
+        handlePastedContent(images: pastedImages, text: pastedText, imageProcessed: imageProcessed)
+        notifyPasteCompleted()
     }
-    
-    private func handlePastedContent(images: [NSImage], text: String) {
+
+    private func handlePastedContent(images: [NSImage], text: String, imageProcessed: Bool) {
         if !images.isEmpty {
+            // Process images in order
             images.forEach { self.onPaste?($0) }
         }
         
@@ -156,8 +250,8 @@ final class MyTextView: NSTextView {
             self.insertText(text, replacementRange: self.selectedRange())
         }
         
-        if images.isEmpty && text.isEmpty {
-            // 이미지와 HTML 텍스트가 모두 없으면 일반 텍스트 붙여넣기
+        if !imageProcessed && images.isEmpty && text.isEmpty {
+            // Fall back to standard paste if no images or HTML text
             super.paste(nil)
         }
     }
@@ -214,17 +308,39 @@ final class MyTextView: NSTextView {
         }
         return super.performKeyEquivalent(with: event)
     }
+    
+    // Notify that paste operation has started
+    private func notifyPasteStarted() {
+        if !isPasteInProgress {
+            isPasteInProgress = true
+            DispatchQueue.main.async {
+                self.onPasteStarted?()
+            }
+        }
+    }
+    
+    // Notify that paste operation has completed
+    private func notifyPasteCompleted() {
+        if isPasteInProgress {
+            isPasteInProgress = false
+            DispatchQueue.main.async {
+                self.onPasteCompleted?()
+            }
+        }
+    }
 }
-
 
 /// Extension to validate NSImage properties against specified constraints.
 extension NSImage {
     func isValidImage(fileURL: URL, maxSize: Int, maxWidth: Int, maxHeight: Int) -> Bool {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let fileSize = attributes[.size] as? Int,
-              fileSize <= maxSize,
-              let image = NSImage(contentsOf: fileURL),
-              let bitmap = NSBitmapImageRep(data: image.tiffRepresentation!) else {
+              fileSize <= maxSize else {
+            return false
+        }
+        
+        guard let tiffData = self.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
             return false
         }
         
@@ -238,6 +354,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
     @Binding var text: String
     @Binding var isDisabled: Bool
     @Binding var calculatedHeight: CGFloat
+    @Binding var isPasting: Bool  // New binding for paste operation status
     var onCommit: () -> Void
     var onPaste: ((NSImage) -> Void)?
     
@@ -256,7 +373,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
     }
     
     static func == (lhs: FirstResponderTextView, rhs: FirstResponderTextView) -> Bool {
-        lhs.text == rhs.text && lhs.isDisabled == rhs.isDisabled
+        lhs.text == rhs.text && lhs.isDisabled == rhs.isDisabled && lhs.isPasting == rhs.isPasting
     }
     
     func makeNSView(context: Context) -> NSScrollView {
@@ -271,6 +388,20 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
             textView.delegate = context.coordinator
             textView.onPaste = { image in context.coordinator.parent.onPaste?(image) }
             textView.onCommit = { context.coordinator.parent.onCommit() }
+            
+            // Set up paste operation callbacks
+            textView.onPasteStarted = {
+                DispatchQueue.main.async {
+                    context.coordinator.parent.isPasting = true
+                }
+            }
+            
+            textView.onPasteCompleted = {
+                DispatchQueue.main.async {
+                    context.coordinator.parent.isPasting = false
+                }
+            }
+            
             textView.registerForDraggedTypes([.fileURL])
             textView.font = NSFont.systemFont(ofSize: 15)
             textView.isRichText = false
@@ -355,7 +486,7 @@ public class Coordinator: NSObject, NSTextViewDelegate {
     }
 }
 
-/// Extension to calculate the bounding box for an attributed string.
+// Utility extensions
 extension NSAttributedString {
     func height(withConstrainedWidth width: CGFloat) -> CGFloat {
         let constraintRect = CGSize(width: width, height: .greatestFiniteMagnitude)
@@ -372,6 +503,7 @@ extension NSAttributedString {
     }
 }
 
+// Optimized pasteboard extension
 extension NSPasteboard {
     var imageFilesWithNames: [(image: NSImage, name: String)] {
         var result: [(NSImage, String)] = []

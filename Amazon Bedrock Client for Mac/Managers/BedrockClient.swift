@@ -109,7 +109,7 @@ class Backend: Equatable {
     let profile: String
     let endpoint: String
     let runtimeEndpoint: String
-    private let logger = Logger(label: "Backend")
+    let logger = Logger(label: "Backend")
     public let awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
     
     private(set) lazy var bedrockClient: BedrockClient = {
@@ -207,168 +207,150 @@ class Backend: Equatable {
         && lhs.endpoint == rhs.endpoint && lhs.runtimeEndpoint == rhs.runtimeEndpoint
     }
     
-    func invokeModel(withId modelId: String, prompt: String) async throws -> Data {
-        let modelType = getModelType(modelId)
-        
-        // Use Converse API for supported models
-        if modelType.usesConverseAPI {
-            return try await converse(withId: modelId, prompt: prompt)
-        }
-        
-        let strategy: JSONEncoder.KeyEncodingStrategy = (
-            modelType == .claude ||
-            modelType == .claude3 ||
-            modelType == .novaPro ||
-            modelType == .novaLite ||
-            modelType == .novaMicro
-        ) ? .convertToSnakeCase : .useDefaultKeys
-        
-        let params = getModelParameters(modelType: modelType, prompt: prompt)
-        let encodedParams = try self.encode(params, strategy: strategy)
-        
-        let request = InvokeModelInput(
-            body: encodedParams, contentType: "application/json", modelId: modelId)
-        
-        if let requestJson = String(data: encodedParams, encoding: .utf8) {
-            logger.info("Request: \(requestJson)")
-        }
-        
-        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-        
-        guard response.contentType == "application/json", let data = response.body else {
-            logger.error("Invalid Bedrock response: \(response)")
-            throw BedrockRuntimeError.invalidResponse(response.body)
-        }
-        
-        return data
+    // MARK: - Core Functionality
+    
+    /// Check if a model is an image generation model
+    func isImageGenerationModel(_ modelId: String) -> Bool {
+        let id = modelId.lowercased()
+        return id.contains("titan-image") ||
+               id.contains("nova-canvas") ||
+               id.contains("stable-") ||
+               id.contains("sd3-")
     }
     
-    /// Invokes a model using the Converse API (non-streaming)
-    /// For Llama and Mistral models
-    func converse(withId modelId: String, prompt: String) async throws -> Data {
-        let modelType = getModelType(modelId)
-        
-        // ContentBlock은 enum 케이스 사용
-        let contentBlock = BedrockRuntimeClientTypes.ContentBlock.text(prompt)
-        
-        // userMessage는 var로 선언하여 수정 가능하게 함
-        var userMessage = BedrockRuntimeClientTypes.Message(role: .user)
-        userMessage.content = [contentBlock]
-        
-        let inferenceConfig = BedrockRuntimeClientTypes.InferenceConfiguration(
-            maxTokens: 2048,
-            temperature: 0.7,
-            topp: 0.9
-        )
-        
-        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        var systemBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
-        if !systemPrompt.isEmpty && modelType.supportsSystemPrompt {
-            // SystemContentBlock도 enum 케이스 사용
-            let systemBlock = BedrockRuntimeClientTypes.SystemContentBlock.text(systemPrompt)
-            systemBlocks = [systemBlock]
+    /// Check if a model is an embedding model
+    func isEmbeddingModel(_ modelId: String) -> Bool {
+        let id = modelId.lowercased()
+        return id.contains("embed") || id.contains("titan-e1t")
+    }
+    
+    /// Helper function to determine the model type based on modelId
+    func getModelType(_ modelId: String) -> ModelType {
+        let parts = modelId.split(separator: ".")
+        guard let modelName = parts.last else {
+            print("Error: Invalid modelId: \(modelId)")
+            return .unknown
         }
         
-        let request = ConverseInput(
-            inferenceConfig: inferenceConfig,
-            messages: [userMessage],
-            modelId: modelId,
-            system: systemBlocks
-        )
-        
-        logger.info("Converse API Request for model: \(modelId)")
-        
-        let response = try await self.bedrockRuntimeClient.converse(input: request)
-        
-        // 수정: output.message를 안전하게 추출
-        var standardResponse: [String: Any] = [:]
-        if case let .message(convMessage) = response.output,
-           convMessage.role == .assistant,
-           let content = convMessage.content {
-            var contentItems: [[String: String]] = []
-            for item in content {
-                if case let BedrockRuntimeClientTypes.ContentBlock.text(text) = item {
-                    contentItems.append(["type": "text", "text": text])
-                }
-            }
-            standardResponse["message"] = [
-                "role": "assistant",
-                "content": contentItems
-            ]
+        if modelName.hasPrefix("claude") {
+            return .claude
+        } else if modelName.hasPrefix("titan-embed") || modelName.hasPrefix("titan-e1t") {
+            return .titanEmbed
+        } else if modelName.hasPrefix("titan-image") {
+            return .titanImage
+        } else if modelName.hasPrefix("titan") {
+            return .titan
+        } else if modelName.hasPrefix("nova-pro") {
+            return .novaPro
+        } else if modelName.hasPrefix("nova-lite") {
+            return .novaLite
+        } else if modelName.hasPrefix("nova-micro") {
+            return .novaMicro
+        } else if modelName.hasPrefix("nova-canvas") {
+            return .novaCanvas
+        } else if modelName.hasPrefix("j2") {
+            return .j2
+        } else if modelName.hasPrefix("command") {
+            return .cohereCommand
+        } else if modelName.hasPrefix("embed") {
+            return .cohereEmbed
+        } else if modelName.hasPrefix("stable-") || modelName.hasPrefix("sd3-") {
+            return .stableDiffusion
+        } else if modelName.hasPrefix("llama2") {
+            return .llama2
+        } else if modelName.hasPrefix("llama3") {
+            return .llama3
+        } else if modelName.hasPrefix("mistral") || modelName.hasPrefix("mixtral") {
+            return .mistral
+        } else if modelName.hasPrefix("jamba-instruct") {
+            return .jambaInstruct
+        } else if modelName.hasPrefix("r1") {
+            return .deepseekr1
         } else {
-            standardResponse["message"] = [
-                "role": "assistant",
-                "content": [
-                    ["type": "text", "text": "No valid response from model"]
-                ]
-            ]
+            return .unknown
         }
-        
-        let processedData = try JSONSerialization.data(withJSONObject: standardResponse)
-        return processedData
     }
     
-    func invokeModelStream(withId modelId: String, prompt: String) async throws
-    -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error>
-    {
-        let modelType = getModelType(modelId)
-        
-        let strategy: JSONEncoder.KeyEncodingStrategy = (
-            modelType == .claude ||
-            modelType == .claude3 ||
-            modelType == .novaPro ||
-            modelType == .novaLite ||
-            modelType == .novaMicro
-        ) ? .convertToSnakeCase : .useDefaultKeys
-        
-        let params = getModelParameters(modelType: modelType, prompt: prompt)
-        
-        let encodedParams = try self.encode(params, strategy: strategy)
-        let request = InvokeModelWithResponseStreamInput(
-            body: encodedParams, contentType: "application/json", modelId: modelId)
-        
-        if let requestJson = String(data: encodedParams, encoding: .utf8) {
-            logger.info("Request: \(requestJson)")
+    func getDefaultInferenceConfig(for modelType: ModelType) -> BedrockRuntimeClientTypes.InferenceConfiguration {
+        switch modelType {
+        case .claude, .claude3:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 4096,
+                temperature: 1.0,
+                topp: 1.0
+            )
+        case .titan:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 3072,
+                temperature: 0,
+                topp: 1.0
+            )
+        case .novaPro, .novaLite, .novaMicro:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 4096,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .mistral, .llama2, .llama3, .jambaInstruct, .deepseekr1:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 4096,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .cohereCommand:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 400,
+                temperature: 0.9,
+                topp: 0.75
+            )
+        case .j2:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 200,
+                temperature: 0.5,
+                topp: 0.5
+            )
+        default:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 4096,
+                temperature: 0.7,
+                topp: 0.9
+            )
         }
-        
-        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(
-            input: request)
-        return output.body ?? AsyncThrowingStream { _ in }
     }
+
     
-    /// Invokes a model using the Converse API (streaming)
-    /// For Llama and Mistral models
-    func converseStream(withId modelId: String, prompt: String) async throws
-    -> AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Swift.Error> {
+    // MARK: - Converse Stream API (Unified for Text Models)
+    
+    /// Unified converseStream method for all text generation models
+    /// This is the primary method that should be used for all text-based LLMs
+    func converseStream(
+        withId modelId: String,
+        messages: [BedrockRuntimeClientTypes.Message],
+        systemContent: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil,
+        inferenceConfig: BedrockRuntimeClientTypes.InferenceConfiguration? = nil,
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil
+    ) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Error> {
         let modelType = getModelType(modelId)
         
-        // userMessage 생성
-        var userMessage = BedrockRuntimeClientTypes.Message(role: .user)
-        let contentBlock = BedrockRuntimeClientTypes.ContentBlock.text(prompt)
-        userMessage.content = [contentBlock]
+        // Create default inference config if not provided
+        let config = inferenceConfig ?? getDefaultInferenceConfig(for: modelType)
         
-        let inferenceConfig = BedrockRuntimeClientTypes.InferenceConfiguration(
-            maxTokens: 2048,
-            temperature: 0.7,
-            topp: 0.9
-        )
-        
-        let systemPrompt = SettingManager.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        var systemBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
-        if !systemPrompt.isEmpty && modelType.supportsSystemPrompt {
-            let systemBlock = BedrockRuntimeClientTypes.SystemContentBlock.text(systemPrompt)
-            systemBlocks = [systemBlock]
-        }
-        
-        let request = ConverseStreamInput(
-            inferenceConfig: inferenceConfig,
-            messages: [userMessage],
+        // Create converse stream request
+        var request = ConverseStreamInput(
+            inferenceConfig: config,
+            messages: messages,
             modelId: modelId,
-            system: systemBlocks
+            system: systemContent
         )
+        
+        // Add tool configuration if provided
+        if let tools = toolConfig {
+            request.toolConfig = tools
+        }
         
         logger.info("Converse API Stream Request for model: \(modelId)")
         
+        // Make API call
         let output = try await self.bedrockRuntimeClient.converseStream(input: request)
         
         return AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Error> { continuation in
@@ -380,7 +362,6 @@ class Backend: Equatable {
                     }
                     
                     for try await event in stream {
-                        // 이미 event는 ResponseStream 타입이므로 그대로 전달합니다.
                         continuation.yield(event)
                     }
                     continuation.finish()
@@ -391,188 +372,179 @@ class Backend: Equatable {
         }
     }
     
-    func buildClaudeMessageRequest(
-        modelId: String,
-        systemPrompt: String?,
-        messages: [ClaudeMessageRequest.Message]
-    ) -> ClaudeMessageRequest {
-        let thinking = SettingManager.shared.enableModelThinking && modelId.contains("3-7") ? ClaudeMessageRequest.Thinking(budgetTokens: 2048, type: "enabled") : nil
-        
-        return ClaudeMessageRequest(
-            maxTokens: 8192,
-            thinking: thinking,
-            system: systemPrompt,
-            messages: messages,
-            temperature: 1,
-            topP: nil,
-            topK: nil,
-            stopSequences: nil
-        )
-    }
+    // MARK: - Image Generation Models
     
-    func invokeClaudeModel(
-        withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
+    /// Invoke image generation models (which don't use converseStream)
+    func invokeImageModel(
+        withId modelId: String,
+        prompt: String,
+        modelType: ModelType
     ) async throws -> Data {
-        let requestBody = buildClaudeMessageRequest(modelId: modelId, systemPrompt: systemPrompt, messages: messages)
-        
-        let jsonData = try requestBody.encode(strategy: .convertToSnakeCase)
-        
-        let request = InvokeModelInput(
-            body: jsonData, contentType: "application/json", modelId: modelId)
-        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-        
-        guard response.contentType == "application/json", let data = response.body else {
-            logger.error("Invalid Bedrock response: \(response)")
-            throw BedrockRuntimeError.invalidResponse(response.body)
-        }
-        
-        return data
-    }
-    
-    func invokeClaudeModelStream(
-        withId modelId: String, messages: [ClaudeMessageRequest.Message], systemPrompt: String?
-    ) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Swift.Error> {
-        let requestBody = buildClaudeMessageRequest(modelId: modelId, systemPrompt: systemPrompt, messages: messages)
-        
-        let jsonData = try requestBody.encode(strategy: .convertToSnakeCase)
-        
-        let request = InvokeModelWithResponseStreamInput(body: jsonData, contentType: "application/json", modelId: modelId)
-        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(input: request)
-        
-        return output.body ?? AsyncThrowingStream { _ in }
-    }
-    
-    //    MARK: -- Invoke Nova Model
-    func invokeNovaModel(withId modelId: String, messages: [NovaModelParameters.Message], systemPrompt: String?) async throws -> Data {
-        let requestBody = NovaModelParameters(
-            system: systemPrompt.map { [NovaModelParameters.SystemMessage(text: $0)] },
-            messages: messages
-        )
-        
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let jsonData = try encoder.encode(requestBody)
-        
-        let request = InvokeModelInput(
-            body: jsonData,
-            contentType: "application/json",
-            modelId: modelId
-        )
-        
-        if let requestJson = String(data: jsonData, encoding: .utf8) {
-            logger.info("[BedrockClient] Nova Request: \(requestJson)")
-        }
-        
-        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-        
-        guard response.contentType == "application/json", let data = response.body else {
-            logger.error("Invalid Bedrock response: \(response)")
-            throw BedrockRuntimeError.invalidResponse(response.body)
-        }
-        
-        return data
-    }
-    
-    func invokeNovaModelStream(withId modelId: String, messages: [NovaModelParameters.Message], systemPrompt: String?) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ResponseStream, Error> {
-        let requestBody = NovaModelParameters(
-            system: systemPrompt.map { [NovaModelParameters.SystemMessage(text: $0)] },
-            messages: messages
-        )
-        
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let jsonData = try encoder.encode(requestBody)
-        
-        let request = InvokeModelWithResponseStreamInput(
-            body: jsonData, contentType: "application/json", modelId: modelId)
-        let output = try await self.bedrockRuntimeClient.invokeModelWithResponseStream(
-            input: request)
-        
-        return output.body ?? AsyncThrowingStream { _ in }
-    }
-    
-    func invokeStableDiffusionModel(withId modelId: String, prompt: String) async throws -> Data {
-        let isSD3 = modelId.contains("sd3")
-        let isCore = modelId.contains("stable-image-core")
-        let isUltra = modelId.contains("stable-image-ultra") || modelId.contains("sd3-ultra")
-        
-        let promptData: [String: Any]
-        
-        if isSD3 || isCore || isUltra {
-            // SD3, Core, Ultra
-            promptData = ["prompt": prompt]
-        } else {
-            // Standard Stable Diffusion (including SDXL)
-            promptData = [
-                "text_prompts": [["text": prompt]],
-                "cfg_scale": 10,
-                "seed": 0,
-                "steps": 50,
-                "samples": 1,
-                "style_preset": "photographic",
-            ]
-        }
-        
-        let jsonData = try JSONSerialization.data(withJSONObject: promptData)
-        
-        let request = InvokeModelInput(
-            body: jsonData,
-            contentType: "application/json",
-            modelId: modelId
-        )
-        
-        let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-        
-        guard let responseBody = response.body else {
-            throw NSError(
-                domain: "BedrockRuntime", code: 0,
-                userInfo: [NSLocalizedDescriptionKey: "Invalid response: Empty body"])
-        }
-        
-        let json =
-        try JSONSerialization.jsonObject(with: responseBody, options: []) as? [String: Any]
-        
-        if let images = json?["images"] as? [String], let base64Image = images.first,
-           let imageData = Data(base64Encoded: base64Image)
-        {
+        switch modelType {
+        case .titanImage:
+            // TitanImage specific parameters
+            let params = TitanImageModelParameters(inputText: prompt)
+            let encodedParams = try JSONEncoder().encode(params)
             
-            // Process additional information for Ultra model
-            if isUltra, let finishReasons = json?["finish_reasons"] as? [String?] {
-                if let finishReason = finishReasons.first, finishReason != nil {
-                    throw NSError(
-                        domain: "BedrockRuntime", code: 3,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Image generation error: \(finishReason!)"
-                        ])
-                }
+            let request = InvokeModelInput(
+                body: encodedParams,
+                contentType: "application/json",
+                modelId: modelId
+            )
+            
+            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
+            guard let data = response.body else {
+                throw BedrockRuntimeError.invalidResponse(nil)
             }
             
-            return imageData
-        } else if let artifacts = json?["artifacts"] as? [[String: Any]],
-                  let firstArtifact = artifacts.first,
-                  let base64Image = firstArtifact["base64"] as? String,
-                  let imageData = Data(base64Encoded: base64Image)
-        {
-            
-            // Process response for standard Stable Diffusion (including SDXL)
-            if let finishReason = firstArtifact["finishReason"] as? String {
-                if finishReason == "ERROR" || finishReason == "CONTENT_FILTERED" {
-                    throw NSError(
-                        domain: "BedrockRuntime", code: 3,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Image generation error: \(finishReason)"
-                        ])
-                }
-                print("Stable Diffusion generation - Finish Reason: \(finishReason)")
+            // Process TitanImage response
+            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            if let images = json?["images"] as? [String], let base64Image = images.first,
+               let imageData = Data(base64Encoded: base64Image) {
+                return imageData
+            } else {
+                throw BedrockRuntimeError.invalidResponse(data)
             }
             
-            return imageData
-        } else {
+        case .novaCanvas:
+            // NovaCanvas specific parameters
+            let params = NovaCanvasModelParameters(text: prompt)
+            let encodedParams = try JSONEncoder().encode(params)
+            
+            let request = InvokeModelInput(
+                body: encodedParams,
+                contentType: "application/json",
+                modelId: modelId
+            )
+            
+            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
+            guard let data = response.body else {
+                throw BedrockRuntimeError.invalidResponse(nil)
+            }
+            
+            // Process NovaCanvas response
+            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            if let images = json?["images"] as? [String], let base64Image = images.first,
+               let imageData = Data(base64Encoded: base64Image) {
+                return imageData
+            } else {
+                throw BedrockRuntimeError.invalidResponse(data)
+            }
+            
+        case .stableDiffusion:
+            // Stable Diffusion parameters
+            let isSD3 = modelId.contains("sd3")
+            let isCore = modelId.contains("stable-image-core")
+            let isUltra = modelId.contains("stable-image-ultra") || modelId.contains("sd3-ultra")
+            
+            let promptData: [String: Any]
+            
+            if isSD3 || isCore || isUltra {
+                // SD3, Core, Ultra formatting
+                promptData = ["prompt": prompt]
+            } else {
+                // Standard Stable Diffusion formatting
+                promptData = [
+                    "text_prompts": [["text": prompt]],
+                    "cfg_scale": 10,
+                    "seed": 0,
+                    "steps": 50,
+                    "samples": 1,
+                    "style_preset": "photographic",
+                ]
+            }
+            
+            let jsonData = try JSONSerialization.data(withJSONObject: promptData)
+            
+            let request = InvokeModelInput(
+                body: jsonData,
+                contentType: "application/json",
+                modelId: modelId
+            )
+            
+            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
+            guard let data = response.body else {
+                throw BedrockRuntimeError.invalidResponse(nil)
+            }
+            
+            // Try to extract the image from the response
+            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            
+            if let images = json?["images"] as? [String], let base64Image = images.first,
+               let imageData = Data(base64Encoded: base64Image) {
+                return imageData
+            } else if let artifacts = json?["artifacts"] as? [[String: Any]],
+                      let firstArtifact = artifacts.first,
+                      let base64Image = firstArtifact["base64"] as? String,
+                      let imageData = Data(base64Encoded: base64Image) {
+                return imageData
+            } else {
+                throw BedrockRuntimeError.invalidResponse(data)
+            }
+            
+        default:
             throw NSError(
-                domain: "BedrockRuntime", code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to parse model response"])
+                domain: "BedrockClient",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported image model type"]
+            )
         }
     }
+    
+    // MARK: - Embedding Models
+    
+    /// Invoke embedding models (which don't use converseStream)
+    func invokeEmbeddingModel(
+        withId modelId: String,
+        text: String
+    ) async throws -> Data {
+        let modelType = getModelType(modelId)
+        
+        switch modelType {
+        case .titanEmbed:
+            let params = TitanEmbedModelParameters(inputText: text)
+            let encodedParams = try JSONEncoder().encode(params)
+            
+            let request = InvokeModelInput(
+                body: encodedParams,
+                contentType: "application/json",
+                modelId: modelId
+            )
+            
+            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
+            guard let data = response.body else {
+                throw BedrockRuntimeError.invalidResponse(nil)
+            }
+            
+            return data
+            
+        case .cohereEmbed:
+            let params = CohereEmbedModelParameters(texts: [text], inputType: .searchDocument)
+            let encodedParams = try JSONEncoder().encode(params)
+            
+            let request = InvokeModelInput(
+                body: encodedParams,
+                contentType: "application/json",
+                modelId: modelId
+            )
+            
+            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
+            guard let data = response.body else {
+                throw BedrockRuntimeError.invalidResponse(nil)
+            }
+            
+            return data
+            
+        default:
+            throw NSError(
+                domain: "BedrockClient",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported embedding model type"]
+            )
+        }
+    }
+    
+    // MARK: - Foundation Model Information
     
     func listFoundationModels(
         byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,
@@ -629,173 +601,50 @@ class Backend: Equatable {
         }
     }
     
-    /// Helper function to determine the model type based on modelId
-    func getModelType(_ modelId: String) -> ModelType {
-        let parts = modelId.split(separator: ".")
-        guard let modelName = parts.last else {
-            print("Error: Invalid modelId: \(modelId)")
-            return .unknown
-        }
-        
-        if modelName.hasPrefix("claude") {
-            return .claude
-        } else if modelName.hasPrefix("titan-embed") {
-            return .titanEmbed
-        } else if modelName.hasPrefix("titan-e1t") {
-            return .titanEmbed
-        } else if modelName.hasPrefix("titan-image") {
-            return .titanImage
-        } else if modelName.hasPrefix("titan") {
-            return .titan
-        } else if modelName.hasPrefix("nova-pro"){
-            return .novaPro
-        } else if modelName.hasPrefix("nova-lite"){
-            return .novaLite
-        } else if modelName.hasPrefix("nova-micro"){
-            return .novaMicro
-        } else if modelName.hasPrefix("nova-canvas") {
-            return .novaCanvas
-        } else if modelName.hasPrefix("j2") {
-            return .j2
-        } else if modelName.hasPrefix("command") {
-            return .cohereCommand
-        } else if modelName.hasPrefix("embed") {
-            return .cohereEmbed
-        } else if modelName.hasPrefix("stable-") || modelName.hasPrefix("sd3-") {
-            return .stableDiffusion
-        } else if modelName.hasPrefix("llama2") {
-            return .llama2
-        } else if modelName.hasPrefix("llama3") {
-            return .llama3
-        } else if modelName.hasPrefix("mistral") || modelName.hasPrefix("mixtral") {
-            return .mistral
-        } else if modelName.hasPrefix("jamba-instruct") {
-            return .jambaInstruct
-        } else if modelName.hasPrefix("r1") {
-            return .deepseekr1
-        } else {
-            return .unknown
-        }
-    }
-    
-    /// Function to get model parameters
-    func getModelParameters(modelType: ModelType, prompt: String) -> ModelParameters {
-        switch modelType {
-        case .claude:
-            return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
-        case .titan:
-            let textGenerationConfig = TitanModelParameters.TextGenerationConfig(
-                temperature: 0,
-                topP: 1.0,
-                maxTokenCount: 3072,
-                stopSequences: []
-            )
-            return TitanModelParameters(
-                inputText: "User: \(prompt)\n\nBot:", textGenerationConfig: textGenerationConfig)
-        case .titanEmbed:
-            // No system prompt for embedding models
-            return TitanEmbedModelParameters(inputText: prompt)
-        case .titanImage:
-            // No system prompt for image generation models
-            // Create TitanImageModelParameters with prompt length validation
-            if prompt.count > 512 {
-                logger.info("Titan image prompt truncated from \(prompt.count) to 512 characters")
-            }
-            return TitanImageModelParameters(inputText: prompt)
-        case .novaPro, .novaLite, .novaMicro:
-            // ADDED Amazon Nova ModelParameters. https://docs.aws.amazon.com/nova/latest/userguide/invoke.html
-            let message = NovaModelParameters.Message(role: "user", content: [NovaModelParameters.Message.MessageContent(text: prompt)])
-            let systemMessage = NovaModelParameters.SystemMessage(text: "You are a helpful AI assistant.") // Optional: Add system message if needed
-            return NovaModelParameters(system: [systemMessage], messages: [message])
-        case .novaCanvas:
-            // No system prompt for image generation models
-            return NovaCanvasModelParameters(
-                taskType: "TEXT_IMAGE",
-                text: prompt
-            )
-        case .j2:
-            return AI21ModelParameters(prompt: prompt, temperature: 0.5, topP: 0.5, maxTokens: 200)
-        case .cohereCommand:
-            return CohereModelParameters(
-                prompt: prompt, temperature: 0.9, p: 0.75, k: 0, maxTokens: 20)
-        case .cohereEmbed:
-            // No system prompt for embedding models
-            return CohereEmbedModelParameters(texts: [prompt], inputType: .searchDocument)
-        case .mistral, .llama2, .llama3:
-            // These models now use the Converse API instead
-            // Handled in separate methods: invokeConverseModel and invokeConverseModelStream
-            return ClaudeModelParameters(prompt: "Placeholder - should not be used")  // This won't actually be used
-        case .jambaInstruct:
-            return JambaInstructModelParameters(
-                messages: [
-                    JambaInstructModelParameters.Message(role: "user", content: prompt)
-                ],
-                max_tokens: 4096,
-                temperature: 0.7,
-                top_p: 0.9
-            )
-        default:
-            return ClaudeModelParameters(prompt: "Human: \(prompt)\n\nAssistant:")
-        }
-    }
+    // MARK: - Utility Methods
     
     public func decode<T: Decodable>(_ data: Data) throws -> T {
         let decoder = JSONDecoder()
         return try decoder.decode(T.self, from: data)
     }
+    
     public func decode<T: Decodable>(json: String) throws -> T {
         let data = json.data(using: .utf8)!
         return try self.decode(data)
     }
+    
     private func encode<T: Encodable>(
         _ value: T, strategy: JSONEncoder.KeyEncodingStrategy = .useDefaultKeys
     ) throws -> Data {
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = strategy  // Use the provided strategy, default to .useDefaultKeys
+        encoder.keyEncodingStrategy = strategy
         return try encoder.encode(value)
     }
+    
     private func encode<T: Encodable>(_ value: T) throws -> String {
         let data: Data = try self.encode(value)
         return String(data: data, encoding: .utf8) ?? "error when encoding the string"
     }
 }
 
-// MARK: - NSAlert Extension for Error Handling
-
-extension NSAlert {
-    static func presentErrorAlert(title: String, message: String) {
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.alertStyle = .critical
-            alert.messageText = title
-            alert.informativeText = message
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        }
-    }
-}
+// MARK: - Model Type and Parameter Definitions
 
 enum ModelType {
-    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed, j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, deepseekr1, unknown
-    
-    var usesConverseAPI: Bool {
-        switch self {
-        case .llama2, .llama3, .mistral, .deepseekr1:
-            return true
-        default:
-            return false
-        }
-    }
+    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed
+    case j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, deepseekr1, unknown
     
     var supportsSystemPrompt: Bool {
         switch self {
-        case .claude, .claude3, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro, .titan, .cohereCommand, .jambaInstruct, .deepseekr1:
+        case .claude, .claude3, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro,
+             .titan, .cohereCommand, .jambaInstruct, .deepseekr1:
             return true
         case .titanEmbed, .titanImage, .cohereEmbed, .stableDiffusion, .novaCanvas, .j2, .unknown:
             return false
         }
     }
 }
+
+// MARK: - Simplified Parameter Structures
 
 public protocol ModelParameters: Encodable {
     func encode(strategy: JSONEncoder.KeyEncodingStrategy?) throws -> Data
@@ -811,127 +660,7 @@ extension ModelParameters {
     }
 }
 
-// Extend structs to include AI21 and Cohere model parameters
-public struct AI21ModelParameters: ModelParameters {
-    let prompt: String
-    let temperature: Float
-    let topP: Float
-    let maxTokens: Int
-    // Add additional parameters like penalties if needed
-}
-
-public struct JambaInstructModelParameters: ModelParameters {
-    public var messages: [Message]
-    public var max_tokens: Int
-    public var temperature: Double
-    public var top_p: Double
-    
-    public struct Message: Codable {
-        public let role: String
-        public let content: String
-    }
-    
-    public init(
-        messages: [Message],
-        max_tokens: Int = 4096,
-        temperature: Double = 0.7,
-        top_p: Double = 0.9
-    ) {
-        self.messages = messages
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.top_p = top_p
-    }
-}
-
-public enum ReturnLikelihoods: String, Codable {
-    case generation = "GENERATION"
-    case all = "ALL"
-    case none = "NONE"
-}
-
-public struct CohereModelParameters: ModelParameters {
-    let prompt: String
-    let temperature: Float
-    let p: Float
-    let k: Float
-    let maxTokens: Int
-    let stopSequences: [String]
-    let returnLikelihoods: ReturnLikelihoods
-    
-    // Initialize all the parameters with default values, so you can omit them when you don't need to set them
-    init(prompt: String,
-         temperature: Float = 0.7,
-         p: Float = 0.9,
-         k: Float = 0,
-         maxTokens: Int = 400,
-         stopSequences: [String] = [],
-         returnLikelihoods: ReturnLikelihoods = .none)
-    {
-        self.prompt = prompt
-        self.temperature = temperature
-        self.p = p
-        self.k = k
-        self.maxTokens = maxTokens
-        self.stopSequences = stopSequences
-        self.returnLikelihoods = returnLikelihoods
-    }
-    
-    // Define the CodingKeys enum for custom JSON key names
-    enum CodingKeys: String, CodingKey {
-        case prompt
-        case temperature
-        case p
-        case k
-        case maxTokens = "max_tokens"
-        case stopSequences = "stop_sequences"
-        case returnLikelihoods = "return_likelihoods"
-    }
-}
-
-public struct CohereEmbedModelParameters: ModelParameters, Encodable {
-    let texts: [String]
-    let inputType: EmbedInputType
-    let truncate: TruncateOption?
-    
-    init(
-        texts: [String],
-        inputType: EmbedInputType,
-        truncate: TruncateOption? = nil
-    ) {
-        self.texts = texts
-        self.inputType = inputType
-        self.truncate = truncate
-    }
-    
-    enum EmbedInputType: String, Codable {
-        case searchDocument = "search_document"
-        case searchQuery = "search_query"
-        case classification = "classification"
-        case clustering = "clustering"
-    }
-    
-    enum TruncateOption: String, Codable {
-        case none = "NONE"
-        case left = "LEFT"
-        case right = "RIGHT"
-    }
-    
-    // Define the CodingKeys enum for custom JSON key names
-    enum CodingKeys: String, CodingKey {
-        case texts
-        case inputType = "input_type"
-        case truncate
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(texts, forKey: .texts)
-        try container.encode(inputType, forKey: .inputType)
-        try container.encodeIfPresent(truncate, forKey: .truncate)
-    }
-}
-
+// Image model parameter definitions
 public struct TitanEmbedModelParameters: ModelParameters {
     let inputText: String
 }
@@ -954,10 +683,14 @@ struct TitanImageModelParameters: ModelParameters {
         var seed: Int?
     }
     
-    // Initialize with default values and the input text
     init(
-        inputText: String, numberOfImages: Int = 1, quality: String = "standard",
-        cfgScale: Double = 8.0, height: Int = 512, width: Int = 512, seed: Int? = nil
+        inputText: String,
+        numberOfImages: Int = 1,
+        quality: String = "standard",
+        cfgScale: Double = 8.0,
+        height: Int = 512,
+        width: Int = 512,
+        seed: Int? = nil
     ) {
         self.taskType = "TEXT_IMAGE"
         
@@ -966,12 +699,13 @@ struct TitanImageModelParameters: ModelParameters {
         self.textToImageParams = TextToImageParams(text: limitedText)
         
         self.imageGenerationConfig = ImageGenerationConfig(
-            numberOfImages: numberOfImages, quality: quality, cfgScale: cfgScale, height: height,
-            width: width, seed: seed)
-        
-        if limitedText.count < inputText.count {
-            print("Warning: Titan image prompt truncated to 512 characters (original: \(inputText.count) characters)")
-        }
+            numberOfImages: numberOfImages,
+            quality: quality,
+            cfgScale: cfgScale,
+            height: height,
+            width: width,
+            seed: seed
+        )
     }
 }
 
@@ -1018,414 +752,54 @@ struct NovaCanvasModelParameters: ModelParameters {
     }
 }
 
-public struct ClaudeModelParameters: ModelParameters {
-    public var prompt: String
-    public var temperature: Double
-    public var topP: Double
-    public var topK: Int
-    public var maxTokensToSample: Int
-    public var stopSequences: [String]
+// Parameters for embedding models
+public struct CohereEmbedModelParameters: ModelParameters {
+    let texts: [String]
+    let inputType: EmbedInputType
+    let truncate: TruncateOption?
     
-    public init(
-        prompt: String,
-        temperature: Double = 1.0,
-        topP: Double = 1.0,
-        topK: Int = 250,
-        maxTokensToSample: Int = 8191,
-        stopSequences: [String] = ["\n\nHuman:"]
+    init(
+        texts: [String],
+        inputType: EmbedInputType,
+        truncate: TruncateOption? = nil
     ) {
-        self.prompt = prompt
-        self.temperature = temperature
-        self.topP = topP
-        self.topK = topK
-        self.maxTokensToSample = maxTokensToSample
-        self.stopSequences = stopSequences
-    }
-}
-
-public struct ClaudeMessageRequest: ModelParameters {
-    public struct Thinking: ModelParameters {
-        public let budgetTokens: Int
-        public let type: String
+        self.texts = texts
+        self.inputType = inputType
+        self.truncate = truncate
     }
     
-    public let anthropicVersion: String = "bedrock-2023-05-31"
-    public let maxTokens: Int
-    public let thinking: Thinking?
-    public let system: String?
-    public let messages: [Message]
-    public let temperature: Float?
-    public let topP: Float?
-    public let topK: Int?
-    public let stopSequences: [String]?
-    
-    // Message structure definition
-    public struct Message: Codable {
-        let role: String
-        let content: [Content]
-        
-        // Content structure definition
-        struct Content: Codable {
-            var type: String
-            var text: String?
-            var source: ImageSource?
-            
-            // Image source structure definition
-            struct ImageSource: Codable {
-                let type: String = "base64"
-                let mediaType: String
-                let data: String
-                
-                enum CodingKeys: String, CodingKey {
-                    case type
-                    case mediaType = "media_type"
-                    case data
-                }
-            }
-        }
-    }
-}
-
-public struct LLamaMistralModelParameters: ModelParameters {
-    public var prompt: String
-    public var maxTokens: Int
-    public var temperature: Double
-    public var topP: Double
-    public var topK: Double?
-    
-    // Included default values for stop and topK to align with the rest of the structure
-    public init(
-        prompt: String,
-        maxTokens: Int = 4096,
-        temperature: Double = 1.0,
-        topP: Double = 0.9,
-        topK: Double? = nil
-    ) {
-        self.prompt = prompt
-        // Ensured maxTokens cannot exceed 4096.
-        self.maxTokens = min(maxTokens, 4096)
-        self.temperature = temperature
-        self.topP = topP
-        self.topK = topK
-    }
-}
-
-// MARK: - Amazon Nova Model Parameters
-public struct NovaModelParameters: ModelParameters {
-    public let system: [SystemMessage]?
-    public let messages: [Message]
-    public let inferenceConfig: InferenceConfig?
-    
-    public struct SystemMessage: Codable {
-        public let text: String
-        
-        public init(text: String) {
-            self.text = text
-        }
+    enum EmbedInputType: String, Codable {
+        case searchDocument = "search_document"
+        case searchQuery = "search_query"
+        case classification = "classification"
+        case clustering = "clustering"
     }
     
-    public struct Message: Codable {
-        public let role: String
-        public let content: [MessageContent]
-        
-        public init(role: String, content: [MessageContent]) {
-            self.role = role
-            self.content = content
-        }
-        
-        public struct MessageContent: Codable {
-            public var text: String?
-            public var image: ImageContent?
-            
-            public init(text: String? = nil, image: ImageContent? = nil) {
-                self.text = text
-                self.image = image
-            }
-            
-            public struct ImageContent: Codable {
-                public let format: ImageFormat
-                public let source: ImageSource
-                
-                public init(format: ImageFormat, source: ImageSource) {
-                    self.format = format
-                    self.source = source
-                }
-                
-                public enum ImageFormat: String, Codable {
-                    case jpeg, png, gif, webp
-                }
-                
-                public struct ImageSource: Codable {
-                    public let bytes: String
-                    
-                    public init(bytes: String) {
-                        self.bytes = bytes
-                    }
-                }
-            }
-        }
-    }
-    
-    public struct InferenceConfig: Codable {
-        public let maxNewTokens: Int?
-        public let temperature: Float?
-        public let topP: Float?
-        public let topK: Int?
-        public let stopSequences: [String]?
-        
-        enum CodingKeys: String, CodingKey {
-            case maxNewTokens = "max_new_tokens"
-            case temperature
-            case topP = "top_p"
-            case topK = "top_k"
-            case stopSequences = "stop_sequences"
-        }
-        
-        public init(
-            maxNewTokens: Int? = nil,
-            temperature: Float? = nil,
-            topP: Float? = nil,
-            topK: Int? = nil,
-            stopSequences: [String]? = nil
-        ) {
-            self.maxNewTokens = maxNewTokens
-            self.temperature = temperature
-            self.topP = topP
-            self.topK = topK
-            self.stopSequences = stopSequences
-        }
-    }
-    
-    public init(
-        system: [SystemMessage]? = nil,
-        messages: [Message],
-        inferenceConfig: InferenceConfig? = nil
-    ) {
-        self.system = system
-        self.messages = messages
-        self.inferenceConfig = inferenceConfig
-    }
-}
-
-// MARK: - TitanModelParameters
-
-public struct TitanModelParameters: ModelParameters {
-    public let inputText: String  // Changed from `prompt`
-    public let textGenerationConfig: TextGenerationConfig
-    
-    public struct TextGenerationConfig: Encodable {
-        let temperature: Double
-        let topP: Double
-        let maxTokenCount: Int  // Ensure this doesn't exceed 8000
-        let stopSequences: [String]
-    }
-}
-
-// MARK: - ModelType Enumeration
-
-// Model response protocols
-protocol ModelResponse {}
-
-public struct InvokeClaudeResponse: ModelResponse, Decodable {
-    public let completion: String
-    public let stop_reason: String
-}
-
-// 응답 모델 정의
-struct ClaudeMessageResponse: Codable {
-    let id: String
-    let model: String
-    let type: String
-    let role: String
-    let content: [Content]
-    let stopReason: String
-    let stopSequence: String?
-    let usage: Usage
-    
-    struct Content: Codable {
-        let type: String
-        let text: String?
-    }
-    
-    struct Usage: Codable {
-        let inputTokens: Int
-        let outputTokens: Int
-        
-        enum CodingKeys: String, CodingKey {
-            case inputTokens = "input_tokens"
-            case outputTokens = "output_tokens"
-        }
+    enum TruncateOption: String, Codable {
+        case none = "NONE"
+        case left = "LEFT"
+        case right = "RIGHT"
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, model, type, role, content
-        case stopReason = "stop_reason"
-        case stopSequence = "stop_sequence"
-        case usage
+        case texts
+        case inputType = "input_type"
+        case truncate
     }
 }
 
-public struct InvokeNovaResponse: ModelResponse, Decodable {
-    public let output: Output
-    public let stopReason: String
-    public let usage: Usage
-    
-    public struct Output: Decodable {
-        public let message: Message
-    }
-    
-    public struct Message: Decodable {
-        public let content: [Content]
-        public let role: String
-        
-        public struct Content: Decodable {
-            public let text: String
-        }
-    }
-    
-    public struct Usage: Decodable {
-        public let inputTokens: Int
-        public let outputTokens: Int
-        public let totalTokens: Int
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case output
-        case stopReason = "stopReason"
-        case usage
-    }
-}
+// MARK: - Error Definitions
 
-public struct InvokeTitanResponse: ModelResponse, Decodable {
-    public let results: [InvokeTitanResult]
-}
-
-public struct InvokeTitanEmbedResponse: ModelResponse, Decodable {
-    public let embedding: [Float]
-}
-
-public struct InvokeTitanImageResponse: ModelResponse, Decodable {
-    public let images: [Data]
-}
-
-public struct InvokeNovaCanvasResponse: ModelResponse, Decodable {
-    public let images: [Data]
-    public let error: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case images
-        case error
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        // Decode base64-encoded images and convert them to Data
-        let base64Images = try container.decode([String].self, forKey: .images)
-        self.images = try base64Images.map { base64Str in
-            guard let imageData = Data(base64Encoded: base64Str) else {
-                throw DecodingError.dataCorrupted(
-                    DecodingError.Context(
-                        codingPath: container.codingPath,
-                        debugDescription: "Invalid base64 image string."
-                    )
-                )
-            }
-            return imageData
-        }
-        
-        // Decode optional error field
-        self.error = try container.decodeIfPresent(String.self, forKey: .error)
-    }
-}
-
-public struct InvokeTitanResult: Decodable {
-    public let outputText: String
-    // Add any other properties you need from the Titan response
-}
-
-public struct InvokeAI21Response: ModelResponse, Decodable {
-    public let completions: [AI21Completion]
-}
-
-public struct InvokeJambaInstructResponse: ModelResponse, Decodable {
-    public let id: String
-    public let choices: [Choice]
-    public let usage: Usage
-    
-    public struct Choice: Decodable {
-        public let index: Int
-        public let message: Message
-        public let finishReason: String?
-        
-        public struct Message: Decodable {
-            public let role: String
-            public let content: String
-        }
-    }
-    
-    public struct Usage: Decodable {
-        public let promptTokens: Int?
-        public let completionTokens: Int?
-        public let totalTokens: Int?
-    }
-}
-
-public struct AI21Completion: Decodable {
-    public let data: AI21Data
-}
-
-public struct AI21Data: Decodable {
-    public let text: String
-    // Add any other properties you need from the AI21 response
-}
-
-public struct InvokeCommandResponse: ModelResponse, Decodable {
-    public let generations: [AI21Data]
-}
-
-public struct InvokeCohereEmbedResponse: ModelResponse, Decodable {
-    public let embeddings: [[Float]]
-}
-
-public struct InvokeStableDiffusionResponse: ModelResponse, Decodable {
-    public let body: Data  // Specify the type here
-}
-
-public struct MistralData: Decodable {
-    public let text: String
-    public let stop_reason: String?
-}
-
-public struct InvokeMistralResponse: ModelResponse, Decodable {
-    public let outputs: [MistralData]
-}
-
-public struct InvokeLlama2Response: ModelResponse, Decodable {
-    public let generation: String
-}
-
-public struct InvokeLlama3Response: ModelResponse, Decodable {
-    public let generation: String
-}
-
-// MARK: - Errors
-enum STSError: Error {
-    case invalidCredentialsResponse(String)
-    case invalidAssumeRoleWithWebIdentityResponse(String)
-}
 enum BedrockRuntimeError: Error {
     case invalidResponse(Data?)
     case invalidURL
     case requestFailed
     case decodingFailed
 }
+
 enum BedrockError: Error {
-    /// The response from Bedrock was invalid.
     case invalidResponse(String?)
-    /// The AWS credentials have expired.
     case expiredToken(String?)
-    /// An unknown error occurred.
     case unknown(String?)
     
     init(error: Error) {
@@ -1439,6 +813,21 @@ enum BedrockError: Error {
             self = .invalidResponse(commonError.localizedDescription)
         } else {
             self = .unknown(error.localizedDescription)
+        }
+    }
+}
+
+// MARK: - NSAlert Extension for Error Handling
+
+extension NSAlert {
+    static func presentErrorAlert(title: String, message: String) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = title
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         }
     }
 }

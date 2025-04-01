@@ -46,7 +46,7 @@ Get the latest version:
 ## Getting Started
 
 ### Requirements
-- macOS 13 or later
+- macOS 14 or later
 - AWS Account with Bedrock access
 - Configured AWS credentials
 

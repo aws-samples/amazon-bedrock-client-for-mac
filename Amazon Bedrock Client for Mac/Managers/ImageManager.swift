@@ -11,4 +11,5 @@ import SwiftUI
 class SharedImageDataSource: ObservableObject {
     @Published var images: [NSImage] = []
     @Published var fileExtensions: [String] = [] // Assuming this stores file extensions corresponding to each image
+    @Published var filenames: [String] = []
 }

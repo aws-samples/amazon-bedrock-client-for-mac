@@ -180,7 +180,7 @@ struct ChatView: View {
                         } label: {
                             Image(systemName: "arrow.down")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.blue)
+                                .foregroundColor(.black)
                                 .frame(width: 36, height: 36)
                                 .background(
                                     Circle()
