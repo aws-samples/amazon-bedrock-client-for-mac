@@ -121,6 +121,7 @@ struct SidebarView: View {
     @State private var searchIndex = ChatSearchIndex()
     @State private var searchResults: [String] = []
     @State private var isSearching: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
     
     // Timer to periodically update chat dates
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
@@ -165,23 +166,27 @@ struct SidebarView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar at the top of sidebar
+            newChatButton
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            
+            // Enhanced search bar
             searchBarView
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             
-            // Chat list
+            // Enhanced chat list
             chatListView
                 .onReceive(timer) { _ in
                     organizeChatsByDate()
                 }
-                .onChange(of: appCoordinator.shouldCreateNewChat) { newValue in
+                .onChange(of: appCoordinator.shouldCreateNewChat) { _, newValue in
                     if newValue {
                         createNewChat()
                         appCoordinator.shouldCreateNewChat = false
                     }
                 }
-                .onChange(of: appCoordinator.shouldDeleteChat) { newValue in
+                .onChange(of: appCoordinator.shouldDeleteChat) { _, newValue in
                     if newValue {
                         deleteSelectedChat()
                         appCoordinator.shouldDeleteChat = false
@@ -191,42 +196,73 @@ struct SidebarView: View {
                 .listStyle(SidebarListStyle())
                 .frame(minWidth: 100, idealWidth: 250, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
         .onAppear {
             organizeChatsByDate()
             updateSearchIndex()
         }
-        .onChange(of: chatManager.chats) { _ in
+        .onChange(of: chatManager.chats) { _, _ in
             organizeChatsByDate()
             updateSearchIndex()
         }
-        .onChange(of: searchText) { newValue in
+        .onChange(of: searchText) { _, _ in
             performSearch()
         }
-        // Using toolbar with inline items to avoid ambiguity
+        // Remove New Chat button from toolbar, keeping only Toggle Sidebar
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: Amazon_Bedrock_Client_for_MacApp.toggleSidebar) {
                     Label("Toggle Sidebar", systemImage: "sidebar.left")
                         .help("Toggle Sidebar")
                 }
-                
-                Button(action: {
-                    createNewChat()
-                }) {
-                    Label("New Chat", systemImage: "square.and.pencil")
-                        .help("New Chat")
-                }
             }
         }
     }
     
+    // New Chat button view
+    private var newChatButton: some View {
+        Button(action: {
+            createNewChat()
+        }) {
+            HStack {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .medium))
+                
+                Text("New Chat")
+                    .font(.system(size: 14))
+                
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(colorScheme == .dark ?
+                          Color(NSColor.controlBackgroundColor) :
+                          Color(NSColor.controlColor))
+                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(colorScheme == .dark ?
+                            Color.white.opacity(0.1) :
+                            Color.black.opacity(0.1),
+                            lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help("Start a new chat")
+    }
+
     // MARK: - Search Bar View
     
-    /// Search bar for filtering chats
+    /// Enhanced search bar for filtering chats
     private var searchBarView: some View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
+                .font(.system(size: 14))
             
             TextField("Search chats", text: $searchText)
                 .textFieldStyle(PlainTextFieldStyle())
@@ -238,32 +274,48 @@ struct SidebarView: View {
                     .frame(width: 16, height: 16)
             } else if !searchText.isEmpty {
                 Button(action: {
-                    searchText = ""
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        searchText = ""
+                    }
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
                         .font(.system(size: 14))
                 }
                 .buttonStyle(PlainButtonStyle())
+                .transition(.opacity)
             }
         }
-        .padding(6)
-        .background(Color(NSColor.textBackgroundColor))
-        .cornerRadius(8)
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(colorScheme == .dark ?
+                      Color(NSColor.textBackgroundColor).opacity(0.8) :
+                        Color(NSColor.textBackgroundColor))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                .stroke(colorScheme == .dark ?
+                        Color.white.opacity(0.1) :
+                            Color.black.opacity(0.1),
+                        lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
     }
     
     // MARK: - Chat List View
     
-    /// Main chat list view
+    /// Enhanced chat list view
     private var chatListView: some View {
         List {
             ForEach(sortedDateKeys, id: \.self) { dateKey in
                 if let chats = filteredChatModels[dateKey], !chats.isEmpty {
-                    Section(header: Text(dateKey)) {
+                    Section(header:
+                                Text(dateKey)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 6)
+                    ) {
                         ForEach(chats, id: \.self) { chat in
                             chatRowView(for: chat)
                                 .contextMenu {
@@ -304,7 +356,137 @@ struct SidebarView: View {
         }
     }
     
-    // MARK: - Search Methods
+    // MARK: - Chat Row View
+    
+    /// Creates an enhanced view for an individual chat row
+    func chatRowView(for chat: ChatModel) -> some View {
+        let isHovered = hoverStates[chat.chatId, default: false]
+        let isSelected = selection == .chat(chat)
+        
+        return HStack(spacing: 12) {
+            // Model icon - using actual model images
+            //            getModelImage(for: chat.id)
+            //                .resizable()
+            //                .scaledToFit()
+            //                .frame(width: 24, height: 24)
+            //                .padding(4)
+            //                .background(
+            //                    RoundedRectangle(cornerRadius: 6)
+            //                        .fill(colorScheme == .dark ?
+            //                              Color(NSColor.windowBackgroundColor) :
+            //                              Color.white)
+            //                )
+            //                .overlay(
+            //                    RoundedRectangle(cornerRadius: 6)
+            //                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+            //                )
+            
+            // Chat title and model name
+            VStack(alignment: .leading, spacing: 3) {
+                Text(chat.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                
+                Text(chat.name)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            // Loading indicator as animated dots
+            if chatManager.getIsLoading(for: chat.chatId) {
+                LoadingDotsView()
+                    .frame(width: 30, height: 20)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ?
+                      Color.blue.opacity(0.15) :
+                        (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onHover { hover in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                hoverStates[chat.chatId] = hover
+            }
+            if hover {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+        .onTapGesture {
+            selection = .chat(chat)
+        }
+    }
+    
+    // Helper function to get model image based on ID
+    func getModelImage(for modelId: String) -> Image {
+        switch modelId {
+        case let id where id.contains("anthropic"):
+            return Image("anthropic")
+        case let id where id.contains("meta"):
+            return Image("meta")
+        case let id where id.contains("cohere"):
+            return Image("cohere")
+        case let id where id.contains("mistral"):
+            return Image("mistral")
+        case let id where id.contains("ai21"):
+            return Image("AI21")
+        case let id where id.contains("amazon"):
+            return Image("amazon")
+        case let id where id.contains("deepseek"):
+            return Image("deepseek")
+        case let id where id.contains("stability"):
+            return Image("stability ai")
+        default:
+            return Image("bedrock")
+        }
+    }
+    
+    // New loading dots animation view
+    struct LoadingDotsView: View {
+        @State private var dotCount = 1
+        
+        var body: some View {
+            HStack {
+                Text(String(repeating: ".", count: dotCount))
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+            }
+            .onAppear {
+                // Start the animation
+                let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+                
+                // Clean up the timer when the view disappears
+                let cancellable = timer.sink { _ in
+                    withAnimation {
+                        dotCount = (dotCount % 3) + 1
+                    }
+                }
+                
+                // Store the cancellable for cleanup
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                    cancellable.cancel()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Methods
+    
+    // [Keeping the existing methods as is]
     
     /// Updates the search index with current chat data
     private func updateSearchIndex() {
@@ -337,8 +519,6 @@ struct SidebarView: View {
             }
         }
     }
-    
-    // MARK: - Methods
     
     /// Creates a new chat with the currently selected model
     private func createNewChat() {
@@ -405,53 +585,6 @@ struct SidebarView: View {
         dateFormatter.dateFormat = "MMMM dd, yyyy"
         return dateFormatter.string(from: date)
     }
-    
-    /// Creates a view for an individual chat row
-    func chatRowView(for chat: ChatModel) -> some View {
-        let isHovered = hoverStates[chat.chatId, default: false]
-        
-        return HStack(spacing: 8) {
-            // Chat title and model name
-            VStack(alignment: .leading, spacing: 2) {
-                Text(chat.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                Text(chat.name)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            // Loading indicator
-            if chatManager.getIsLoading(for: chat.chatId) {
-                Text("…")
-                    .font(.headline)
-                    .foregroundColor(.gray)
-            }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 8)
-        .background(isHovered || selection == .chat(chat) ? Color.gray.opacity(0.15) : Color.clear)
-        .cornerRadius(8)
-        .contentShape(Rectangle())
-        .onHover { hover in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                hoverStates[chat.chatId] = hover
-            }
-            if hover {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
-            }
-        }
-        .onTapGesture {
-            selection = .chat(chat)
-        }
-    }
-    
-    // Rest of the methods (deleteChat, exportChatAsTextFile) remain unchanged
     
     /// Deletes a specific chat
     private func deleteChat(_ chat: ChatModel) {

@@ -19,6 +19,7 @@ import Logging
 import SmithyIdentity
 import SmithyIdentityAPI
 import SwiftUI
+import Smithy
 
 class BackendModel: ObservableObject {
     @Published var backend: Backend
@@ -213,15 +214,194 @@ class Backend: Equatable {
     func isImageGenerationModel(_ modelId: String) -> Bool {
         let id = modelId.lowercased()
         return id.contains("titan-image") ||
-               id.contains("nova-canvas") ||
-               id.contains("stable-") ||
-               id.contains("sd3-")
+        id.contains("nova-canvas") ||
+        id.contains("stable-") ||
+        id.contains("sd3-")
+    }
+    
+    func isReasoningSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude37:
+            // Claude 3.7 models and DeepSeek R1 support advanced reasoning
+            return true
+        case .claude, .claude3, .llama2, .llama3, .mistral, .titan, .titanEmbed, .titanImage,
+                .cohereCommand, .cohereEmbed, .stableDiffusion, .novaCanvas, .j2,
+                .novaPro, .novaLite, .novaMicro, .jambaInstruct, .deepseekr1, .unknown:
+            return false
+        }
+    }
+    
+    /// Check if a model has configurable reasoning (can be toggled on/off)
+    func hasConfigurableReasoning(_ modelId: String) -> Bool {
+        // Only Claude 3.7 has configurable reasoning
+        return getModelType(modelId) == .claude3 && modelId.contains("claude-3-7")
+    }
+    
+    /// Check if a model has always-on reasoning (can't be disabled)
+    func hasAlwaysOnReasoning(_ modelId: String) -> Bool {
+        return getModelType(modelId) == .deepseekr1
     }
     
     /// Check if a model is an embedding model
     func isEmbeddingModel(_ modelId: String) -> Bool {
         let id = modelId.lowercased()
         return id.contains("embed") || id.contains("titan-e1t")
+    }
+    
+    /// Check if a model supports document chat
+    func isDocumentChatSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude, .claude3, .claude37, .llama2, .llama3, .novaPro, .novaLite, .titan,
+                .mistral, .cohereCommand, .deepseekr1, .jambaInstruct:
+            // Handle specific exceptions
+            if modelType == .titan && modelId.contains("text-premier") {
+                return false
+            }
+            if modelType == .mistral && modelId.contains("small") {
+                return false
+            }
+            if modelType == .cohereCommand && modelId.contains("light") {
+                return false
+            }
+            if modelType == .jambaInstruct {
+                return false
+            }
+            return true
+        case .novaMicro, .titanEmbed, .titanImage, .cohereEmbed,
+             .stableDiffusion, .novaCanvas, .j2, .unknown:
+            return false
+        }
+    }
+
+    /// Check if a model supports system prompts
+    func isSystemPromptSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude, .claude3, .claude37, .llama2, .llama3, .novaPro, .novaLite,
+                .novaMicro, .jambaInstruct, .deepseekr1, .jambaInstruct, .mistral:
+            // Handle specific exceptions
+            if modelId.contains("mistral") && modelId.contains("instruct") {
+                return false
+            }
+            return true
+        case .titan, .titanEmbed, .titanImage, .cohereEmbed, .cohereCommand,
+             .stableDiffusion, .novaCanvas, .j2, .unknown:
+            return false
+        }
+    }
+
+    /// Check if a model supports vision capabilities
+    func isVisionSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude3, .claude37, .novaPro, .novaLite, .llama3:
+            // Only specific Claude 3 models support vision
+            if modelId.contains("claude-3") {
+                // Claude 3.5 Haiku doesn't support vision
+                if modelId.contains("haiku") {
+                    return false
+                }
+                return true
+            }
+            // Nova Pro supports vision, but Nova Lite doesn't
+            if modelId.contains("nova-pro") {
+                return true
+            }
+            // Only Llama 3.2 11b and 90b support vision
+            if modelId.contains("llama3") && (modelId.contains("3-2-11b") || modelId.contains("3-2-90b")) {
+                return true
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    /// Check if a model supports tool use
+    func isToolUseSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude3, .claude37, .novaPro, .novaLite, .novaMicro, .cohereCommand,
+                .mistral, .llama3, .jambaInstruct:
+            // Claude 3 models all support tool use
+            if modelId.contains("claude-3") {
+                return true
+            }
+            // Nova models all support tool use
+            if modelId.contains("nova-") {
+                return true
+            }
+            // Only Command R and R+ support tool use
+            if modelId.contains("command-r") {
+                return true
+            }
+            // Mistral Large supports tool use, but not Mistral Instruct
+            if modelId.contains("mistral-large") {
+                return true
+            }
+            // Llama 3.1 and 3.2 larger models support tool use
+            if (modelId.contains("llama3-1") ||
+                modelId.contains("llama3-2-11b") ||
+                modelId.contains("llama3-2-90b")) {
+                return true
+            }
+            // Jamba 1.5 Large and Mini support tool use
+            if modelId.contains("jamba") &&
+               (modelId.contains("large") || modelId.contains("mini")) {
+                return true
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    /// Check if a model supports streaming tool use
+    func isStreamingToolUseSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude3, .claude37, .novaPro, .novaLite, .novaMicro, .cohereCommand, .jambaInstruct:
+            // Claude 3 models support streaming tool use
+            if modelId.contains("claude-3") {
+                return true
+            }
+            // Nova models support streaming tool use
+            if modelId.contains("nova-") {
+                return true
+            }
+            // Command R and R+ support streaming tool use
+            if modelId.contains("command-r") {
+                return true
+            }
+            // Jamba 1.5 Large and Mini support streaming tool use
+            if modelId.contains("jamba") &&
+               (modelId.contains("large") || modelId.contains("mini")) {
+                return true
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    /// Check if a model supports guardrails
+    func isGuardrailsSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        
+        // Models that don't support guardrails
+        if modelId.contains("3-5-haiku") {
+            return false
+        }
+        if modelId.contains("command-r") {
+            return false
+        }
+        if modelId.contains("jamba-instruct-v1") {
+            return false
+        }
+        
+        return true
     }
     
     /// Helper function to determine the model type based on modelId
@@ -232,7 +412,11 @@ class Backend: Equatable {
             return .unknown
         }
         
-        if modelName.hasPrefix("claude") {
+        if modelName.hasPrefix("claude-3-7") {
+            return .claude37
+        } else if modelName.hasPrefix("claude-3") {
+            return .claude3
+        } else if modelName.hasPrefix("claude") {
             return .claude
         } else if modelName.hasPrefix("titan-embed") || modelName.hasPrefix("titan-e1t") {
             return .titanEmbed
@@ -273,11 +457,26 @@ class Backend: Equatable {
     
     func getDefaultInferenceConfig(for modelType: ModelType) -> BedrockRuntimeClientTypes.InferenceConfiguration {
         switch modelType {
+        case .claude37:
+            let isThinkingEnabled = SettingManager.shared.enableModelThinking
+            
+            if isThinkingEnabled {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 64000,
+                    temperature: 1.0
+                )
+            } else {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 8192,
+                    temperature: 0.9,
+                    topp: 0.7
+                )
+            }
         case .claude, .claude3:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 4096,
-                temperature: 1.0,
-                topp: 1.0
+                temperature: 0.9,
+                topp: 0.7
             )
         case .titan:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -291,9 +490,20 @@ class Backend: Equatable {
                 temperature: 0.7,
                 topp: 0.9
             )
-        case .mistral, .llama2, .llama3, .jambaInstruct, .deepseekr1:
+        case .deepseekr1:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 1
+            )
+        case .mistral, .jambaInstruct:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 4096,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .llama2, .llama3:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 2048,
                 temperature: 0.7,
                 topp: 0.9
             )
@@ -317,7 +527,7 @@ class Backend: Equatable {
             )
         }
     }
-
+    
     
     // MARK: - Converse Stream API (Unified for Text Models)
     
@@ -340,12 +550,33 @@ class Backend: Equatable {
             inferenceConfig: config,
             messages: messages,
             modelId: modelId,
-            system: systemContent
+            system: isSystemPromptSupported(modelId) ? systemContent : nil
         )
-        
+
         // Add tool configuration if provided
         if let tools = toolConfig {
             request.toolConfig = tools
+        }
+        
+        // Add reasoning configuration for models that support it
+        if isReasoningSupported(modelId) {
+            let isThinkingEnabled = SettingManager.shared.enableModelThinking
+            
+            if isThinkingEnabled {
+                // Create reasoning configuration
+                do {
+                    let reasoningConfig = [
+                        "reasoning_config": [
+                            "type": "enabled",
+                            "budget_tokens": 1024
+                        ]
+                    ]
+                    
+                    request.additionalModelRequestFields = try Document.make(from: reasoningConfig)
+                } catch {
+                    logger.error("Failed to create reasoning config document: \(error)")
+                }
+            }
         }
         
         logger.info("Converse API Stream Request for model: \(modelId)")
@@ -371,6 +602,7 @@ class Backend: Equatable {
             }
         }
     }
+    
     
     // MARK: - Image Generation Models
     
@@ -630,13 +862,13 @@ class Backend: Equatable {
 // MARK: - Model Type and Parameter Definitions
 
 enum ModelType {
-    case claude, claude3, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed
+    case claude, claude3, claude37, llama2, llama3, mistral, titan, titanImage, titanEmbed, cohereCommand, cohereEmbed
     case j2, stableDiffusion, jambaInstruct, novaPro, novaLite, novaMicro, novaCanvas, deepseekr1, unknown
     
     var supportsSystemPrompt: Bool {
         switch self {
-        case .claude, .claude3, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro,
-             .titan, .cohereCommand, .jambaInstruct, .deepseekr1:
+        case .claude, .claude3, .claude37, .llama2, .llama3, .mistral, .novaPro, .novaLite, .novaMicro,
+                .titan, .cohereCommand, .jambaInstruct, .deepseekr1:
             return true
         case .titanEmbed, .titanImage, .cohereEmbed, .stableDiffusion, .novaCanvas, .j2, .unknown:
             return false

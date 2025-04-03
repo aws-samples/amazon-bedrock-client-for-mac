@@ -298,6 +298,13 @@ final class MyTextView: NSTextView {
     
     // Implement the performKeyEquivalent to catch Command+V (paste)
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // 검색 필드가 활성화되었는지 확인
+        if AppStateManager.shared.isSearchFieldActive {
+            // 검색 필드가 활성화된 경우 기본 동작 허용
+            return super.performKeyEquivalent(with: event)
+        }
+        
+        // 검색 필드가 활성화되지 않은 경우 Command+V 처리
         if event.modifierFlags.contains(.command) {
             if event.keyCode == 9 { // 'V' key
                 paste(nil)

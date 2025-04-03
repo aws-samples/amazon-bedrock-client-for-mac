@@ -19,16 +19,19 @@ struct ToolInfo: Codable, Equatable {
 
 /**
  * Represents a message in the chat conversation.
- * Includes support for text content, thinking steps, tool usage, and image attachments.
+ * Includes support for text content, thinking steps, tool usage, and image/document attachments.
  */
 struct MessageData: Identifiable, Equatable, Codable {
     var id = UUID()
     var text: String // Changed to var to allow modification
     var thinking: String?
     let user: String
-    var isError: Bool
+    var isError: Bool = false
     let sentTime: Date
     var imageBase64Strings: [String]?
+    var documentBase64Strings: [String]?
+    var documentFormats: [String]?
+    var documentNames: [String]?
     var toolUse: ToolInfo?  // Information about tool usage in this message
     var toolResult: String?  // Result from tool execution
     
@@ -40,6 +43,9 @@ struct MessageData: Identifiable, Equatable, Codable {
         case isError = "is_error"
         case sentTime = "sent_time"
         case imageBase64Strings = "image_base64_strings"
+        case documentBase64Strings = "document_base64_strings"
+        case documentFormats = "document_formats"
+        case documentNames = "document_names"
         case toolUse = "tool_use"
         case toolResult = "tool_result"
     }
@@ -51,6 +57,9 @@ struct MessageData: Identifiable, Equatable, Codable {
                lhs.toolResult == rhs.toolResult &&
                lhs.user == rhs.user &&
                lhs.isError == rhs.isError &&
-               lhs.sentTime == rhs.sentTime
+               lhs.sentTime == rhs.sentTime &&
+               lhs.documentBase64Strings == rhs.documentBase64Strings &&
+               lhs.documentFormats == rhs.documentFormats &&
+               lhs.documentNames == rhs.documentNames
     }
 }

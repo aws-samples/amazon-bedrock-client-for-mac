@@ -278,6 +278,8 @@ struct DeveloperSettingsView: View {
     @State private var tempEndpoint: String = ""
     @State private var tempRuntimeEndpoint: String = ""
     
+    private var logger = Logger(label: "DeveloperSettingsView")
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) { // Reduced spacing
@@ -490,7 +492,7 @@ struct DeveloperSettingsView: View {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 
-                print("Node.js detection method \(methodIndex + 1) output: \(output)")
+                logger.info("Node.js detection method \(methodIndex + 1) output: \(output)")
                 
                 // If we found Node.js
                 if !output.contains("not found") && task.terminationStatus == 0 {
@@ -500,7 +502,7 @@ struct DeveloperSettingsView: View {
                     return
                 }
             } catch {
-                print("Error in Node.js detection method \(methodIndex + 1): \(error)")
+                logger.info("Error in Node.js detection method \(methodIndex + 1): \(error)")
             }
         }
         

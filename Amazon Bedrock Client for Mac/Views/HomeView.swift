@@ -1,3 +1,8 @@
+//
+//  HomeView.swift
+//  Amazon Bedrock Client for Mac
+//
+
 import SwiftUI
 
 struct HomeView: View {
@@ -14,25 +19,25 @@ struct HomeView: View {
     // MARK: - Body
     var body: some View {
         ZStack {
-            // Background color (dark mode aware)
-            backgroundColor.ignoresSafeArea()
+            // Modern background layer
+            backgroundLayer
             
-            // Main content - centered both horizontally and vertically
-            VStack {
+            // Main content
+            VStack(spacing: 24) {
                 Spacer()
                 
-                // Title section
-                titleSection
+                // Branding section
+                brandingSection
                 
-                // Tagline - simplified
+                // Tagline
                 Text("Build and scale generative AI applications")
-                    .font(.system(size: 16))
-                    .foregroundColor(secondaryTextColor)
-                    .padding(.top, 12)
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 8)
                 
-                // Simple New Chat button
+                // Modern new chat button
                 newChatButton
-                    .padding(.top, 32)
+                    .padding(.top, 36)
                 
                 Spacer()
             }
@@ -49,57 +54,110 @@ struct HomeView: View {
         }
     }
     
-    // MARK: - Colors (Dark Mode support)
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color(hex: "121212") : Color.white
+    // MARK: - UI Components
+    
+    // Modern background layer
+    private var backgroundLayer: some View {
+        ZStack {
+            // Base background
+            Color(NSColor.windowBackgroundColor)
+            
+            // Subtle gradient overlay
+            LinearGradient(
+                colors: [
+                    Color.blue.opacity(0.08),
+                    Color.purple.opacity(0.05)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            // Pattern overlay (macOS style)
+            Image(systemName: "circle.grid.2x2")
+                .resizable(resizingMode: .tile)
+                .foregroundStyle(Color.primary.opacity(0.03))
+                .blendMode(.overlay)
+        }
+        .ignoresSafeArea()
     }
     
-    private var primaryTextColor: Color {
-        colorScheme == .dark ? Color.white : Color.black
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color(hex: "AAAAAA") : Color(hex: "6E6E80")
-    }
-    
-    // MARK: - Title Section (Simplified)
-    private var titleSection: some View {
-        VStack(spacing: 16) {
+    // Modern branding section
+    private var brandingSection: some View {
+        VStack(spacing: 12) {
+            // App icon
+            Image("bedrock")
+                .font(.system(size: 24))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.blue, .purple.opacity(0.8))
+                .padding(.bottom, 8)
+            
+            // Title (SF Pro design)
             Text("Amazon Bedrock")
-                .font(.system(size: 34, weight: .bold))
-                .foregroundColor(primaryTextColor)
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.blue, .purple],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
         }
     }
     
-    // MARK: - New Chat Button (Simplified)
+    // Modern new chat button
     private var newChatButton: some View {
         Button(action: {
-            createNewChat()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                createNewChat()
+            }
         }) {
             HStack(spacing: 10) {
-                Image(systemName: "plus")
-                    .font(.system(size: 16))
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
                 
                 Text("New chat")
-                    .font(.system(size: 16))
+                    .font(.system(size: 16, weight: .medium))
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 24)
             .frame(width: 200)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(colorScheme == .dark ? Color(hex: "3E3E41") : Color(hex: "DEDEDE"), lineWidth: 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(colorScheme == .dark ? Color(hex: "202123") : Color(hex: "F7F7F8"))
+                Group {
+                    if colorScheme == .dark {
+                        // Dark mode - translucent material
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            )
+                    } else {
+                        // Light mode - translucent material
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            )
+                    }
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.blue.opacity(0.6), .purple.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: isHoveringNewChat ? 1.5 : 0
                     )
             )
-            .foregroundColor(primaryTextColor)
+            .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 1)
+            .foregroundStyle(.primary)
         }
-        .buttonStyle(PlainButtonStyle())
-        .onHover { hovering in
-            isHoveringNewChat = hovering
-        }
+        .buttonStyle(MacButtonStyle(isHovering: $isHoveringNewChat))
         .keyboardShortcut("n", modifiers: [.command])
     }
     
@@ -120,7 +178,28 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Color Extension
+// MARK: - Mac Style Button
+struct MacButtonStyle: ButtonStyle {
+    @Binding var isHovering: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { newValue in
+                if newValue {
+                    isHovering = false
+                }
+            }
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isHovering = hovering
+                }
+            }
+    }
+}
+
+// Keep existing Color extension
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)

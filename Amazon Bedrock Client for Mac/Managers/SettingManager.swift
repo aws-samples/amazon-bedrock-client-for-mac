@@ -17,6 +17,8 @@ extension Notification.Name {
 class SettingManager: ObservableObject {
     static let shared = SettingManager()
     private var logger = Logger(label: "SettingManager")
+    private static let staticLogger = Logger(label: "SettingManager.Static")
+
     private var fileMonitors: [String: DispatchSourceFileSystemObject] = [:]
     private let monitoringQueue = DispatchQueue(
         label: "com.amazonbedrock.fileMonitoring", attributes: .concurrent)
@@ -233,7 +235,7 @@ class SettingManager: ObservableObject {
         
         // Attempt to read the file contents
         guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
-            print("Error reading file: \(path)")
+            staticLogger.info("Error reading file: \(path)")
             return []
         }
         
@@ -257,7 +259,7 @@ class SettingManager: ObservableObject {
         
         // Attempt to read the file contents
         guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
-            print("Error reading file: \(path)")
+            staticLogger.info("Error reading file: \(path)")
             return []
         }
         

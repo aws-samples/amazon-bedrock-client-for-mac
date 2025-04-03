@@ -10,7 +10,7 @@ import AWSBedrock
 
 class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
     var id: String
-    let chatId: String
+    var chatId: String
     var name: String
     @Published var title: String
     var description: String
@@ -49,7 +49,7 @@ class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
     
     static func fromInferenceProfile(_ profileSummary: BedrockClientTypes.InferenceProfileSummary) -> ChatModel {
         return ChatModel(
-            id: profileSummary.inferenceProfileArn ?? "Unknown ARN",  // Provide default if nil
+            id: profileSummary.inferenceProfileId ?? "Unknown Id",  // Provide default if nil
             chatId: UUID().uuidString,  // Generate unique chatId
             name: profileSummary.inferenceProfileName ?? "Unknown Profile",  // Provide default if nil
             title: "Inference Profile: \(profileSummary.inferenceProfileName ?? "Unknown")",  // Provide default if nil

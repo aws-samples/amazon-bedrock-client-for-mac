@@ -8,6 +8,7 @@
 import Combine
 import SwiftUI
 import CoreData
+import Logging
 
 // MARK: - Unified Conversation History
 
@@ -21,6 +22,9 @@ struct ConversationHistory: Codable {
         let timestamp: Date
         let isError: Bool
         var imageBase64Strings: [String]?
+        var documentBase64Strings: [String]?
+        var documentFormats: [String]?
+        var documentNames: [String]?
         var toolUsage: ToolUsage?
         
         struct ToolUsage: Codable {
@@ -97,6 +101,8 @@ class ChatManager: ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let lastVersionKey = "LastRunAppVersion"
     
+    private var logger = Logger(label: "ChatManager")
+    
     private init() {
         self.coreDataStack = CoreDataStack(modelName: "ChatModel")
         self.loadChats()
@@ -112,7 +118,7 @@ class ChatManager: ObservableObject {
         let lastVersion = userDefaults.string(forKey: lastVersionKey) ?? "1.0.0"
         
         if lastVersion.compare(currentAppVersion, options: .numeric) == .orderedAscending {
-            print("Running migrations from version \(lastVersion) to \(currentAppVersion)")
+            logger.info("Running migrations from version \(lastVersion) to \(currentAppVersion)")
             migrateAllHistoriesToUnifiedFormat()
             
             userDefaults.set(currentAppVersion, forKey: lastVersionKey)
@@ -120,20 +126,20 @@ class ChatManager: ObservableObject {
     }
     
     private func migrateAllHistoriesToUnifiedFormat() {
-        print("Starting history migration to unified format...")
+        logger.info("Starting history migration to unified format...")
         
         for chat in chats {
             migrateHistoryForChat(chatId: chat.chatId, modelId: chat.id)
         }
         
-        print("History migration completed")
+        logger.info("History migration completed")
     }
     
     private func migrateHistoryForChat(chatId: String, modelId: String) {
-        print("Migrating history for chat: \(chatId)")
+        logger.info("Migrating history for chat: \(chatId)")
         
         if fileExists(at: getConversationHistoryFileURL(chatId: chatId)) {
-            print("Unified history already exists for chat \(chatId), skipping migration")
+            logger.info("Unified history already exists for chat \(chatId), skipping migration")
             return
         }
         
@@ -176,7 +182,7 @@ class ChatManager: ObservableObject {
         }
         
         saveConversationHistory(conversationHistory, for: chatId)
-        print("Successfully migrated history for chat \(chatId)")
+        logger.info("Successfully migrated history for chat \(chatId)")
     }
     
     // MARK: - Chat Management
@@ -217,7 +223,7 @@ class ChatManager: ObservableObject {
                     completion(chatModel)
                 }
             } catch {
-                print("Failed to save context: \(error)")
+                self.logger.info("Failed to save context: \(error)")
                 completion(ChatModel(id: "", chatId: "", name: "", title: "", description: "", provider: "", lastMessageDate: Date()))
             }
         }
@@ -242,7 +248,7 @@ class ChatManager: ObservableObject {
                 }
             }
         } catch {
-            print("Failed to update chat title: \(error)")
+            logger.info("Failed to update chat title: \(error)")
         }
     }
     
@@ -259,7 +265,7 @@ class ChatManager: ObservableObject {
                 try context.save()
             }
         } catch {
-            print("Failed to delete chat from CoreData: \(error)")
+            logger.info("Failed to delete chat from CoreData: \(error)")
         }
         
         // Remove from in-memory array
@@ -295,7 +301,7 @@ class ChatManager: ObservableObject {
             
             clearAllFiles()
         } catch {
-            print("Failed to clear all chats: \(error)")
+            logger.info("Failed to clear all chats: \(error)")
         }
     }
     
@@ -340,6 +346,9 @@ class ChatManager: ObservableObject {
                     isError: message.isError,
                     sentTime: message.timestamp,
                     imageBase64Strings: message.imageBase64Strings,
+                    documentBase64Strings: message.documentBase64Strings,
+                    documentFormats: message.documentFormats,
+                    documentNames: message.documentNames,
                     toolUse: toolUse,
                     toolResult: message.toolUsage?.result
                 )
@@ -376,6 +385,9 @@ class ChatManager: ObservableObject {
             timestamp: message.sentTime,
             isError: message.isError,
             imageBase64Strings: message.imageBase64Strings,
+            documentBase64Strings: message.documentBase64Strings,  // 추가
+            documentFormats: message.documentFormats,              // 추가
+            documentNames: message.documentNames,                  // 추가
             toolUsage: toolUsage
         )
         
@@ -492,7 +504,7 @@ class ChatManager: ObservableObject {
                 return try JSONDecoder().decode(ConversationHistory.self, from: data)
             }
         } catch {
-            print("Failed to load conversation history: \(error)")
+            logger.info("Failed to load conversation history: \(error)")
         }
         
         return nil
@@ -506,7 +518,7 @@ class ChatManager: ObservableObject {
             let data = try JSONEncoder().encode(history)
             try data.write(to: fileURL)
         } catch {
-            print("Failed to save conversation history: \(error)")
+            logger.info("Failed to save conversation history: \(error)")
         }
     }
     
@@ -581,7 +593,7 @@ class ChatManager: ObservableObject {
                 self.chats = Array(uniqueChats.values)
             }
         } catch {
-            print("Failed to fetch chats: \(error)")
+            logger.info("Failed to fetch chats: \(error)")
         }
     }
     
@@ -598,7 +610,7 @@ class ChatManager: ObservableObject {
             try fileManager.createDirectory(at: messagesURL, withIntermediateDirectories: true, attributes: nil)
             try fileManager.createDirectory(at: historyURL, withIntermediateDirectories: true, attributes: nil)
         } catch {
-            print("Failed to create directories: \(error)")
+            logger.info("Failed to create directories: \(error)")
         }
     }
     
@@ -638,19 +650,26 @@ class ChatManager: ObservableObject {
             let data = try JSONEncoder().encode(messages)
             try data.write(to: fileURL)
         } catch {
-            print("Failed to save messages: \(error)")
+            logger.error("Failed to save messages: \(error)")
         }
     }
     
     private func loadMessagesFromFile(chatId: String) -> [MessageData] {
         let fileURL = getMessageFileURL(chatId: chatId)
+        
+        guard fileManager.fileExists(atPath: fileURL.path),
+              let data = try? Data(contentsOf: fileURL),
+              !data.isEmpty else {
+            return []
+        }
+        
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let data = try Data(contentsOf: fileURL)
                 return try JSONDecoder().decode([MessageData].self, from: data)
             }
         } catch {
-            print("Failed to load messages: \(error)")
+            logger.error("Failed to load messages: \(error)")
         }
         return []
     }
@@ -660,7 +679,7 @@ class ChatManager: ObservableObject {
         do {
             try history.write(to: fileURL, atomically: true, encoding: .utf8)
         } catch {
-            print("Failed to save history: \(error)")
+            logger.error("Failed to save history: \(error)")
         }
     }
     
@@ -671,7 +690,7 @@ class ChatManager: ObservableObject {
                 return try String(contentsOf: fileURL)
             }
         } catch {
-            print("Failed to load history: \(error)")
+            logger.error("Failed to load history: \(error)")
         }
         return ""
     }
@@ -682,7 +701,7 @@ class ChatManager: ObservableObject {
             let data = try JSONEncoder().encode(toolIds)
             try data.write(to: fileURL)
         } catch {
-            print("Failed to save tool IDs: \(error)")
+            logger.error("Failed to save tool IDs: \(error)")
         }
     }
     
@@ -694,7 +713,7 @@ class ChatManager: ObservableObject {
                 return try JSONDecoder().decode([String: String].self, from: data)
             }
         } catch {
-            print("Failed to load tool IDs: \(error)")
+            logger.error("Failed to load tool IDs: \(error)")
         }
         return [:]
     }
@@ -736,7 +755,7 @@ class ChatManager: ObservableObject {
                 }
             }
         } catch {
-            print("Failed to clear files: \(error)")
+            logger.info("Failed to clear files: \(error)")
         }
     }
 }

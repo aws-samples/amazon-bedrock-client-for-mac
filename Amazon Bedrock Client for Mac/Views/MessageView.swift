@@ -88,6 +88,7 @@ struct LazyImageView: View {
     let imageData: String
     let size: CGFloat
     let onTap: () -> Void
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
     
     var body: some View {
         Button(action: onTap) {
@@ -95,6 +96,7 @@ struct LazyImageView: View {
                 switch phase {
                 case .empty:
                     ProgressView()
+                        .frame(width: size, height: size/2)
                 case .success(let image):
                     image
                         .resizable()
@@ -103,6 +105,7 @@ struct LazyImageView: View {
                 case .failure:
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.red)
+                        .frame(width: size, height: size/2)
                 @unknown default:
                     EmptyView()
                 }
@@ -110,8 +113,14 @@ struct LazyImageView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                    .stroke(
+                        colorScheme == .dark ?
+                        Color.white.opacity(0.15) :
+                            Color.primary.opacity(0.1),
+                        lineWidth: 1
+                    )
             )
+            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(PlainButtonStyle())
         .contextMenu {
@@ -134,8 +143,10 @@ struct LazyImageView: View {
     }
 }
 
+// MARK: - ExpandableMarkdownItem
 struct ExpandableMarkdownItem: View {
     @State private var isExpanded = false
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
     
     let header: String
     let text: String
@@ -143,38 +154,63 @@ struct ExpandableMarkdownItem: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // 접기/펼치기 버튼
+            // Toggle button
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     isExpanded.toggle()
                 }
             }) {
                 HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: fontSize - 4))
+                        .foregroundColor(.secondary)
+                    
                     Text(header)
-                        .font(.system(size: fontSize, weight: .semibold))
-                        .foregroundColor(.gray)  // 좀 더 연한 회색
+                        .font(.system(size: fontSize - 1, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
                     Spacer()
                 }
             }
             .buttonStyle(.borderless)
             
-            // 펼쳐졌을 때 내용 표시
+            // Expandable content
             if isExpanded {
-                // 추가 문구를 원한다면 text 끝에 이어붙입니다
-                
                 LazyMarkdownView(text: text, fontSize: fontSize - 2)
+                    .padding(.leading, fontSize / 2)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    colorScheme == .dark ?
+                    Color.gray.opacity(0.1) :
+                        Color.gray.opacity(0.05)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    colorScheme == .dark ?
+                    Color.gray.opacity(0.2) :
+                        Color.gray.opacity(0.1),
+                    lineWidth: 0.5
+                )
+        )
     }
 }
 
 // MARK: - MessageView
 struct MessageView: View {
     let message: MessageData
-    let searchQuery: String  // For user messages partial highlight
+    let searchQuery: String  // For highlighting search matches
+    var adjustedFontSize: CGFloat = -1 // One size smaller
     
     @StateObject var viewModel = MessageViewModel()
     @Environment(\.fontSize) private var fontSize: CGFloat
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @State private var isHovering = false
     
     private let imageSize: CGFloat = 100
@@ -187,7 +223,7 @@ struct MessageView: View {
                     userMessageBubble
                         .padding(.horizontal)
                 } else {
-                    nonUserMessageBubble
+                    assistantMessageBubble
                         .padding(.horizontal)
                     Spacer()
                 }
@@ -202,22 +238,60 @@ struct MessageView: View {
         .textSelection(.enabled)
     }
     
-    // MARK: - Non-user bubble (HTML-based)
-    private var nonUserMessageBubble: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            messageHeader
-            nonUserContent
-            copyButton
-                .opacity(isHovering ? 1 : 0)
-                .animation(.easeInOut(duration: 0.2), value: isHovering)
+    // MARK: - Assistant Message Bubble
+    private var assistantMessageBubble: some View {
+        ZStack(alignment: .bottomTrailing) {
+            // Main content
+            VStack(alignment: .leading, spacing: 4) {
+                // Message header with user name and timestamp
+                messageHeader
+                    .padding(.bottom, 2)
+                
+                // Message content with images and markdown
+                assistantMessageContent
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ?
+                          Color(NSColor.controlBackgroundColor).opacity(0.4) :
+                            Color(NSColor.controlBackgroundColor).opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        colorScheme == .dark ?
+                        Color.gray.opacity(0.2) :
+                            Color.gray.opacity(0.15),
+                        lineWidth: 0.5
+                    )
+            )
+            
+            // Copy button as overlay at bottom left
+            Button(action: copyMessageToClipboard) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 12))
+                    .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.8))
+                    .padding(6)
+                    .background(
+                        Circle()
+                            .fill(colorScheme == .dark ?
+                                  Color.gray.opacity(0.3) :
+                                    Color.white.opacity(0.9))
+                            .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .offset(x: 8, y: 8)
+            .opacity(isHovering ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.2), value: isHovering)
         }
-        .padding()
-        .background(Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
     
+    // MARK: - Assistant Content Components
     @ViewBuilder
-    private var nonUserContent: some View {
+    private var assistantMessageContent: some View {
+        // Image grid (if present)
         if let imageBase64Strings = message.imageBase64Strings,
            !imageBase64Strings.isEmpty {
             ImageGridView(
@@ -226,14 +300,16 @@ struct MessageView: View {
             ) { imageData in
                 viewModel.selectImage(with: imageData)
             }
+            .padding(.bottom, 8)
         }
+        
         VStack(spacing: 8) {
             // Expandable "thinking" section
             if let thinking = message.thinking, !thinking.isEmpty {
                 ExpandableMarkdownItem(
                     header: "Thinking",
                     text: thinking,
-                    fontSize: fontSize - 2
+                    fontSize: fontSize + adjustedFontSize - 2
                 )
                 .padding(.vertical, 2)
             }
@@ -243,10 +319,9 @@ struct MessageView: View {
                 ExpandableMarkdownItem(
                     header: "Tool Result",
                     text: toolResult,
-                    fontSize: fontSize - 2
+                    fontSize: fontSize + adjustedFontSize - 2
                 )
                 .padding(.vertical, 2)
-                .cornerRadius(8)
             }
             
             // Tool use information display
@@ -254,25 +329,27 @@ struct MessageView: View {
                 ExpandableMarkdownItem(
                     header: "Using tool: \(toolUse.name)",
                     text: formatToolInput(toolUse.input),
-                    fontSize: fontSize - 2
+                    fontSize: fontSize + adjustedFontSize - 2
                 )
                 .padding(.vertical, 2)
             }
             
             // Main message content
-            LazyMarkdownView(text: message.text, fontSize: fontSize)
+            LazyMarkdownView(text: message.text, fontSize: fontSize + adjustedFontSize)
                 .sheet(isPresented: $viewModel.isShowingImageModal) {
                     if let data = viewModel.selectedImageData,
                        let imageToShow = NSImage(base64Encoded: data) {
-                        ImageViewerModal(image: imageToShow) {
-                            viewModel.clearSelection()
-                        }
+                        ImagePreviewModal(
+                            image: imageToShow,
+                            filename: "image-\(Date().timeIntervalSince1970).png",
+                            isPresented: $viewModel.isShowingImageModal
+                        )
                     }
                 }
         }
     }
-
-    // Helper function to format tool input parameters
+    
+    // Helper function to format tool input parameters as JSON
     private func formatToolInput(_ input: [String: String]) -> String {
         var result = "```json\n"
         result += "{\n"
@@ -287,76 +364,120 @@ struct MessageView: View {
         return result
     }
     
-    // MARK: - User bubble (possible partial highlight + images)
+    // MARK: - User Message Bubble
     private var userMessageBubble: some View {
-        VStack(alignment: .trailing, spacing: 10) {
-            if let imageBase64Strings = message.imageBase64Strings, !imageBase64Strings.isEmpty {
-                ImageGridView(imageBase64Strings: imageBase64Strings, imageSize: imageSize) { imageData in
-                    viewModel.selectImage(with: imageData)
+        ZStack(alignment: .bottomTrailing) {
+            // Main message content
+            VStack(alignment: .trailing, spacing: 6) { // Reduced spacing
+                // Combined attachments view with right alignment
+                AttachmentsView(
+                    imageBase64Strings: message.imageBase64Strings,
+                    imageSize: imageSize,
+                    onTapImage: { imageData in
+                        viewModel.selectImage(with: imageData)
+                    },
+                    documentBase64Strings: message.documentBase64Strings,
+                    documentFormats: message.documentFormats,
+                    documentNames: message.documentNames,
+                    alignment: .trailing  // Right-aligned for user messages
+                )
+                
+                // User message text (only if non-empty)
+                if !message.text.isEmpty {
+                    createHighlightedText(message.text)
+                        .font(.system(size: fontSize + adjustedFontSize))
+                        .foregroundColor(Color.primary)
                 }
-                .frame(alignment: .trailing)
             }
+            .padding(10) // Reduced padding
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ?
+                          Color.gray.opacity(0.25) :
+                            Color.gray.opacity(0.15))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        colorScheme == .dark ?
+                        Color.gray.opacity(0.25) :
+                            Color.gray.opacity(0.2),
+                        lineWidth: 0.5
+                    )
+            )
             
-            highlightedText(message.text)
-                .font(.system(size: fontSize))
-                .foregroundColor(.primary)
+            // Copy button
+            Button(action: copyMessageToClipboard) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 12))
+                    .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.8))
+                    .padding(6)
+                    .background(
+                        Circle()
+                            .fill(colorScheme == .dark ?
+                                  Color.gray.opacity(0.3) :
+                                    Color.white.opacity(0.9))
+                            .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .offset(x: 8, y: 8)
+            .opacity(isHovering ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.2), value: isHovering)
         }
         .sheet(isPresented: $viewModel.isShowingImageModal) {
             if let imageData = viewModel.selectedImageData,
                let imageToShow = NSImage(base64Encoded: imageData) {
-                ImageViewerModal(image: imageToShow) {
-                    viewModel.clearSelection()
+                ImagePreviewModal(
+                    image: imageToShow,
+                    filename: "image-\(Date().timeIntervalSince1970).png",
+                    isPresented: $viewModel.isShowingImageModal
+                )
+            }
+        }
+    }
+    
+    // Text highlighting for search matches
+    private func createHighlightedText(_ text: String) -> SwiftUI.Text {
+        if #available(macOS 12.0, *) {
+            var attributed = AttributedString(text)
+            let lowerSearch = searchQuery.lowercased()
+            
+            guard !lowerSearch.isEmpty else {
+                return Text(attributed)
+            }
+            
+            let lowerText = text.lowercased()
+            var searchStartIndex = lowerText.startIndex
+            while let range = lowerText.range(of: lowerSearch, options: .caseInsensitive, range: searchStartIndex..<lowerText.endIndex) {
+                if let start = AttributedString.Index(range.lowerBound, within: attributed),
+                   let end = AttributedString.Index(range.upperBound, within: attributed) {
+                    let attrRange = start..<end
+                    attributed[attrRange].backgroundColor = .yellow.opacity(0.8)
+                    attributed[attrRange].foregroundColor = .black
                 }
+                searchStartIndex = range.upperBound
             }
+            
+            return Text(attributed)
+        } else {
+            // Fallback for older versions
+            return Text(text)
         }
-        .padding()
-        .background(Color.gray.opacity(0.2))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
     
-    @available(macOS 12.0, *)
-    private func highlightedText(_ text: String) -> SwiftUI.Text {
-        var attributed = AttributedString(text)
-        let lowerSearch = searchQuery.lowercased()
-        
-        guard !lowerSearch.isEmpty else {
-            return SwiftUI.Text(attributed)
-        }
-        
-        let lowerText = text.lowercased()
-        var searchStartIndex = lowerText.startIndex
-        while let range = lowerText.range(of: lowerSearch, options: .caseInsensitive, range: searchStartIndex..<lowerText.endIndex) {
-            if let start = AttributedString.Index(range.lowerBound, within: attributed),
-               let end = AttributedString.Index(range.upperBound, within: attributed) {
-                let attrRange = start..<end
-                attributed[attrRange].backgroundColor = .yellow.opacity(0.8)
-                attributed[attrRange].foregroundColor = .black
-            }
-            searchStartIndex = range.upperBound
-        }
-        
-        return SwiftUI.Text(attributed)
-    }
+    // MARK: - Shared Components
     
-    // MARK: - Shared for non-user and user
     private var messageHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(message.user)
-                .font(.system(size: fontSize))
-                .bold()
+                .font(.system(size: fontSize + adjustedFontSize, weight: .semibold))
+                .foregroundColor(.primary) // Original color
+            
             Text(format(date: message.sentTime))
-                .font(.callout)
-                .foregroundColor(.secondary)
+                .font(.system(size: fontSize + adjustedFontSize - 2))
+                .foregroundColor(.secondary) // Original color
         }
-    }
-    
-    private var copyButton: some View {
-        Button(action: copyMessageToClipboard) {
-            Image(systemName: "doc.on.doc")
-                .foregroundColor(.secondary)
-                .font(.system(size: 16))
-        }
-        .buttonStyle(PlainButtonStyle())
     }
     
     private func copyMessageToClipboard() {
@@ -697,7 +818,7 @@ extension NSImage {
     }
 }
 
-// MARK: - ImageGridView
+// MARK: - AttachmentsView
 
 struct ImageGridView: View {
     let imageBase64Strings: [String]
@@ -715,11 +836,123 @@ struct ImageGridView: View {
     }
 }
 
+struct AttachmentsView: View {
+    // Image properties
+    let imageBase64Strings: [String]?
+    let imageSize: CGFloat
+    let onTapImage: (String) -> Void
+    
+    // Document properties
+    let documentBase64Strings: [String]?
+    let documentFormats: [String]?
+    let documentNames: [String]?
+    
+    // Alignment control
+    let alignment: HorizontalAlignment
+    
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.fontSize) private var fontSize
+    
+    private var hasAttachments: Bool {
+        return (imageBase64Strings?.isEmpty == false) ||
+        (documentBase64Strings?.isEmpty == false)
+    }
+    
+    var body: some View {
+        Group {
+            if hasAttachments {
+                HStack(spacing: 10) {
+                    // Document attachments
+                    if let documentBase64Strings = documentBase64Strings,
+                       let documentFormats = documentFormats,
+                       let documentNames = documentNames,
+                       !documentBase64Strings.isEmpty {
+                        
+                        ForEach(0..<min(documentBase64Strings.count,
+                                  min(documentFormats.count, documentNames.count)),
+                               id: \.self) { index in
+                            documentContent(name: documentNames[index], format: documentFormats[index])
+                        }
+                    }
+                    
+                    // Image attachments
+                    if let imageBase64Strings = imageBase64Strings, !imageBase64Strings.isEmpty {
+                        ForEach(imageBase64Strings, id: \.self) { imageData in
+                            LazyImageView(imageData: imageData, size: imageSize) {
+                                onTapImage(imageData)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Document content extracted to its own function
+    private func documentContent(name: String, format: String) -> some View {
+        HStack(spacing: 10) {
+            // Document icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(colorScheme == .dark ?
+                          Color.gray.opacity(0.2) :
+                            Color.gray.opacity(0.1))
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: documentIcon(for: format))
+                    .font(.system(size: 18))
+                    .foregroundColor(.primary)
+            }
+            
+            // Document name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: fontSize - 2, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                
+                Text("\(format.uppercased()) document")
+                    .font(.system(size: fontSize - 4))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(6) // Reduced padding
+        .background(
+            RoundedRectangle(cornerRadius: 8) // Reduced corner radius
+                .fill(colorScheme == .dark ?
+                      Color.gray.opacity(0.15) :
+                        Color.gray.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    colorScheme == .dark ?
+                    Color.gray.opacity(0.3) :
+                        Color.gray.opacity(0.2),
+                    lineWidth: 1
+                )
+        )
+    }
+    
+    // Helper function to determine document icon based on file extension
+    private func documentIcon(for fileExtension: String) -> String {
+        switch fileExtension.lowercased() {
+        case "pdf": return "doc.fill"
+        case "doc", "docx": return "doc.text.fill"
+        case "xls", "xlsx", "csv": return "tablecells.fill"
+        case "txt", "md": return "doc.plaintext.fill"
+        case "html": return "globe"
+        default: return "doc.fill"
+        }
+    }
+}
+
 // MARK: - ImageViewerModal
 
 struct ImageViewerModal: View {
     var image: NSImage
     var closeModal: () -> Void
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
     
     var body: some View {
         ZStack {
@@ -730,12 +963,20 @@ struct ImageViewerModal: View {
                 .scaledToFit()
                 .cornerRadius(10)
                 .padding()
+                .shadow(color: Color.black.opacity(0.3), radius: 20, x: 0, y: 10)
                 .contextMenu {
                     Button(action: {
                         copyNSImageToClipboard(image: image)
                     }) {
                         Text("Copy Image")
                         Image(systemName: "doc.on.doc")
+                    }
+                    
+                    Button(action: {
+                        saveImage(image)
+                    }) {
+                        Text("Save Image")
+                        Image(systemName: "square.and.arrow.down")
                     }
                 }
             
@@ -746,6 +987,7 @@ struct ImageViewerModal: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.white)
                             .font(.title)
+                            .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 0)
                     }
                     .padding([.top, .trailing])
                     .buttonStyle(PlainButtonStyle())
@@ -759,6 +1001,35 @@ struct ImageViewerModal: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
+    }
+    
+    func saveImage(_ image: NSImage) {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.png, .jpeg]
+        savePanel.nameFieldStringValue = "image.png"
+        
+        savePanel.begin { response in
+            if response == .OK {
+                guard let url = savePanel.url else { return }
+                
+                if let tiffData = image.tiffRepresentation,
+                   let bitmap = NSBitmapImageRep(data: tiffData) {
+                    
+                    let fileExtension = url.pathExtension.lowercased()
+                    let imageData: Data?
+                    
+                    if fileExtension == "png" {
+                        imageData = bitmap.representation(using: .png, properties: [:])
+                    } else {
+                        imageData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+                    }
+                    
+                    if let data = imageData {
+                        try? data.write(to: url)
+                    }
+                }
+            }
+        }
     }
 }
 

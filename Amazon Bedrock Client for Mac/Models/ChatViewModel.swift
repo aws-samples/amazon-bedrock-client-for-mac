@@ -8,6 +8,7 @@
 import SwiftUI
 import Combine
 import AWSBedrockRuntime
+import Logging
 
 // MARK: - Required Type Definitions for Bedrock API integration
 
@@ -21,17 +22,53 @@ enum MessageRole: String, Codable {
 enum MessageContent: Codable {
     case text(String)
     case image(ImageContent)
+    case document(DocumentContent)
     
     // For encoding/decoding
     private enum CodingKeys: String, CodingKey {
-        case type, text, image
+        case type, text, image, document
     }
     
     struct ImageContent: Codable {
         let format: ImageFormat
         let base64Data: String
     }
-
+    
+    struct DocumentContent: Codable {
+        let format: DocumentFormat
+        let base64Data: String
+        let name: String
+    }
+    
+    enum DocumentFormat: String, Codable {
+        case pdf = "pdf"
+        case csv = "csv"
+        case doc = "doc"
+        case docx = "docx"
+        case xls = "xls"
+        case xlsx = "xlsx"
+        case html = "html"
+        case txt = "txt"
+        case md = "md"
+        
+        // Helper to convert from file extension
+        static func fromExtension(_ ext: String) -> DocumentFormat {
+            let lowercased = ext.lowercased()
+            switch lowercased {
+            case "pdf": return .pdf
+            case "csv": return .csv
+            case "doc": return .doc
+            case "docx": return .docx
+            case "xls": return .xls
+            case "xlsx": return .xlsx
+            case "html": return .html
+            case "txt": return .txt
+            case "md": return .md
+            default: return .pdf // Default to PDF if unsupported
+            }
+        }
+    }
+    
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         
@@ -42,10 +79,15 @@ enum MessageContent: Codable {
         case .image(let imageContent):
             try container.encode("image", forKey: .type)
             try container.encode(imageContent, forKey: .image)
+        case .document(let documentContent):
+            try container.encode("document", forKey: .type)
+            try container.encode(documentContent, forKey: .document)
         }
     }
     
     init(from decoder: Decoder) throws {
+        // 기존 init 코드...
+        // document 케이스 추가:
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
         
@@ -56,6 +98,9 @@ enum MessageContent: Codable {
         case "image":
             let imageContent = try container.decode(ImageContent.self, forKey: .image)
             self = .image(imageContent)
+        case "document":
+            let documentContent = try container.decode(DocumentContent.self, forKey: .document)
+            self = .document(documentContent)
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -80,7 +125,7 @@ struct ToolUseError: Error {
 class ChatViewModel: ObservableObject {
     let chatId: String
     let chatManager: ChatManager
-    let sharedImageDataSource: SharedImageDataSource
+    let sharedMediaDataSource: SharedMediaDataSource
     @ObservedObject private var settingManager = SettingManager.shared
     
     @ObservedObject var backendModel: BackendModel
@@ -93,14 +138,15 @@ class ChatViewModel: ObservableObject {
     @Published var selectedPlaceholder: String
     @Published var emptyText: String = ""
     
+    private var logger = Logger(label: "ChatViewModel")
     private var cancellables: Set<AnyCancellable> = []
     private var messageTask: Task<Void, Never>?
     
-    init(chatId: String, backendModel: BackendModel, chatManager: ChatManager = .shared, sharedImageDataSource: SharedImageDataSource) {
+    init(chatId: String, backendModel: BackendModel, chatManager: ChatManager = .shared, sharedMediaDataSource: SharedMediaDataSource) {
         self.chatId = chatId
         self.backendModel = backendModel
         self.chatManager = chatManager
-        self.sharedImageDataSource = sharedImageDataSource
+        self.sharedMediaDataSource = sharedMediaDataSource
         
         guard let model = chatManager.getChatModel(for: chatId) else {
             fatalError("Chat model not found for id: \(chatId)")
@@ -128,7 +174,7 @@ class ChatViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 100_000_000) // Wait 0.1 second
         }
         // Chat model not found
-        print("Error: Chat model not found for id: \(chatId)")
+        logger.info("Error: Chat model not found for id: \(chatId)")
     }
     
     private func setupStreamingEnabled() {
@@ -212,8 +258,9 @@ class ChatViewModel: ObservableObject {
         
         await MainActor.run {
             userInput = ""
-            sharedImageDataSource.images.removeAll()
-            sharedImageDataSource.fileExtensions.removeAll()
+            sharedMediaDataSource.images.removeAll()
+            sharedMediaDataSource.fileExtensions.removeAll()
+            sharedMediaDataSource.documents.removeAll()
         }
         
         do {
@@ -221,6 +268,8 @@ class ChatViewModel: ObservableObject {
             if backendModel.backend.isImageGenerationModel(chatModel.id) {
                 // Use existing image generation methods
                 try await handleImageGenerationModel(userMessage)
+            } else if backendModel.backend.isEmbeddingModel(chatModel.id) {
+                try await handleEmbeddingModel(userMessage)
             } else {
                 // Use unified converseStream for all text LLMs
                 try await handleTextLLMWithConverseStream(userMessage)
@@ -264,43 +313,84 @@ class ChatViewModel: ObservableObject {
     }
     
     private func createUserMessage() -> MessageData {
-        let imageBase64Strings = sharedImageDataSource.images.enumerated().compactMap { index, image in
-            let fileExtension = sharedImageDataSource.fileExtensions.indices.contains(index)
-            ? sharedImageDataSource.fileExtensions[index]
-            : ""
-            let (base64String, _) = base64EncodeImage(image, withExtension: fileExtension)
-            
-            if let base64String = base64String {
-                print("Image at index \(index) encoded successfully: \(base64String.prefix(30))...")
-            } else {
-                print("Failed to encode image at index \(index)")
+        // Log current state
+        logger.info("Creating user message with \(sharedMediaDataSource.images.count) images and \(sharedMediaDataSource.documents.count) documents")
+        
+        // Process images
+        let imageBase64Strings = sharedMediaDataSource.images.enumerated().compactMap { index, image -> String? in
+            guard index < sharedMediaDataSource.fileExtensions.count else {
+                logger.error("Missing extension for image at index \(index)")
+                return nil
             }
             
-            return base64String
+            let fileExtension = sharedMediaDataSource.fileExtensions[index]
+            logger.info("Encoding image at index \(index) with extension: \(fileExtension)")
+            
+            let result = base64EncodeImage(image, withExtension: fileExtension)
+            return result.base64String
         }
         
-        let userMessage = MessageData(id: UUID(), text: userInput, user: "User", isError: false, sentTime: Date(), imageBase64Strings: imageBase64Strings)
+        // Process documents
+        var documentBase64Strings: [String] = []
+        var documentFormats: [String] = []
+        var documentNames: [String] = []
+        
+        for (index, docData) in sharedMediaDataSource.documents.enumerated() {
+            let docIndex = sharedMediaDataSource.images.count + index
+            
+            // Get document metadata
+            let fileExt = docIndex < sharedMediaDataSource.fileExtensions.count ?
+                sharedMediaDataSource.fileExtensions[docIndex] : "pdf"
+                
+            let filename = docIndex < sharedMediaDataSource.filenames.count ?
+                sharedMediaDataSource.filenames[docIndex] : "document\(index+1)"
+                
+            logger.info("Processing document at index \(index): \(filename) (\(fileExt), \(docData.count) bytes)")
+            
+            // Encode document data
+            let base64String = docData.base64EncodedString()
+            documentBase64Strings.append(base64String)
+            documentFormats.append(fileExt)
+            documentNames.append(filename)
+            
+            logger.info("Document encoded successfully: \(base64String.prefix(20))... (\(base64String.count) chars)")
+        }
+        
+        // Create message with all attachments
+        let userMessage = MessageData(
+            id: UUID(),
+            text: userInput,
+            user: "User",
+            isError: false,
+            sentTime: Date(),
+            imageBase64Strings: imageBase64Strings.isEmpty ? nil : imageBase64Strings,
+            documentBase64Strings: documentBase64Strings.isEmpty ? nil : documentBase64Strings,
+            documentFormats: documentFormats.isEmpty ? nil : documentFormats,
+            documentNames: documentNames.isEmpty ? nil : documentNames
+        )
+        
+        logger.info("Created user message with \(imageBase64Strings.count) images and \(documentBase64Strings.count) documents")
         return userMessage
     }
-    
+
     // MARK: - Unified Text LLM Handler with converseStream
     
     /// Handles all text-based LLM models using converseStream API
     private func handleTextLLMWithConverseStream(_ userMessage: MessageData) async throws {
         // Create message content from user message
         var messageContents: [MessageContent] = []
-        
-        // Add text content
-        if !userMessage.text.isEmpty {
-            messageContents.append(.text(userMessage.text))
-        }
+
+        // Always include a text prompt as required when sending documents
+        let textToSend = userMessage.text.isEmpty &&
+                        (userMessage.documentBase64Strings?.isEmpty == false) ?
+                        "Please analyze this document." : userMessage.text
+        messageContents.append(.text(textToSend))
         
         // Add images if present
         if let imageBase64Strings = userMessage.imageBase64Strings, !imageBase64Strings.isEmpty {
             for (index, base64String) in imageBase64Strings.enumerated() {
-                let fileExtension = sharedImageDataSource.fileExtensions.indices.contains(index)
-                    ? sharedImageDataSource.fileExtensions[index].lowercased()
-                    : "jpeg"
+                let fileExtension = index < sharedMediaDataSource.fileExtensions.count ?
+                    sharedMediaDataSource.fileExtensions[index].lowercased() : "jpeg"
                 
                 // Map file extension to image format
                 let format: ImageFormat
@@ -317,14 +407,56 @@ class ChatViewModel: ObservableObject {
                     format: format,
                     base64Data: base64String
                 )))
+                
+                logger.info("Added image content with format: \(format)")
             }
         }
         
+        // Add documents if present
+        if let documentBase64Strings = userMessage.documentBase64Strings,
+           let documentFormats = userMessage.documentFormats,
+           let documentNames = userMessage.documentNames,
+           !documentBase64Strings.isEmpty {
+            
+            for (index, base64String) in documentBase64Strings.enumerated() {
+                guard index < documentFormats.count && index < documentNames.count else {
+                    logger.error("Missing metadata for document at index \(index)")
+                    continue
+                }
+                
+                let fileExt = documentFormats[index].lowercased()
+                let fileName = documentNames[index]
+                
+                // Create document content
+                let docFormat = MessageContent.DocumentFormat.fromExtension(fileExt)
+                messageContents.append(.document(MessageContent.DocumentContent(
+                    format: docFormat,
+                    base64Data: base64String,
+                    name: fileName
+                )))
+                
+                logger.info("Added document content: \(fileName) with format: \(docFormat)")
+            }
+        }
+
         // Create user message
         let userMsg = BedrockMessage(
             role: .user,
             content: messageContents
         )
+        
+        // Debug info about the content going to the API
+        logger.info("Sending message with \(messageContents.count) content blocks")
+        for (i, content) in messageContents.enumerated() {
+            switch content {
+            case .text(let text):
+                logger.info("Content \(i): Text (length: \(text.count))")
+            case .image:
+                logger.info("Content \(i): Image")
+            case .document(let doc):
+                logger.info("Content \(i): Document (\(doc.name), format: \(doc.format))")
+            }
+        }
         
         // Get conversation history
         var conversationHistory = await getConversationHistory()
@@ -340,7 +472,7 @@ class ChatViewModel: ObservableObject {
         
         // Get Bedrock messages in AWS SDK format
         let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0) }
-
+        
         // Invoke the model stream
         var streamedText = ""
         var thinking: String? = nil
@@ -348,8 +480,8 @@ class ChatViewModel: ObservableObject {
         
         // Convert to system prompt format used by AWS SDK
         let systemContentBlock: [AWSBedrockRuntime.BedrockRuntimeClientTypes.SystemContentBlock]? =
-            systemPrompt.isEmpty ? nil : [.text(systemPrompt)]
-
+        systemPrompt.isEmpty ? nil : [.text(systemPrompt)]
+        
         for try await chunk in try await backendModel.backend.converseStream(
             withId: chatModel.id,
             messages: bedrockMessages,
@@ -410,7 +542,7 @@ class ChatViewModel: ObservableObject {
         }
         return nil
     }
-
+    
     /// Extracts thinking content from a streaming chunk
     private func extractThinkingFromChunk(_ chunk: BedrockRuntimeClientTypes.ConverseStreamOutput) -> String? {
         if case .contentblockdelta(let deltaEvent) = chunk,
@@ -422,7 +554,7 @@ class ChatViewModel: ObservableObject {
         }
         return nil
     }
-
+    
     /// Gets conversation history
     private func getConversationHistory() async -> [BedrockMessage] {
         // Build conversation history from local storage
@@ -466,6 +598,21 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
+            // Add documents if present
+            if let documentBase64Strings = message.documentBase64Strings,
+               let documentFormats = message.documentFormats,
+               let documentNames = message.documentNames {
+                
+                for i in 0..<min(documentBase64Strings.count, min(documentFormats.count, documentNames.count)) {
+                    let format = MessageContent.DocumentFormat.fromExtension(documentFormats[i])
+                    contents.append(.document(MessageContent.DocumentContent(
+                        format: format,
+                        base64Data: documentBase64Strings[i],
+                        name: documentNames[i]
+                    )))
+                }
+            }
+            
             let bedrockMessage = BedrockMessage(role: role, content: contents)
             bedrockMessages.append(bedrockMessage)
         }
@@ -497,12 +644,26 @@ class ChatViewModel: ObservableObject {
             
             // Extract images
             var imageBase64Strings: [String]? = nil
+            // Extract documents
+            var documentBase64Strings: [String]? = nil
+            var documentFormats: [String]? = nil
+            var documentNames: [String]? = nil
+            
             for content in message.content {
                 if case let .image(imageContent) = content {
                     if imageBase64Strings == nil {
                         imageBase64Strings = []
                     }
                     imageBase64Strings?.append(imageContent.base64Data)
+                } else if case let .document(documentContent) = content {
+                    if documentBase64Strings == nil {
+                        documentBase64Strings = []
+                        documentFormats = []
+                        documentNames = []
+                    }
+                    documentBase64Strings?.append(documentContent.base64Data)
+                    documentFormats?.append(documentContent.format.rawValue)
+                    documentNames?.append(documentContent.name)
                 }
             }
             
@@ -512,7 +673,10 @@ class ChatViewModel: ObservableObject {
                 role: role,
                 timestamp: Date(),
                 isError: false,
-                imageBase64Strings: imageBase64Strings
+                imageBase64Strings: imageBase64Strings,
+                documentBase64Strings: documentBase64Strings,
+                documentFormats: documentFormats,
+                documentNames: documentNames
             )
             
             conversationHistory.addMessage(unifiedMessage)
@@ -544,13 +708,27 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
+            // Add documents if present
+            if let documentBase64Strings = message.documentBase64Strings,
+               let documentFormats = message.documentFormats,
+               let documentNames = message.documentNames {
+                
+                for i in 0..<min(documentBase64Strings.count, min(documentFormats.count, documentNames.count)) {
+                    let format = MessageContent.DocumentFormat.fromExtension(documentFormats[i])
+                    contents.append(.document(MessageContent.DocumentContent(
+                        format: format,
+                        base64Data: documentBase64Strings[i],
+                        name: documentNames[i]
+                    )))
+                }
+            }
+            
             return BedrockMessage(role: role, content: contents)
         }
     }
     
     /// Converts a BedrockMessage to AWS SDK format
     private func convertToBedrockMessage(_ message: BedrockMessage) throws -> AWSBedrockRuntime.BedrockRuntimeClientTypes.Message {
-        // Convert content blocks
         var contentBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
         
         for content in message.content {
@@ -562,31 +740,62 @@ class ChatViewModel: ObservableObject {
                 // Convert to AWS image format
                 let awsFormat: AWSBedrockRuntime.BedrockRuntimeClientTypes.ImageFormat
                 switch imageContent.format {
-                    case .jpeg: awsFormat = .jpeg
-                    case .png: awsFormat = .png
-                    case .gif: awsFormat = .gif
-                    case .webp: awsFormat = .webp
+                case .jpeg: awsFormat = .jpeg
+                case .png: awsFormat = .png
+                case .gif: awsFormat = .gif
+                case .webp: awsFormat = .png // Fall back to PNG for WebP
                 }
-
+                
                 guard let imageData = Data(base64Encoded: imageContent.base64Data) else {
-                    throw NSError(domain: "ChatViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 string to Data"])
+                    logger.error("Failed to decode image base64 string with length: \(imageContent.base64Data.count)")
+                    throw NSError(domain: "ChatViewModel", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image to data"])
                 }
-
+                
                 contentBlocks.append(.image(AWSBedrockRuntime.BedrockRuntimeClientTypes.ImageBlock(
                     format: awsFormat,
                     source: .bytes(imageData)
                 )))
+                
+            case .document(let documentContent):
+                // Convert to AWS document format
+                let docFormat: AWSBedrockRuntime.BedrockRuntimeClientTypes.DocumentFormat
+                
+                switch documentContent.format {
+                case .pdf: docFormat = .pdf
+                case .csv: docFormat = .csv
+                case .doc: docFormat = .doc
+                case .docx: docFormat = .docx
+                case .xls: docFormat = .xls
+                case .xlsx: docFormat = .xlsx
+                case .html: docFormat = .html
+                case .txt: docFormat = .txt
+                case .md: docFormat = .md
+                }
+                
+                guard let documentData = Data(base64Encoded: documentContent.base64Data) else {
+                    print("Failed to decode document base64 string with length: \(documentContent.base64Data.count)")
+                    throw NSError(domain: "ChatViewModel", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 document to data"])
+                }
+                
+                print("Creating DocumentBlock with name: \(documentContent.name), format: \(docFormat), size: \(documentData.count) bytes")
+                
+                contentBlocks.append(.document(AWSBedrockRuntime.BedrockRuntimeClientTypes.DocumentBlock(
+                    format: docFormat,
+                    name: documentContent.name,
+                    source: .bytes(documentData)
+                )))
             }
         }
         
-        // SDK 문서와 일치하는 Message 생성
+        // Create Message that matches SDK documentation
         return AWSBedrockRuntime.BedrockRuntimeClientTypes.Message(
             content: contentBlocks,
             role: convertToAWSRole(message.role)
         )
     }
 
-    
     /// Converts MessageRole to AWS SDK role
     private func convertToAWSRole(_ role: MessageRole) -> AWSBedrockRuntime.BedrockRuntimeClientTypes.ConversationRole {
         switch role {
@@ -601,9 +810,9 @@ class ChatViewModel: ObservableObject {
     private func handleImageGenerationModel(_ userMessage: MessageData) async throws {
         let modelId = chatModel.id
         
-        if modelId.contains("titanImage") {
+        if modelId.contains("titan-image") {
             try await invokeTitanImageModel(prompt: userMessage.text)
-        } else if modelId.contains("novaCanvas") {
+        } else if modelId.contains("nova-canvas") {
             try await invokeNovaCanvasModel(prompt: userMessage.text)
         } else if modelId.contains("stable") || modelId.contains("sd3") {
             try await invokeStableDiffusionModel(prompt: userMessage.text)
@@ -612,6 +821,71 @@ class ChatViewModel: ObservableObject {
                 NSLocalizedDescriptionKey: "Unsupported image generation model: \(modelId)"
             ])
         }
+    }
+    
+    /// Handles embedding models by directly parsing JSON responses
+    private func handleEmbeddingModel(_ userMessage: MessageData) async throws {
+        // Invoke embedding model to get raw data response
+        let responseData = try await backendModel.backend.invokeEmbeddingModel(
+            withId: chatModel.id,
+            text: userMessage.text
+        )
+        
+        let modelId = chatModel.id.lowercased()
+        var responseText = ""
+        
+        // Parse JSON data directly
+        if let json = try? JSONSerialization.jsonObject(with: responseData, options: []) {
+            if modelId.contains("titan-embed") || modelId.contains("titan-e1t") {
+                // For Titan embedding models, extract the "embedding" field
+                if let jsonDict = json as? [String: Any],
+                   let embedding = jsonDict["embedding"] as? [Double] {
+                    responseText = embedding.map { "\($0)" }.joined(separator: ",")
+                } else {
+                    responseText = "Failed to extract Titan embedding data"
+                }
+            } else if modelId.contains("cohere") {
+                // For Cohere embedding models, extract the "embeddings" field
+                if let jsonDict = json as? [String: Any],
+                   let embeddings = jsonDict["embeddings"] as? [[Double]],
+                   let firstEmbedding = embeddings.first {
+                    responseText = firstEmbedding.map { "\($0)" }.joined(separator: ",")
+                } else {
+                    responseText = "Failed to extract Cohere embedding data"
+                }
+            } else {
+                // For other models, convert the entire JSON to a string
+                if let jsonData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    responseText = jsonString
+                } else {
+                    responseText = "Unknown embedding format"
+                }
+            }
+        } else {
+            // If JSON parsing fails, convert the original data to string
+            responseText = String(data: responseData, encoding: .utf8) ?? "Unable to decode response"
+        }
+        
+        // Create response message
+        let assistantMessage = MessageData(
+            id: UUID(),
+            text: responseText,
+            user: chatModel.name,
+            isError: false,
+            sentTime: Date()
+        )
+        
+        // Add message to chat
+        addMessage(assistantMessage)
+        
+        // Update conversation history
+        var conversationHistory = await getConversationHistory()
+        conversationHistory.append(BedrockMessage(
+            role: .assistant,
+            content: [.text(responseText)]
+        ))
+        await saveConversationHistory(conversationHistory)
     }
     
     /// Invokes Titan Image model
@@ -691,7 +965,7 @@ class ChatViewModel: ObservableObject {
     }
     
     private func handleModelError(_ error: Error) async {
-        print("Error invoking the model: \(error)")
+        logger.info("Error invoking the model: \(error)")
         let errorMessage = MessageData(
             id: UUID(),
             text: "Error invoking the model: \(error)",
@@ -780,12 +1054,12 @@ class ChatViewModel: ObservableObject {
         do {
             // Convert to AWS SDK format
             let awsMessage = try convertToBedrockMessage(userMsg)
-
+            
             // Use converseStream API to get the title
             var title = ""
             
             let systemContentBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
-
+            
             for try await chunk in try await backendModel.backend.converseStream(
                 withId: haikuModelId,
                 messages: [awsMessage],
@@ -805,7 +1079,7 @@ class ChatViewModel: ObservableObject {
                 )
             }
         } catch {
-            print("Error updating chat title: \(error)")
+            logger.info("Error updating chat title: \(error)")
         }
     }
 }
