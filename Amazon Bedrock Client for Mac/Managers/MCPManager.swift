@@ -30,6 +30,33 @@ class MCPManager: ObservableObject {
     private var connecting: Set<String> = []
     
     /**
+     * Represents a tool available from an MCP server.
+     * Used primarily for UI display and server tool management.
+     */
+    struct MCPToolInfo: Identifiable, Hashable {
+        var id: String { "\(serverName).\(toolName)" }
+        var serverName: String
+        var toolName: String
+        var description: String
+        var tool: Tool  // Store the complete Tool object
+        
+        init(serverName: String, tool: Tool) {
+            self.serverName = serverName
+            self.toolName = tool.name
+            self.description = tool.description ?? "No description available"
+            self.tool = tool
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+        }
+        
+        static func == (lhs: MCPToolInfo, rhs: MCPToolInfo) -> Bool {
+            return lhs.id == rhs.id
+        }
+    }
+    
+    /**
      * Represents the connection status of a server.
      */
     enum ConnectionStatus: Equatable {
@@ -146,9 +173,15 @@ class MCPManager: ObservableObject {
                 let tools: [Tool]?
                 do {
                     tools = try await client.tools.value.get()
+                    logger.info("Successfully loaded \(tools?.count ?? 0) tools from server \(server.name)")
+                    if let tools = tools, !tools.isEmpty {
+                        for tool in tools {
+                            logger.info("Tool loaded: \(tool.name) with schema: \(tool.inputSchema)")
+                        }
+                    }
                 } catch {
                     tools = nil
-                    logger.warning("Failed to get tools: \(error.localizedDescription)")
+                    logger.warning("Failed to get tools from server \(server.name): \(error.localizedDescription)")
                 }
                 
                 await MainActor.run {
@@ -210,6 +243,7 @@ class MCPManager: ObservableObject {
             }
         }
         self.toolInfos = infos
+        logger.info("Updated tool info list with \(infos.count) tools from \(availableTools.keys.count) servers")
     }
     
     /**
@@ -234,6 +268,7 @@ class MCPManager: ObservableObject {
             availableTools.removeValue(forKey: serverName)
             connectionStatus[serverName] = .notConnected
             updateToolInfos()
+            logger.info("Disconnected from server: \(serverName)")
         }
     }
     
@@ -251,17 +286,12 @@ class MCPManager: ObservableObject {
             // Ensure we have a valid ID - this is critical for the API
             let toolId = id.isEmpty ? "tool_\(UUID().uuidString)" : id
             
-            // Validate and prepare input parameters
-            var validatedInput = input
-            
-            // Set default values for required fields if missing
-            if name == "list_directory" && (validatedInput["path"] == nil || validatedInput["path"]!.isEmpty) {
-                validatedInput["path"] = "."
-                logger.debug("Setting default path '.' for list_directory")
-            } else if name == "read_file" && (validatedInput["path"] == nil || validatedInput["path"]!.isEmpty) {
-                validatedInput["path"] = "README.md"
-                logger.debug("Setting default path 'README.md' for read_file")
+            // [String: String] to JSON.object
+            var jsonValueDict = [String: JSON.Value]()
+            for (key, value) in input {
+                jsonValueDict[key] = .string(value)
             }
+            let jsonArguments: JSON = .object(jsonValueDict)
             
             // Find the server that provides the requested tool
             var serverWithTool: (name: String, client: MCPClient)? = nil
@@ -277,8 +307,7 @@ class MCPManager: ObservableObject {
             if let (serverName, client) = serverWithTool {
                 logger.debug("Executing tool '\(name)' on server '\(serverName)'")
                 
-                // Call the tool with the validated input
-                let result = try await client.callTool(named: name, arguments: validatedInput as? JSON)
+                let result = try await client.callTool(named: name, arguments: jsonArguments)
 
                 // Process result
                 let extractedText = extractTextFromToolResult(result)

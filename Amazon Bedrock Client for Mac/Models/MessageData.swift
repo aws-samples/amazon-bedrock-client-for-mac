@@ -25,6 +25,7 @@ struct MessageData: Identifiable, Equatable, Codable {
     var id = UUID()
     var text: String // Changed to var to allow modification
     var thinking: String?
+    var signature: String?
     let user: String
     var isError: Bool = false
     let sentTime: Date
@@ -39,6 +40,7 @@ struct MessageData: Identifiable, Equatable, Codable {
         case id
         case text
         case thinking
+        case signature
         case user
         case isError = "is_error"
         case sentTime = "sent_time"

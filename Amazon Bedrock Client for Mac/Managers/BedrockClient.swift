@@ -568,7 +568,7 @@ class Backend: Equatable {
                     let reasoningConfig = [
                         "reasoning_config": [
                             "type": "enabled",
-                            "budget_tokens": 1024
+                            "budget_tokens": 2048
                         ]
                     ]
                     

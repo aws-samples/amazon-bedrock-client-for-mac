@@ -18,6 +18,7 @@ struct ConversationHistory: Codable {
         let id: UUID
         var text: String
         var thinking: String?
+        var thinkingSignature: String?
         let role: String
         let timestamp: Date
         let isError: Bool
@@ -60,7 +61,7 @@ struct ConversationHistory: Codable {
         lastUpdated = Date()
     }
     
-    mutating func updateMessage(id: UUID, newText: String? = nil, thinking: String? = nil, toolResult: String? = nil) {
+    mutating func updateMessage(id: UUID, newText: String? = nil, thinking: String? = nil, thinkingSignature: String? = nil, toolResult: String? = nil) {
         if let index = messages.firstIndex(where: { $0.id == id }) {
             var message = messages[index]
             
@@ -70,6 +71,10 @@ struct ConversationHistory: Codable {
             
             if let thinking = thinking {
                 message.thinking = thinking
+            }
+            
+            if let thinkingSignature = thinkingSignature {
+                message.thinkingSignature = thinkingSignature
             }
             
             if let toolResult = toolResult, message.toolUsage != nil {
@@ -167,14 +172,19 @@ class ChatManager: ObservableObject {
                 )
             }
             
+            // Create message with all available fields, handling potential nil values
             let unifiedMessage = ConversationHistory.Message(
                 id: message.id,
                 text: message.text,
                 thinking: message.thinking,
+                thinkingSignature: message.signature,
                 role: role,
                 timestamp: message.sentTime,
                 isError: message.isError,
                 imageBase64Strings: message.imageBase64Strings,
+                documentBase64Strings: message.documentBase64Strings,
+                documentFormats: message.documentFormats,
+                documentNames: message.documentNames,
                 toolUsage: toolUsage
             )
             
@@ -385,9 +395,9 @@ class ChatManager: ObservableObject {
             timestamp: message.sentTime,
             isError: message.isError,
             imageBase64Strings: message.imageBase64Strings,
-            documentBase64Strings: message.documentBase64Strings,  // 추가
-            documentFormats: message.documentFormats,              // 추가
-            documentNames: message.documentNames,                  // 추가
+            documentBase64Strings: message.documentBase64Strings,
+            documentFormats: message.documentFormats,
+            documentNames: message.documentNames,
             toolUsage: toolUsage
         )
         
@@ -663,14 +673,122 @@ class ChatManager: ObservableObject {
             return []
         }
         
+        // Try the most flexible approach - manual JSON parsing
         do {
-            if fileManager.fileExists(atPath: fileURL.path) {
-                let data = try Data(contentsOf: fileURL)
-                return try JSONDecoder().decode([MessageData].self, from: data)
+            guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                logger.error("Failed to parse JSON data as array")
+                return []
+            }
+            
+            var messages: [MessageData] = []
+            
+            for json in jsonArray {
+                // Extract core fields with fallbacks for different naming conventions
+                guard let idString = (json["id"] as? String),
+                      let id = UUID(uuidString: idString),
+                      let text = json["text"] as? String,
+                      let user = json["user"] as? String else {
+                    logger.warning("Missing required fields in message data")
+                    continue
+                }
+                
+                // Handle timestamp with multiple possible formats
+                var sentTime: Date
+                if let timeValue = json["sentTime"] as? TimeInterval {
+                    sentTime = Date(timeIntervalSince1970: timeValue)
+                } else if let timeValue = json["sent_time"] as? TimeInterval {
+                    sentTime = Date(timeIntervalSince1970: timeValue)
+                } else {
+                    // Default to current time if no valid time found
+                    sentTime = Date()
+                    logger.warning("No valid timestamp found for message, using current time")
+                }
+                
+                // Optional fields with fallbacks
+                let isError = (json["isError"] as? Bool) ?? (json["is_error"] as? Bool) ?? false
+                let thinking = json["thinking"] as? String
+                let signature = json["signature"] as? String
+                
+                // Image attachments
+                var imageBase64Strings: [String]? = nil
+                if let images = json["imageBase64Strings"] as? [String] {
+                    imageBase64Strings = images
+                } else if let images = json["image_base64_strings"] as? [String] {
+                    imageBase64Strings = images
+                }
+                
+                // Document attachments
+                var documentBase64Strings: [String]? = nil
+                if let docs = json["documentBase64Strings"] as? [String] {
+                    documentBase64Strings = docs
+                } else if let docs = json["document_base64_strings"] as? [String] {
+                    documentBase64Strings = docs
+                }
+                
+                var documentFormats: [String]? = nil
+                if let formats = json["documentFormats"] as? [String] {
+                    documentFormats = formats
+                } else if let formats = json["document_formats"] as? [String] {
+                    documentFormats = formats
+                }
+                
+                var documentNames: [String]? = nil
+                if let names = json["documentNames"] as? [String] {
+                    documentNames = names
+                } else if let names = json["document_names"] as? [String] {
+                    documentNames = names
+                }
+                
+                // Tool usage
+                var toolUse: ToolInfo? = nil
+                var toolResult: String? = nil
+                
+                if let toolDict = json["toolUse"] as? [String: Any] {
+                    if let toolId = toolDict["id"] as? String,
+                       let toolName = toolDict["name"] as? String,
+                       let toolInput = toolDict["input"] as? [String: String] {
+                        toolUse = ToolInfo(id: toolId, name: toolName, input: toolInput)
+                    }
+                } else if let toolDict = json["tool_use"] as? [String: Any] {
+                    if let toolId = toolDict["id"] as? String,
+                       let toolName = toolDict["name"] as? String,
+                       let toolInput = toolDict["input"] as? [String: String] {
+                        toolUse = ToolInfo(id: toolId, name: toolName, input: toolInput)
+                    }
+                }
+                
+                toolResult = (json["toolResult"] as? String) ?? (json["tool_result"] as? String)
+                
+                // Create message with extracted fields
+                let message = MessageData(
+                    id: id,
+                    text: text,
+                    thinking: thinking,
+                    signature: signature,
+                    user: user,
+                    isError: isError,
+                    sentTime: sentTime,
+                    imageBase64Strings: imageBase64Strings,
+                    documentBase64Strings: documentBase64Strings,
+                    documentFormats: documentFormats,
+                    documentNames: documentNames,
+                    toolUse: toolUse,
+                    toolResult: toolResult
+                )
+                
+                messages.append(message)
+            }
+            
+            if !messages.isEmpty {
+                logger.info("Successfully loaded \(messages.count) messages using manual JSON parsing")
+                return messages
             }
         } catch {
-            logger.error("Failed to load messages: \(error)")
+            logger.error("Error during manual JSON parsing: \(error)")
         }
+        
+        // If we got here, all approaches failed
+        logger.error("All attempts to parse message data failed")
         return []
     }
     

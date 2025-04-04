@@ -620,7 +620,7 @@ struct AddServerView: View {
     // 서버 템플릿 확장
     private let templates = [
         ("Filesystem", "npx", "-y @modelcontextprotocol/server-filesystem \"$HOME\""),
-        ("Time", "uvx", "mcp-server-time"),
+        ("Time", "uvx", "mcp-server-time --local-timezone=America/Los_Angeles"),
         ("Memory", "npx", "-y @modelcontextprotocol/server-memory")
     ]
     

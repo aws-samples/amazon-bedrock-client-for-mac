@@ -34,11 +34,13 @@ struct MCPToolInfo: Identifiable, Hashable {
     var serverName: String
     var toolName: String
     var description: String
+    var tool: Tool
     
     init(serverName: String, tool: Tool) {
         self.serverName = serverName
         self.toolName = tool.name
         self.description = tool.description ?? "No description available"
+        self.tool = tool
     }
     
     func hash(into hasher: inout Hasher) {

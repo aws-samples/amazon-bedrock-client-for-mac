@@ -71,12 +71,6 @@ struct HomeView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            
-            // Pattern overlay (macOS style)
-            Image(systemName: "circle.grid.2x2")
-                .resizable(resizingMode: .tile)
-                .foregroundStyle(Color.primary.opacity(0.03))
-                .blendMode(.overlay)
         }
         .ignoresSafeArea()
     }

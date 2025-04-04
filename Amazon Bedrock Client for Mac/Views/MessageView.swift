@@ -42,13 +42,20 @@ struct LazyMarkdownView: View {
 
 // MARK: - CustomHtmlGenerator
 class CustomHtmlGenerator: HtmlGenerator {
-    override func generate(block: Block, tight: Bool = false) -> String {
+    override func generate(block: Block, parent: Parent, tight: Bool = false) -> String {
         switch block {
         case .fencedCode(let info, let lines):
             return generateCustomCodeBlock(info: info, lines: lines)
         default:
-            return super.generate(block: block, tight: tight)
+            return super.generate(block: block, parent: parent, tight: tight)
         }
+    }
+    
+    override func generate(doc: Block) -> String {
+        guard case .document(let blocks) = doc else {
+            preconditionFailure("cannot generate HTML from \(doc)")
+        }
+        return self.generate(blocks: blocks, parent: .none)
     }
     
     private func generateCustomCodeBlock(info: String?, lines: Lines) -> String {
@@ -366,64 +373,52 @@ struct MessageView: View {
     
     // MARK: - User Message Bubble
     private var userMessageBubble: some View {
-        ZStack(alignment: .bottomTrailing) {
-            // Main message content
-            VStack(alignment: .trailing, spacing: 6) { // Reduced spacing
-                // Combined attachments view with right alignment
-                AttachmentsView(
-                    imageBase64Strings: message.imageBase64Strings,
-                    imageSize: imageSize,
-                    onTapImage: { imageData in
-                        viewModel.selectImage(with: imageData)
-                    },
-                    documentBase64Strings: message.documentBase64Strings,
-                    documentFormats: message.documentFormats,
-                    documentNames: message.documentNames,
-                    alignment: .trailing  // Right-aligned for user messages
-                )
+        // Cache complex views to avoid unnecessary recalculations
+        let messageBackground = RoundedRectangle(cornerRadius: 12)
+            .fill(colorScheme == .dark ?
+                  Color.gray.opacity(0.25) :
+                  Color.gray.opacity(0.15))
+        
+        let messageBorder = RoundedRectangle(cornerRadius: 12)
+            .stroke(
+                colorScheme == .dark ?
+                Color.gray.opacity(0.25) :
+                Color.gray.opacity(0.2),
+                lineWidth: 0.5
+            )
+        
+        return ZStack(alignment: .bottomTrailing) {
+            // Main message content with optimized rendering
+            VStack(alignment: .trailing, spacing: 6) {
+                // Only load attachments if they exist
+                if (message.imageBase64Strings?.isEmpty == false) ||
+                   (message.documentBase64Strings?.isEmpty == false) {
+                    
+                    AttachmentsView(
+                        imageBase64Strings: message.imageBase64Strings,
+                        imageSize: imageSize,
+                        onTapImage: viewModel.selectImage,
+                        documentBase64Strings: message.documentBase64Strings,
+                        documentFormats: message.documentFormats,
+                        documentNames: message.documentNames,
+                        alignment: .trailing
+                    )
+                }
                 
-                // User message text (only if non-empty)
+                // Only create text if non-empty
                 if !message.text.isEmpty {
-                    createHighlightedText(message.text)
-                        .font(.system(size: fontSize + adjustedFontSize))
-                        .foregroundColor(Color.primary)
+                    textContent
                 }
             }
-            .padding(10) // Reduced padding
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(colorScheme == .dark ?
-                          Color.gray.opacity(0.25) :
-                            Color.gray.opacity(0.15))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        colorScheme == .dark ?
-                        Color.gray.opacity(0.25) :
-                            Color.gray.opacity(0.2),
-                        lineWidth: 0.5
-                    )
-            )
+            .padding(10)
+            .background(messageBackground)
+            .overlay(messageBorder)
             
-            // Copy button
-            Button(action: copyMessageToClipboard) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 12))
-                    .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.8))
-                    .padding(6)
-                    .background(
-                        Circle()
-                            .fill(colorScheme == .dark ?
-                                  Color.gray.opacity(0.3) :
-                                    Color.white.opacity(0.9))
-                            .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
-                    )
+            // Copy button with optimized rendering
+            if isHovering {
+                copyButton
+                    .transition(.opacity)
             }
-            .buttonStyle(PlainButtonStyle())
-            .offset(x: 8, y: 8)
-            .opacity(isHovering ? 1.0 : 0.0)
-            .animation(.easeInOut(duration: 0.2), value: isHovering)
         }
         .sheet(isPresented: $viewModel.isShowingImageModal) {
             if let imageData = viewModel.selectedImageData,
@@ -436,7 +431,45 @@ struct MessageView: View {
             }
         }
     }
-    
+
+    // Extract text content to a separate computed property
+    private var textContent: some View {
+        Group {
+            if searchQuery.isEmpty {
+                // Simple text without highlighting when no search
+                Text(message.text)
+                    .font(.system(size: fontSize + adjustedFontSize))
+                    .foregroundColor(.primary)
+            } else {
+                // Only use expensive highlighting when needed
+                createHighlightedText(message.text)
+                    .font(.system(size: fontSize + adjustedFontSize))
+                    .foregroundColor(.primary)
+            }
+        }
+    }
+
+    // Extract copy button to a separate computed property
+    private var copyButton: some View {
+        Button(action: copyMessageToClipboard) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 12))
+                .foregroundColor(colorScheme == .dark ?
+                                 Color.white.opacity(0.9) :
+                                 Color.black.opacity(0.8))
+                .padding(6)
+                .background(
+                    Circle()
+                        .fill(colorScheme == .dark ?
+                              Color.gray.opacity(0.3) :
+                              Color.white.opacity(0.9))
+                        .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .offset(x: 8, y: 8)
+    }
+
     // Text highlighting for search matches
     private func createHighlightedText(_ text: String) -> SwiftUI.Text {
         if #available(macOS 12.0, *) {

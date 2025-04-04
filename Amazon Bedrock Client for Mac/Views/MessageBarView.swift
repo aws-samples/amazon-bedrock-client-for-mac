@@ -216,7 +216,7 @@ struct MessageBarView: View {
         .buttonStyle(PlainButtonStyle())
         .disabled(userInput.isEmpty && sharedMediaDataSource.images.isEmpty && !isLoading)
         .opacity((userInput.isEmpty && sharedMediaDataSource.images.isEmpty && !isLoading) ? 0.6 : 1)
-        .onChange(of: chatManager.getIsLoading(for: chatID)) { isLoading = $0 } // SwiftUI 3.0 문법 유지
+        .onChange(of: chatManager.getIsLoading(for: chatID)) { isLoading = $0 }
     }
     
     // MARK: - Helper Methods
@@ -570,7 +570,6 @@ struct AdvancedOptionsMenu: View {
                 
                 ForEach(MCPManager.shared.toolInfos) { tool in
                     Button {
-                        userInput += "\n/tool \(tool.serverName).\(tool.toolName)"
                     } label: {
                         Label(tool.toolName, systemImage: "bolt.fill")
                     }
