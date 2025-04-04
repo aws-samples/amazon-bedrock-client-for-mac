@@ -645,6 +645,10 @@ class ChatViewModel: ObservableObject {
             toolConfig = convertMCPToolsToBedrockFormat(MCPManager.shared.toolInfos)
         }
         
+        // Add MAX_TURNS constant at the beginning
+        let MAX_TURNS = 3
+        var turn_count = 0
+        
         // Get Bedrock messages in AWS SDK format
         let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0) }
         
@@ -666,112 +670,125 @@ class ChatViewModel: ObservableObject {
         
         logger.info("Starting converseStream request with model ID: \(chatModel.id)")
         
-        for try await chunk in try await backendModel.backend.converseStream(
-            withId: chatModel.id,
-            messages: bedrockMessages,
-            systemContent: systemContentBlock,
-            inferenceConfig: nil,
-            toolConfig: toolConfig
-        ) {
-            // Check for tool use
-            if !isToolUseDetected, let toolUseInfo = extractToolUseFromChunk(chunk) {
-                isToolUseDetected = true
-                
-                logger.info("Tool use detected: \(toolUseInfo.name) with ID: \(toolUseInfo.toolUseId)")
-                
-                // Create a tool info object
-                currentToolInfo = ToolInfo(
-                    id: toolUseInfo.toolUseId,
-                    name: toolUseInfo.name,
-                    input: JSONValue.from(toolUseInfo.input)
-                )
-                
-                toolUseId = toolUseInfo.toolUseId
-                
-                // Add partial message for tool use
-                let partialMessage = MessageData(
-                    id: UUID(),
-                    text: "Using tool: \(toolUseInfo.name)...",
-                    user: chatModel.name,
-                    isError: false,
-                    sentTime: Date(),
-                    toolUse: currentToolInfo
-                )
-                
-                await addMessage(partialMessage)
-                
-                // Execute the tool
-                logger.info("Executing MCP tool: \(toolUseInfo.name) with input: \(toolUseInfo.input)")
-                let toolResult = await executeMCPTool(
-                    id: toolUseInfo.toolUseId,
-                    name: toolUseInfo.name,
-                    input: toolUseInfo.input
-                )
-                
-                // Update message with tool result
-                let status = toolResult["status"] as? String ?? "error"
-                let resultText: String
-                
-                if status == "success",
-                   let content = toolResult["content"] as? [[String: Any]],
-                   let firstContent = content.first,
-                   let jsonContent = firstContent["json"],
-                   let json = jsonContent as? [String: String],
-                   let text = json["text"] {
-                    resultText = text
-                } else {
-                    resultText = "Tool execution failed"
+        // Create a recursive function to handle tool use cycles
+        func processToolCycles(messages: [AWSBedrockRuntime.BedrockRuntimeClientTypes.Message]) async throws {
+            if turn_count >= MAX_TURNS {
+                logger.info("Maximum number of tool use turns (\(MAX_TURNS)) reached")
+                return
+            }
+            
+            for try await chunk in try await backendModel.backend.converseStream(
+                withId: chatModel.id,
+                messages: messages,
+                systemContent: systemContentBlock,
+                inferenceConfig: nil,
+                toolConfig: toolConfig
+            ) {
+                // Check for tool use
+                if let toolUseInfo = extractToolUseFromChunk(chunk) {
+                    // Increment turn count for each tool use
+                    turn_count += 1
+                    logger.info("Tool use cycle \(turn_count) of \(MAX_TURNS)")
+                    
+                    logger.info("Tool use detected: \(toolUseInfo.name) with ID: \(toolUseInfo.toolUseId)")
+                    
+                    // Create a tool info object
+                    currentToolInfo = ToolInfo(
+                        id: toolUseInfo.toolUseId,
+                        name: toolUseInfo.name,
+                        input: JSONValue.from(toolUseInfo.input)
+                    )
+                    
+                    toolUseId = toolUseInfo.toolUseId
+                    
+                    // Add partial message for tool use
+                    let partialMessage = MessageData(
+                        id: UUID(),
+                        text: "Using tool: \(toolUseInfo.name)...",
+                        user: chatModel.name,
+                        isError: false,
+                        sentTime: Date(),
+                        toolUse: currentToolInfo
+                    )
+                    
+                    await addMessage(partialMessage)
+                    
+                    // Execute the tool
+                    logger.info("Executing MCP tool: \(toolUseInfo.name) with input: \(toolUseInfo.input)")
+                    let toolResult = await executeMCPTool(
+                        id: toolUseInfo.toolUseId,
+                        name: toolUseInfo.name,
+                        input: toolUseInfo.input
+                    )
+                    
+                    // Update message with tool result
+                    let status = toolResult["status"] as? String ?? "error"
+                    let resultText: String
+                    
+                    if status == "success",
+                       let content = toolResult["content"] as? [[String: Any]],
+                       let firstContent = content.first,
+                       let jsonContent = firstContent["json"],
+                       let json = jsonContent as? [String: String],
+                       let text = json["text"] {
+                        resultText = text
+                    } else {
+                        resultText = "Tool execution failed"
+                    }
+                    
+                    logger.info("Tool execution completed with status: \(status)")
+                    
+                    chatManager.updateMessageWithToolInfo(
+                        for: chatId,
+                        messageId: partialMessage.id,
+                        newText: resultText,
+                        toolInfo: currentToolInfo!,
+                        toolResult: resultText
+                    )
+                    
+                    // Create tool result message for conversation history
+                    let toolResultMessage = createToolResultMessage(toolUseId: toolUseInfo.toolUseId, result: resultText)
+                    conversationHistory.append(toolResultMessage)
+                    
+                    // Create updated messages list
+                    var updatedMessages = try conversationHistory.map { try convertToBedrockMessage($0) }
+                    
+                    // Reset streaming state for next cycle
+                    isFirstChunk = true
+                    streamedText = ""
+                    
+                    // Recursively continue conversation with tool results if under MAX_TURNS
+                    if turn_count < MAX_TURNS {
+                        logger.info("Continuing conversation for tool cycle \(turn_count)")
+                        try await processToolCycles(messages: updatedMessages)
+                        return
+                    } else {
+                        logger.info("Maximum tool turns reached (\(MAX_TURNS))")
+                        return
+                    }
                 }
                 
-                logger.info("Tool execution completed with status: \(status)")
+                // Process regular text chunk
+                if let textChunk = extractTextFromChunk(chunk) {
+                    streamedText += textChunk
+                    appendTextToMessage(textChunk, shouldCreateNewMessage: isFirstChunk)
+                    isFirstChunk = false
+                }
                 
-                chatManager.updateMessageWithToolInfo(
-                    for: chatId,
-                    messageId: partialMessage.id,
-                    newText: resultText,
-                    toolInfo: currentToolInfo!,
-                    toolResult: resultText
-                )
+                // Process thinking chunk
+                let thinkingResult = extractThinkingFromChunk(chunk)
+                if let thinkingText = thinkingResult.text {
+                    thinking = (thinking ?? "") + thinkingText
+                    appendTextToMessage("", thinking: thinkingText, shouldCreateNewMessage: isFirstChunk)
+                    isFirstChunk = false
+                }
                 
-                // Continue with conversation including tool result
-                let toolResultMessage = createToolResultMessage(toolUseId: toolUseInfo.toolUseId, result: resultText)
-                conversationHistory.append(toolResultMessage)
-                
-                // Send updated conversation to the model
-                let updatedBedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0) }
-                
-                logger.info("Continuing conversation with tool result")
-                
-                // Start a new conversation with the tool result
-                return try await continueConversationWithToolResult(
-                    updatedBedrockMessages,
-                    systemContentBlock: systemContentBlock,
-                    toolConfig: toolConfig
-                )
+                if let thinkingSignatureText = thinkingResult.signature {
+                    thinkingSignature = thinkingSignatureText
+                }
             }
             
-            // Process regular text chunk
-            if let textChunk = extractTextFromChunk(chunk) {
-                streamedText += textChunk
-                appendTextToMessage(textChunk, shouldCreateNewMessage: isFirstChunk)
-                isFirstChunk = false
-            }
-            
-            // Process thinking chunk
-            let thinkingResult = extractThinkingFromChunk(chunk)
-            if let thinkingText = thinkingResult.text {
-                thinking = (thinking ?? "") + thinkingText
-                appendTextToMessage("", thinking: thinkingText, shouldCreateNewMessage: isFirstChunk)
-                isFirstChunk = false
-            }
-            
-            if let thinkingSignatureText = thinkingResult.signature {
-                thinkingSignature = thinkingSignatureText
-            }
-        }
-        
-        // Create assistant message when streaming is complete (if no tool was used)
-        if !isToolUseDetected {
+            // Create assistant message when streaming is complete (if no more tool was used)
             let assistantText = streamedText.trimmingCharacters(in: .whitespacesAndNewlines)
             let assistantMessage = MessageData(
                 id: UUID(),
@@ -783,7 +800,7 @@ class ChatViewModel: ObservableObject {
                 sentTime: Date()
             )
             
-            logger.info("Conversation completed without tool use")
+            logger.info("Conversation completed after \(turn_count) tool use cycles")
             
             // Only save to history if we haven't already streamed it
             if isFirstChunk {
@@ -806,6 +823,9 @@ class ChatViewModel: ObservableObject {
             conversationHistory.append(assistantMsg)
             await saveConversationHistory(conversationHistory)
         }
+        
+        // Start the first cycle
+        try await processToolCycles(messages: bedrockMessages)
     }
     
     /// Continue conversation after a tool has been used
