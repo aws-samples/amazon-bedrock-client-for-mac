@@ -134,27 +134,19 @@ struct MainView: View {
     }
     
     private func handleFetchModelsError(_ error: Error) {
+        // Create a BedrockError from the raw error
         let bedrockError = BedrockError(error: error)
-        switch bedrockError {
-        case .expiredToken(let message):
-            self.alertInfo = AlertInfo(
-                title: "Expired Token",
-                message: message ?? "Your AWS credentials have expired. Please log in again."
-            )
-        case .invalidResponse(let message):
-            self.alertInfo = AlertInfo(
-                title: "Invalid Response",
-                message: message ?? "The response from Bedrock was invalid."
-            )
-        case .unknown(let message):
-            self.alertInfo = AlertInfo(
-                title: "Unknown Error",
-                message: message ?? "An unknown error occurred."
-            )
-        }
-        logger.error("Fetch Models Error - \(self.alertInfo?.title ?? "Error"): \(self.alertInfo?.message ?? "No message")")
-        logger.error("Error type: \(type(of: error))")
-        logger.error("Error description: \(error)")
+        
+        // Set the alert info using the BedrockError's title and message
+        self.alertInfo = AlertInfo(
+            title: bedrockError.title,
+            message: bedrockError.message
+        )
+        
+        // Log detailed error information
+        logger.error("\(bedrockError.title): \(bedrockError.message)")
+        logger.error("Original error type: \(type(of: error))")
+        logger.error("Original error description: \(error)")
     }
     
     private func selectDefaultModel() {

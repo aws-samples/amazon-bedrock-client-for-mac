@@ -32,18 +32,67 @@ class BackendModel: ObservableObject {
         do {
             self.backend = try BackendModel.createBackend()
             logger.info("Backend initialized successfully")
+            self.isLoggedIn = true
         } catch {
-            logger.error("Failed to initialize Backend: \(error.localizedDescription). Using fallback Backend.")
-            self.backend = Backend.fallbackInstance()
-            if error.localizedDescription.lowercased().contains("expired") {
-                alertMessage = "Your AWS credentials have expired. Please log in again."
-            } else {
-                alertMessage = "Backend initialization failed: \(error.localizedDescription). Using fallback settings."
+            logger.error("Failed to initialize Backend: \(error)")
+            
+            // Create Backend with default credentials when an error occurs
+            do {
+                let defaultCredentialProvider = try DefaultAWSCredentialIdentityResolverChain()
+                self.backend = Backend(
+                    region: "us-east-1",
+                    profile: "default",
+                    endpoint: "",
+                    runtimeEndpoint: "",
+                    awsCredentialIdentityResolver: defaultCredentialProvider
+                )
+            } catch {
+                fatalError("Failed to create even fallback Backend: \(error)")
             }
+            
+            // Extract more detailed error information
+            if let commonRuntimeError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
+                // Use Mirror to access internal properties of CommonRunTimeError
+                let mirror = Mirror(reflecting: commonRuntimeError)
+                
+                // Try to find the crtError property
+                if let crtErrorProperty = mirror.children.first(where: { $0.label == "crtError" }) {
+                    if let crtError = crtErrorProperty.value as? Any {
+                        let crtErrorMirror = Mirror(reflecting: crtError)
+                        
+                        // Extract code, message and name from crtError
+                        var errorCode: String = "unknown"
+                        var errorMessage: String = "No detailed message available"
+                        var errorName: String = "Unknown error"
+                        
+                        for child in crtErrorMirror.children {
+                            if child.label == "code", let code = child.value as? Int {
+                                errorCode = String(code)
+                            } else if child.label == "message", let message = child.value as? String {
+                                errorMessage = message
+                            } else if child.label == "name", let name = child.value as? String {
+                                errorName = name
+                            }
+                        }
+                        
+                        alertMessage = "AWS error (\(errorName)): \(errorMessage) (Code: \(errorCode))"
+                    } else {
+                        alertMessage = "AWS error: \(commonRuntimeError.localizedDescription)"
+                    }
+                } else {
+                    alertMessage = "AWS error: \(commonRuntimeError.localizedDescription)"
+                }
+            } else if let awsServiceError = error as? AWSClientRuntime.AWSServiceError {
+                alertMessage = "AWS service error: \(awsServiceError.message)"
+            } else {
+                alertMessage = "Error: \(error.localizedDescription)"
+            }
+            
+            self.isLoggedIn = false
         }
         setupObservers()
     }
-    
+
     private static func createBackend() throws -> Backend {
         let region = SettingManager.shared.selectedRegion.rawValue
         let profile = SettingManager.shared.selectedProfile
@@ -140,42 +189,57 @@ class Backend: Equatable {
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
         
-        // Find the selected profile from SettingManager
-        if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile })
-        {
-            // If the profile type is SSO, use SSOAWSCredentialIdentityResolver
-            if selectedProfile.type == .sso {
-                self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(
-                    profileName: profile)
-            } else {
-                // Otherwise, it's a standard credentials profile
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(
-                    profileName: profile)
+        // Try to initialize credentials in order of preference
+        do {
+            // First try: Use the specified profile from SettingManager
+            if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
+                if selectedProfile.type == .sso {
+                    self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+                    logger.info("Using SSO credentials for profile: \(profile)")
+                } else {
+                    self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                    logger.info("Using standard credentials for profile: \(profile)")
+                }
             }
-        } else {
-            // If profile not found, fallback to default
-            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(
-                profileName: "default")
+            // Second try: Use default profile if specified profile not found
+            else if profile != "default" {
+                logger.warning("Profile '\(profile)' not found, falling back to 'default' profile")
+                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
+            }
+            // Third try: Use default profile directly
+            else {
+                logger.info("Using default profile")
+                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
+            }
+        } catch {
+            // Final try: Use DefaultAWSCredentialIdentityResolverChain as last resort
+            logger.warning("Failed to initialize with profile '\(profile)': \(error.localizedDescription)")
+            logger.info("Attempting to use DefaultAWSCredentialIdentityResolverChain")
+            
+            do {
+                self.awsCredentialIdentityResolver = try DefaultAWSCredentialIdentityResolverChain()
+                logger.info("Successfully initialized with DefaultAWSCredentialIdentityResolverChain")
+            } catch {
+                // If even the default chain fails, we have no choice but to throw
+                logger.error("Failed to initialize with DefaultAWSCredentialIdentityResolverChain: \(error.localizedDescription)")
+                throw error
+            }
         }
         
-        logger.info(
-            "Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)"
-        )
+        logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
     }
-    
-    /// Creates a fallback instance with default values
-    static func fallbackInstance() -> Backend {
-        do {
-            return try Backend(
-                region: "us-east-1",
-                profile: "default",
-                endpoint: "",
-                runtimeEndpoint: ""
-            )
-        } catch {
-            fatalError(
-                "Fallback Backend failed to initialize. Error: \(error.localizedDescription)")
-        }
+
+    /// Initializes Backend with a custom credential resolver
+    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, awsCredentialIdentityResolver: any AWSCredentialIdentityResolver) {
+        self.region = region
+        self.profile = profile
+        self.endpoint = endpoint
+        self.runtimeEndpoint = runtimeEndpoint
+        self.awsCredentialIdentityResolver = awsCredentialIdentityResolver
+        
+        logger.info(
+            "Backend initialized with custom credential resolver, region: \(region), profile: \(profile)"
+        )
     }
     
     private func createBedrockClient() throws -> BedrockClient {
@@ -1029,26 +1093,6 @@ enum BedrockRuntimeError: Error {
     case decodingFailed
 }
 
-enum BedrockError: Error {
-    case invalidResponse(String?)
-    case expiredToken(String?)
-    case unknown(String?)
-    
-    init(error: Error) {
-        if let awsError = error as? AWSClientRuntime.AWSServiceError {
-            if let typeName = awsError.typeName?.lowercased(), typeName.contains("expiredtoken") {
-                self = .expiredToken(awsError.message)
-            } else {
-                self = .unknown(awsError.message)
-            }
-        } else if let commonError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
-            self = .invalidResponse(commonError.localizedDescription)
-        } else {
-            self = .unknown(error.localizedDescription)
-        }
-    }
-}
-
 // MARK: - NSAlert Extension for Error Handling
 
 extension NSAlert {
@@ -1060,6 +1104,123 @@ extension NSAlert {
             alert.informativeText = message
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        }
+    }
+}
+
+enum BedrockError: Error {
+    case invalidResponse(String?)
+    case expiredToken(String?)
+    case credentialsError(String?)
+    case configurationError(String?)
+    case permissionError(String?)
+    case networkError(String?)
+    case unknown(String?)
+    
+    init(error: Error) {
+        // First try to extract detailed information from CommonRunTimeError
+        if let commonError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
+            // Use reflection to extract detailed error information
+            let mirror = Mirror(reflecting: commonError)
+            
+            if let crtErrorProperty = mirror.children.first(where: { $0.label == "crtError" }) {
+                let crtError = crtErrorProperty.value
+                let crtErrorMirror = Mirror(reflecting: crtError)
+                
+                var errorCode: Int = -1
+                var errorMessage: String = "Unknown error"
+                var errorName: String = "Unknown"
+                
+                for child in crtErrorMirror.children {
+                    if child.label == "code", let code = child.value as? Int {
+                        errorCode = code
+                    } else if child.label == "message", let message = child.value as? String {
+                        errorMessage = message
+                    } else if child.label == "name", let name = child.value as? String {
+                        errorName = name
+                    }
+                }
+                
+                let detailedMessage = "\(errorName): \(errorMessage) (Code: \(errorCode))"
+                
+                // Categorize based on error message content
+                let lowerMessage = errorMessage.lowercased()
+                if lowerMessage.contains("credential") || lowerMessage.contains("identity") {
+                    self = .credentialsError(detailedMessage)
+                } else if lowerMessage.contains("config") || lowerMessage.contains("profile") {
+                    self = .configurationError(detailedMessage)
+                } else if lowerMessage.contains("permission") || lowerMessage.contains("access") {
+                    self = .permissionError(detailedMessage)
+                } else if lowerMessage.contains("network") || lowerMessage.contains("connection") {
+                    self = .networkError(detailedMessage)
+                } else {
+                    self = .invalidResponse(detailedMessage)
+                }
+                return
+            }
+            
+            // If reflection didn't work, use the standard description
+            self = .invalidResponse(commonError.localizedDescription)
+            return
+        }
+        
+        // Handle AWS service errors
+        if let awsError = error as? AWSClientRuntime.AWSServiceError {
+            if let typeName = awsError.typeName?.lowercased() {
+                if typeName.contains("expiredtoken") {
+                    self = .expiredToken(awsError.message)
+                } else if typeName.contains("credential") || typeName.contains("auth") {
+                    self = .credentialsError(awsError.message)
+                } else if typeName.contains("permission") || typeName.contains("access") {
+                    self = .permissionError(awsError.message)
+                } else {
+                    self = .unknown("\(typeName): \(awsError.message ?? "Unknown AWS error")")
+                }
+            } else {
+                self = .unknown(awsError.message)
+            }
+            return
+        }
+        
+        // Generic error handling
+        let errorDescription = error.localizedDescription.lowercased()
+        if errorDescription.contains("credential") || errorDescription.contains("identity") {
+            self = .credentialsError(error.localizedDescription)
+        } else if errorDescription.contains("config") || errorDescription.contains("profile") {
+            self = .configurationError(error.localizedDescription)
+        } else if errorDescription.contains("permission") || errorDescription.contains("access") {
+            self = .permissionError(error.localizedDescription)
+        } else if errorDescription.contains("network") || errorDescription.contains("connection") {
+            self = .networkError(error.localizedDescription)
+        } else if errorDescription.contains("expired") || errorDescription.contains("token") {
+            self = .expiredToken(error.localizedDescription)
+        } else {
+            self = .unknown(error.localizedDescription)
+        }
+    }
+    
+    var title: String {
+        switch self {
+        case .invalidResponse: return "Invalid Response"
+        case .expiredToken: return "Expired Token"
+        case .credentialsError: return "Credentials Error"
+        case .configurationError: return "Configuration Error"
+        case .permissionError: return "Permission Error"
+        case .networkError: return "Network Error"
+        case .unknown: return "Unknown Error"
+        }
+    }
+    
+    var message: String {
+        switch self {
+        case .invalidResponse(let msg),
+             .expiredToken(let msg),
+             .credentialsError(let msg),
+             .configurationError(let msg),
+             .permissionError(let msg),
+             .networkError(let msg),
+             .unknown(let msg):
+            return msg ?? "No additional information available"
         }
     }
 }
