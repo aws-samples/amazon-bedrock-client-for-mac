@@ -614,15 +614,11 @@ class ChatViewModel: ObservableObject {
             }
         }
         
-        // Create user message
-        let userMsg = BedrockMessage(
-            role: .user,
-            content: messageContents
-        )
-        
         // Get conversation history
         var conversationHistory = await getConversationHistory()
-        conversationHistory.append(userMsg)
+        
+        // Do not uncomment this - this will create duplicate user messages.
+        // conversationHistory.append(userMsg)
         
         // Save updated history
         await saveConversationHistory(conversationHistory)
