@@ -182,6 +182,9 @@ struct MessageBarView: View {
             },
             onPaste: { image in
                 handleImagePaste(image)
+            },
+            onPasteDocument: { url in
+                handleFileImport([url])
             }
         )
         .focused($isInputFocused)
@@ -345,32 +348,59 @@ struct MessageBarView: View {
     /// Sanitizes document name to comply with Bedrock restrictions
     /// - Only allows alphanumeric characters, single spaces, hyphens, parentheses, and square brackets
     func sanitizeDocumentName(_ name: String) -> String {
+        // First, remove the file extension if present
+        let nameWithoutExtension: String
+        if let lastDotIndex = name.lastIndex(of: ".") {
+            nameWithoutExtension = String(name[..<lastDotIndex])
+        } else {
+            nameWithoutExtension = name
+        }
+        
         var result = ""
         var lastCharWasSpace = false
         
-        for char in name {
-            // Allow alphanumeric characters
-            if char.isLetter || char.isNumber {
-                result.append(char)
+        // Process each character
+        for scalar in nameWithoutExtension.unicodeScalars {
+            // Allow only English alphanumeric characters (a-z, A-Z, 0-9)
+            if (scalar.value >= 65 && scalar.value <= 90) ||    // A-Z
+               (scalar.value >= 97 && scalar.value <= 122) ||   // a-z
+               (scalar.value >= 48 && scalar.value <= 57) {     // 0-9
+                result.append(Character(scalar))
                 lastCharWasSpace = false
             }
             // Allow single spaces (no consecutive spaces)
-            else if char.isWhitespace {
+            else if CharacterSet.whitespaces.contains(scalar) {
                 if !lastCharWasSpace {
                     result.append(" ")
                     lastCharWasSpace = true
                 }
             }
-            // Allow hyphens, parentheses, and square brackets
-            else if char == "-" || char == "(" || char == ")" || char == "[" || char == "]" {
-                result.append(char)
+            // Allow specific permitted symbols
+            else if scalar == "-" || scalar == "(" || scalar == ")" || scalar == "[" || scalar == "]" {
+                result.append(Character(scalar))
                 lastCharWasSpace = false
+            }
+            // For any other character, replace with a space if we don't already have one
+            else if !lastCharWasSpace {
+                result.append(" ")
+                lastCharWasSpace = true
             }
         }
         
         // Trim any leading/trailing spaces
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // If the result is empty, provide a default name
+        if trimmed.isEmpty {
+            // Use current timestamp to create a unique default name
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
+            return "Document-\(dateFormatter.string(from: Date()))"
+        }
+        
+        return trimmed
     }
+
     
     private func setupTranscriptObserver() {
         NotificationCenter.default.addObserver(

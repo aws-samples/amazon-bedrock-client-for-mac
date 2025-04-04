@@ -23,6 +23,7 @@ import UniformTypeIdentifiers
  */
 final class MyTextView: NSTextView {
     var onPaste: ((NSImage) -> Void)?
+    var onPasteDocument: ((URL) -> Void)?
     var onCommit: (() -> Void)?
     var onPasteStarted: (() -> Void)?
     var onPasteCompleted: (() -> Void)?
@@ -78,43 +79,44 @@ final class MyTextView: NSTextView {
     
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let pasteboard = sender.draggingPasteboard
-        let supportedTypes = [UTType.jpeg, UTType.png, UTType.gif, UTType.webP]
+        let supportedImageTypes = [UTType.jpeg, UTType.png, UTType.gif, UTType.webP, UTType.tiff, UTType.bmp, UTType.heic]
+        let supportedDocTypes = [UTType.pdf, UTType.commaSeparatedText, UTType.rtf, UTType.plainText,
+                                UTType.html, UTType.xml]
         
         // Indicate paste operation has started
         notifyPasteStarted()
         
         // Process multiple dragged files with order preservation
         if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
-            let validURLs = fileURLs.filter { url in
-                let fileType = UTType(filenameExtension: url.pathExtension) ?? .data
-                return supportedTypes.contains(fileType)
-            }
+            var processedAnyFile = false
             
-            if !validURLs.isEmpty {
-                // Limit to maximum allowed images
-                let imagesToProcess = validURLs.prefix(maxImagesAllowed)
+            for url in fileURLs {
+                let fileType = UTType(filenameExtension: url.pathExtension) ?? .data
                 
-                // Process images sequentially to preserve order
-                DispatchQueue.global(qos: .userInitiated).async {
-                    var processedImages = 0
-                    
-                    for url in imagesToProcess {
-                        if let image = NSImage(contentsOf: url),
-                           image.isValidImage(fileURL: url, maxSize: 10 * 1024 * 1024, maxWidth: 8000, maxHeight: 8000) {
-                            DispatchQueue.main.sync {
-                                self.onPaste?(image)
-                                processedImages += 1
-                            }
-                        }
-                    }
-                    
+                // Handle image files
+                if supportedImageTypes.contains(fileType),
+                   let image = NSImage(contentsOf: url),
+                   image.isValidImage(fileURL: url, maxSize: 10 * 1024 * 1024, maxWidth: 8000, maxHeight: 8000) {
                     DispatchQueue.main.async {
-                        self.notifyPasteCompleted()
+                        self.onPaste?(image)
+                        processedAnyFile = true
                     }
                 }
-                
-                return true
+                // Handle document files
+                else if supportedDocTypes.contains(fileType) ||
+                        ["doc", "docx", "xls", "xlsx", "csv", "pdf", "txt", "md"].contains(url.pathExtension.lowercased()) {
+                    DispatchQueue.main.async {
+                        self.onPasteDocument?(url)
+                        processedAnyFile = true
+                    }
+                }
             }
+            
+            DispatchQueue.main.async {
+                self.notifyPasteCompleted()
+            }
+            
+            return processedAnyFile
         }
         
         notifyPasteCompleted()
@@ -138,30 +140,39 @@ final class MyTextView: NSTextView {
     private func handlePaste() {
         let pasteboard = NSPasteboard.general
         var pastedImages: [NSImage] = []
+        var pastedDocuments: [URL] = []  // 문서 URL을 저장할 배열 추가
         var pastedText: String = ""
-        var imageProcessed = false // Track if image was already processed
+        var fileProcessed = false // Track if any file was processed
         
-        // List of supported image extensions
-        let supportedExtensions = ["jpg", "jpeg", "png", "gif", "tiff", "bmp", "webp", "heic"]
+        // List of supported file extensions
+        let supportedImageExtensions = ["jpg", "jpeg", "png", "gif", "tiff", "bmp", "webp", "heic"]
+        let supportedDocExtensions = ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"]
         
         // 1. Process file URLs first - maintain order
         if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
             for url in fileURLs {
-                // Check maximum image count
-                if pastedImages.count >= maxImagesAllowed {
+                // Check maximum file count
+                if pastedImages.count + pastedDocuments.count >= maxImagesAllowed {
                     break
                 }
                 
                 let ext = url.pathExtension.lowercased()
-                if supportedExtensions.contains(ext), let image = NSImage(contentsOf: url) {
+                
+                // Handle image files
+                if supportedImageExtensions.contains(ext), let image = NSImage(contentsOf: url) {
                     pastedImages.append(image)
-                    imageProcessed = true // Set image processed flag
+                    fileProcessed = true
+                }
+                // Handle document files
+                else if supportedDocExtensions.contains(ext) {
+                    pastedDocuments.append(url)  // 문서 URL 저장
+                    fileProcessed = true
                 }
             }
         }
         
-        // 2. Process image data directly - only if no images processed yet
-        if !imageProcessed && pastedImages.isEmpty {
+        // 2. Process image data directly - only if no files processed yet
+        if !fileProcessed && pastedImages.isEmpty {
             let types: [NSPasteboard.PasteboardType] = [
                 .tiff,
                 .png,
@@ -176,14 +187,14 @@ final class MyTextView: NSTextView {
                 if let imageData = pasteboard.data(forType: type),
                    let image = NSImage(data: imageData) {
                     pastedImages.append(image)
-                    imageProcessed = true // Set image processed flag
+                    fileProcessed = true
                     break // Add only first valid image
                 }
             }
         }
         
-        // 3. Try to extract image URLs from HTML content - only if no images processed yet
-        if !imageProcessed && pastedImages.isEmpty,
+        // 3. Try to extract image URLs from HTML content - only if no files processed yet
+        if !fileProcessed && pastedImages.isEmpty,
            let htmlString = pasteboard.string(forType: .html) {
             let (imageUrls, extractedText) = extractContentFromHTML(htmlString)
             pastedText = extractedText
@@ -219,12 +230,12 @@ final class MyTextView: NSTextView {
                     let sortedImages = orderedImages.sorted { $0.0 < $1.0 }.map { $0.1 }
                     
                     // Check for duplication (ignore if already processed)
-                    if !imageProcessed {
+                    if !fileProcessed {
                         pastedImages.append(contentsOf: sortedImages)
-                        imageProcessed = true
+                        fileProcessed = true
                     }
                     
-                    self.handlePastedContent(images: pastedImages, text: pastedText, imageProcessed: imageProcessed)
+                    self.handlePastedContent(images: pastedImages, documents: pastedDocuments, text: pastedText, fileProcessed: fileProcessed)
                     self.notifyPasteCompleted()
                 }
                 
@@ -236,22 +247,28 @@ final class MyTextView: NSTextView {
         }
         
         // 4. Process immediately if no HTML handling
-        handlePastedContent(images: pastedImages, text: pastedText, imageProcessed: imageProcessed)
+        handlePastedContent(images: pastedImages, documents: pastedDocuments, text: pastedText, fileProcessed: fileProcessed)
         notifyPasteCompleted()
     }
 
-    private func handlePastedContent(images: [NSImage], text: String, imageProcessed: Bool) {
+    private func handlePastedContent(images: [NSImage], documents: [URL], text: String, fileProcessed: Bool) {
+        // Process images
         if !images.isEmpty {
-            // Process images in order
             images.forEach { self.onPaste?($0) }
         }
         
+        // Process documents
+        if !documents.isEmpty {
+            documents.forEach { self.onPasteDocument?($0) }
+        }
+        
+        // Process text
         if !text.isEmpty {
             self.insertText(text, replacementRange: self.selectedRange())
         }
         
-        if !imageProcessed && images.isEmpty && text.isEmpty {
-            // Fall back to standard paste if no images or HTML text
+        // Fall back to standard paste if nothing was processed
+        if !fileProcessed && images.isEmpty && documents.isEmpty && text.isEmpty {
             super.paste(nil)
         }
     }
@@ -364,6 +381,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
     @Binding var isPasting: Bool  // New binding for paste operation status
     var onCommit: () -> Void
     var onPaste: ((NSImage) -> Void)?
+    var onPasteDocument: ((URL) -> Void)?
     
     func makeCoordinator() -> Coordinator {
         let coordinator = Coordinator(self, onPaste: onPaste)
@@ -394,6 +412,9 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
         if let textView = scrollView.documentView as? MyTextView {
             textView.delegate = context.coordinator
             textView.onPaste = { image in context.coordinator.parent.onPaste?(image) }
+            textView.onPasteDocument = { url in
+                context.coordinator.parent.onPasteDocument?(url)
+            }
             textView.onCommit = { context.coordinator.parent.onCommit() }
             
             // Set up paste operation callbacks

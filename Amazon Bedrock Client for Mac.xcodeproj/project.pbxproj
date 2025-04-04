@@ -41,6 +41,7 @@
 		79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78992C31691800BD6FB1 /* AWSSSOOIDC */; };
 		79AF97552D9E332A00313A4C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF97542D9E332500313A4C /* NSImage.swift */; };
 		79AF97572D9E33C400313A4C /* ImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF97562D9E33BE00313A4C /* ImagePreview.swift */; };
+		79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */; };
 		79BF645F2ACFF8FD00383300 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 79BF645E2ACFF8FD00383300 /* README.md */; };
 		79BFF5102AD342710057BF3A /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BFF50F2AD342710057BF3A /* ChatManager.swift */; };
 		79C4F01E2C30362100C488C2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C4F01D2C30362100C488C2 /* AppDelegate.swift */; };
@@ -114,6 +115,7 @@
 		798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalHostServer.swift; sourceTree = "<group>"; };
 		79AF97542D9E332500313A4C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		79AF97562D9E33BE00313A4C /* ImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreview.swift; sourceTree = "<group>"; };
+		79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPreview.swift; sourceTree = "<group>"; };
 		79BF645E2ACFF8FD00383300 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		79BFF50F2AD342710057BF3A /* ChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatManager.swift; sourceTree = "<group>"; };
 		79C4F01D2C30362100C488C2 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -288,6 +290,7 @@
 			isa = PBXGroup;
 			children = (
 				79AF97562D9E33BE00313A4C /* ImagePreview.swift */,
+				79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */,
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
 				79610DD12AD22A2F00993D09 /* HomeView.swift */,
 				795D9C8E2BC57D3900DF38C0 /* MainView.swift */,
@@ -461,6 +464,7 @@
 				79D6E6A32C99BFF300314D86 /* GithubTheme.swift in Sources */,
 				79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */,
 				79AF97552D9E332A00313A4C /* NSImage.swift in Sources */,
+				79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */,
 				790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */,
 				79610DE62AD22A2F00993D09 /* HomeView.swift in Sources */,
 				79FF2B332D925EDB0075249D /* MCPManager.swift in Sources */,
@@ -684,7 +688,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -730,7 +734,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";

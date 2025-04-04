@@ -398,6 +398,9 @@ struct MessageView: View {
                         imageBase64Strings: message.imageBase64Strings,
                         imageSize: imageSize,
                         onTapImage: viewModel.selectImage,
+                        onSelectDocument: { data, ext, name in
+                            viewModel.selectDocument(data: data, ext: ext, name: name)
+                        },
                         documentBase64Strings: message.documentBase64Strings,
                         documentFormats: message.documentFormats,
                         documentNames: message.documentNames,
@@ -427,6 +430,16 @@ struct MessageView: View {
                     image: imageToShow,
                     filename: "image-\(Date().timeIntervalSince1970).png",
                     isPresented: $viewModel.isShowingImageModal
+                )
+            }
+        }
+        .sheet(isPresented: $viewModel.isShowingDocumentModal) {
+            if let docData = viewModel.selectedDocumentData {
+                DocumentPreviewModal(
+                    documentData: docData,
+                    filename: viewModel.selectedDocumentName,
+                    fileExtension: viewModel.selectedDocumentExt,
+                    isPresented: $viewModel.isShowingDocumentModal
                 )
             }
         }
@@ -827,11 +840,22 @@ struct HTMLStringView: NSViewRepresentable {
 class MessageViewModel: ObservableObject {
     @Published var selectedImageData: String? = nil
     @Published var isShowingImageModal: Bool = false
+    @Published var selectedDocumentData: Data? = nil
+    @Published var selectedDocumentExt: String = ""
+    @Published var selectedDocumentName: String = ""
+    @Published var isShowingDocumentModal: Bool = false
     @Published var currentHighlightedMatch: (messageIndex: Int, matchPositionIndex: Int)? = nil
     
     func selectImage(with data: String) {
         self.selectedImageData = data
         self.isShowingImageModal = true
+    }
+    
+    func selectDocument(data: Data, ext: String, name: String) {
+        self.selectedDocumentData = data
+        self.selectedDocumentExt = ext
+        self.selectedDocumentName = name
+        self.isShowingDocumentModal = true
     }
     
     func clearSelection() {
@@ -874,7 +898,8 @@ struct AttachmentsView: View {
     let imageBase64Strings: [String]?
     let imageSize: CGFloat
     let onTapImage: (String) -> Void
-    
+    var onSelectDocument: (Data, String, String) -> Void
+
     // Document properties
     let documentBase64Strings: [String]?
     let documentFormats: [String]?
@@ -923,48 +948,57 @@ struct AttachmentsView: View {
     
     // Document content extracted to its own function
     private func documentContent(name: String, format: String) -> some View {
-        HStack(spacing: 10) {
-            // Document icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
+        Button(action: {
+            if let index = documentNames?.firstIndex(of: name),
+               let docStrings = documentBase64Strings,
+               index < docStrings.count,
+               let docData = Data(base64Encoded: docStrings[index]) {
+                onSelectDocument(docData, format, name)
+            }
+        }) {
+            HStack(spacing: 10) {
+                // Document icon
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ?
+                              Color.gray.opacity(0.2) :
+                                Color.gray.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: documentIcon(for: format))
+                        .font(.system(size: 18))
+                        .foregroundColor(.primary)
+                }
+                
+                // Document name
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: fontSize - 2, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    Text("\(format.uppercased()) document")
+                        .font(.system(size: fontSize - 4))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(6) // Reduced padding
+            .background(
+                RoundedRectangle(cornerRadius: 8) // Reduced corner radius
                     .fill(colorScheme == .dark ?
-                          Color.gray.opacity(0.2) :
-                            Color.gray.opacity(0.1))
-                    .frame(width: 36, height: 36)
-                
-                Image(systemName: documentIcon(for: format))
-                    .font(.system(size: 18))
-                    .foregroundColor(.primary)
-            }
-            
-            // Document name
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.system(size: fontSize - 2, weight: .medium))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                
-                Text("\(format.uppercased()) document")
-                    .font(.system(size: fontSize - 4))
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(6) // Reduced padding
-        .background(
-            RoundedRectangle(cornerRadius: 8) // Reduced corner radius
-                .fill(colorScheme == .dark ?
-                      Color.gray.opacity(0.15) :
-                        Color.gray.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(
-                    colorScheme == .dark ?
-                    Color.gray.opacity(0.3) :
-                        Color.gray.opacity(0.2),
-                    lineWidth: 1
-                )
-        )
+                          Color.gray.opacity(0.15) :
+                            Color.gray.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        colorScheme == .dark ?
+                        Color.gray.opacity(0.3) :
+                            Color.gray.opacity(0.2),
+                        lineWidth: 1
+                    )
+            )
+        }.buttonStyle(PlainButtonStyle())
     }
     
     // Helper function to determine document icon based on file extension
