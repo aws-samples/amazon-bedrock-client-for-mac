@@ -336,7 +336,7 @@ struct MessageView: View {
                 ExpandableMarkdownItem(
                     header: "Using tool: \(toolUse.name)",
                     text: formatToolInput(toolUse.input),
-                    fontSize: fontSize + adjustedFontSize - 2
+                    fontSize    : fontSize + adjustedFontSize - 2
                 )
                 .padding(.vertical, 2)
             }
@@ -357,18 +357,73 @@ struct MessageView: View {
     }
     
     // Helper function to format tool input parameters as JSON
-    private func formatToolInput(_ input: [String: String]) -> String {
-        var result = "```json\n"
-        result += "{\n"
-        for (key, value) in input.sorted(by: { $0.key < $1.key }) {
-            result += "  \"\(key)\": \"\(value)\",\n"
+    private func formatToolInput(_ input: JSONValue) -> String {
+        return "```json\n\(prettyPrintJSON(input, indent: 0))\n```"
+    }
+
+    // Helper function for recursive pretty printing of JSONValue
+    private func prettyPrintJSON(_ json: JSONValue, indent: Int) -> String {
+        let indentString = String(repeating: "  ", count: indent)
+        let childIndentString = String(repeating: "  ", count: indent + 1)
+        
+        switch json {
+        case .string(let str):
+            return "\"\(escapeString(str))\""
+            
+        case .number(let num):
+            return "\(num)"
+            
+        case .bool(let bool):
+            return bool ? "true" : "false"
+            
+        case .null:
+            return "null"
+            
+        case .array(let arr):
+            if arr.isEmpty {
+                return "[]"
+            }
+            
+            var result = "[\n"
+            for (index, item) in arr.enumerated() {
+                result += "\(childIndentString)\(prettyPrintJSON(item, indent: indent + 1))"
+                if index < arr.count - 1 {
+                    result += ","
+                }
+                result += "\n"
+            }
+            result += "\(indentString)]"
+            return result
+            
+        case .object(let obj):
+            if obj.isEmpty {
+                return "{}"
+            }
+            
+            var result = "{\n"
+            let sortedKeys = obj.keys.sorted()
+            for (index, key) in sortedKeys.enumerated() {
+                if let value = obj[key] {
+                    result += "\(childIndentString)\"\(key)\": \(prettyPrintJSON(value, indent: indent + 1))"
+                    if index < sortedKeys.count - 1 {
+                        result += ","
+                    }
+                    result += "\n"
+                }
+            }
+            result += "\(indentString)}"
+            return result
         }
-        if !input.isEmpty {
-            result.removeLast(2)  // Remove the last comma and newline
-            result += "\n"
-        }
-        result += "}\n```"
-        return result
+    }
+
+    // Helper function to escape special characters in strings
+    private func escapeString(_ string: String) -> String {
+        return string
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\t", with: "\\t")
     }
     
     // MARK: - User Message Bubble

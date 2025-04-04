@@ -365,9 +365,6 @@ class ChatViewModel: ObservableObject {
         var inputString = ""
         var currentBlockIndex: Int?
         
-        /**
-         * Resets all tracking variables to initial state.
-         */
         func reset() {
             toolUseId = nil
             name = nil
@@ -375,22 +372,30 @@ class ChatViewModel: ObservableObject {
             currentBlockIndex = nil
         }
         
-        /**
-         * Retrieves the complete tool use information if available.
-         * @return Tuple containing tool use ID, name and input parameters, or nil if incomplete
-         */
-        func getToolUseInfo() -> (toolUseId: String, name: String, input: [String: String])? {
+        func getToolUseInfo() -> (toolUseId: String, name: String, input: Any)? {
             guard let toolUseId = toolUseId, let name = name, !inputString.isEmpty else {
                 return nil
             }
             
-            // Parse JSON string into dictionary
-            if let data = inputString.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
-                return (toolUseId: toolUseId, name: name, input: json)
+            // Return empty object for empty input
+            if inputString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return (toolUseId: toolUseId, name: name, input: [:])
             }
             
-            return nil
+            // Parse JSON string to Any type
+            if let data = inputString.data(using: .utf8) {
+                do {
+                    // Don't use if let since jsonObject returns Any, not optional
+                    let json = try JSONSerialization.jsonObject(with: data)
+                    return (toolUseId: toolUseId, name: name, input: json)
+                } catch {
+                    // Return original string on parsing failure
+                    return (toolUseId: toolUseId, name: name, input: inputString)
+                }
+            }
+            
+            // Return original string if all parsing attempts fail
+            return (toolUseId: toolUseId, name: name, input: inputString)
         }
     }
     
@@ -469,32 +474,28 @@ class ChatViewModel: ObservableObject {
      * @param chunk A single chunk from the Bedrock Converse streaming response
      * @return Tuple with tool use ID, name and input parameters, or nil if not a complete tool use
      */
-    private func extractToolUseFromChunk(_ chunk: BedrockRuntimeClientTypes.ConverseStreamOutput) -> (toolUseId: String, name: String, input: [String: String])? {
+    private func extractToolUseFromChunk(_ chunk: BedrockRuntimeClientTypes.ConverseStreamOutput) -> (toolUseId: String, name: String, input: Any)? {
         let tracker = ToolUseTracker.shared
         
-        // Check for tool use in contentBlockStart events
+        // Handle contentBlockStart events
         if case .contentblockstart(let blockStartEvent) = chunk,
            let start = blockStartEvent.start,
            case .tooluse(let toolUseBlock) = start {
             
-            // Reset tracker for fresh tool use
             tracker.reset()
-            
-            // Store tool metadata
             tracker.toolUseId = toolUseBlock.toolUseId ?? UUID().uuidString
             tracker.name = toolUseBlock.name ?? ""
             tracker.currentBlockIndex = blockStartEvent.contentBlockIndex
             
             logger.info("Tool use start detected: \(tracker.name ?? "unnamed") with ID: \(tracker.toolUseId ?? "unknown")")
-            return nil // Not complete yet
+            return nil
         }
         
-        // Handle contentBlockDelta - accumulate input
+        // Handle contentBlockDelta events
         if case .contentblockdelta(let deltaEvent) = chunk,
            let delta = deltaEvent.delta,
            tracker.currentBlockIndex == deltaEvent.contentBlockIndex {
             
-            // Log the delta type
             logger.info("Delta received for block \(deltaEvent.contentBlockIndex ?? -1): \(delta)")
             
             if case .tooluse(let toolUseDelta) = delta {
@@ -503,10 +504,10 @@ class ChatViewModel: ObservableObject {
                     logger.info("Accumulated tool input: \(inputStr)")
                 }
             }
-            return nil // Still not ready
+            return nil
         }
         
-        // Check for completion in contentBlockStop events
+        // Handle contentBlockStop events
         if case .contentblockstop(let stopEvent) = chunk,
            tracker.currentBlockIndex == stopEvent.contentBlockIndex,
            let toolUseId = tracker.toolUseId,
@@ -514,41 +515,51 @@ class ChatViewModel: ObservableObject {
             
             logger.info("Tool use block completed for \(name). Input string: \(tracker.inputString)")
             
-            // IMPORTANT CHANGE: Handle empty input case - create empty parameters
+            // Handle empty input
             if tracker.inputString.isEmpty {
-                logger.info("Tool use with empty input parameters - creating empty JSON")
+                logger.info("Tool use with empty input parameters")
                 defer { tracker.reset() }
                 return (toolUseId: toolUseId, name: name, input: [:])
             }
             
-            // Parse non-empty input
-            if let data = tracker.inputString.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
-                logger.info("Successfully parsed tool input JSON for \(name): \(json)")
-                defer { tracker.reset() }
-                return (toolUseId: toolUseId, name: name, input: json)
-            } else {
-                // If parsing fails but we have a name, still return with empty input
-                logger.warning("Failed to parse JSON, returning with empty parameters")
-                defer { tracker.reset() }
-                return (toolUseId: toolUseId, name: name, input: [:])
+            // Try parsing JSON
+            if let data = tracker.inputString.data(using: .utf8) {
+                do {
+                    // Don't use if let since jsonObject returns Any, not optional
+                    let json = try JSONSerialization.jsonObject(with: data)
+                    logger.info("Successfully parsed tool input JSON for \(name)")
+                    defer { tracker.reset() }
+                    return (toolUseId: toolUseId, name: name, input: json)
+                } catch {
+                    logger.warning("Failed to parse JSON, using raw string")
+                    defer { tracker.reset() }
+                    return (toolUseId: toolUseId, name: name, input: tracker.inputString)
+                }
             }
+            
+            // Use original string if all parsing attempts fail
+            defer { tracker.reset() }
+            return (toolUseId: toolUseId, name: name, input: tracker.inputString)
         }
         
-        // Also check for messageStop with tool_use reason
+        // Handle messageStop events with tool_use reason
         if case .messagestop(let stopEvent) = chunk,
-           stopEvent.stopReason == .toolUse {
+           stopEvent.stopReason == .toolUse,
+           let toolUseId = tracker.toolUseId,
+           let name = tracker.name {
             
-            if let toolUseId = tracker.toolUseId,
-               let name = tracker.name,
-               !tracker.inputString.isEmpty,
-               let data = tracker.inputString.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
-                
-                // Reset tracker before returning
-                defer { tracker.reset() }
-                logger.info("Tool use detected from messageStop: \(name)")
-                return (toolUseId: toolUseId, name: name, input: json)
+            if !tracker.inputString.isEmpty {
+                if let data = tracker.inputString.data(using: .utf8) {
+                    do {
+                        let json = try JSONSerialization.jsonObject(with: data)
+                        defer { tracker.reset() }
+                        logger.info("Tool use detected from messageStop: \(name)")
+                        return (toolUseId: toolUseId, name: name, input: json)
+                    } catch {
+                        defer { tracker.reset() }
+                        return (toolUseId: toolUseId, name: name, input: tracker.inputString)
+                    }
+                }
             }
         }
         
@@ -672,7 +683,7 @@ class ChatViewModel: ObservableObject {
                 currentToolInfo = ToolInfo(
                     id: toolUseInfo.toolUseId,
                     name: toolUseInfo.name,
-                    input: toolUseInfo.input
+                    input: JSONValue.from(toolUseInfo.input)
                 )
                 
                 toolUseId = toolUseInfo.toolUseId
@@ -893,8 +904,8 @@ class ChatViewModel: ObservableObject {
     }
     
     /// Execute an MCP tool and return the result
-    private func executeMCPTool(id: String, name: String, input: [String: String]) async -> [String: Any] {
-        logger.info("Executing MCP tool: \(name) with ID: \(id)")
+    private func executeMCPTool(id: String, name: String, input: Any) async -> [String: Any] {
+        logger.info("Executing MCP tool: \(name) with ID: \(id) and Input: \(input)")
         return await mcpManager.executeBedrockTool(id: id, name: name, input: input)
     }
     

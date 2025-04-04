@@ -31,7 +31,7 @@ struct ConversationHistory: Codable {
         struct ToolUsage: Codable {
             let toolId: String
             let toolName: String
-            let inputs: [String: String]
+            let inputs: JSONValue
             var result: String?
         }
     }
@@ -167,7 +167,7 @@ class ChatManager: ObservableObject {
                 toolUsage = ConversationHistory.Message.ToolUsage(
                     toolId: tool.id,
                     toolName: tool.name,
-                    inputs: tool.input,
+                    inputs: tool.input,  // Already a JSONValue type
                     result: message.toolResult
                 )
             }
@@ -743,17 +743,18 @@ class ChatManager: ObservableObject {
                 var toolUse: ToolInfo? = nil
                 var toolResult: String? = nil
                 
+
                 if let toolDict = json["toolUse"] as? [String: Any] {
                     if let toolId = toolDict["id"] as? String,
                        let toolName = toolDict["name"] as? String,
-                       let toolInput = toolDict["input"] as? [String: String] {
-                        toolUse = ToolInfo(id: toolId, name: toolName, input: toolInput)
+                       let toolInput = toolDict["input"] as? [String: Any] {
+                        toolUse = ToolInfo(id: toolId, name: toolName, input: JSONValue.from(toolInput))
                     }
                 } else if let toolDict = json["tool_use"] as? [String: Any] {
                     if let toolId = toolDict["id"] as? String,
                        let toolName = toolDict["name"] as? String,
-                       let toolInput = toolDict["input"] as? [String: String] {
-                        toolUse = ToolInfo(id: toolId, name: toolName, input: toolInput)
+                       let toolInput = toolDict["input"] as? [String: Any] {
+                        toolUse = ToolInfo(id: toolId, name: toolName, input: JSONValue.from(toolInput))
                     }
                 }
                 

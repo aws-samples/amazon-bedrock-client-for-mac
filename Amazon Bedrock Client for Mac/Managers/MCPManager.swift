@@ -274,26 +274,48 @@ class MCPManager: ObservableObject {
     
     /**
      * Executes a Bedrock tool through the MCP interface.
-     * Handles input validation, tool execution, and result formatting.
+     * Handles complex JSON structures, tool execution, and result formatting.
      *
      * @param id The unique identifier for this tool execution
      * @param name The name of the tool to execute
-     * @param input The input parameters for the tool
+     * @param input The input parameters (can be any valid JSON structure)
      * @return A dictionary containing the execution result
      */
-    func executeBedrockTool(id: String, name: String, input: [String: String]) async -> [String: Any] {
+    func executeBedrockTool(id: String, name: String, input: Any) async -> [String: Any] {
         do {
-            // Ensure we have a valid ID - this is critical for the API
+            // Ensure we have a valid ID
             let toolId = id.isEmpty ? "tool_\(UUID().uuidString)" : id
             
-            // [String: String] to JSON.object
-            var jsonValueDict = [String: JSON.Value]()
-            for (key, value) in input {
-                jsonValueDict[key] = .string(value)
-            }
-            let jsonArguments: JSON = .object(jsonValueDict)
+            // Convert input to MCPInterface.JSON format
+            let jsonArguments: MCPInterface.JSON
             
-            // Find the server that provides the requested tool
+            logger.info("Executing tool '\(name)' with input: \(input)")
+            
+            if let inputString = input as? String {
+                // Parse JSON string input
+                if let data = inputString.data(using: .utf8),
+                   let jsonObject = try? JSONSerialization.jsonObject(with: data) {
+                    jsonArguments = try convertToMCPJSON(jsonObject)
+                } else {
+                    // Plain string - wrap as text
+                    jsonArguments = .object(["text": .string(inputString)])
+                }
+            } else if let inputDict = input as? [String: Any] {
+                // Dictionary input
+                jsonArguments = try convertToMCPJSON(inputDict)
+            } else if let inputDict = input as? [String: String] {
+                // Simple string dictionary
+                var jsonDict = [String: MCPInterface.JSON.Value]()
+                for (key, value) in inputDict {
+                    jsonDict[key] = .string(value)
+                }
+                jsonArguments = .object(jsonDict)
+            } else {
+                // Try to serialize other types
+                jsonArguments = try convertToMCPJSON(input)
+            }
+            
+            // Find server with the tool
             var serverWithTool: (name: String, client: MCPClient)? = nil
             
             for (serverName, client) in activeClients {
@@ -308,19 +330,17 @@ class MCPManager: ObservableObject {
                 logger.debug("Executing tool '\(name)' on server '\(serverName)'")
                 
                 let result = try await client.callTool(named: name, arguments: jsonArguments)
-
-                // Process result
                 let extractedText = extractTextFromToolResult(result)
                 
                 return [
-                    "id": toolId,  // Ensure we return the same ID we received or generated
+                    "id": toolId,
                     "status": "success",
                     "content": [["json": ["text": extractedText]]]
                 ]
             } else {
                 logger.warning("Tool '\(name)' not found in any connected server")
                 return [
-                    "id": toolId,  // Return consistent ID even for errors
+                    "id": toolId,
                     "status": "error",
                     "content": [["text": "Tool '\(name)' not found in any connected server"]]
                 ]
@@ -328,7 +348,6 @@ class MCPManager: ObservableObject {
         } catch let error as MCPClientError {
             logger.error("Tool execution error: \(error)")
             
-            // Format the error message based on error type
             let errorMessage: String
             switch error {
             case .toolCallError(let executionErrors):
@@ -338,17 +357,103 @@ class MCPManager: ObservableObject {
             }
             
             return [
-                "id": id,  // Original ID for consistency
+                "id": id,
                 "status": "error",
-                "content": [["json": ["text": "Error: Error executing tool:\n\(errorMessage)"]]]
+                "content": [["json": ["text": "Error executing tool:\n\(errorMessage)"]]]
             ]
         } catch {
             logger.error("Tool execution error: \(error)")
             return [
-                "id": id,  // Original ID for consistency
+                "id": id,
                 "status": "error",
-                "content": [["json": ["text": "Error: Error executing tool:\n\(error.localizedDescription)"]]]
+                "content": [["json": ["text": "Error executing tool:\n\(error.localizedDescription)"]]]
             ]
+        }
+    }
+
+    /**
+     * Converts any Swift type to MCPInterface.JSON format
+     *
+     * @param value The value to convert
+     * @return MCPInterface.JSON representation
+     */
+    func convertToMCPJSON(_ value: Any) throws -> MCPInterface.JSON {
+        if let dict = value as? [String: Any] {
+            var jsonDict = [String: MCPInterface.JSON.Value]()
+            for (key, val) in dict {
+                jsonDict[key] = try convertToMCPJSONValue(val)
+            }
+            return .object(jsonDict)
+        } else if let array = value as? [Any] {
+            var jsonArray = [MCPInterface.JSON.Value]()
+            for item in array {
+                jsonArray.append(try convertToMCPJSONValue(item))
+            }
+            return .array(jsonArray)
+        } else {
+            // Single value - wrap in object
+            return .object(["value": try convertToMCPJSONValue(value)])
+        }
+    }
+
+    /**
+     * Converts any Swift value to MCPInterface.JSON.Value format
+     *
+     * @param value The value to convert
+     * @return MCPInterface.JSON.Value representation
+     */
+    func convertToMCPJSONValue(_ value: Any) throws -> MCPInterface.JSON.Value {
+        switch value {
+        case let string as String:
+            return .string(string)
+        case let int as Int:
+            return .number(Double(int))
+        case let double as Double:
+            return .number(double)
+        case let bool as Bool:
+            return .bool(bool)
+        case let dict as [String: Any]:
+            var jsonDict = [String: MCPInterface.JSON.Value]()
+            for (key, val) in dict {
+                jsonDict[key] = try convertToMCPJSONValue(val)
+            }
+            return .object(jsonDict)
+        case let array as [Any]:
+            var jsonArray = [MCPInterface.JSON.Value]()
+            for item in array {
+                jsonArray.append(try convertToMCPJSONValue(item))
+            }
+            return .array(jsonArray)
+        case is NSNull:
+            return .null
+        case nil:
+            return .null
+        default:
+            // Try JSON serialization for unknown types
+            if JSONSerialization.isValidJSONObject([value]) {
+                let data = try JSONSerialization.data(withJSONObject: value)
+                let jsonStr = String(data: data, encoding: .utf8) ?? String(describing: value)
+                return .string(jsonStr)
+            } else {
+                return .string(String(describing: value))
+            }
+        }
+    }
+
+    /**
+     * Parses a JSON string to a native Swift object (Dictionary or Array).
+     *
+     * @param jsonString The JSON string to parse
+     * @return The parsed Swift object or nil if parsing fails
+     */
+    func parseJSONString(_ jsonString: String) -> Any? {
+        guard let data = jsonString.data(using: .utf8) else { return nil }
+        
+        do {
+            return try JSONSerialization.jsonObject(with: data, options: [])
+        } catch {
+            logger.error("Failed to parse JSON string: \(error)")
+            return nil
         }
     }
 
