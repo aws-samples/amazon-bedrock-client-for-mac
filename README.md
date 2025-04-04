@@ -1,26 +1,11 @@
 # Amazon Bedrock Client for Mac
+<img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.png" />
 
-<div>
-  <img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.png" />
-
-  <p>
-    <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest">
-      <img src="https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square" alt="Latest Release">
-    </a>
-    <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions">
-      <img src="https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build/badge.svg" alt="Build Status">
-    </a>
-    <a href="https://opensource.org/license/mit-0/">
-      <img src="https://img.shields.io/badge/License-MIT--0-green.svg?style=flat-square" alt="License: MIT-0">
-    </a>
-    <a href="https://developer.apple.com/macos/">
-      <img src="https://img.shields.io/badge/platform-macOS-blue.svg?style=flat-square" alt="Platform">
-    </a>
-    <a href="https://swift.org">
-      <img src="https://img.shields.io/badge/Swift-5.9-orange.svg?style=flat-square" alt="Swift Version">
-    </a>
-  </p>
-</div>
+[![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
+[![Build Status](https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions)
+[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-green.svg?style=flat-square)](https://opensource.org/license/mit-0/)
+[![Platform](https://img.shields.io/badge/platform-macOS-blue.svg?style=flat-square)](https://developer.apple.com/macos/)
+[![Swift Version](https://img.shields.io/badge/Swift-5.9-orange.svg?style=flat-square)](https://swift.org)
 
 A modern, native macOS client for Amazon Bedrock, providing streamlined access to AI models directly from your desktop.
 
