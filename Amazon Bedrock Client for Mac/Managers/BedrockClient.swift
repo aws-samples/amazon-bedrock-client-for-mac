@@ -92,7 +92,7 @@ class BackendModel: ObservableObject {
         }
         setupObservers()
     }
-
+    
     private static func createBackend() throws -> Backend {
         let region = SettingManager.shared.selectedRegion.rawValue
         let profile = SettingManager.shared.selectedProfile
@@ -228,7 +228,7 @@ class Backend: Equatable {
         
         logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
     }
-
+    
     /// Initializes Backend with a custom credential resolver
     init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, awsCredentialIdentityResolver: any AWSCredentialIdentityResolver) {
         self.region = region
@@ -334,11 +334,11 @@ class Backend: Equatable {
             }
             return true
         case .novaMicro, .titanEmbed, .titanImage, .cohereEmbed,
-             .stableDiffusion, .novaCanvas, .j2, .unknown:
+                .stableDiffusion, .novaCanvas, .j2, .unknown:
             return false
         }
     }
-
+    
     /// Check if a model supports system prompts
     func isSystemPromptSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
@@ -351,11 +351,11 @@ class Backend: Equatable {
             }
             return true
         case .titan, .titanEmbed, .titanImage, .cohereEmbed, .cohereCommand,
-             .stableDiffusion, .novaCanvas, .j2, .unknown:
+                .stableDiffusion, .novaCanvas, .j2, .unknown:
             return false
         }
     }
-
+    
     /// Check if a model supports vision capabilities
     func isVisionSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
@@ -382,7 +382,7 @@ class Backend: Equatable {
             return false
         }
     }
-
+    
     /// Check if a model supports tool use
     func isToolUseSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
@@ -413,7 +413,7 @@ class Backend: Equatable {
             }
             // Jamba 1.5 Large and Mini support tool use
             if modelId.contains("jamba") &&
-               (modelId.contains("large") || modelId.contains("mini")) {
+                (modelId.contains("large") || modelId.contains("mini")) {
                 return true
             }
             return false
@@ -421,7 +421,7 @@ class Backend: Equatable {
             return false
         }
     }
-
+    
     /// Check if a model supports streaming tool use
     func isStreamingToolUseSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
@@ -441,7 +441,7 @@ class Backend: Equatable {
             }
             // Jamba 1.5 Large and Mini support streaming tool use
             if modelId.contains("jamba") &&
-               (modelId.contains("large") || modelId.contains("mini")) {
+                (modelId.contains("large") || modelId.contains("mini")) {
                 return true
             }
             return false
@@ -449,7 +449,7 @@ class Backend: Equatable {
             return false
         }
     }
-
+    
     /// Check if a model supports guardrails
     func isGuardrailsSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
@@ -616,14 +616,15 @@ class Backend: Equatable {
             modelId: modelId,
             system: isSystemPromptSupported(modelId) ? systemContent : nil
         )
-
+        
         // Add tool configuration if provided
         if let tools = toolConfig {
             request.toolConfig = tools
         }
         
-        // Add reasoning configuration for models that support it
-        if isReasoningSupported(modelId) {
+        // Add reasoning configuration only for models that support configurable reasoning
+        // Skip models with always-on reasoning like deepseek-r1
+        if isReasoningSupported(modelId) && !hasAlwaysOnReasoning(modelId) {
             let isThinkingEnabled = SettingManager.shared.enableModelThinking
             
             if isThinkingEnabled {
@@ -666,6 +667,7 @@ class Backend: Equatable {
             }
         }
     }
+    
     
     
     // MARK: - Image Generation Models
@@ -1214,12 +1216,12 @@ enum BedrockError: Error {
     var message: String {
         switch self {
         case .invalidResponse(let msg),
-             .expiredToken(let msg),
-             .credentialsError(let msg),
-             .configurationError(let msg),
-             .permissionError(let msg),
-             .networkError(let msg),
-             .unknown(let msg):
+                .expiredToken(let msg),
+                .credentialsError(let msg),
+                .configurationError(let msg),
+                .permissionError(let msg),
+                .networkError(let msg),
+                .unknown(let msg):
             return msg ?? "No additional information available"
         }
     }

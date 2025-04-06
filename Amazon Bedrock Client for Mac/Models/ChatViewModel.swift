@@ -815,7 +815,10 @@ class ChatViewModel: ObservableObject {
                 role: .assistant,
                 content: thinking != nil ? [
                     .text(assistantText),
-                    .thinking(MessageContent.ThinkingContent(text: thinking!, signature: thinkingSignature!))
+                    .thinking(MessageContent.ThinkingContent(
+                        text: thinking!,
+                        signature: thinkingSignature ?? UUID().uuidString
+                    ))
                 ] : [.text(assistantText)]
             )
             
@@ -904,7 +907,10 @@ class ChatViewModel: ObservableObject {
             role: .assistant,
             content: thinking != nil ? [
                 .text(assistantText),
-                .thinking(MessageContent.ThinkingContent(text: thinking!, signature: UUID().uuidString))
+                .thinking(MessageContent.ThinkingContent(
+                    text: thinking!,
+                    signature: thinkingSignature ?? UUID().uuidString
+                ))
             ] : [.text(assistantText)]
         )
         
@@ -1179,6 +1185,11 @@ class ChatViewModel: ObservableObject {
                 contentBlocks.append(.text(text))
 
             case .thinking(let thinkingContent):
+                // Skip reasoning content for user messages
+                if message.role == .user {
+                    continue
+                }
+                
                 // Add thinking content as a reasoning block
                 let reasoningTextBlock = AWSBedrockRuntime.BedrockRuntimeClientTypes.ReasoningTextBlock(
                     signature: thinkingContent.signature,
