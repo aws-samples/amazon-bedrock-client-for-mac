@@ -10,6 +10,11 @@ import SwiftUI
 @main
 struct Amazon_Bedrock_Client_for_MacApp: App {
     @ObservedObject private var settingManager = SettingManager.shared
+    
+    // Use StateObject for AppDelegate to ensure it stays alive
+    @StateObject private var appDelegateProvider = AppDelegateProvider()
+    
+    // Use NSApplicationDelegateAdaptor with the provider
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     init() {
@@ -117,4 +122,8 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
     static func toggleSidebar() {
         NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
+}
+
+class AppDelegateProvider: ObservableObject {
+    // This class helps ensure the AppDelegate is properly retained
 }

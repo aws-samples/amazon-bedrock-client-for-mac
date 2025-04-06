@@ -91,7 +91,6 @@ struct MainView: View {
     
     private func setup() {
         fetchModels()
-        UpdateManager().checkForUpdates()
     }
     
     private func fetchModels() {
