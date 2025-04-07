@@ -463,6 +463,16 @@ struct MessageView: View {
                     )
                 }
                 
+                // Tool result section (new addition for user messages)
+                if let toolResult = message.toolResult, !toolResult.isEmpty {
+                    ExpandableMarkdownItem(
+                        header: "Tool Result",
+                        text: toolResult,
+                        fontSize: fontSize + adjustedFontSize - 2
+                    )
+                    .padding(.vertical, 2)
+                }
+                
                 // Only create text if non-empty
                 if !message.text.isEmpty {
                     textContent

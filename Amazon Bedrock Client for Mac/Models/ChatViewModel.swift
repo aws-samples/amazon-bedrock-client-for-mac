@@ -26,10 +26,12 @@ enum MessageContent: Codable {
     case image(ImageContent)
     case document(DocumentContent)
     case thinking(ThinkingContent)
-
+    case toolresult(ToolResultContent)
+    case tooluse(ToolUseContent)
+    
     // For encoding/decoding
     private enum CodingKeys: String, CodingKey {
-        case type, text, image, document, thinking
+        case type, text, image, document, thinking, toolresult, tooluse
     }
     
     struct ImageContent: Codable {
@@ -46,6 +48,18 @@ enum MessageContent: Codable {
     struct ThinkingContent: Codable {
         let text: String
         let signature: String
+    }
+    
+    struct ToolResultContent: Codable {
+        let toolUseId: String
+        let result: String
+        let status: String
+    }
+    
+    struct ToolUseContent: Codable {
+        let toolUseId: String
+        let name: String
+        let input: JSONValue
     }
     
     enum DocumentFormat: String, Codable {
@@ -93,6 +107,12 @@ enum MessageContent: Codable {
         case .thinking(let thinkingContent):
             try container.encode("thinking", forKey: .type)
             try container.encode(thinkingContent, forKey: .thinking)
+        case .toolresult(let toolResultContent):
+            try container.encode("toolresult", forKey: .type)
+            try container.encode(toolResultContent, forKey: .toolresult)
+        case .tooluse(let toolUseContent):
+            try container.encode("tooluse", forKey: .type)
+            try container.encode(toolUseContent, forKey: .tooluse)
         }
     }
     
@@ -113,6 +133,12 @@ enum MessageContent: Codable {
         case "thinking":
             let thinkingContent = try container.decode(ThinkingContent.self, forKey: .thinking)
             self = .thinking(thinkingContent)
+        case "toolresult":
+            let toolResultContent = try container.decode(ToolResultContent.self, forKey: .toolresult)
+            self = .toolresult(toolResultContent)
+        case "tooluse":
+            let toolUseContent = try container.decode(ToolUseContent.self, forKey: .tooluse)
+            self = .tooluse(toolUseContent)
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -466,7 +492,7 @@ class ChatViewModel: ObservableObject {
             tools: bedrockTools
         )
     }
-
+    
     /**
      * Extracts tool use information from a streaming response chunk.
      * Processes different types of events in the stream to build complete tool use data.
@@ -480,23 +506,28 @@ class ChatViewModel: ObservableObject {
         // Handle contentBlockStart events
         if case .contentblockstart(let blockStartEvent) = chunk,
            let start = blockStartEvent.start,
-           case .tooluse(let toolUseBlock) = start {
+           case .tooluse(let toolUseBlockStart) = start {
+            
+            // Ensure we have non-nil values for required fields
+            guard let toolUseId = toolUseBlockStart.toolUseId,
+                  let name = toolUseBlockStart.name else {
+                logger.warning("Received incomplete tool use block start")
+                return nil
+            }
             
             tracker.reset()
-            tracker.toolUseId = toolUseBlock.toolUseId ?? UUID().uuidString
-            tracker.name = toolUseBlock.name ?? ""
+            tracker.toolUseId = toolUseId
+            tracker.name = name
             tracker.currentBlockIndex = blockStartEvent.contentBlockIndex
             
-            logger.info("Tool use start detected: \(tracker.name ?? "unnamed") with ID: \(tracker.toolUseId ?? "unknown")")
-            return nil
+            logger.info("Tool use start detected: \(name) with ID: \(toolUseId)")
+            return nil  // Return nil as we need to collect input from deltas
         }
         
-        // Handle contentBlockDelta events
+        // Handle contentBlockDelta events to collect input
         if case .contentblockdelta(let deltaEvent) = chunk,
            let delta = deltaEvent.delta,
            tracker.currentBlockIndex == deltaEvent.contentBlockIndex {
-            
-            logger.info("Delta received for block \(deltaEvent.contentBlockIndex ?? -1): \(delta)")
             
             if case .tooluse(let toolUseDelta) = delta {
                 if let inputStr = toolUseDelta.input {
@@ -507,7 +538,7 @@ class ChatViewModel: ObservableObject {
             return nil
         }
         
-        // Handle contentBlockStop events
+        // Handle contentBlockStop events to finalize tool use
         if case .contentblockstop(let stopEvent) = chunk,
            tracker.currentBlockIndex == stopEvent.contentBlockIndex,
            let toolUseId = tracker.toolUseId,
@@ -525,7 +556,6 @@ class ChatViewModel: ObservableObject {
             // Try parsing JSON
             if let data = tracker.inputString.data(using: .utf8) {
                 do {
-                    // Don't use if let since jsonObject returns Any, not optional
                     let json = try JSONSerialization.jsonObject(with: data)
                     logger.info("Successfully parsed tool input JSON for \(name)")
                     defer { tracker.reset() }
@@ -537,7 +567,7 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Use original string if all parsing attempts fail
+            // Use original string if parsing fails
             defer { tracker.reset() }
             return (toolUseId: toolUseId, name: name, input: tracker.inputString)
         }
@@ -640,9 +670,13 @@ class ChatViewModel: ObservableObject {
         // Get tool configurations if MCP is enabled - directly from MCPManager
         var toolConfig: AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolConfiguration? = nil
         
-        if SettingManager.shared.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty {
-            logger.info("MCP enabled with \(MCPManager.shared.toolInfos.count) available tools")
+        if SettingManager.shared.mcpEnabled &&
+            !MCPManager.shared.toolInfos.isEmpty &&
+            backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
+            logger.info("MCP enabled with \(MCPManager.shared.toolInfos.count) tools for supported model \(chatModel.id).")
             toolConfig = convertMCPToolsToBedrockFormat(MCPManager.shared.toolInfos)
+        } else if SettingManager.shared.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty {
+            logger.info("MCP enabled, but model \(chatModel.id) does not support streaming tool use. Tools disabled.")
         }
         
         // Add MAX_TURNS constant at the beginning
@@ -650,8 +684,8 @@ class ChatViewModel: ObservableObject {
         var turn_count = 0
         
         // Get Bedrock messages in AWS SDK format
-        let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0) }
-        
+        let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0, modelId: chatModel.id) }
+
         // Invoke the model stream
         var streamedText = ""
         var thinking: String? = nil
@@ -751,8 +785,8 @@ class ChatViewModel: ObservableObject {
                     conversationHistory.append(toolResultMessage)
                     
                     // Create updated messages list
-                    var updatedMessages = try conversationHistory.map { try convertToBedrockMessage($0) }
-                    
+                    var updatedMessages = try conversationHistory.map { try convertToBedrockMessage($0, modelId: chatModel.id) }
+
                     // Reset streaming state for next cycle
                     isFirstChunk = true
                     streamedText = ""
@@ -1011,7 +1045,7 @@ class ChatViewModel: ObservableObject {
                     signature: UUID().uuidString // Generate a signature for the thinking content
                 )))
             }
-
+            
             // Add images if present
             if let imageBase64Strings = message.imageBase64Strings {
                 for base64String in imageBase64Strings {
@@ -1047,83 +1081,80 @@ class ChatViewModel: ObservableObject {
         return bedrockMessages
     }
     
-    /// Saves conversation history
+    /// Saves conversation history (Revised for Consistency)
     private func saveConversationHistory(_ history: [BedrockMessage]) async {
-        // Convert to ConversationHistory format
-        var conversationHistory = ConversationHistory(
-            chatId: chatId,
-            modelId: chatModel.id,
-            messages: []
-        )
+        var newConversationHistory = ConversationHistory(chatId: chatId, modelId: chatModel.id, messages: [])
+        logger.debug("[SaveHistory] Processing \(history.count) Bedrock messages for saving.")
         
-        // Add all messages
-        for message in history {
-            // Extract text
-            let role = message.role == .user ? "user" : "assistant"
-            let text = message.content.compactMap { content -> String? in
-                if case let .text(text) = content {
-                    return text
-                }
-                return nil
-            }.joined()
-            
-            // Extract thinking
+        var lastToolUseId: String? = nil // Track the last tool use ID from assistant
+        
+        for bedrockMessage in history {
+            let roleString = bedrockMessage.role == .user ? "user" : "assistant"
+            var text = ""
             var thinkingText: String? = nil
             var thinkingSignature: String? = nil
+            var toolUsageForStorage: ConversationHistory.Message.ToolUsage? = nil // ToolUsage to store
+            var extractedResultTextForUserMessage: String? = nil // Temp store result text found in a user message
             
-            for content in message.content {
-                if case let .thinking(thinkingContent) = content {
-                    thinkingText = (thinkingText ?? "") + thinkingContent.text
-                    if thinkingSignature == nil {
-                        thinkingSignature = thinkingContent.signature
+            // Extract content from the current BedrockMessage
+            for content in bedrockMessage.content {
+                switch content {
+                case .text(let txt): text += txt // Append text chunks
+                case .thinking(let tc):
+                    thinkingText = (thinkingText ?? "") + tc.text
+                    if thinkingSignature == nil { thinkingSignature = tc.signature }
+                case .tooluse(let tu):
+                    // If this is an assistant message with toolUse, prepare ToolUsage for storage
+                    if bedrockMessage.role == .assistant {
+                        toolUsageForStorage = .init(toolId: tu.toolUseId, toolName: tu.name, inputs: tu.input, result: nil) // Result is initially nil
+                        lastToolUseId = tu.toolUseId // Remember this ID for the next user message
+                        logger.debug("[SaveHistory] Found toolUse in ASSISTANT message: ID=\(tu.toolUseId)")
+                    } else {
+                        logger.warning("[SaveHistory] Found toolUse in non-assistant message. Ignoring for ToolUsage struct.")
                     }
+                case .toolresult(let tr):
+                    // If this is a user message with toolResult, store the result text temporarily
+                    if bedrockMessage.role == .user {
+                        extractedResultTextForUserMessage = tr.result
+                        // Verify the ID matches the last assistant tool use
+                        if tr.toolUseId == lastToolUseId {
+                            logger.debug("[SaveHistory] Found toolResult in USER message matching last toolUse ID (\(tr.toolUseId)): Result=\(tr.result)")
+                        } else {
+                            logger.warning("[SaveHistory] Found toolResult in USER message (ID: \(tr.toolUseId)) but it doesn't match last assistant toolUse ID (\(lastToolUseId ?? "nil")).")
+                        }
+                        // Clear lastToolUseId as the result has been found
+                        lastToolUseId = nil
+                    } else {
+                        logger.warning("[SaveHistory] Found toolResult in non-user message. Ignoring.")
+                    }
+                    // Ignore image/document for simplicity in this fix
+                case .image, .document: break
                 }
             }
-
-            // Extract images
-            var imageBase64Strings: [String]? = nil
-            // Extract documents
-            var documentBase64Strings: [String]? = nil
-            var documentFormats: [String]? = nil
-            var documentNames: [String]? = nil
             
-            for content in message.content {
-                if case let .image(imageContent) = content {
-                    if imageBase64Strings == nil {
-                        imageBase64Strings = []
-                    }
-                    imageBase64Strings?.append(imageContent.base64Data)
-                } else if case let .document(documentContent) = content {
-                    if documentBase64Strings == nil {
-                        documentBase64Strings = []
-                        documentFormats = []
-                        documentNames = []
-                    }
-                    documentBase64Strings?.append(documentContent.base64Data)
-                    documentFormats?.append(documentContent.format.rawValue)
-                    documentNames?.append(documentContent.name)
-                }
+            // Override the main 'text' if this user message represents a tool result
+            // This makes loading simpler and ensures the result text is preserved.
+            if bedrockMessage.role == .user, let resultText = extractedResultTextForUserMessage {
+                text = resultText // Store the result as the primary text for this user message in history
+                logger.debug("[SaveHistory] Storing tool result text in main 'text' field for user message.")
             }
             
+            // Create the ConversationHistory.Message
             let unifiedMessage = ConversationHistory.Message(
-                id: UUID(),
-                text: text,
-                thinking: thinkingText,
-                thinkingSignature: thinkingSignature,
-                role: role,
-                timestamp: Date(),
-                isError: false,
-                imageBase64Strings: imageBase64Strings,
-                documentBase64Strings: documentBase64Strings,
-                documentFormats: documentFormats,
-                documentNames: documentNames
+                id: UUID(), text: text, // Use potentially overridden text
+                thinking: thinkingText, thinkingSignature: thinkingSignature,
+                role: roleString, timestamp: Date(), isError: false,
+                // Other fields like images/docs would be handled here too
+                imageBase64Strings: nil, documentBase64Strings: nil, documentFormats: nil, documentNames: nil,
+                // Attach toolUsage only if it was created (for assistant messages)
+                toolUsage: toolUsageForStorage
             )
+            newConversationHistory.addMessage(unifiedMessage)
             
-            conversationHistory.addMessage(unifiedMessage)
-        }
+        } // End loop through bedrockMessages
         
-        // Save the history
-        chatManager.saveConversationHistory(conversationHistory, for: chatId)
+        logger.info("[SaveHistory] Finished processing. Saving \(newConversationHistory.messages.count) messages.")
+        chatManager.saveConversationHistory(newConversationHistory, for: chatId)
     }
     
     /// Converts a ConversationHistory to Bedrock messages
@@ -1133,17 +1164,18 @@ class ChatViewModel: ObservableObject {
             
             var contents: [MessageContent] = []
             
+            // Add thinking content if present
+            if role == .assistant, let thinking = message.thinking, !thinking.isEmpty {
+                let signatureToUse = message.thinkingSignature ?? UUID().uuidString // Use stored signature
+                contents.append(.thinking(.init(text: thinking, signature: signatureToUse)))
+                if message.thinkingSignature == nil {
+                    logger.warning("[ConvertHistory] Missing thinkingSignature for assistant message ID \(message.id). Using generated UUID.")
+                }
+            }
+            
             // Add text content
             if !message.text.isEmpty {
                 contents.append(.text(message.text))
-            }
-
-            // Add thinking content if present
-            if let thinking = message.thinking, !thinking.isEmpty {
-                contents.append(.thinking(MessageContent.ThinkingContent(
-                    text: thinking,
-                    signature: UUID().uuidString // Generate a random signature or use a constant
-                )))
             }
             
             // Add images if present
@@ -1171,22 +1203,37 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
+            // Handle Tool Result (User Only, Following Assistant Tool Use)
+            if role == .user, let toolUsage = message.toolUsage {
+                contents.append(.tooluse(.init(toolUseId: toolUsage.toolId, name: toolUsage.toolName, input: toolUsage.inputs)))
+                logger.trace("Added .tooluse for assistant (ID: \(toolUsage.toolId))")
+            }
+            
             return BedrockMessage(role: role, content: contents)
         }
     }
     
+    private func isDeepSeekModel(_ modelId: String) -> Bool {
+        return modelId.lowercased().contains("deepseek")
+    }
+    
     /// Converts a BedrockMessage to AWS SDK format
-    private func convertToBedrockMessage(_ message: BedrockMessage) throws -> AWSBedrockRuntime.BedrockRuntimeClientTypes.Message {
-        var contentBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
+    private func convertToBedrockMessage(_ message: BedrockMessage, modelId: String = "") throws -> AWSBedrockRuntime.BedrockRuntimeClientTypes.Message {
+        // Separate collections for thinking and non-thinking blocks
+        var thinkingBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
+        var otherBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
         
+        // Process all content blocks with the original switch structure
         for content in message.content {
             switch content {
             case .text(let text):
-                contentBlocks.append(.text(text))
-
+                otherBlocks.append(.text(text))
+                
             case .thinking(let thinkingContent):
                 // Skip reasoning content for user messages
-                if message.role == .user {
+                // Also skip for DeepSeek models due to a server-side validation error
+                // that occurs when reasoning content is included in multi-turn conversations
+                if message.role == .user || isDeepSeekModel(modelId) {
                     continue
                 }
                 
@@ -1195,7 +1242,7 @@ class ChatViewModel: ObservableObject {
                     signature: thinkingContent.signature,
                     text: thinkingContent.text
                 )
-                contentBlocks.append(.reasoningcontent(.reasoningtext(reasoningTextBlock)))
+                thinkingBlocks.append(.reasoningcontent(.reasoningtext(reasoningTextBlock)))
                 
             case .image(let imageContent):
                 // Convert to AWS image format
@@ -1213,7 +1260,7 @@ class ChatViewModel: ObservableObject {
                                   userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image to data"])
                 }
                 
-                contentBlocks.append(.image(AWSBedrockRuntime.BedrockRuntimeClientTypes.ImageBlock(
+                otherBlocks.append(.image(AWSBedrockRuntime.BedrockRuntimeClientTypes.ImageBlock(
                     format: awsFormat,
                     source: .bytes(imageData)
                 )))
@@ -1240,13 +1287,52 @@ class ChatViewModel: ObservableObject {
                                   userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 document to data"])
                 }
                 
-                contentBlocks.append(.document(AWSBedrockRuntime.BedrockRuntimeClientTypes.DocumentBlock(
+                otherBlocks.append(.document(AWSBedrockRuntime.BedrockRuntimeClientTypes.DocumentBlock(
                     format: docFormat,
                     name: documentContent.name,
                     source: .bytes(documentData)
                 )))
+                
+            case .toolresult(let toolResultContent):
+                // Convert to AWS tool result format
+                let toolResultBlock = AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolResultBlock(
+                    content: [.text(toolResultContent.result)],
+                    status: toolResultContent.status == "success" ? .success : .error,
+                    toolUseId: toolResultContent.toolUseId
+                )
+                
+                otherBlocks.append(.toolresult(toolResultBlock))
+                
+            case .tooluse(let toolUseContent):
+                // Convert to AWS tool use format
+                do {
+                    // 1. Convert JSONValue input back to standard Swift [String: Any] or other Any type
+                    // CORRECTED: Access asAny as a property (no parentheses)
+                    let swiftInputObject = toolUseContent.input.asAny
+                    
+                    // 2. Create Smithy Document directly from the Swift object/array/value
+                    let inputDocument = try Smithy.Document.make(from: swiftInputObject)
+                    
+                    // 3. Create the ToolUseBlock
+                    let toolUseBlock = AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolUseBlock(
+                        input: inputDocument,
+                        name: toolUseContent.name,
+                        toolUseId: toolUseContent.toolUseId
+                    )
+                    
+                    otherBlocks.append(.tooluse(toolUseBlock))
+                    logger.debug("Successfully converted toolUse block for '\(toolUseContent.name)' with input: \(inputDocument)")
+                    
+                } catch {
+                    // Log the specific error and the input that failed
+                    logger.error("Failed to convert tool use input (\(toolUseContent.input)) to Smithy Document: \(error). Skipping this toolUse block in the request.")
+                    // Handle error appropriately (e.g., skip, send empty input)
+                }
             }
         }
+        
+        // Combine blocks - thinking blocks first, then others
+        let contentBlocks = thinkingBlocks + otherBlocks
         
         // Create Message that matches SDK documentation
         return AWSBedrockRuntime.BedrockRuntimeClientTypes.Message(

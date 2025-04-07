@@ -578,22 +578,75 @@ struct AdvancedOptionsMenu: View {
     @ObservedObject var settingManager: SettingManager
     var modelId: String
     
+    // Check if current model supports reasoning/thinking
+    private var supportsThinking: Bool {
+        let id = modelId.lowercased()
+        // Claude 3.7 and DeepSeek R1 support thinking
+        return id.contains("claude-3-7") || id.contains("deepseek") && id.contains("r1")
+    }
+    
+    // Check if model has always-on reasoning that can't be toggled
+    private var hasAlwaysOnThinking: Bool {
+        let id = modelId.lowercased()
+        // DeepSeek R1 has always-on thinking
+        return id.contains("deepseek") && id.contains("r1")
+    }
+    
+    // Check if thinking toggle should be shown
+    private var shouldShowThinkingToggle: Bool {
+        return supportsThinking && !hasAlwaysOnThinking
+    }
+    
+    // Check if current model supports streaming tool use
+    private var supportsStreamingTools: Bool {
+        let id = modelId.lowercased()
+        return (
+            // Claude models
+            (id.contains("claude-3") && !id.contains("haiku")) ||
+            // Anthropic models except Claude 3 Haiku
+            (id.contains("anthropic") && id.contains("claude-3") && !id.contains("haiku")) ||
+            // Amazon Nova models
+            (id.contains("amazon") && (
+                id.contains("nova-pro") ||
+                id.contains("nova-lite") ||
+                id.contains("nova-micro")
+            )) ||
+            // Cohere Command-R models
+            (id.contains("cohere") && id.contains("command-r")) ||
+            // AI21 Jamba models (except Instruct)
+            (id.contains("ai21") && id.contains("jamba") && !id.contains("instruct"))
+        )
+    }
+    
+    // Check if MCP tools should be available and shown
+    private var shouldShowMCPTools: Bool {
+        return settingManager.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty && supportsStreamingTools
+    }
+    
     var body: some View {
         Menu {
             Text("More Options")
                 .font(.headline)
                 .foregroundColor(.secondary)
             
-            if modelId.contains("3-7") {
+            // Show thinking toggle for models that support configurable reasoning
+            if shouldShowThinkingToggle {
                 Toggle("Enable Thinking", isOn: $settingManager.enableModelThinking)
-                    .help("Allow Claude 3.7 to show its thinking process")
+                    .help("Allow the model to show its thinking process")
+            }
+            
+            // For models with always-on thinking, show an informative option
+            if hasAlwaysOnThinking {
+                Text("Thinking: Always On")
+                    .foregroundColor(.secondary)
+                    .help("This model always includes its thinking process")
             }
             
             Toggle("Allow Image Pasting", isOn: $settingManager.allowImagePasting)
                 .help("Enable or disable image pasting functionality")
             
-            // MCP tools section
-            if settingManager.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty {
+            // MCP tools section - only show if model supports streaming tool use
+            if shouldShowMCPTools {
                 Divider()
                 
                 Text("Available Tools").bold()
@@ -621,7 +674,7 @@ struct AdvancedOptionsMenu: View {
                 }
             }
         } label: {
-            Image(systemName: settingManager.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty
+            Image(systemName: shouldShowMCPTools
                   ? "plus.circle.fill"
                   : "plus.circle")
             .font(.system(size: 16, weight: .regular))

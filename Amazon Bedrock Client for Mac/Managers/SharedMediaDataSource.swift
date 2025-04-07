@@ -15,6 +15,10 @@ class SharedMediaDataSource: ObservableObject {
     @Published var filenames: [String] = [] // Names for all attachments
     @Published var mediaTypes: [MediaType] = [] // Type of each item
     
+    var isEmpty: Bool {
+        images.isEmpty && documents.isEmpty
+    }
+    
     enum MediaType {
         case image
         case document
@@ -69,7 +73,7 @@ class SharedMediaDataSource: ObservableObject {
     }
     
     // Remove all attachments
-    func clearAll() {
+    func clear() {
         images.removeAll()
         documents.removeAll()
         fileExtensions.removeAll()
