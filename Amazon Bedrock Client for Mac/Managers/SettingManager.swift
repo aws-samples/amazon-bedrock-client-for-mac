@@ -221,8 +221,8 @@ class SettingManager: ObservableObject {
             path: "~/.aws/credentials", type: .credentials)
         profiles.append(contentsOf: credentialsProfiles)
         
-        // Read SSO profiles from ~/.aws/config
-        let configProfiles = readSSOProfilesFromConfig(path: "~/.aws/config")
+        // Read profiles from ~/.aws/config including SSO and credential_process
+        let configProfiles = readProfilesFromConfig(path: "~/.aws/config")
         profiles.append(contentsOf: configProfiles)
         
         // Return unique profiles
@@ -253,8 +253,8 @@ class SettingManager: ObservableObject {
         return profiles
     }
     
-    // Read SSO profiles from ~/.aws/config
-    static func readSSOProfilesFromConfig(path: String) -> [ProfileInfo] {
+    // Read all profiles from ~/.aws/config including SSO and credential_process
+    static func readProfilesFromConfig(path: String) -> [ProfileInfo] {
         let expandedPath = NSString(string: path).expandingTildeInPath
         
         // Attempt to read the file contents
@@ -267,32 +267,41 @@ class SettingManager: ObservableObject {
         var profiles: [ProfileInfo] = []
         var currentProfile: String?
         var isSSO = false
+        var hasCredentialProcess = false
         
-        // Function to add the current profile if it's SSO
-        func addCurrentProfileIfSSO() {
-            if let profile = currentProfile, isSSO {
-                profiles.append(ProfileInfo(name: profile, type: .sso))
+        // Function to add the current profile with appropriate type
+        func addCurrentProfile() {
+            if let profile = currentProfile {
+                if isSSO {
+                    profiles.append(ProfileInfo(name: profile, type: .sso))
+                } else if hasCredentialProcess {
+                    profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
+                }
             }
         }
         
-        // Parse each line to find SSO profiles
+        // Parse each line to find profiles
         for line in lines {
             let trimmedLine = line.trimmingCharacters(in: .whitespaces)
             if trimmedLine.starts(with: "[profile ") && trimmedLine.hasSuffix("]") {
-                // If we've found a new profile, add the previous one if it was SSO
-                addCurrentProfileIfSSO()
+                // If we've found a new profile, add the previous one if applicable
+                addCurrentProfile()
                 
                 // Start tracking a new profile
                 currentProfile = String(trimmedLine.dropFirst(9).dropLast())
                 isSSO = false
+                hasCredentialProcess = false
             } else if trimmedLine.starts(with: "sso_") {
                 // If we find an SSO-related setting, mark this profile as SSO
                 isSSO = true
+            } else if trimmedLine.starts(with: "credential_process") {
+                // If we find credential_process setting, mark this profile
+                hasCredentialProcess = true
             }
         }
         
-        // Add the last profile if it was SSO
-        addCurrentProfileIfSSO()
+        // Add the last profile
+        addCurrentProfile()
         
         return profiles
     }
@@ -360,6 +369,7 @@ struct ProfileInfo: Identifiable, Hashable {
     enum ProfileType {
         case credentials
         case sso
+        case credentialProcess
     }
 }
 

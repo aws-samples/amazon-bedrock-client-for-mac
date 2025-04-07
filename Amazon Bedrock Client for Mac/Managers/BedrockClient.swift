@@ -193,13 +193,19 @@ class Backend: Equatable {
         do {
             // First try: Use the specified profile from SettingManager
             if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
-                if selectedProfile.type == .sso {
-                    self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
-                    logger.info("Using SSO credentials for profile: \(profile)")
-                } else {
-                    self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-                    logger.info("Using standard credentials for profile: \(profile)")
-                }
+                 switch selectedProfile.type {
+                 case .sso:
+                     self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
+                     logger.info("Using SSO credentials for profile: \(profile)")
+                 case .credentialProcess:
+                     // For credential_process profiles, we use ProfileAWSCredentialIdentityResolver
+                     // which automatically handles credential_process directives
+                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                     logger.info("Using credential_process for profile: \(profile)")
+                 case .credentials:
+                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                     logger.info("Using standard credentials for profile: \(profile)")
+                 }
             }
             // Second try: Use default profile if specified profile not found
             else if profile != "default" {
