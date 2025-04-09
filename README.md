@@ -59,6 +59,7 @@ You can also install using Homebrew:
 ```bash
 # Add the tap
 brew tap didhd/tap
+brew update
 
 # Install Amazon Bedrock Client
 brew install amazon-bedrock-client --no-quarantine
