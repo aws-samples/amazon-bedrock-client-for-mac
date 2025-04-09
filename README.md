@@ -52,6 +52,18 @@ Get the latest version:
   <img src="https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=apple" alt="Download Latest Release" height="36">
 </a>
 
+### Homebrew Installation
+
+You can also install using Homebrew:
+
+```bash
+# Add the tap
+brew tap didhd/tap
+
+# Install Amazon Bedrock Client
+brew install amazon-bedrock-client --no-quarantine
+```
+
 ## Getting Started
 
 ### Requirements
