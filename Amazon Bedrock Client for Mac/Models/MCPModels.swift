@@ -19,6 +19,8 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
     var command: String
     var args: [String]
     var enabled: Bool = true
+    var env: [String: String]? = nil
+    var cwd: String? = nil
     
     static func == (lhs: MCPServerConfig, rhs: MCPServerConfig) -> Bool {
         return lhs.name == rhs.name

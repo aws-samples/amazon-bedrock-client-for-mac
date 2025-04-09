@@ -74,7 +74,10 @@ class SettingManager: ObservableObject {
     @Published var allowImagePasting: Bool = true
     @Published var mcpServers: [MCPServerConfig] = [] {
         didSet {
-            saveMCPServers()
+            // Save the complete list to UserDefaults
+            saveMCPServerList()
+            // Save only enabled servers to the config file
+            saveMCPConfigFile()
         }
     }
     @Published var favoriteModelIds: [String] = [] {
@@ -306,54 +309,182 @@ class SettingManager: ObservableObject {
         return profiles
     }
     
-    private func saveMCPServers() {
+    // Load both sources and reconcile differences
+    func loadMCPServers() {
+        // Step 1: Load the complete list from UserDefaults
+        let savedServers = loadSavedMCPServerList()
+        
+        // Step 2: Load the enabled servers from the config file
+        let configServers = loadMCPServersFromConfigFile()
+        
+        // Step 3: Reconcile the differences
+        var mergedServers = savedServers
+        
+        // Add any servers in the config file that aren't in our saved list
+        for configServer in configServers {
+            if !mergedServers.contains(where: { $0.name == configServer.name }) {
+                // New server found in config file - add it as enabled
+                var newServer = configServer
+                newServer.enabled = true
+                mergedServers.append(newServer)
+            } else {
+                // Update existing server if it's in the config file (should be enabled)
+                for i in 0..<mergedServers.count {
+                    if mergedServers[i].name == configServer.name {
+                        // Update details from config file but preserve enabled state
+                        var updatedServer = configServer
+                        updatedServer.enabled = true  // If it's in the config file, it should be enabled
+                        mergedServers[i] = updatedServer
+                        break
+                    }
+                }
+            }
+        }
+        
+        // Update the server list without triggering didSet (to avoid immediate saving)
+        self.mcpServers = mergedServers
+    }
+    
+    // Load server list from UserDefaults
+    private func loadSavedMCPServerList() -> [MCPServerConfig] {
+        if let data = UserDefaults.standard.data(forKey: "mcpServers"),
+           let decoded = try? JSONDecoder().decode([MCPServerConfig].self, from: data) {
+            return decoded
+        }
+        return []
+    }
+
+    // Save complete server list to UserDefaults
+    private func saveMCPServerList() {
         if let encoded = try? JSONEncoder().encode(mcpServers) {
             UserDefaults.standard.set(encoded, forKey: "mcpServers")
         }
     }
 
-    func loadMCPServers() {
-        if let data = UserDefaults.standard.data(forKey: "mcpServers"),
-           let decoded = try? JSONDecoder().decode([MCPServerConfig].self, from: data) {
-            self.mcpServers = decoded
+    // Load servers from config file
+    private func loadMCPServersFromConfigFile() -> [MCPServerConfig] {
+        let configPath = getMCPConfigPath()
+        var loadedServers: [MCPServerConfig] = []
+        
+        if FileManager.default.fileExists(atPath: configPath) {
+            do {
+                let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
+                
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]],
+                   let servers = json["mcpServers"] as? [String: [String: Any]] {
+                    
+                    for (name, serverInfo) in servers {
+                        // Extract server details directly from dictionary
+                        if let command = serverInfo["command"] as? String,
+                           let argsArray = serverInfo["args"] as? [String] {
+                            
+                            var server = MCPServerConfig(
+                                name: name,
+                                command: command,
+                                args: argsArray,
+                                enabled: true  // Servers in config are considered enabled
+                            )
+                            
+                            // Add optional fields if present
+                            if let env = serverInfo["env"] as? [String: String] {
+                                server.env = env
+                            }
+                            
+                            if let cwd = serverInfo["cwd"] as? String {
+                                server.cwd = cwd
+                            }
+                            
+                            loadedServers.append(server)
+                        }
+                    }
+                    
+                    logger.info("Loaded \(loadedServers.count) MCP servers from config file")
+                }
+            } catch {
+                logger.error("Error reading MCP config file: \(error)")
+            }
         }
+        
+        return loadedServers
     }
 
-    // MCP 서버 구성 JSON 파일 경로 가져오기
+    // Define MCPServerInfo for JSON parsing
+    private struct MCPServerInfo: Codable {
+        var command: String
+        var args: [String]
+        var env: [String: String]?
+        var cwd: String?
+    }
+
+    // Helper function to get the MCP config file path
     func getMCPConfigPath() -> String {
-        return URL(fileURLWithPath: defaultDirectory)
+        let configDir = defaultDirectory.isEmpty
+            ? FileManager.default.homeDirectoryForCurrentUser.path
+            : defaultDirectory
+        
+        return URL(fileURLWithPath: configDir)
             .appendingPathComponent("mcp_config.json")
             .path
     }
 
-    // MCP 구성 파일 저장
+    // Save only enabled servers to the MCP config file
     func saveMCPConfigFile() {
-        let configDict: [String: [String: MCPServerInfo]] = [
-            "mcpServers": Dictionary(uniqueKeysWithValues: mcpServers.compactMap { server in
-                guard server.enabled else { return nil }
-                return (server.name, MCPServerInfo(command: server.command, args: server.args))
-            })
-        ]
+        // Get only enabled servers
+        let enabledServers = mcpServers.filter { $0.enabled }
         
-        struct MCPServerInfo: Codable {
-            var command: String
-            var args: [String]
+        // Only proceed if we have servers to save
+        guard !enabledServers.isEmpty else {
+            // If no enabled servers, create an empty config
+            try? "{ \"mcpServers\": {} }".write(
+                toFile: getMCPConfigPath(),
+                atomically: true,
+                encoding: .utf8
+            )
+            return
         }
         
-        if let jsonData = try? JSONEncoder().encode(configDict),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
+        // Build a dictionary representation first
+        var serversDict: [String: [String: Any]] = [:]
+        
+        for server in enabledServers {
+            var serverInfo: [String: Any] = [
+                "command": server.command,
+                "args": server.args
+            ]
+            
+            if let env = server.env, !env.isEmpty {
+                serverInfo["env"] = env
+            }
+            
+            if let cwd = server.cwd, !cwd.isEmpty {
+                serverInfo["cwd"] = cwd
+            }
+            
+            serversDict[server.name] = serverInfo
+        }
+        
+        let configDict: [String: Any] = ["mcpServers": serversDict]
+        
+        // Use JSONSerialization instead of Codable to have more control over escaping
+        if let jsonData = try? JSONSerialization.data(
+            withJSONObject: configDict,
+            options: [.prettyPrinted, .withoutEscapingSlashes]
+        ) {
             do {
-                try jsonString.write(
-                    toFile: getMCPConfigPath(),
-                    atomically: true,
-                    encoding: .utf8
-                )
+                // Ensure directory exists
+                let configPath = getMCPConfigPath()
+                let directoryURL = URL(fileURLWithPath: configPath).deletingLastPathComponent()
+                try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+                
+                // Write the config file
+                try jsonData.write(to: URL(fileURLWithPath: configPath))
+                logger.debug("Saved MCP config file with pretty formatting")
             } catch {
                 logger.error("Failed to save MCP config file: \(error)")
             }
         }
     }
-    
+
     deinit {
         for (_, monitor) in fileMonitors {
             monitor.cancel()

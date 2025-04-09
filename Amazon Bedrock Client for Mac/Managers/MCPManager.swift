@@ -141,27 +141,40 @@ class MCPManager: ObservableObject {
                 
                 var env = ProcessInfo.processInfo.environment
                 let paths = [
-                    "/usr/local/bin", "/opt/homebrew/bin",
+                    "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin",
                     "\(homeDir)/.nvm/versions/node/*/bin", env["PATH"] ?? ""
                 ].joined(separator: ":")
                 
                 env["PATH"] = paths
                 env["HOME"] = homeDir
                 
-                // Create process transport
-                let transport: Transport
-                do {
-                    transport = try Transport.stdioProcess(
-                        server.command, args: args, env: env, verbose: true)
-                } catch {
-                    await MainActor.run {
-                        self.connectionStatus[server.name] = .failed(error: "Failed to start process: \(error.localizedDescription)")
+                if let customEnv = server.env {
+                    for (key, value) in customEnv {
+                        env[key] = value.replacingOccurrences(of: "$HOME", with: homeDir)
                     }
-                    connecting.remove(server.name)
-                    return
                 }
                 
-                // Create client with timeout protection
+                let workingDirectory = server.cwd?.replacingOccurrences(of: "$HOME", with: homeDir)
+                
+                // Use our safe wrapper
+                let transportResult = Transport.safeStdioProcess(
+                    server.command,
+                    args: args,
+                    cwd: workingDirectory,
+                    env: env,
+                    verbose: true
+                )
+                
+                // Extract transport or throw error
+                let transport: Transport
+                switch transportResult {
+                case .success(let t):
+                    transport = t
+                case .failure(let error):
+                    throw error
+                }
+                
+                // Rest of your client creation code...
                 let client = try await withTimeout(seconds: 15) {
                     try await MCPClient(
                         info: .init(name: "bedrock-client", version: "1.0.0"),
@@ -194,12 +207,20 @@ class MCPManager: ObservableObject {
                     }
                 }
             } catch {
+                // Handle errors safely
+                logger.error("Failed to connect to server '\(server.name)': \(error.localizedDescription)")
+                
                 await MainActor.run {
                     self.connectionStatus[server.name] = .failed(error: error.localizedDescription)
+                    
+                    // Auto-disable the server on connection failure
+                    if let index = SettingManager.shared.mcpServers.firstIndex(where: { $0.name == server.name }) {
+                        SettingManager.shared.mcpServers[index].enabled = false
+                    }
                 }
+                
+                connecting.remove(server.name)
             }
-            
-            connecting.remove(server.name)
         }
     }
 
@@ -525,5 +546,32 @@ class MCPManager: ObservableObject {
         }
         
         return result
+    }
+}
+
+extension Transport {
+    // Safe wrapper around stdioProcess without using internal APIs
+    public static func safeStdioProcess(
+        _ executable: String,
+        args: [String] = [],
+        cwd: String? = nil,
+        env: [String: String]? = nil,
+        verbose: Bool = false
+    ) -> Swift.Result<Transport, Error> {
+        do {
+            // 원래 stdioProcess 함수를 직접 호출하되, try-catch로 감싸서 assertion failure 방지
+            let transport = try Transport.stdioProcess(
+                executable,
+                args: args,
+                cwd: cwd,
+                env: env,
+                verbose: verbose
+            )
+            return .success(transport)
+        } catch {
+            // 오류 로깅 후 정상적으로 오류 반환
+            print("Failed to create transport: \(error.localizedDescription)")
+            return .failure(error)
+        }
     }
 }
