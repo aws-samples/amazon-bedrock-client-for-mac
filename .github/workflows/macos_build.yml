@@ -104,7 +104,7 @@ jobs:
         HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.BREW_TOKEN }}
       run: |
         brew tap didhd/tap
-        brew bump-formula-pr -f --cask --version=${{ steps.get_version.outputs.version }} --no-browse --no-audit \
+        brew bump-cask-pr --version=${{ steps.get_version.outputs.version }} --no-browse --no-audit \
         --sha256=${{ steps.shasum.outputs.sha }} \
         --url="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/download/v${{ steps.get_version.outputs.version }}/Amazon.Bedrock.Client.for.Mac.dmg" \
         didhd/tap/amazon-bedrock-client
