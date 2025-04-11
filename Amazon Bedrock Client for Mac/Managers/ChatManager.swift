@@ -10,32 +10,52 @@ import SwiftUI
 import CoreData
 import Logging
 
+// MARK: - Message Attachments
+
+struct MessageAttachments {
+    var imageBase64Strings: [String]?
+    var documentBase64Strings: [String]?
+    var documentFormats: [String]?
+    var documentNames: [String]?
+}
+
+// MARK: - Unified Message Structure
+struct Message: Codable, Identifiable {
+    let id: UUID
+    var text: String
+    var role: Role
+    let timestamp: Date
+    let isError: Bool
+    
+    // Separate fields for different content types
+    var thinking: String?
+    var thinkingSignature: String?
+    var imageBase64Strings: [String]?
+    var documentBase64Strings: [String]?
+    var documentFormats: [String]?
+    var documentNames: [String]?
+    
+    // Tool use is a separate concern - not mixed with message text
+    var toolUse: ToolUse?
+    
+    enum Role: String, Codable {
+        case user
+        case assistant
+    }
+    
+    struct ToolUse: Codable {
+        let toolId: String
+        let toolName: String
+        let inputs: JSONValue
+        var result: String?
+        var resultTimestamp: Date?
+    }
+}
+
 // MARK: - Unified Conversation History
 
 /// Unified conversation history structure
 struct ConversationHistory: Codable {
-    struct Message: Codable, Identifiable {
-        let id: UUID
-        var text: String
-        var thinking: String?
-        var thinkingSignature: String?
-        let role: String
-        let timestamp: Date
-        let isError: Bool
-        var imageBase64Strings: [String]?
-        var documentBase64Strings: [String]?
-        var documentFormats: [String]?
-        var documentNames: [String]?
-        var toolUsage: ToolUsage?
-        
-        struct ToolUsage: Codable {
-            let toolId: String
-            let toolName: String
-            let inputs: JSONValue
-            var result: String?
-        }
-    }
-    
     let chatId: String
     let modelId: String
     var messages: [Message]
@@ -50,43 +70,43 @@ struct ConversationHistory: Codable {
         self.systemPrompt = systemPrompt
     }
     
+    // Improved implementation of addMessage
     mutating func addMessage(_ message: Message) {
-        if message.role == "user" {
-            while let lastMessage = messages.last, lastMessage.role == "user" {
-                messages.removeLast()
-            }
-        }
-        
         messages.append(message)
         lastUpdated = Date()
     }
     
-    mutating func updateMessage(id: UUID, newText: String? = nil, thinking: String? = nil, thinkingSignature: String? = nil, toolResult: String? = nil) {
+    // Improved implementation of updateMessage
+    mutating func updateMessage(id: UUID,
+                              newText: String? = nil,
+                              thinking: String? = nil,
+                              thinkingSignature: String? = nil,
+                              toolResult: String? = nil) {
         if let index = messages.firstIndex(where: { $0.id == id }) {
-            var message = messages[index]
-            
+            // Update specific fields only if provided
             if let newText = newText {
-                message.text = newText
+                messages[index].text = newText
             }
             
             if let thinking = thinking {
-                message.thinking = thinking
+                messages[index].thinking = thinking
             }
             
             if let thinkingSignature = thinkingSignature {
-                message.thinkingSignature = thinkingSignature
+                messages[index].thinkingSignature = thinkingSignature
             }
             
-            if let toolResult = toolResult, message.toolUsage != nil {
-                message.toolUsage?.result = toolResult
+            if let toolResult = toolResult, messages[index].toolUse != nil {
+                messages[index].toolUse?.result = toolResult
             }
             
-            messages[index] = message
             lastUpdated = Date()
         }
     }
 }
 
+// Fix for concurrency issues
+@MainActor
 class ChatManager: ObservableObject {
     @Published var chats: [ChatModel] = []
     @Published var chatIsLoading: [String: Bool] = [:]
@@ -140,10 +160,10 @@ class ChatManager: ObservableObject {
         logger.info("History migration completed")
     }
     
-    private func migrateHistoryForChat(chatId: String, modelId: String) {
+    private func migrateHistoryForChat(chatId: String, modelId: String, force: Bool = false) {
         logger.info("Migrating history for chat: \(chatId)")
         
-        if fileExists(at: getConversationHistoryFileURL(chatId: chatId)) {
+        if !force && fileExists(at: getConversationHistoryFileURL(chatId: chatId)) {
             logger.info("Unified history already exists for chat \(chatId), skipping migration")
             return
         }
@@ -159,42 +179,46 @@ class ChatManager: ObservableObject {
         }
         
         let messages = getMessages(for: chatId)
+        if messages.isEmpty {
+            logger.warning("No legacy messages found for chat \(chatId)")
+        }
+        
         for message in messages {
-            let role = message.user == "User" ? "user" : "assistant"
+            let role = message.user == "User" ? Message.Role.user : Message.Role.assistant
             
-            var toolUsage: ConversationHistory.Message.ToolUsage? = nil
+            var toolUse: Message.ToolUse? = nil
             if let tool = message.toolUse {
-                toolUsage = ConversationHistory.Message.ToolUsage(
+                toolUse = Message.ToolUse(
                     toolId: tool.id,
                     toolName: tool.name,
-                    inputs: tool.input,  // Already a JSONValue type
-                    result: message.toolResult
+                    inputs: tool.input,
+                    result: message.toolResult,
+                    resultTimestamp: message.toolResult != nil ? Date() : nil
                 )
             }
             
-            // Create message with all available fields, handling potential nil values
-            let unifiedMessage = ConversationHistory.Message(
+            let unifiedMessage = Message(
                 id: message.id,
                 text: message.text,
-                thinking: message.thinking,
-                thinkingSignature: message.signature,
                 role: role,
                 timestamp: message.sentTime,
                 isError: message.isError,
+                thinking: message.thinking,
+                thinkingSignature: message.signature,
                 imageBase64Strings: message.imageBase64Strings,
                 documentBase64Strings: message.documentBase64Strings,
                 documentFormats: message.documentFormats,
                 documentNames: message.documentNames,
-                toolUsage: toolUsage
+                toolUse: toolUse
             )
             
             conversationHistory.addMessage(unifiedMessage)
         }
         
         saveConversationHistory(conversationHistory, for: chatId)
-        logger.info("Successfully migrated history for chat \(chatId)")
+        logger.info("Successfully migrated history for chat \(chatId) with \(messages.count) messages")
     }
-    
+
     // MARK: - Chat Management
     
     func createNewChat(modelId: String, modelName: String, modelProvider: String, completion: @escaping (ChatModel) -> Void) {
@@ -330,86 +354,59 @@ class ChatManager: ObservableObject {
         }
     }
     
-    // MARK: - Messages API
+    // MARK: - Message Management
     
-    func getMessages(for chatId: String) -> [MessageData] {
-        // First check if we have a unified history
-        if let history = getConversationHistory(for: chatId) {
-            // Convert from unified format to MessageData
-            return history.messages.map { message in
-                let user = message.role == "user" ? "User" : getChatModel(for: chatId)?.name ?? "Assistant"
-                
-                // Convert tool usage
-                let toolUse: ToolInfo? = message.toolUsage.map { usage in
-                    return ToolInfo(
-                        id: usage.toolId,
-                        name: usage.toolName,
-                        input: usage.inputs
-                    )
-                }
-                
-                return MessageData(
-                    id: message.id,
-                    text: message.text,
-                    thinking: message.thinking,
-                    user: user,
-                    isError: message.isError,
-                    sentTime: message.timestamp,
-                    imageBase64Strings: message.imageBase64Strings,
-                    documentBase64Strings: message.documentBase64Strings,
-                    documentFormats: message.documentFormats,
-                    documentNames: message.documentNames,
-                    toolUse: toolUse,
-                    toolResult: message.toolUsage?.result
-                )
-            }
-        }
-        
-        // Fall back to legacy format if unified history not found
-        return loadMessagesFromFile(chatId: chatId)
-    }
-    
-    func addMessage(_ message: MessageData, for chatId: String) {
-        // Get existing conversation history or create new one
-        var history = getConversationHistory(for: chatId) ?? createNewConversationHistory(for: chatId)
-        
-        // Add message to history
-        let role = message.user == "User" ? "user" : "assistant"
-        
-        // Process tool usage data
-        var toolUsage: ConversationHistory.Message.ToolUsage? = nil
-        if let tool = message.toolUse {
-            toolUsage = ConversationHistory.Message.ToolUsage(
-                toolId: tool.id,
-                toolName: tool.name,
-                inputs: tool.input,
-                result: message.toolResult
-            )
-        }
-        
-        let unifiedMessage = ConversationHistory.Message(
-            id: message.id,
-            text: message.text,
-            thinking: message.thinking,
-            role: role,
-            timestamp: message.sentTime,
-            isError: message.isError,
-            imageBase64Strings: message.imageBase64Strings,
-            documentBase64Strings: message.documentBase64Strings,
-            documentFormats: message.documentFormats,
-            documentNames: message.documentNames,
-            toolUsage: toolUsage
+    func addUserMessage(text: String, chatId: String, attachments: MessageAttachments? = nil) {
+        let message = Message(
+            id: UUID(),
+            text: text,
+            role: .user,
+            timestamp: Date(),
+            isError: false,
+            thinking: nil,
+            thinkingSignature: nil,
+            imageBase64Strings: attachments?.imageBase64Strings,
+            documentBase64Strings: attachments?.documentBase64Strings,
+            documentFormats: attachments?.documentFormats,
+            documentNames: attachments?.documentNames
         )
         
-        history.addMessage(unifiedMessage)
+        addMessage(message, to: chatId)
+    }
+    
+    func addAssistantMessage(text: String, chatId: String, thinking: String? = nil) {
+        let message = Message(
+            id: UUID(),
+            text: text,
+            role: .assistant,
+            timestamp: Date(),
+            isError: false,
+            thinking: thinking
+        )
         
-        // Save updated history
+        addMessage(message, to: chatId)
+    }
+    
+    func addAssistantErrorMessage(error: String, chatId: String) {
+        let message = Message(
+            id: UUID(),
+            text: error,
+            role: .assistant,
+            timestamp: Date(),
+            isError: true
+        )
+        
+        addMessage(message, to: chatId)
+    }
+    
+    // The main add message function that handles conversation history updates
+    func addMessage(_ message: Message, to chatId: String) {
+        var history = getConversationHistory(for: chatId) ?? createNewConversationHistory(for: chatId)
+        
+        history.addMessage(message)
         saveConversationHistory(history, for: chatId)
         
-        // For backward compatibility, also save in the legacy format
-        saveMessageInLegacyFormat(message, for: chatId)
-        
-        // Update last message date for chat model
+        // Update UI state
         DispatchQueue.main.async {
             if let index = self.chats.firstIndex(where: { $0.chatId == chatId }) {
                 self.chats[index].lastMessageDate = Date()
@@ -417,6 +414,37 @@ class ChatManager: ObservableObject {
             }
         }
     }
+
+    // MARK: - Tool Use Management
+    
+    func addToolUse(for chatId: String, messageId: UUID, toolName: String, toolId: String, inputs: JSONValue) {
+        if var history = getConversationHistory(for: chatId) {
+            // Find message and add tool use
+            if let index = history.messages.firstIndex(where: { $0.id == messageId }) {
+                // Create tool usage structure
+                let toolUse = Message.ToolUse(
+                    toolId: toolId,
+                    toolName: toolName,
+                    inputs: inputs
+                )
+                
+                // Update message with tool usage
+                history.messages[index].toolUse = toolUse
+                
+                // Save updated history
+                saveConversationHistory(history, for: chatId)
+            }
+        }
+    }
+    
+    func updateToolResult(for chatId: String, messageId: UUID, result: String) {
+        if var history = getConversationHistory(for: chatId) {
+            history.updateMessage(id: messageId, toolResult: result)
+            saveConversationHistory(history, for: chatId)
+        }
+    }
+
+    // MARK: - Message Update Methods
     
     func updateMessageText(for chatId: String, messageId: UUID, newText: String) {
         if var history = getConversationHistory(for: chatId) {
@@ -451,8 +479,25 @@ class ChatManager: ObservableObject {
     
     func updateMessageWithToolInfo(for chatId: String, messageId: UUID, newText: String, toolInfo: ToolInfo, toolResult: String? = nil) {
         if var history = getConversationHistory(for: chatId) {
-            history.updateMessage(id: messageId, newText: newText, toolResult: toolResult)
-            saveConversationHistory(history, for: chatId)
+            if let index = history.messages.firstIndex(where: { $0.id == messageId }) {
+                // Update message text
+                history.messages[index].text = newText
+                
+                // Convert ToolInfo to Message.ToolUse
+                let toolUse = Message.ToolUse(
+                    toolId: toolInfo.id,
+                    toolName: toolInfo.name,
+                    inputs: toolInfo.input
+                )
+                
+                // Update tool usage and result
+                history.messages[index].toolUse = toolUse
+                if let result = toolResult {
+                    history.messages[index].toolUse?.result = result
+                }
+                
+                saveConversationHistory(history, for: chatId)
+            }
             
             DispatchQueue.main.async {
                 if let chatIndex = self.chats.firstIndex(where: { $0.chatId == chatId }) {
@@ -485,9 +530,9 @@ class ChatManager: ObservableObject {
         }
     }
     
-    func updateMessageThinking(for chatId: String, messageId: UUID, newThinking: String) {
+    func updateMessageThinking(for chatId: String, messageId: UUID, newThinking: String, signature: String? = nil) {
         if var history = getConversationHistory(for: chatId) {
-            history.updateMessage(id: messageId, thinking: newThinking)
+            history.updateMessage(id: messageId, thinking: newThinking, thinkingSignature: signature)
             saveConversationHistory(history, for: chatId)
         } else {
             // Fall back to legacy method
@@ -495,11 +540,54 @@ class ChatManager: ObservableObject {
             if let index = messages.firstIndex(where: { $0.id == messageId }) {
                 var message = messages[index]
                 message.thinking = newThinking
+                if let sig = signature {
+                    message.signature = sig
+                }
                 messages[index] = message
                 
                 saveMessagesToFile(chatId: chatId, messages: messages)
             }
         }
+    }
+    
+    // MARK: - Get Messages
+    
+    func getMessages(for chatId: String) -> [MessageData] {
+        // First check if we have a unified history
+        if let history = getConversationHistory(for: chatId) {
+            // Convert from unified format to MessageData
+            return history.messages.map { message in
+                let user = message.role == .user ? "User" : getChatModel(for: chatId)?.name ?? "Assistant"
+                
+                // Convert tool usage
+                let toolUse: ToolInfo? = message.toolUse.map { usage in
+                    return ToolInfo(
+                        id: usage.toolId,
+                        name: usage.toolName,
+                        input: usage.inputs
+                    )
+                }
+                
+                return MessageData(
+                    id: message.id,
+                    text: message.text,
+                    thinking: message.thinking,
+                    signature: message.thinkingSignature,
+                    user: user,
+                    isError: message.isError,
+                    sentTime: message.timestamp,
+                    imageBase64Strings: message.imageBase64Strings,
+                    documentBase64Strings: message.documentBase64Strings,
+                    documentFormats: message.documentFormats,
+                    documentNames: message.documentNames,
+                    toolUse: toolUse,
+                    toolResult: message.toolUse?.result
+                )
+            }
+        }
+        
+        // Fall back to legacy format if unified history not found
+        return loadMessagesFromFile(chatId: chatId)
     }
     
     // MARK: - Conversation History API (Unified)
@@ -611,6 +699,8 @@ class ChatManager: ObservableObject {
         return URL(fileURLWithPath: settingManager.defaultDirectory)
     }
     
+    // File operations that need to be main-actor safe
+    @MainActor
     private func createDirectories() {
         let baseURL = getBaseDirectory()
         let messagesURL = baseURL.appendingPathComponent("messages")
@@ -623,7 +713,7 @@ class ChatManager: ObservableObject {
             logger.info("Failed to create directories: \(error)")
         }
     }
-    
+
     // MARK: - File URLs
     
     private func getConversationHistoryFileURL(chatId: String) -> URL {

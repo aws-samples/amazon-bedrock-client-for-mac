@@ -11,13 +11,23 @@ import AppKit
 // MARK: - Chat Search Index
 
 /// Optimized search index for O(log n) chat content searching
+@MainActor
 class ChatSearchIndex {
     // Map of chat IDs to indexed chat content tokens
-    private var chatIndexMap: [String: Set<String>] = [:]
+    var chatIndexMap: [String: Set<String>] = [:]
+    private var _chatIndexMap: [String: Set<String>] = [:]
+
     // Inverted index: keyword -> chat IDs that contain it
-    private var keywordIndex: [String: Set<String>] = [:]
+    var keywordIndex: [String: Set<String>] = [:]
+    private var _keywordIndex: [String: Set<String>] = [:]
+
     // Minimum word length for indexing
     private let minWordLength = 2
+
+    func updateIndexDirect(chatIndexMap: [String: Set<String>], keywordIndex: [String: Set<String>]) {
+        self._chatIndexMap = chatIndexMap
+        self._keywordIndex = keywordIndex
+    }
     
     /// Updates the search index with current chats and their content
     func updateIndex(chats: [ChatModel], chatManager: ChatManager) {
@@ -123,8 +133,13 @@ struct SidebarView: View {
     @State private var isSearching: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     
-    // Timer to periodically update chat dates
-    let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    // Performance optimization properties
+    @State private var lastSortTime: Date = Date(timeIntervalSince1970: 0)
+    @State private var sortingInProgress: Bool = false
+    private let sortingThrottleInterval: TimeInterval = 0.5 // Minimum interval between sorting operations
+    
+    // Timer to periodically update chat dates - reduced frequency
+    let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -170,15 +185,16 @@ struct SidebarView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             
-            // Enhanced search bar
             searchBarView
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             
-            // Enhanced chat list
             chatListView
                 .onReceive(timer) { _ in
-                    organizeChatsByDate()
+                    // Only sort if enough time has passed since last update
+                    if Date().timeIntervalSince(lastSortTime) > 10 {
+                        throttledOrganizeChatsByDate()
+                    }
                 }
                 .onChange(of: appCoordinator.shouldCreateNewChat) { _, newValue in
                     if newValue {
@@ -198,12 +214,14 @@ struct SidebarView: View {
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
         .onAppear {
-            organizeChatsByDate()
-            updateSearchIndex()
+            // Initial organization and indexing only once at startup
+            organizeChatsInitial()
         }
-        .onChange(of: chatManager.chats) { _, _ in
-            organizeChatsByDate()
-            updateSearchIndex()
+        .onChange(of: chatManager.chats) { oldChats, newChats in
+            // Only reorganize when chat count changes (add/remove)
+            if oldChats.count != newChats.count {
+                throttledOrganizeChatsByDate()
+            }
         }
         .onChange(of: searchText) { _, _ in
             performSearch()
@@ -364,23 +382,6 @@ struct SidebarView: View {
         let isSelected = selection == .chat(chat)
         
         return HStack(spacing: 12) {
-            // Model icon - using actual model images
-            //            getModelImage(for: chat.id)
-            //                .resizable()
-            //                .scaledToFit()
-            //                .frame(width: 24, height: 24)
-            //                .padding(4)
-            //                .background(
-            //                    RoundedRectangle(cornerRadius: 6)
-            //                        .fill(colorScheme == .dark ?
-            //                              Color(NSColor.windowBackgroundColor) :
-            //                              Color.white)
-            //                )
-            //                .overlay(
-            //                    RoundedRectangle(cornerRadius: 6)
-            //                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-            //                )
-            
             // Chat title and model name
             VStack(alignment: .leading, spacing: 3) {
                 Text(chat.title)
@@ -429,30 +430,6 @@ struct SidebarView: View {
         }
     }
     
-    // Helper function to get model image based on ID
-    func getModelImage(for modelId: String) -> Image {
-        switch modelId {
-        case let id where id.contains("anthropic"):
-            return Image("anthropic")
-        case let id where id.contains("meta"):
-            return Image("meta")
-        case let id where id.contains("cohere"):
-            return Image("cohere")
-        case let id where id.contains("mistral"):
-            return Image("mistral")
-        case let id where id.contains("ai21"):
-            return Image("AI21")
-        case let id where id.contains("amazon"):
-            return Image("amazon")
-        case let id where id.contains("deepseek"):
-            return Image("deepseek")
-        case let id where id.contains("stability"):
-            return Image("stability ai")
-        default:
-            return Image("bedrock")
-        }
-    }
-    
     // New loading dots animation view
     struct LoadingDotsView: View {
         @State private var dotCount = 1
@@ -485,23 +462,7 @@ struct SidebarView: View {
     }
     
     // MARK: - Methods
-    
-    // [Keeping the existing methods as is]
-    
-    /// Updates the search index with current chat data
-    private func updateSearchIndex() {
-        // Perform indexing in the background
-        Task(priority: .background) {
-            isSearching = true
-            searchIndex.updateIndex(chats: chatManager.chats, chatManager: chatManager)
-            await MainActor.run {
-                isSearching = false
-                // Re-run search with updated index
-                performSearch()
-            }
-        }
-    }
-    
+
     /// Executes search against the index and updates results
     private func performSearch() {
         if searchText.isEmpty {
@@ -512,7 +473,9 @@ struct SidebarView: View {
         // Run search in the background
         Task(priority: .userInitiated) {
             isSearching = true
-            let results = searchIndex.search(query: searchText)
+            let results = await MainActor.run {
+                return searchIndex.search(query: searchText)
+            }
             await MainActor.run {
                 searchResults = results
                 isSearching = false
@@ -524,10 +487,142 @@ struct SidebarView: View {
     private func createNewChat() {
         if let modelSelection = menuSelection, case .chat(let model) = modelSelection {
             chatManager.createNewChat(modelId: model.id, modelName: model.name, modelProvider: model.provider) { newChat in
-                newChat.lastMessageDate = Date()
-                self.organizeChatsByDate()
+                // 1. Add only the new chat, without resorting the entire list
+                incrementalAddChat(newChat)
+                
+                // 2. Update selection
                 self.selection = .chat(newChat)
+                
+                // 3. Update selectionId (needed only for selection changes)
                 self.selectionId = UUID()
+                
+                // 4. Incrementally update search index in background
+                Task(priority: .background) {
+                    await MainActor.run {
+                        incrementalUpdateSearchIndex(for: newChat)
+                    }
+                }
+            }
+        }
+    }
+
+    // Incremental update: Add a new chat to the appropriate date group
+    private func incrementalAddChat(_ newChat: ChatModel) {
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: newChat.lastMessageDate)
+        
+        if let date = calendar.date(from: dateComponents) {
+            let key = formatDate(date)
+            
+            // If date key already exists, add to that group, otherwise create new group
+            var mutableOrganizedModels = organizedChatModels
+            if var chatsForDate = mutableOrganizedModels[key] {
+                // Insert maintaining date sort order
+                chatsForDate.insert(newChat, at: 0) // Add at front since it's the newest
+                mutableOrganizedModels[key] = chatsForDate
+            } else {
+                mutableOrganizedModels[key] = [newChat]
+            }
+            
+            organizedChatModels = mutableOrganizedModels
+        }
+    }
+    
+    // Incremental update: Add new chat to search index
+    @MainActor
+    private func incrementalUpdateSearchIndex(for chat: ChatModel) {
+        // Optimize by only indexing one chat
+        var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
+        
+        // Get chat messages - this could also be optimized if there are many messages
+        let messages = chatManager.getMessages(for: chat.chatId)
+        for message in messages {
+            searchableContent += " \(message.text.lowercased())"
+        }
+        
+        // Tokenize content
+        let words = searchableContent
+            .split { !$0.isLetter && !$0.isNumber }
+            .map { String($0) }
+            .filter { $0.count >= 2 } // Minimum word length 2
+        
+        let wordSet = Set(words)
+        
+        // Update chat index map
+        var updatedChatIndexMap = self.searchIndex.chatIndexMap
+        updatedChatIndexMap[chat.chatId] = wordSet
+        
+        // Update keyword index
+        var updatedKeywordIndex = self.searchIndex.keywordIndex
+        for word in wordSet {
+            if updatedKeywordIndex[word] == nil {
+                updatedKeywordIndex[word] = []
+            }
+            updatedKeywordIndex[word]?.insert(chat.chatId)
+        }
+        
+        // Apply index updates
+        self.searchIndex.updateIndexDirect(chatIndexMap: updatedChatIndexMap, keywordIndex: updatedKeywordIndex)
+    }
+    
+    // Throttled organization function (prevents multiple calls in short time)
+    private func throttledOrganizeChatsByDate() {
+        let now = Date()
+        if !sortingInProgress && now.timeIntervalSince(lastSortTime) > sortingThrottleInterval {
+            sortingInProgress = true
+            
+            // Move sorting work to background thread
+            Task(priority: .userInitiated) {
+                let calendar = Calendar.current
+                let sortedChats = self.chatManager.chats.sorted { $0.lastMessageDate > $1.lastMessageDate }
+                let groupedChats = Dictionary(grouping: sortedChats) { chat -> DateComponents in
+                    calendar.dateComponents([.year, .month, .day], from: chat.lastMessageDate)
+                }
+                
+                let sortedDateComponents = groupedChats.keys.sorted {
+                    if $0.year != $1.year {
+                        return $0.year! > $1.year! // Descending
+                    } else if $0.month != $1.month {
+                        return $0.month! > $1.month! // Descending
+                    } else {
+                        return $0.day! > $1.day! // Descending
+                    }
+                }
+                
+                var newOrganizedModels: [String: [ChatModel]] = [:]
+                for components in sortedDateComponents {
+                    if let date = calendar.date(from: components) {
+                        let key = self.formatDate(date)
+                        if let chatsForDate = groupedChats[components] {
+                            newOrganizedModels[key] = chatsForDate
+                        }
+                    }
+                }
+                
+                // UI updates on main thread
+                await MainActor.run {
+                    self.organizedChatModels = newOrganizedModels
+                    self.lastSortTime = Date()
+                    self.sortingInProgress = false
+                }
+            }
+        }
+    }
+    
+    // Initial organization (run once at app startup)
+    private func organizeChatsInitial() {
+        throttledOrganizeChatsByDate()
+        updateSearchIndex()
+    }
+    
+    // Optimized search index update - only called when needed
+    private func updateSearchIndex() {
+        Task(priority: .background) {
+            isSearching = true
+            await MainActor.run {
+                searchIndex.updateIndex(chats: chatManager.chats, chatManager: chatManager)
+                isSearching = false
+                performSearch()
             }
         }
     }
@@ -539,7 +634,7 @@ struct SidebarView: View {
             return
         }
         selection = chatManager.deleteChat(with: selectedChat.chatId)
-        organizeChatsByDate()
+        throttledOrganizeChatsByDate()
     }
     
     /// Returns the currently selected chat model, if any
@@ -548,35 +643,6 @@ struct SidebarView: View {
             return chat
         }
         return nil
-    }
-    
-    /// Organizes chats by date for display in sections
-    func organizeChatsByDate() {
-        let calendar = Calendar.current
-        let sortedChats = chatManager.chats.sorted { $0.lastMessageDate > $1.lastMessageDate }
-        let groupedChats = Dictionary(grouping: sortedChats) { chat -> DateComponents in
-            calendar.dateComponents([.year, .month, .day], from: chat.lastMessageDate)
-        }
-        
-        let sortedDateComponents = groupedChats.keys.sorted {
-            if $0.year != $1.year {
-                return $0.year! < $1.year!
-            } else if $0.month != $1.month {
-                return $0.month! < $1.month!
-            } else {
-                return $0.day! < $1.day!
-            }
-        }
-        
-        organizedChatModels = [:]
-        for components in sortedDateComponents {
-            if let date = calendar.date(from: components) {
-                let key = formatDate(date)
-                if let chatsForDate = groupedChats[components] {
-                    organizedChatModels[key] = chatsForDate
-                }
-            }
-        }
     }
     
     /// Formats a date for section headers
@@ -590,7 +656,7 @@ struct SidebarView: View {
     private func deleteChat(_ chat: ChatModel) {
         hoverStates[chat.chatId] = false
         selection = chatManager.deleteChat(with: chat.chatId)
-        organizeChatsByDate()
+        throttledOrganizeChatsByDate() // Use optimized version
     }
     
     /// Exports a chat history as a text file

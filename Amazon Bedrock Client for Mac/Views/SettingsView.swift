@@ -671,7 +671,7 @@ struct ServerFormView: View {
     // Server templates
     private let templates: [(name: String, command: String, args: String, env: [String: String]?, cwd: String?)] = [
         ("Memory", "npx", "-y @modelcontextprotocol/server-memory", nil, nil),
-        ("Filesystem", "npx", "-y @modelcontextprotocol/server-filesystem /path/to/allowed/files", nil, nil),
+        ("Filesystem", "npx", "-y @modelcontextprotocol/server-filesystem ~", nil, nil),
         ("GitHub", "npx", "-y @modelcontextprotocol/server-github", ["GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"], nil)
     ]
     

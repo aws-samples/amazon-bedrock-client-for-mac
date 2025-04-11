@@ -321,26 +321,6 @@ struct MessageView: View {
                 .padding(.vertical, 2)
             }
             
-            // Expandable tool result section
-            if let toolResult = message.toolResult, !toolResult.isEmpty {
-                ExpandableMarkdownItem(
-                    header: "Tool Result",
-                    text: toolResult,
-                    fontSize: fontSize + adjustedFontSize - 2
-                )
-                .padding(.vertical, 2)
-            }
-            
-            // Tool use information display
-            if let toolUse = message.toolUse {
-                ExpandableMarkdownItem(
-                    header: "Using tool: \(toolUse.name)",
-                    text: formatToolInput(toolUse.input),
-                    fontSize    : fontSize + adjustedFontSize - 2
-                )
-                .padding(.vertical, 2)
-            }
-            
             // Main message content
             LazyMarkdownView(text: message.text, fontSize: fontSize + adjustedFontSize)
                 .sheet(isPresented: $viewModel.isShowingImageModal) {
@@ -353,6 +333,26 @@ struct MessageView: View {
                         )
                     }
                 }
+            
+            // Tool use information display
+            if let toolUse = message.toolUse {
+                ExpandableMarkdownItem(
+                    header: "Using tool: \(toolUse.name)",
+                    text: formatToolInput(toolUse.input),
+                    fontSize    : fontSize + adjustedFontSize - 2
+                )
+                .padding(.vertical, 2)
+            }
+
+            // Expandable tool result section
+            if let toolResult = message.toolResult, !toolResult.isEmpty {
+                ExpandableMarkdownItem(
+                    header: "Tool Result",
+                    text: toolResult,
+                    fontSize: fontSize + adjustedFontSize - 2
+                )
+                .padding(.vertical, 2)
+            }
         }
     }
     
