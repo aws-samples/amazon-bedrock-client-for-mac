@@ -34,6 +34,7 @@ class SettingManager: ObservableObject {
         "Amazon Bedrock Client"
     ).path
     @AppStorage("defaultModelId") var defaultModelId: String = ""
+    @AppStorage("maxToolUseTurns") var maxToolUseTurns: Int = 10
 
     var mcpEnabled: Bool {
         get {

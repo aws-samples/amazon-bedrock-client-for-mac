@@ -665,7 +665,7 @@ class ChatViewModel: ObservableObject {
         // Reset tool tracker for new conversation
         await ToolUseTracker.shared.reset()
         
-        let MAX_TURNS = 4  // Fixed default value of 4 max tool turns
+        let maxTurns = settingManager.maxToolUseTurns
         var turn_count = 0
         
         // Get Bedrock messages in AWS SDK format
@@ -678,7 +678,7 @@ class ChatViewModel: ObservableObject {
         logger.info("Starting converseStream request with model ID: \(chatModel.id)")
         
         // Start the tool cycling process
-        try await processToolCycles(bedrockMessages: bedrockMessages, systemContentBlock: systemContentBlock, toolConfig: toolConfig, turnCount: turn_count, maxTurns: MAX_TURNS)
+        try await processToolCycles(bedrockMessages: bedrockMessages, systemContentBlock: systemContentBlock, toolConfig: toolConfig, turnCount: turn_count, maxTurns: maxTurns)
     }
     
     // Process tool cycles recursively

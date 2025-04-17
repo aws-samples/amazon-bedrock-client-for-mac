@@ -15,7 +15,6 @@ class LocalhostServer {
     init() throws {
         // Create a new Vapor application
         var env = try Environment.detect()
-        try LoggingSystem.bootstrap(from: &env)
         app = Application(env)
         
         // Determine directory and create if necessary

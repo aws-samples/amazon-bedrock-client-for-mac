@@ -6,28 +6,96 @@
 //
 
 import SwiftUI
+import Logging
+
+/// Custom LogHandler for standardized logging across the application
+struct CustomLogHandler: LogHandler {
+    var logLevel: Logger.Level = .debug
+    var metadata: Logger.Metadata = [:]
+    let label: String
+    
+    subscript(metadataKey key: String) -> Logger.Metadata.Value? {
+        get { metadata[key] }
+        set { metadata[key] = newValue }
+    }
+    
+    // Updated to use the non-deprecated method signature with source parameter
+    func log(level: Logger.Level, message: Logger.Message, metadata: Logger.Metadata?, source: String, file: String, function: String, line: UInt) {
+        // Generate timestamp in ISO8601 format
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        
+        // Extract current filename
+        let fileName = (file as NSString).lastPathComponent
+        
+        // Merge additional metadata
+        var mergedMetadata = self.metadata
+        if let metadata = metadata {
+            for (key, value) in metadata {
+                mergedMetadata[key] = value
+            }
+        }
+        
+        // Format final metadata string
+        let metadataString = mergedMetadata.isEmpty ? "" : " \(mergedMetadata)"
+        
+        // Standardized log message format with source included
+        let logMessage = "[\(timestamp)] [\(level)] [\(fileName):\(line)] \(message)\(metadataString)"
+        print(logMessage)
+    }
+    
+    // For backward compatibility (can be removed later)
+    @available(*, deprecated, message: "Use the updated log method instead")
+    func log(level: Logger.Level, message: Logger.Message, metadata: Logger.Metadata?, file: String, function: String, line: UInt) {
+        log(level: level, message: message, metadata: metadata, source: "", file: file, function: function, line: line)
+    }
+}
+
 
 @main
 struct Amazon_Bedrock_Client_for_MacApp: App {
-    @ObservedObject private var settingManager = SettingManager.shared
+    // Use StateObject for lazy initialization of SettingManager
+    @StateObject private var settingManager = StateObject(wrappedValue: SettingManager.shared).wrappedValue
     
     // Use StateObject for AppDelegate to ensure it stays alive
     @StateObject private var appDelegateProvider = AppDelegateProvider()
     
     // Use NSApplicationDelegateAdaptor with the provider
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
+    // Logger for app initialization
+    private let logger = Logger(label: "AppInitialization")
 
     init() {
+        // Initialize logging system with standardized configuration
+        LoggingSystem.bootstrap { label in
+            var handler = CustomLogHandler(label: label)
+            
+            #if DEBUG
+            handler.logLevel = .debug
+            #else
+            handler.logLevel = .info
+            #endif
+            
+            return handler
+        }
+    }
+    
+    // Lazily configure debug logging when needed
+    private func setupDebugLogging() {
         if SettingManager.shared.enableDebugLog {
             redirectStdoutAndStderrToFile()
         }
     }
-    
+
     var body: some Scene {
         Window("Amazon Bedrock Client", id: "MainWindow") {
             MainView()
                 .frame(minWidth: 800, minHeight: 600)
                 .environmentObject(settingManager)
+                .onAppear {
+                    // Setup debug logging when the UI appears, ensuring SettingManager is initialized first
+                    setupDebugLogging()
+                }
         }
         .windowStyle(DefaultWindowStyle())
         .commands {
@@ -49,7 +117,6 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
                 NSApp.sendAction(#selector(AppDelegate.deleteChat(_:)), to: nil, from: nil)
             }
             .keyboardShortcut("d", modifiers: [.command])
-//            .disabled(!ChatManager.shared.hasChats) // Disable if no chats
         }
         
         // Remove 'Show All Tabs' and 'Merge All Windows' menu items
@@ -113,9 +180,9 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
             dup2(fileDescriptor, STDOUT_FILENO)
             dup2(fileDescriptor, STDERR_FILENO)
             
-            print("Logging started")
+            logger.info("Logging redirected to file: \(logFileURL.path)")
         } catch {
-            print("Failed to redirect stdout and stderr to file: \(error)")
+            logger.error("Failed to redirect stdout and stderr to file: \(error)")
         }
     }
     

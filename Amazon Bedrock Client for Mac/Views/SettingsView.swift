@@ -331,6 +331,23 @@ struct DeveloperSettingsView: View {
                                 )
                             }
                             
+                            HStack(alignment: .center) {
+                                Text("Max Tool Use Turns:")
+                                    .frame(width: 140, alignment: .leading)
+                                
+                                TextField("", value: $settingsManager.maxToolUseTurns, formatter: NumberFormatter())
+                                    .frame(width: 60)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .onChange(of: settingsManager.maxToolUseTurns) { newValue in
+                                        if newValue < 1 {
+                                            settingsManager.maxToolUseTurns = 1
+                                        } else if newValue > 1000 {
+                                            settingsManager.maxToolUseTurns = 1000
+                                        }
+                                    }
+                            }
+                            .padding(.vertical, 2)
+                            
                             // Helper text
                             Text("MCP allows your LLM to access tools from your local machine. Add servers only from trusted sources.")
                                 .font(.caption)
