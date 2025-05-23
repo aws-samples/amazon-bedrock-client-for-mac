@@ -293,7 +293,7 @@ class Backend: Equatable {
     func isReasoningSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .deepseekr1:
+        case .claude37, .claudeSonnet4, .claudeOpus4, .deepseekr1:
             return true
         default:
             return false
@@ -302,7 +302,7 @@ class Backend: Equatable {
 
     /// Check if a model has configurable reasoning (can be toggled on/off)
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
-        return getModelType(modelId) == .claude37
+        return getModelType(modelId) == .claude37 || getModelType(modelId) == .claudeSonnet4 || getModelType(modelId) == .claudeOpus4
     }
 
     /// Check if a model has always-on reasoning (can't be disabled)
@@ -328,13 +328,13 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
             // Models that support document chat
-        case .claude, .claude3, .claude35, .claude37:
+        case .claude, .claude3, .claude35, .claude37, .claudeSonnet4, .claudeOpus4:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33:
             return true
         case .mistral, .mistralLarge, .mistralLarge2407, .mixtral:
             return true
-        case .novaPro, .novaLite:
+        case .novaPremier, .novaPro, .novaLite:
             return true
         case .titan:
             // Titan Text Premier doesn't support document chat
@@ -368,13 +368,13 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support system prompts
-        case .claude, .claude3, .claude35, .claude37:
+        case .claude, .claude3, .claude35, .claude37, .claudeSonnet4, .claudeOpus4:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33:
             return true
         case .mistralLarge, .mistralLarge2407, .mistralSmall:
             return true
-        case .novaPro, .novaLite, .novaMicro:
+        case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return true
         case .jambaInstruct, .jambaLarge, .jambaMini:
             return true
@@ -399,7 +399,7 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .novaPro, .llama32Large:
+        case .claude3, .claude37, .claudeSonnet4, .claudeOpus4, .novaPro, .llama32Large:
             return true
             
         // Models with exceptions
@@ -418,9 +418,9 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support tool use
-        case .claude3, .claude35, .claude37:
+        case .claude3, .claude35, .claude37, .claudeSonnet4, .claudeOpus4:
             return true
-        case .novaPro, .novaLite, .novaMicro:
+        case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return true
         case .cohereCommandR, .cohereCommandRPlus:
             return true
@@ -442,9 +442,9 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support streaming tool use
-        case .claude3, .claude35, .claude37:
+        case .claude3, .claude35, .claude37, .claudeSonnet4, .claudeOpus4:
             return true
-        case .novaPro, .novaLite, .novaMicro:
+        case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return true
         case .cohereCommandR, .cohereCommandRPlus:
             return true
@@ -500,7 +500,11 @@ class Backend: Equatable {
         // Classify by provider first
         switch provider {
         case "anthropic":
-            if modelNameAndVersion.contains("claude-3-7") {
+            if modelNameAndVersion.contains("claude-sonnet-4") {
+                return .claudeSonnet4
+            } else if modelNameAndVersion.contains("claude-opus-4") {
+                return .claudeOpus4
+            } else if modelNameAndVersion.contains("claude-3-7") {
                 return .claude37
             } else if modelNameAndVersion.contains("claude-3-5") {
                 return .claude35
@@ -528,6 +532,8 @@ class Backend: Equatable {
                 return .titanImage
             } else if modelNameAndVersion.contains("titan") {
                 return .titan
+            } else if modelNameAndVersion.contains("nova-premier") {
+                return .novaPremier
             } else if modelNameAndVersion.contains("nova-pro") {
                 return .novaPro
             } else if modelNameAndVersion.contains("nova-lite") {
@@ -612,6 +618,36 @@ class Backend: Equatable {
     
     func getDefaultInferenceConfig(for modelType: ModelType) -> BedrockRuntimeClientTypes.InferenceConfiguration {
         switch modelType {
+        case .claudeSonnet4:
+            let isThinkingEnabled = SettingManager.shared.enableModelThinking
+            
+            if isThinkingEnabled {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 64000,
+                    temperature: 1.0
+                )
+            } else {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 8192,
+                    temperature: 0.9,
+                    topp: 0.7
+                )
+            }
+        case .claudeOpus4:
+            let isThinkingEnabled = SettingManager.shared.enableModelThinking
+            
+            if isThinkingEnabled {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 32000,
+                    temperature: 1.0
+                )
+            } else {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 8192,
+                    temperature: 0.9,
+                    topp: 0.7
+                )
+            }
         case .claude37:
             let isThinkingEnabled = SettingManager.shared.enableModelThinking
             
@@ -639,9 +675,9 @@ class Backend: Equatable {
                 temperature: 0,
                 topp: 1.0
             )
-        case .novaPro, .novaLite, .novaMicro:
+        case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
-                maxTokens: 4096,
+                maxTokens: 8192,
                 temperature: 0.7,
                 topp: 0.9
             )
@@ -1023,13 +1059,13 @@ class Backend: Equatable {
 
 enum ModelType {
     // Anthropic models
-    case claude, claude3, claude35, claude37
+    case claude, claude3, claude35, claude37, claudeSonnet4, claudeOpus4
     // Meta models
     case llama2, llama3, llama31, llama32Small, llama32Large, llama33
     // Mistral models
     case mistral, mistral7b, mistralLarge, mistralLarge2407, mistralSmall, mixtral
     // Amazon models
-    case titan, titanImage, titanEmbed, novaPro, novaLite, novaMicro, novaCanvas, rerank
+    case titan, titanImage, titanEmbed, novaPremier, novaPro, novaLite, novaMicro, novaCanvas, rerank
     // AI21 models
     case j2, jambaInstruct, jambaLarge, jambaMini
     // Cohere models

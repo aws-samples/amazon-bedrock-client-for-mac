@@ -6,8 +6,7 @@
 //
 
 import Foundation
-import MCPClient
-import MCPInterface
+import MCP
 
 /**
  * Configuration model for MCP (Model Context Protocol) servers.

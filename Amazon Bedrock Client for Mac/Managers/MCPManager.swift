@@ -7,9 +7,9 @@
 
 import Foundation
 import Combine
-import MCPClient
-import MCPInterface
+import MCP
 import Logging
+import System
 
 /**
  * Manages Model Context Protocol (MCP) integrations.
@@ -20,7 +20,7 @@ class MCPManager: ObservableObject {
     private var logger = Logger(label: "MCPManager")
     
     // Published properties
-    @Published private(set) var activeClients: [String: MCPClient] = [:]
+    @Published private(set) var activeClients: [String: Client] = [:]
     @Published private(set) var availableTools: [String: [Tool]] = [:]
     @Published private(set) var toolInfos: [MCPToolInfo] = []
     @Published private(set) var connectionStatus: [String: ConnectionStatus] = [:]
@@ -28,33 +28,6 @@ class MCPManager: ObservableObject {
     // Status tracking
     private var autoStartCompleted = false
     private var connecting: Set<String> = []
-    
-    /**
-     * Represents a tool available from an MCP server.
-     * Used primarily for UI display and server tool management.
-     */
-    struct MCPToolInfo: Identifiable, Hashable {
-        var id: String { "\(serverName).\(toolName)" }
-        var serverName: String
-        var toolName: String
-        var description: String
-        var tool: Tool  // Store the complete Tool object
-        
-        init(serverName: String, tool: Tool) {
-            self.serverName = serverName
-            self.toolName = tool.name
-            self.description = tool.description ?? "No description available"
-            self.tool = tool
-        }
-        
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(id)
-        }
-        
-        static func == (lhs: MCPToolInfo, rhs: MCPToolInfo) -> Bool {
-            return lhs.id == rhs.id
-        }
-    }
     
     /**
      * Represents the connection status of a server.
@@ -121,7 +94,98 @@ class MCPManager: ObservableObject {
     }
     
     /**
-     * Connects to a specific MCP server.
+     * Detects the user's default shell.
+     *
+     * @return The path to the user's shell
+     */
+    private func getUserShell() -> String {
+        if let shell = ProcessInfo.processInfo.environment["SHELL"] {
+            return shell
+        }
+        
+        // Fallback: try to get from passwd
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/dscl")
+        process.arguments = [".", "-read", "/Users/\(NSUserName())", "UserShell"]
+        
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    let lines = output.components(separatedBy: .newlines)
+                    for line in lines {
+                        if line.contains("UserShell:") {
+                            let shell = line.replacingOccurrences(of: "UserShell:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                            return shell
+                        }
+                    }
+                }
+            }
+        } catch {
+            logger.warning("Failed to detect user shell: \(error)")
+        }
+        
+        // Final fallback
+        return "/bin/zsh"
+    }
+    
+    /**
+     * Creates a shell command string that properly sources shell configuration.
+     *
+     * @param command The command to execute
+     * @param args The command arguments
+     * @param workingDirectory Optional working directory
+     * @return Shell command string
+     */
+    private func createShellCommand(command: String, args: [String], workingDirectory: String?) -> String {
+        let shell = getUserShell()
+        let shellName = URL(fileURLWithPath: shell).lastPathComponent
+        
+        var shellCommand = ""
+        
+        // Source appropriate shell configuration files
+        if shellName.contains("zsh") {
+            shellCommand += "source ~/.zshrc 2>/dev/null || true; "
+        } else if shellName.contains("bash") {
+            shellCommand += "source ~/.bashrc 2>/dev/null || true; source ~/.bash_profile 2>/dev/null || true; "
+        }
+        
+        // Change directory if specified - don't quote to allow ~ expansion
+        if let cwd = workingDirectory {
+            // Replace ~ with $HOME for proper expansion
+            let expandedCwd = cwd.replacingOccurrences(of: "~", with: "$HOME")
+            shellCommand += "cd \(expandedCwd) && "
+        }
+        
+        // Add the actual command - only quote args that need it
+        let quotedArgs = args.map { arg in
+            // Only quote if contains spaces or special characters
+            if arg.contains(" ") || arg.contains("'") || arg.contains("$") {
+                return "'\(arg.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+            } else {
+                return arg
+            }
+        }.joined(separator: " ")
+        
+        // Don't quote the command itself if it's a simple command
+        if command.contains(" ") || command.contains("'") {
+            shellCommand += "'\(command.replacingOccurrences(of: "'", with: "'\"'\"'"))' \(quotedArgs)"
+        } else {
+            shellCommand += "\(command) \(quotedArgs)"
+        }
+        
+        return shellCommand
+    }
+    
+    /**
+     * Connects to a specific MCP server using shell environment.
      * Handles process creation, client initialization, and tool discovery.
      *
      * @param server The server configuration to connect to
@@ -135,61 +199,98 @@ class MCPManager: ObservableObject {
         
         Task {
             do {
-                // Set up environment variables
                 let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
                 let args = server.args.map { $0.replacingOccurrences(of: "$HOME", with: homeDir) }
+                let command = server.command.replacingOccurrences(of: "$HOME", with: homeDir)
+                let workingDirectory = server.cwd?.replacingOccurrences(of: "$HOME", with: homeDir)
                 
+                // Get user's shell
+                let shell = getUserShell()
+                
+                // Create shell command that sources configuration
+                let shellCommand = createShellCommand(
+                    command: command,
+                    args: args,
+                    workingDirectory: workingDirectory
+                )
+                
+                logger.info("Executing MCP server via shell: \(shell) -l -c '\(shellCommand)'")
+                
+                // Create process with shell execution
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: shell)
+                process.arguments = ["-l", "-c", shellCommand]
+                
+                // Set up basic environment
                 var env = ProcessInfo.processInfo.environment
-                let paths = [
-                    "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin",
-                    "\(homeDir)/.nvm/versions/node/*/bin", env["PATH"] ?? ""
-                ].joined(separator: ":")
-                
-                env["PATH"] = paths
                 env["HOME"] = homeDir
                 
+                // Add custom environment variables if specified
                 if let customEnv = server.env {
                     for (key, value) in customEnv {
                         env[key] = value.replacingOccurrences(of: "$HOME", with: homeDir)
                     }
                 }
                 
-                let workingDirectory = server.cwd?.replacingOccurrences(of: "$HOME", with: homeDir)
+                process.environment = env
                 
-                // Use our safe wrapper
-                let transportResult = Transport.safeStdioProcess(
-                    server.command,
-                    args: args,
-                    cwd: workingDirectory,
-                    env: env,
-                    verbose: true
-                )
-                
-                // Extract transport or throw error
-                let transport: Transport
-                switch transportResult {
-                case .success(let t):
-                    transport = t
-                case .failure(let error):
-                    throw error
-                }
-                
-                // Rest of your client creation code...
+                // Set up pipes for stdio
+                let stdinPipe = Pipe()
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+
+                process.standardInput = stdinPipe
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+
+                // Start the process
+                try process.run()
+
+                // Create client with timeout
                 let client = try await withTimeout(seconds: 15) {
-                    try await MCPClient(
-                        info: .init(name: "bedrock-client", version: "1.0.0"),
-                        transport: transport,
-                        capabilities: .init())
+                    // First import System module if not already imported
+                    let client = Client(
+                        name: "bedrock-client",
+                        version: "version"
+                    )
+                    
+                    // Get the raw file descriptors
+                    let stdoutFD = stdoutPipe.fileHandleForReading.fileDescriptor
+                    let stdinFD = stdinPipe.fileHandleForWriting.fileDescriptor
+                    
+                    // Create FileDescriptor objects from raw values
+                    let inputFileDescriptor = FileDescriptor(rawValue: stdoutFD)
+                    let outputFileDescriptor = FileDescriptor(rawValue: stdinFD)
+                    
+                    // Create stdio transport with properly typed file descriptors
+                    let transport = StdioTransport(
+                        input: inputFileDescriptor,
+                        output: outputFileDescriptor,
+                        logger: self.logger
+                    )
+
+                    try await client.connect(transport: transport)
+
+                    // Initialize the connection
+                    let result = try await client.initialize()
+                    
+                    // Check if server supports tools
+                    if result.capabilities.tools != nil {
+                        self.logger.info("Server \(server.name) supports tools")
+                    }
+                    
+                    return client
                 }
                 
                 // Fetch available tools
                 let tools: [Tool]?
                 do {
-                    tools = try await client.tools.value.get()
+                    let (toolList, _) = try await client.listTools()
+                    tools = toolList
                     logger.info("Successfully loaded \(tools?.count ?? 0) tools from server \(server.name)")
                     if let tools = tools, !tools.isEmpty {
                         for tool in tools {
-                            logger.info("Tool loaded: \(tool.name) with schema: \(tool.inputSchema)")
+                            logger.info("Tool loaded: \(tool.name) with schema: \(String(describing: tool.inputSchema))")
                         }
                     }
                 } catch {
@@ -200,6 +301,7 @@ class MCPManager: ObservableObject {
                 await MainActor.run {
                     self.activeClients[server.name] = client
                     self.connectionStatus[server.name] = .connected
+                    self.connecting.remove(server.name)
                     
                     if let tools = tools {
                         self.availableTools[server.name] = tools
@@ -212,14 +314,13 @@ class MCPManager: ObservableObject {
                 
                 await MainActor.run {
                     self.connectionStatus[server.name] = .failed(error: error.localizedDescription)
+                    self.connecting.remove(server.name)
                     
                     // Auto-disable the server on connection failure
                     if let index = SettingManager.shared.mcpServers.firstIndex(where: { $0.name == server.name }) {
                         SettingManager.shared.mcpServers[index].enabled = false
                     }
                 }
-                
-                connecting.remove(server.name)
             }
         }
     }
@@ -284,6 +385,10 @@ class MCPManager: ObservableObject {
      * @param serverName The name of the server to disconnect from
      */
     func disconnectServer(_ serverName: String) async {
+        if let client = activeClients[serverName] {
+            await client.disconnect()
+        }
+        
         await MainActor.run {
             activeClients.removeValue(forKey: serverName)
             availableTools.removeValue(forKey: serverName)
@@ -294,12 +399,279 @@ class MCPManager: ObservableObject {
     }
     
     /**
-     * Executes a Bedrock tool through the MCP interface.
-     * Handles complex JSON structures, tool execution, and result formatting.
+     * Converts Any value to MCP Value format.
+     *
+     * @param value The value to convert
+     * @return The converted Value for MCP protocol
+     */
+    private func convertToMCPValue(_ value: Any) -> Value {
+        if let stringValue = value as? String {
+            return .string(stringValue)
+        } else if let intValue = value as? Int {
+            return .int(intValue)
+        } else if let doubleValue = value as? Double {
+            return .double(doubleValue)
+        } else if let boolValue = value as? Bool {
+            return .bool(boolValue)
+        } else if let arrayValue = value as? [Any] {
+            return .array(arrayValue.map { convertToMCPValue($0) })
+        } else if let dictValue = value as? [String: Any] {
+            return .object(dictValue.mapValues { convertToMCPValue($0) })
+        } else if value is NSNull {
+            return .null
+        } else {
+            // Fallback: convert to string representation
+            return .string(String(describing: value))
+        }
+    }
+    
+    /**
+     * Converts [String: Any] dictionary to [String: Value] for MCP compatibility.
+     *
+     * @param arguments The arguments dictionary to convert
+     * @return The converted dictionary with Value types
+     */
+    private func convertArgumentsToMCPValues(_ arguments: [String: Any]) -> [String: Value] {
+        return arguments.mapValues { convertToMCPValue($0) }
+    }
+    
+    /**
+     * Converts input to multi-modal arguments for MCP.
+     *
+     * @param input The input to convert (can be text, structured data, or multi-modal content)
+     * @return MCP-compatible arguments dictionary
+     */
+    private func convertToMultiModalArguments(_ input: Any) throws -> [String: Value] {
+        if let inputString = input as? String {
+            // Handle plain string input
+            if let data = inputString.data(using: .utf8),
+               let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                return convertArgumentsToMCPValues(jsonObject)
+            } else {
+                return ["text": .string(inputString)]
+            }
+        } else if let inputDict = input as? [String: Any] {
+            // Check if this is multi-modal input
+            if hasMultiModalContent(inputDict) {
+                return try convertMultiModalInput(inputDict)
+            } else {
+                return convertArgumentsToMCPValues(inputDict)
+            }
+        } else if let inputDict = input as? [String: String] {
+            return convertArgumentsToMCPValues(inputDict)
+        } else {
+            return ["value": convertToMCPValue(input)]
+        }
+    }
+    
+    /**
+     * Checks if input contains multi-modal content.
+     *
+     * @param input Dictionary to check
+     * @return True if contains multi-modal content
+     */
+    private func hasMultiModalContent(_ input: [String: Any]) -> Bool {
+        return input.keys.contains { key in
+            ["images", "documents", "audio", "content", "attachments"].contains(key.lowercased())
+        }
+    }
+    
+    /**
+     * Converts multi-modal input to MCP format.
+     *
+     * @param input Multi-modal input dictionary
+     * @return MCP-compatible arguments
+     */
+    private func convertMultiModalInput(_ input: [String: Any]) throws -> [String: Value] {
+        var mcpArguments: [String: Value] = [:]
+        var contentArray: [Value] = []
+        
+        // Add text content if present
+        if let text = input["text"] as? String, !text.isEmpty {
+            contentArray.append(.object([
+                "type": .string("text"),
+                "text": .string(text)
+            ]))
+        }
+        
+        // Add images if present
+        if let images = input["images"] as? [[String: Any]] {
+            for imageData in images {
+                var imageContent: [String: Value] = [
+                    "type": .string("image")
+                ]
+                
+                if let data = imageData["data"] as? String {
+                    imageContent["data"] = .string(data)
+                }
+                if let mimeType = imageData["mimeType"] as? String {
+                    imageContent["mimeType"] = .string(mimeType)
+                }
+                if let metadata = imageData["metadata"] as? [String: Any] {
+                    imageContent["metadata"] = .object(convertArgumentsToMCPValues(metadata))
+                }
+                
+                contentArray.append(.object(imageContent))
+            }
+        }
+        
+        // Add documents if present
+        if let documents = input["documents"] as? [[String: Any]] {
+            for docData in documents {
+                var docContent: [String: Value] = [
+                    "type": .string("document")
+                ]
+                
+                if let data = docData["data"] as? String {
+                    docContent["data"] = .string(data)
+                }
+                if let mimeType = docData["mimeType"] as? String {
+                    docContent["mimeType"] = .string(mimeType)
+                }
+                if let name = docData["name"] as? String {
+                    docContent["name"] = .string(name)
+                }
+                
+                contentArray.append(.object(docContent))
+            }
+        }
+        
+        // Add audio if present
+        if let audioList = input["audio"] as? [[String: Any]] {
+            for audioData in audioList {
+                var audioContent: [String: Value] = [
+                    "type": .string("audio")
+                ]
+                
+                if let data = audioData["data"] as? String {
+                    audioContent["data"] = .string(data)
+                }
+                if let mimeType = audioData["mimeType"] as? String {
+                    audioContent["mimeType"] = .string(mimeType)
+                }
+                
+                contentArray.append(.object(audioContent))
+            }
+        }
+        
+        // If we have multi-modal content, use content array
+        if !contentArray.isEmpty {
+            mcpArguments["content"] = .array(contentArray)
+        }
+        
+        // Add any other parameters that aren't multi-modal
+        for (key, value) in input {
+            if !["text", "images", "documents", "audio", "content", "attachments"].contains(key.lowercased()) {
+                mcpArguments[key] = convertToMCPValue(value)
+            }
+        }
+        
+        // If no content array was created, fall back to simple conversion
+        if contentArray.isEmpty {
+            return convertArgumentsToMCPValues(input)
+        }
+        
+        return mcpArguments
+    }
+    
+    /**
+     * Extracts multi-modal content from tool execution result.
+     *
+     * @param content Array of content items from tool execution
+     * @return Extracted multi-modal content in standardized format
+     */
+    private func extractMultiModalContent(_ content: [Tool.Content]) -> [[String: Any]] {
+        var resultContent: [[String: Any]] = []
+        
+        for item in content {
+            do {
+                switch item {
+                case .text(let text):
+                    resultContent.append([
+                        "type": "text",
+                        "text": text
+                    ])
+                    
+                case .image(let data, let mimeType, let metadata):
+                    var imageResult: [String: Any] = [
+                        "type": "image",
+                        "mimeType": mimeType,
+                        "size": data.count
+                    ]
+                    
+                    // Add metadata if available
+                    if let metadata = metadata {
+                        imageResult["metadata"] = metadata
+                        
+                        if let width = metadata["width"] as? Int,
+                           let height = metadata["height"] as? Int {
+                            imageResult["description"] = "Generated \(width)x\(height) image"
+                        } else {
+                            imageResult["description"] = "Generated image"
+                        }
+                    } else {
+                        imageResult["description"] = "Generated image"
+                    }
+                    
+                    // Convert image data to base64 for transport
+                    let base64String = try data.base64EncodedString()
+                    imageResult["data"] = base64String
+                    
+                    resultContent.append(imageResult)
+                    
+                case .audio(let data, let mimeType):
+                    let base64String = try data.base64EncodedString()
+                    resultContent.append([
+                        "type": "audio",
+                        "mimeType": mimeType,
+                        "size": data.count,
+                        "data": base64String,
+                        "description": "Generated audio"
+                    ])
+
+                case .resource(let uri, let mimeType, let text):
+                    var resourceResult: [String: Any] = [
+                        "type": "resource",
+                        "uri": uri,
+                        "mimeType": mimeType
+                    ]
+                    
+                    if let text = text {
+                        resourceResult["text"] = text
+                        resourceResult["description"] = "Resource from \(uri)"
+                    } else {
+                        resourceResult["description"] = "Resource reference: \(uri)"
+                    }
+                    
+                    resultContent.append(resourceResult)
+                }
+            } catch {
+                logger.error("Error processing content item: \(error)")
+                resultContent.append([
+                    "type": "text",
+                    "text": "Error processing content: \(error.localizedDescription)"
+                ])
+            }
+        }
+        
+        // If no specific content was found, return a simple success message
+        if resultContent.isEmpty {
+            resultContent.append([
+                "type": "text",
+                "text": "Tool execution completed successfully"
+            ])
+        }
+        
+        return resultContent
+    }
+    
+    /**
+     * Executes a Bedrock tool through the MCP interface with multi-modal support.
+     * Handles complex JSON structures, images, documents, audio, and tool execution.
      *
      * @param id The unique identifier for this tool execution
      * @param name The name of the tool to execute
-     * @param input The input parameters (can be any valid JSON structure)
+     * @param input The input parameters (supports multi-modal content)
      * @return A dictionary containing the execution result
      */
     func executeBedrockTool(id: String, name: String, input: Any) async -> [String: Any] {
@@ -307,37 +679,10 @@ class MCPManager: ObservableObject {
             // Ensure we have a valid ID
             let toolId = id.isEmpty ? "tool_\(UUID().uuidString)" : id
             
-            // Convert input to MCPInterface.JSON format
-            let jsonArguments: MCPInterface.JSON
-            
             logger.info("Executing tool '\(name)' with input: \(input)")
             
-            if let inputString = input as? String {
-                // Parse JSON string input
-                if let data = inputString.data(using: .utf8),
-                   let jsonObject = try? JSONSerialization.jsonObject(with: data) {
-                    jsonArguments = try convertToMCPJSON(jsonObject)
-                } else {
-                    // Plain string - wrap as text
-                    jsonArguments = .object(["text": .string(inputString)])
-                }
-            } else if let inputDict = input as? [String: Any] {
-                // Dictionary input
-                jsonArguments = try convertToMCPJSON(inputDict)
-            } else if let inputDict = input as? [String: String] {
-                // Simple string dictionary
-                var jsonDict = [String: MCPInterface.JSON.Value]()
-                for (key, value) in inputDict {
-                    jsonDict[key] = .string(value)
-                }
-                jsonArguments = .object(jsonDict)
-            } else {
-                // Try to serialize other types
-                jsonArguments = try convertToMCPJSON(input)
-            }
-            
             // Find server with the tool
-            var serverWithTool: (name: String, client: MCPClient)? = nil
+            var serverWithTool: (name: String, client: Client)? = nil
             
             for (serverName, client) in activeClients {
                 if let tools = availableTools[serverName],
@@ -350,14 +695,27 @@ class MCPManager: ObservableObject {
             if let (serverName, client) = serverWithTool {
                 logger.debug("Executing tool '\(name)' on server '\(serverName)'")
                 
-                let result = try await client.callTool(named: name, arguments: jsonArguments)
-                let extractedText = extractTextFromToolResult(result)
+                // Convert input to proper format for tool call with multi-modal support
+                let arguments = try convertToMultiModalArguments(input)
                 
-                return [
-                    "id": toolId,
-                    "status": "success",
-                    "content": [["json": ["text": extractedText]]]
-                ]
+                let (content, isError) = try await client.callTool(name: name, arguments: arguments)
+                
+                let extractedContent = extractMultiModalContent(content)
+                
+                let hasError = isError ?? false
+                if hasError {
+                    return [
+                        "id": toolId,
+                        "status": "error",
+                        "content": extractedContent
+                    ]
+                } else {
+                    return [
+                        "id": toolId,
+                        "status": "success",
+                        "content": extractedContent
+                    ]
+                }
             } else {
                 logger.warning("Tool '\(name)' not found in any connected server")
                 return [
@@ -366,21 +724,13 @@ class MCPManager: ObservableObject {
                     "content": [["text": "Tool '\(name)' not found in any connected server"]]
                 ]
             }
-        } catch let error as MCPClientError {
+        } catch let error as MCPError {
             logger.error("Tool execution error: \(error)")
-            
-            let errorMessage: String
-            switch error {
-            case .toolCallError(let executionErrors):
-                errorMessage = executionErrors.map { $0.text }.joined(separator: "\n")
-            default:
-                errorMessage = error.localizedDescription
-            }
             
             return [
                 "id": id,
                 "status": "error",
-                "content": [["json": ["text": "Error executing tool:\n\(errorMessage)"]]]
+                "content": [["json": ["text": "Error executing tool:\n\(error.localizedDescription)"]]]
             ]
         } catch {
             logger.error("Tool execution error: \(error)")
@@ -389,189 +739,6 @@ class MCPManager: ObservableObject {
                 "status": "error",
                 "content": [["json": ["text": "Error executing tool:\n\(error.localizedDescription)"]]]
             ]
-        }
-    }
-
-    /**
-     * Converts any Swift type to MCPInterface.JSON format
-     *
-     * @param value The value to convert
-     * @return MCPInterface.JSON representation
-     */
-    func convertToMCPJSON(_ value: Any) throws -> MCPInterface.JSON {
-        if let dict = value as? [String: Any] {
-            var jsonDict = [String: MCPInterface.JSON.Value]()
-            for (key, val) in dict {
-                jsonDict[key] = try convertToMCPJSONValue(val)
-            }
-            return .object(jsonDict)
-        } else if let array = value as? [Any] {
-            var jsonArray = [MCPInterface.JSON.Value]()
-            for item in array {
-                jsonArray.append(try convertToMCPJSONValue(item))
-            }
-            return .array(jsonArray)
-        } else {
-            // Single value - wrap in object
-            return .object(["value": try convertToMCPJSONValue(value)])
-        }
-    }
-
-    /**
-     * Converts any Swift value to MCPInterface.JSON.Value format
-     *
-     * @param value The value to convert
-     * @return MCPInterface.JSON.Value representation
-     */
-    func convertToMCPJSONValue(_ value: Any) throws -> MCPInterface.JSON.Value {
-        switch value {
-        case let string as String:
-            return .string(string)
-        case let int as Int:
-            return .number(Double(int))
-        case let double as Double:
-            return .number(double)
-        case let bool as Bool:
-            return .bool(bool)
-        case let dict as [String: Any]:
-            var jsonDict = [String: MCPInterface.JSON.Value]()
-            for (key, val) in dict {
-                jsonDict[key] = try convertToMCPJSONValue(val)
-            }
-            return .object(jsonDict)
-        case let array as [Any]:
-            var jsonArray = [MCPInterface.JSON.Value]()
-            for item in array {
-                jsonArray.append(try convertToMCPJSONValue(item))
-            }
-            return .array(jsonArray)
-        case is NSNull:
-            return .null
-        case nil:
-            return .null
-        default:
-            // Try JSON serialization for unknown types
-            if JSONSerialization.isValidJSONObject([value]) {
-                let data = try JSONSerialization.data(withJSONObject: value)
-                let jsonStr = String(data: data, encoding: .utf8) ?? String(describing: value)
-                return .string(jsonStr)
-            } else {
-                return .string(String(describing: value))
-            }
-        }
-    }
-
-    /**
-     * Parses a JSON string to a native Swift object (Dictionary or Array).
-     *
-     * @param jsonString The JSON string to parse
-     * @return The parsed Swift object or nil if parsing fails
-     */
-    func parseJSONString(_ jsonString: String) -> Any? {
-        guard let data = jsonString.data(using: .utf8) else { return nil }
-        
-        do {
-            return try JSONSerialization.jsonObject(with: data, options: [])
-        } catch {
-            logger.error("Failed to parse JSON string: \(error)")
-            return nil
-        }
-    }
-
-    /**
-     * Extracts text from a tool execution result.
-     *
-     * @param result The CallToolResult from executing the tool
-     * @return Extracted text representation of the result
-     */
-    private func extractTextFromToolResult(_ result: CallToolResult) -> String {
-        // Extract text from content blocks - handling only text content for now
-        let textContent = result.content.compactMap { content -> String? in
-            // Check for text content
-            if let textContent = content.text {
-                return textContent.text
-            }
-            
-            // Add other content type handling if needed
-            return nil
-        }.joined(separator: "\n")
-        
-        if textContent.isEmpty {
-            // If we couldn't extract text directly, serialize the whole result
-            do {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = .prettyPrinted
-                let data = try encoder.encode(result)
-                return String(data: data, encoding: .utf8) ?? "Tool execution completed"
-            } catch {
-                logger.error("Failed to encode result: \(error)")
-                return "Tool execution completed"
-            }
-        }
-        
-        return textContent
-    }
-    
-    /**
-     * Converts string input values to appropriate types based on content.
-     * Handles numeric, boolean, null, and JSON conversions.
-     *
-     * @param input The input parameters as string dictionary
-     * @return Converted parameters with appropriate types
-     */
-    private func convertInputToArguments(_ input: [String: String]) -> [String: Any] {
-        var result: [String: Any] = [:]
-        
-        for (key, value) in input {
-            // Convert numbers, booleans, null
-            if let intValue = Int(value) {
-                result[key] = intValue
-            } else if let doubleValue = Double(value) {
-                result[key] = doubleValue
-            } else if value.lowercased() == "true" {
-                result[key] = true
-            } else if value.lowercased() == "false" {
-                result[key] = false
-            } else if value == "null" {
-                result[key] = NSNull()
-            } else {
-                // Try JSON conversion
-                if let jsonData = value.data(using: .utf8),
-                   let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) {
-                    result[key] = jsonObject
-                } else {
-                    result[key] = value
-                }
-            }
-        }
-        
-        return result
-    }
-}
-
-extension Transport {
-    // Safe wrapper around stdioProcess without using internal APIs
-    public static func safeStdioProcess(
-        _ executable: String,
-        args: [String] = [],
-        cwd: String? = nil,
-        env: [String: String]? = nil,
-        verbose: Bool = false
-    ) -> Swift.Result<Transport, Error> {
-        do {
-            // 원래 stdioProcess 함수를 직접 호출하되, try-catch로 감싸서 assertion failure 방지
-            let transport = try Transport.stdioProcess(
-                executable,
-                args: args,
-                cwd: cwd,
-                env: env,
-                verbose: verbose
-            )
-            return .success(transport)
-        } catch {
-            // 오류 로깅 후 정상적으로 오류 반환
-            print("Failed to create transport: \(error.localizedDescription)")
-            return .failure(error)
         }
     }
 }

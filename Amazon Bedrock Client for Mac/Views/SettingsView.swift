@@ -462,37 +462,11 @@ struct DeveloperSettingsView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .overlay(alignment: .bottom) {
-            // Node.js warning banner, shown only when needed
-            if !nodeInstalled && !isCheckingNode {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Node.js is required to run MCP servers. It doesn't appear to be installed on your system.")
-                    
-                    Button("Install Node.js") {
-                        NSWorkspace.shared.open(URL(string: "https://nodejs.org/")!)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(8)
-                .padding()
-                .transition(.opacity)
-            }
-        }
         .sheet(isPresented: $showingAddServerSheet) {
             ServerFormView(isPresented: $showingAddServerSheet)
         }
         .onAppear {
             settingsManager.loadMCPServers()
-            // Run Node.js check asynchronously to avoid UI lag
-            isCheckingNode = true
-            Task {
-                await checkNodeInstalled()
-                isCheckingNode = false
-            }
         }
     }
 

@@ -582,7 +582,7 @@ struct AdvancedOptionsMenu: View {
     private var supportsThinking: Bool {
         let id = modelId.lowercased()
         // Claude 3.7 and DeepSeek R1 support thinking
-        return id.contains("claude-3-7") || id.contains("deepseek") && id.contains("r1")
+        return id.contains("claude-3-7") || id.contains("claude-sonnet-4") ||  id.contains("claude-opus-4") || id.contains("deepseek") && id.contains("r1")
     }
     
     // Check if model has always-on reasoning that can't be toggled
@@ -601,23 +601,27 @@ struct AdvancedOptionsMenu: View {
     private var supportsStreamingTools: Bool {
         let id = modelId.lowercased()
         return (
-            // Claude models
+            // Claude models (3 and 4 series)
             (id.contains("claude-3") && !id.contains("haiku")) ||
-            // Anthropic models except Claude 3 Haiku
-            (id.contains("anthropic") && id.contains("claude-3") && !id.contains("haiku")) ||
+            id.contains("claude-sonnet-4") ||
+            id.contains("claude-opus-4") ||
+            
             // Amazon Nova models
             (id.contains("amazon") && (
                 id.contains("nova-pro") ||
                 id.contains("nova-lite") ||
-                id.contains("nova-micro")
+                id.contains("nova-micro") ||
+                id.contains("nova-premier")
             )) ||
+            
             // Cohere Command-R models
             (id.contains("cohere") && id.contains("command-r")) ||
+            
             // AI21 Jamba models (except Instruct)
             (id.contains("ai21") && id.contains("jamba") && !id.contains("instruct"))
         )
     }
-    
+
     // Check if MCP tools should be available and shown
     private var shouldShowMCPTools: Bool {
         return settingManager.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty && supportsStreamingTools

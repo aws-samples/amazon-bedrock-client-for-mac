@@ -9,7 +9,6 @@ import SwiftUI
 import Combine
 import AWSBedrockRuntime
 import Logging
-import MCPInterface
 import Smithy
 
 // MARK: - Required Type Definitions for Bedrock API integration
@@ -430,7 +429,7 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - Tool Conversion and Processing
     
-    private func convertMCPToolsToBedrockFormat(_ tools: [MCPManager.MCPToolInfo]) -> AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolConfiguration {
+    private func convertMCPToolsToBedrockFormat(_ tools: [MCPToolInfo]) -> AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolConfiguration {
         logger.debug("Converting \(tools.count) MCP tools to Bedrock format")
         
         let bedrockTools: [AWSBedrockRuntime.BedrockRuntimeClientTypes.Tool] = tools.compactMap { toolInfo in
@@ -854,9 +853,13 @@ class ChatViewModel: ObservableObject {
                     )
                 }
 
-                // Add both messages to history - critical to maintain proper toolUse/toolResult balance
+                // Add both messages to history
                 conversationHistory.append(assistantMessage)
                 conversationHistory.append(toolResultMessage)
+
+                logger.debug("Added assistant message with tool_use ID: \(toolUseInfo.toolUseId)")
+                logger.debug("Added user message with tool_result ID: \(toolUseInfo.toolUseId)")
+
                 await saveConversationHistory(conversationHistory)
                 
                 // Create updated messages list - important to correctly map conversation to SDK messages
@@ -962,23 +965,59 @@ class ChatViewModel: ObservableObject {
                 resultStatus = status
                 
                 if status == "success" {
-                    if let content = mcpToolResult["content"] as? [[String: Any]],
-                       let firstContent = content.first,
-                       let jsonContent = firstContent["json"],
-                       let json = jsonContent as? [String: String],
-                       let text = json["text"] {
-                        resultText = text
-                    } else if let content = mcpToolResult["content"] as? [[String: Any]],
-                             let firstContent = content.first,
-                             let text = firstContent["text"] as? String {
-                        resultText = text
-                    } else if let contentText = mcpToolResult["result"] as? String {
-                        resultText = contentText
+                    // Handle multi-modal content
+                    if let content = mcpToolResult["content"] as? [[String: Any]] {
+                        var textResults: [String] = []
+                        var hasImages = false
+                        var hasAudio = false
+                        
+                        for contentItem in content {
+                            if let type = contentItem["type"] as? String {
+                                switch type {
+                                case "text":
+                                    if let text = contentItem["text"] as? String {
+                                        textResults.append(text)
+                                    }
+                                case "image":
+                                    hasImages = true
+                                    if let description = contentItem["description"] as? String {
+                                        textResults.append("🖼️ \(description)")
+                                    } else {
+                                        textResults.append("🖼️ Generated image")
+                                    }
+                                case "audio":
+                                    hasAudio = true
+                                    if let description = contentItem["description"] as? String {
+                                        textResults.append("🔊 \(description)")
+                                    } else {
+                                        textResults.append("🔊 Generated audio")
+                                    }
+                                case "resource":
+                                    if let text = contentItem["text"] as? String {
+                                        textResults.append(text)
+                                    } else if let description = contentItem["description"] as? String {
+                                        textResults.append("📄 \(description)")
+                                    }
+                                default:
+                                    if let description = contentItem["description"] as? String {
+                                        textResults.append(description)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        resultText = textResults.isEmpty ? "Tool execution completed" : textResults.joined(separator: "\n")
+                    } else {
+                        resultText = "Tool execution completed"
                     }
                 } else {
                     if let error = mcpToolResult["error"] as? String {
                         resultError = error
                         resultText = "Tool execution failed: \(error)"
+                    } else if let content = mcpToolResult["content"] as? [[String: Any]],
+                             let firstContent = content.first,
+                             let text = firstContent["text"] as? String {
+                        resultText = text
                     }
                 }
             }
@@ -990,7 +1029,7 @@ class ChatViewModel: ObservableObject {
         
         return SendableToolResult(status: resultStatus, text: resultText, error: resultError)
     }
-    
+
     // Helper method to append text during streaming
     private func appendTextToMessage(_ text: String, messageId: UUID, shouldCreateNewMessage: Bool = false) {
         DispatchQueue.main.async { [weak self] in
@@ -1402,15 +1441,13 @@ class ChatViewModel: ObservableObject {
     
     /// Converts a BedrockMessage to AWS SDK format
     private func convertToBedrockMessage(_ message: BedrockMessage, modelId: String = "") throws -> AWSBedrockRuntime.BedrockRuntimeClientTypes.Message {
-        // Separate collections for thinking and non-thinking blocks
-        var thinkingBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
-        var otherBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
+        var contentBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
         
-        // Process all content blocks with the original switch structure
+        // Process all content blocks in their original order (no reordering!)
         for content in message.content {
             switch content {
             case .text(let text):
-                otherBlocks.append(.text(text))
+                contentBlocks.append(.text(text))
                 
             case .thinking(let thinkingContent):
                 // Skip reasoning content for user messages
@@ -1424,7 +1461,7 @@ class ChatViewModel: ObservableObject {
                     signature: thinkingContent.signature,
                     text: thinkingContent.text
                 )
-                thinkingBlocks.append(.reasoningcontent(.reasoningtext(reasoningTextBlock)))
+                contentBlocks.append(.reasoningcontent(.reasoningtext(reasoningTextBlock)))
                 
             case .image(let imageContent):
                 // Convert to AWS image format
@@ -1442,7 +1479,7 @@ class ChatViewModel: ObservableObject {
                                   userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image to data"])
                 }
                 
-                otherBlocks.append(.image(AWSBedrockRuntime.BedrockRuntimeClientTypes.ImageBlock(
+                contentBlocks.append(.image(AWSBedrockRuntime.BedrockRuntimeClientTypes.ImageBlock(
                     format: awsFormat,
                     source: .bytes(imageData)
                 )))
@@ -1469,7 +1506,7 @@ class ChatViewModel: ObservableObject {
                                   userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 document to data"])
                 }
                 
-                otherBlocks.append(.document(AWSBedrockRuntime.BedrockRuntimeClientTypes.DocumentBlock(
+                contentBlocks.append(.document(AWSBedrockRuntime.BedrockRuntimeClientTypes.DocumentBlock(
                     format: docFormat,
                     name: documentContent.name,
                     source: .bytes(documentData)
@@ -1483,7 +1520,7 @@ class ChatViewModel: ObservableObject {
                     toolUseId: toolResultContent.toolUseId
                 )
                 
-                otherBlocks.append(.toolresult(toolResultBlock))
+                contentBlocks.append(.toolresult(toolResultBlock))
                 
             case .tooluse(let toolUseContent):
                 // Convert to AWS tool use format
@@ -1498,7 +1535,7 @@ class ChatViewModel: ObservableObject {
                         toolUseId: toolUseContent.toolUseId
                     )
                     
-                    otherBlocks.append(.tooluse(toolUseBlock))
+                    contentBlocks.append(.tooluse(toolUseBlock))
                     logger.debug("Successfully converted toolUse block for '\(toolUseContent.name)' with input: \(inputDocument)")
                     
                 } catch {
@@ -1507,27 +1544,9 @@ class ChatViewModel: ObservableObject {
             }
         }
         
-        // Combine blocks - thinking blocks first, then others
-        var contentBlocks: [AWSBedrockRuntime.BedrockRuntimeClientTypes.ContentBlock] = []
-        
-        // thinking blocks
-        contentBlocks.append(contentsOf: thinkingBlocks)
-        
-        // tooluse, toolresult
-        let toolBlocks = otherBlocks.filter { block in
-            if case .tooluse = block { return true }
-            if case .toolresult = block { return true }
-            return false
-        }
-        contentBlocks.append(contentsOf: toolBlocks)
-        
-        // text, image, document
-        let remainingBlocks = otherBlocks.filter { block in
-            if case .tooluse = block { return false }
-            if case .toolresult = block { return false }
-            return true
-        }
-        contentBlocks.append(contentsOf: remainingBlocks)
+        // IMPORTANT: Do NOT reorder content blocks!
+        // The order must be preserved to maintain proper tool_use/tool_result pairing
+        // Removing all the previous reordering logic that was causing ValidationException
         
         return AWSBedrockRuntime.BedrockRuntimeClientTypes.Message(
             content: contentBlocks,
