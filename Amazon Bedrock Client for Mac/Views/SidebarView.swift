@@ -12,7 +12,9 @@ import AppKit
 
 /// Optimized search index for O(log n) chat content searching with relevance scoring
 @MainActor
-class ChatSearchIndex {
+class ChatSearchIndex: ObservableObject {
+    static let shared = ChatSearchIndex()
+    
     // Map of chat IDs to indexed chat content tokens
     var chatIndexMap: [String: Set<String>] = [:]
     private var _chatIndexMap: [String: Set<String>] = [:]
@@ -24,8 +26,14 @@ class ChatSearchIndex {
     // Chat metadata for relevance scoring
     var chatMetadata: [String: ChatMetadata] = [:]
     
+    // Track indexed chats to avoid reindexing
+    var indexedChatIds: Set<String> = []
+    var lastIndexUpdate: Date = Date.distantPast
+    
     // Minimum word length for indexing
     private let minWordLength = 2
+    
+    private init() {} // Singleton pattern
     
     struct ChatMetadata {
         let title: String
@@ -40,60 +48,104 @@ class ChatSearchIndex {
         self._keywordIndex = keywordIndex
     }
     
-    /// Updates the search index with current chats and their content
+    /// Updates the search index with current chats and their content - optimized to avoid unnecessary reindexing
     func updateIndex(chats: [ChatModel], chatManager: ChatManager) {
-        // Create new indexes to avoid race conditions
-        var newChatIndexMap: [String: Set<String>] = [:]
-        var newKeywordIndex: [String: Set<String>] = [:]
-        var newChatMetadata: [String: ChatMetadata] = [:]
+        let currentChatIds = Set(chats.map { $0.chatId })
         
-        for chat in chats {
-            // Get chat messages
-            let messages = chatManager.getMessages(for: chat.chatId)
-            
-            // Index chat title and model name with higher weight
-            var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
-            var totalTextLength = searchableContent.count
-            
-            // Add message content
-            for message in messages {
-                let messageText = message.text.lowercased()
-                searchableContent += " \(messageText)"
-                totalTextLength += messageText.count
-            }
-            
-            // Tokenize content into words for faster searching
-            let words = searchableContent
-                .split { !$0.isLetter && !$0.isNumber }
-                .map { String($0) }
-                .filter { $0.count >= minWordLength }
-            
-            // Store tokenized content
-            let wordSet = Set(words)
-            newChatIndexMap[chat.chatId] = wordSet
-            
-            // Store metadata for relevance scoring
-            newChatMetadata[chat.chatId] = ChatMetadata(
-                title: chat.title,
-                modelName: chat.name,
-                messageCount: messages.count,
-                lastMessageDate: chat.lastMessageDate,
-                totalTextLength: totalTextLength
-            )
-            
-            // Update inverted index
-            for word in wordSet {
-                if newKeywordIndex[word] == nil {
-                    newKeywordIndex[word] = []
+        // Check if we need to update at all
+        let needsUpdate = currentChatIds != indexedChatIds || 
+                         Date().timeIntervalSince(lastIndexUpdate) > 300 // 5 minutes
+        
+        if !needsUpdate {
+            return // Skip reindexing if nothing changed
+        }
+        
+        // Only reindex new or modified chats
+        var newChatIndexMap = chatIndexMap
+        var newKeywordIndex = keywordIndex
+        var newChatMetadata = chatMetadata
+        
+        // Remove deleted chats from index
+        let deletedChatIds = indexedChatIds.subtracting(currentChatIds)
+        for deletedId in deletedChatIds {
+            // Remove from chat index
+            if let words = newChatIndexMap[deletedId] {
+                newChatIndexMap.removeValue(forKey: deletedId)
+                
+                // Remove from keyword index
+                for word in words {
+                    newKeywordIndex[word]?.remove(deletedId)
+                    if newKeywordIndex[word]?.isEmpty == true {
+                        newKeywordIndex.removeValue(forKey: word)
+                    }
                 }
-                newKeywordIndex[word]?.insert(chat.chatId)
             }
+            newChatMetadata.removeValue(forKey: deletedId)
+        }
+        
+        // Add or update new/modified chats
+        let newOrModifiedChatIds = currentChatIds.subtracting(indexedChatIds)
+        for chat in chats where newOrModifiedChatIds.contains(chat.chatId) {
+            indexSingleChat(chat, chatManager: chatManager, 
+                          chatIndexMap: &newChatIndexMap, 
+                          keywordIndex: &newKeywordIndex, 
+                          chatMetadata: &newChatMetadata)
         }
         
         // Update class properties
         chatIndexMap = newChatIndexMap
         keywordIndex = newKeywordIndex
         chatMetadata = newChatMetadata
+        indexedChatIds = currentChatIds
+        lastIndexUpdate = Date()
+    }
+    
+    /// Index a single chat - extracted for reuse
+    private func indexSingleChat(_ chat: ChatModel, 
+                               chatManager: ChatManager,
+                               chatIndexMap: inout [String: Set<String>],
+                               keywordIndex: inout [String: Set<String>],
+                               chatMetadata: inout [String: ChatMetadata]) {
+        // Get chat messages
+        let messages = chatManager.getMessages(for: chat.chatId)
+        
+        // Index chat title and model name with higher weight
+        var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
+        var totalTextLength = searchableContent.count
+        
+        // Add message content
+        for message in messages {
+            let messageText = message.text.lowercased()
+            searchableContent += " \(messageText)"
+            totalTextLength += messageText.count
+        }
+        
+        // Tokenize content into words for faster searching
+        let words = searchableContent
+            .split { !$0.isLetter && !$0.isNumber }
+            .map { String($0) }
+            .filter { $0.count >= minWordLength }
+        
+        // Store tokenized content
+        let wordSet = Set(words)
+        chatIndexMap[chat.chatId] = wordSet
+        
+        // Store metadata for relevance scoring
+        chatMetadata[chat.chatId] = ChatMetadata(
+            title: chat.title,
+            modelName: chat.name,
+            messageCount: messages.count,
+            lastMessageDate: chat.lastMessageDate,
+            totalTextLength: totalTextLength
+        )
+        
+        // Update inverted index
+        for word in wordSet {
+            if keywordIndex[word] == nil {
+                keywordIndex[word] = []
+            }
+            keywordIndex[word]?.insert(chat.chatId)
+        }
     }
     
     /// Performs optimized search with relevance scoring
@@ -213,7 +265,7 @@ struct SidebarView: View {
     @State private var selectionId = UUID()
     @State private var hoverStates: [String: Bool] = [:]
     @State private var searchText: String = ""
-    @State private var searchIndex = ChatSearchIndex()
+    @State private var searchIndex = ChatSearchIndex.shared
     @State private var searchResults: [String] = []
     @State private var isSearching: Bool = false
     @State private var searchDebounceTimer: Timer?
@@ -300,13 +352,15 @@ struct SidebarView: View {
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
         .onAppear {
-            // Initial organization and indexing only once at startup
+            // Initial organization only - search index will be updated lazily when needed
             organizeChatsInitial()
         }
         .onChange(of: chatManager.chats) { oldChats, newChats in
             // Only reorganize when chat count changes (add/remove)
             if oldChats.count != newChats.count {
                 throttledOrganizeChatsByDate()
+                // Update search index only when chats actually change
+                updateSearchIndexIfNeeded()
             }
         }
         .onChange(of: searchText) { _, _ in
@@ -554,6 +608,15 @@ struct SidebarView: View {
         // Cancel previous timer
         searchDebounceTimer?.invalidate()
         
+        // Update search index lazily only when search is actually used
+        if searchText.isEmpty {
+            searchResults = []
+            return
+        }
+        
+        // Ensure search index is up to date before searching
+        updateSearchIndexIfNeeded()
+        
         // Set new timer for debounced search (faster than chat search - 0.2s)
         searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
             executeSearch()
@@ -592,10 +655,11 @@ struct SidebarView: View {
                 // 3. Update selectionId (needed only for selection changes)
                 self.selectionId = UUID()
                 
-                // 4. Incrementally update search index in background
+                // 4. Mark that search index needs update for this new chat
                 Task(priority: .background) {
                     await MainActor.run {
-                        incrementalUpdateSearchIndex(for: newChat)
+                        // Reset indexed chat IDs to force reindex when search is used
+                        searchIndex.indexedChatIds.remove(newChat.chatId)
                     }
                 }
             }
@@ -624,58 +688,8 @@ struct SidebarView: View {
         }
     }
     
-    // Incremental update: Add new chat to search index
-    @MainActor
-    private func incrementalUpdateSearchIndex(for chat: ChatModel) {
-        // Get chat messages
-        let messages = chatManager.getMessages(for: chat.chatId)
-        
-        // Optimize by only indexing one chat
-        var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
-        var totalTextLength = searchableContent.count
-        
-        // Get chat messages - this could also be optimized if there are many messages
-        for message in messages {
-            let messageText = message.text.lowercased()
-            searchableContent += " \(messageText)"
-            totalTextLength += messageText.count
-        }
-        
-        // Tokenize content
-        let words = searchableContent
-            .split { !$0.isLetter && !$0.isNumber }
-            .map { String($0) }
-            .filter { $0.count >= 2 } // Minimum word length 2
-        
-        let wordSet = Set(words)
-        
-        // Update chat index map
-        var updatedChatIndexMap = self.searchIndex.chatIndexMap
-        updatedChatIndexMap[chat.chatId] = wordSet
-        
-        // Update keyword index
-        var updatedKeywordIndex = self.searchIndex.keywordIndex
-        for word in wordSet {
-            if updatedKeywordIndex[word] == nil {
-                updatedKeywordIndex[word] = []
-            }
-            updatedKeywordIndex[word]?.insert(chat.chatId)
-        }
-        
-        // Update metadata
-        var updatedChatMetadata = self.searchIndex.chatMetadata
-        updatedChatMetadata[chat.chatId] = ChatSearchIndex.ChatMetadata(
-            title: chat.title,
-            modelName: chat.name,
-            messageCount: messages.count,
-            lastMessageDate: chat.lastMessageDate,
-            totalTextLength: totalTextLength
-        )
-        
-        // Apply index updates
-        self.searchIndex.updateIndexDirect(chatIndexMap: updatedChatIndexMap, keywordIndex: updatedKeywordIndex)
-        self.searchIndex.chatMetadata = updatedChatMetadata
-    }
+    // Incremental update: Add new chat to search index - removed as it's now handled by lazy loading
+    // The search index will be updated when actually needed during search
     
     // Throttled organization function (prevents multiple calls in short time)
     private func throttledOrganizeChatsByDate() {
@@ -724,17 +738,14 @@ struct SidebarView: View {
     // Initial organization (run once at app startup)
     private func organizeChatsInitial() {
         throttledOrganizeChatsByDate()
-        updateSearchIndex()
+        // Don't update search index here - it will be updated lazily when needed
     }
     
-    // Optimized search index update - only called when needed
-    private func updateSearchIndex() {
+    // Optimized search index update - only called when needed and chats have changed
+    private func updateSearchIndexIfNeeded() {
         Task(priority: .background) {
-            isSearching = true
             await MainActor.run {
                 searchIndex.updateIndex(chats: chatManager.chats, chatManager: chatManager)
-                isSearching = false
-                performSearch()
             }
         }
     }

@@ -25,7 +25,6 @@
 		79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC12AD22A2F00993D09 /* BedrockClient.swift */; };
 		79610DDB2AD22A2F00993D09 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DC22AD22A2F00993D09 /* Assets.xcassets */; };
 		79610DE02AD22A2F00993D09 /* FirstResponderTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */; };
-		EDAE4CC62B3D943E99083227 /* SearchEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAE4CC52B3D943E99083226 /* SearchEngine.swift */; };
 		79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCA2AD22A2F00993D09 /* ChatModel.swift */; };
 		79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCB2AD22A2F00993D09 /* MessageData.swift */; };
 		79610DE42AD22A2F00993D09 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */; };
@@ -62,6 +61,7 @@
 		79FDE25B2DFBF456003960BC /* InferenceConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FDE25A2DFBF456003960BC /* InferenceConfigDropdown.swift */; };
 		79FF2B332D925EDB0075249D /* MCPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FF2B322D925ED10075249D /* MCPManager.swift */; };
 		79FF2B352D925F2E0075249D /* MCPModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FF2B342D925F280075249D /* MCPModels.swift */; };
+		EDAE4CC62B3D943E99083227 /* SearchEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAE4CC52B3D943E99083226 /* SearchEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,7 +103,6 @@
 		79610DC12AD22A2F00993D09 /* BedrockClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BedrockClient.swift; sourceTree = "<group>"; };
 		79610DC22AD22A2F00993D09 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FirstResponderTextField.swift; sourceTree = "<group>"; };
-		EDAE4CC52B3D943E99083226 /* SearchEngine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SearchEngine.swift; sourceTree = "<group>"; };
 		79610DCA2AD22A2F00993D09 /* ChatModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		79610DCB2AD22A2F00993D09 /* MessageData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageData.swift; sourceTree = "<group>"; };
 		79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -134,6 +133,7 @@
 		79FDE25A2DFBF456003960BC /* InferenceConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InferenceConfigDropdown.swift; sourceTree = "<group>"; };
 		79FF2B322D925ED10075249D /* MCPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPManager.swift; sourceTree = "<group>"; };
 		79FF2B342D925F280075249D /* MCPModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPModels.swift; sourceTree = "<group>"; };
+		EDAE4CC52B3D943E99083226 /* SearchEngine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SearchEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -697,7 +697,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.3.9;
+				MARKETING_VERSION = 1.3.10;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -743,7 +743,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.3.9;
+				MARKETING_VERSION = 1.3.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";
