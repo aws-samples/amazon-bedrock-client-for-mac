@@ -8,19 +8,22 @@
 import SwiftUI
 import MarkdownKit
 import WebKit
+import Combine
 
 // MARK: - LazyMarkdownView
 struct LazyMarkdownView: View {
     let text: String
     let fontSize: CGFloat
+    let searchRanges: [NSRange]
     @State private var height: CGFloat = .zero
     
     private let parser: ExtendedMarkdownParser
     private let htmlGenerator: CustomHtmlGenerator
     
-    init(text: String, fontSize: CGFloat) {
+    init(text: String, fontSize: CGFloat, searchRanges: [NSRange] = []) {
         self.text = text
         self.fontSize = fontSize
+        self.searchRanges = searchRanges
         self.parser = ExtendedMarkdownParser()
         self.htmlGenerator = CustomHtmlGenerator()
     }
@@ -29,6 +32,7 @@ struct LazyMarkdownView: View {
         HTMLStringView(
             htmlContent: generateHTML(from: text),
             fontSize: fontSize,
+            searchRanges: searchRanges,
             dynamicHeight: $height
         )
         .frame(height: height)
@@ -68,15 +72,31 @@ class CustomHtmlGenerator: HtmlGenerator {
         </svg>
         """
         
-        let codeHeader = """
-        <div class="code-header"><span class="language">\(languageDisplay)</span><button onclick="copyCode(this)">\(copyButtonSVG) Copy code</button></div>
+        let checkmarkSVG = """
+        <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
+            <path fill="currentColor" d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"></path>
+        </svg>
         """
         
         let code = lines.joined(separator: "")
         let escapedCode = escapeHtml(code)
+        let codeBlockId = "code-block-\(UUID().uuidString.prefix(8))"
         
         return """
-        <pre>\(codeHeader)<code class="language-\(languageIdentifier)">\(escapedCode)</code></pre>
+        <div class="code-block-container">
+            <div class="code-header">
+                <span class="language">\(languageDisplay)</span>
+            </div>
+            <pre id="\(codeBlockId)"><code class="language-\(languageIdentifier)">\(escapedCode)</code></pre>
+            <div class="code-footer">
+                <button class="copy-button-bottom" onclick="copyCodeAdvanced(this, '\(codeBlockId)')" data-code-id="\(codeBlockId)">
+                    <span class="copy-icon">\(copyButtonSVG)</span>
+                    <span class="copy-text">Copy code</span>
+                    <span class="copied-icon" style="display: none;">\(checkmarkSVG)</span>
+                    <span class="copied-text" style="display: none;">Copied!</span>
+                </button>
+            </div>
+        </div>
         """.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
@@ -158,6 +178,14 @@ struct ExpandableMarkdownItem: View {
     let header: String
     let text: String
     let fontSize: CGFloat
+    let searchRanges: [NSRange]
+    
+    init(header: String, text: String, fontSize: CGFloat, searchRanges: [NSRange] = []) {
+        self.header = header
+        self.text = text
+        self.fontSize = fontSize
+        self.searchRanges = searchRanges
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -183,7 +211,11 @@ struct ExpandableMarkdownItem: View {
             
             // Expandable content
             if isExpanded {
-                LazyMarkdownView(text: text, fontSize: fontSize - 2)
+                LazyMarkdownView(
+                    text: text, 
+                    fontSize: fontSize - 2,
+                    searchRanges: searchRanges
+                )
                     .padding(.leading, fontSize / 2)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -212,13 +244,15 @@ struct ExpandableMarkdownItem: View {
 // MARK: - MessageView
 struct MessageView: View {
     let message: MessageData
-    let searchQuery: String  // For highlighting search matches
+    let searchResult: SearchMatch?  // Enhanced search result
     var adjustedFontSize: CGFloat = -1 // One size smaller
     
     @StateObject var viewModel = MessageViewModel()
     @Environment(\.fontSize) private var fontSize: CGFloat
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @State private var isHovering = false
+    @State private var currentHighlightIndex = 0
+    @State private var scrollToMatchNotification: AnyCancellable?
     
     private let imageSize: CGFloat = 100
     
@@ -241,6 +275,12 @@ struct MessageView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovering = hovering
             }
+        }
+        .onAppear {
+            setupScrollToMatchNotification()
+        }
+        .onDisappear {
+            scrollToMatchNotification?.cancel()
         }
         .textSelection(.enabled)
     }
@@ -316,13 +356,18 @@ struct MessageView: View {
                 ExpandableMarkdownItem(
                     header: "Thinking",
                     text: thinking,
-                    fontSize: fontSize + adjustedFontSize - 2
+                    fontSize: fontSize + adjustedFontSize - 2,
+                    searchRanges: searchResult?.ranges ?? []
                 )
                 .padding(.vertical, 2)
             }
             
             // Main message content
-            LazyMarkdownView(text: message.text, fontSize: fontSize + adjustedFontSize)
+            LazyMarkdownView(
+                text: message.text, 
+                fontSize: fontSize + adjustedFontSize,
+                searchRanges: searchResult?.ranges ?? []
+            )
                 .sheet(isPresented: $viewModel.isShowingImageModal) {
                     if let data = viewModel.selectedImageData,
                        let imageToShow = NSImage(base64Encoded: data) {
@@ -339,7 +384,8 @@ struct MessageView: View {
                 ExpandableMarkdownItem(
                     header: "Using tool: \(toolUse.name)",
                     text: formatToolInput(toolUse.input),
-                    fontSize    : fontSize + adjustedFontSize - 2
+                    fontSize: fontSize + adjustedFontSize - 2,
+                    searchRanges: searchResult?.ranges ?? []
                 )
                 .padding(.vertical, 2)
             }
@@ -349,7 +395,8 @@ struct MessageView: View {
                 ExpandableMarkdownItem(
                     header: "Tool Result",
                     text: toolResult,
-                    fontSize: fontSize + adjustedFontSize - 2
+                    fontSize: fontSize + adjustedFontSize - 2,
+                    searchRanges: searchResult?.ranges ?? []
                 )
                 .padding(.vertical, 2)
             }
@@ -468,7 +515,8 @@ struct MessageView: View {
                     ExpandableMarkdownItem(
                         header: "Tool Result",
                         text: toolResult,
-                        fontSize: fontSize + adjustedFontSize - 2
+                        fontSize: fontSize + adjustedFontSize - 2,
+                        searchRanges: searchResult?.ranges ?? []
                     )
                     .padding(.vertical, 2)
                 }
@@ -513,14 +561,13 @@ struct MessageView: View {
     // Extract text content to a separate computed property
     private var textContent: some View {
         Group {
-            if searchQuery.isEmpty {
+            if let searchResult = searchResult, !searchResult.ranges.isEmpty {
+                // Use optimized highlighting when search matches exist
+                createHighlightedText(message.text, ranges: searchResult.ranges)
+                    .font(.system(size: fontSize + adjustedFontSize))
+            } else {
                 // Simple text without highlighting when no search
                 Text(message.text)
-                    .font(.system(size: fontSize + adjustedFontSize))
-                    .foregroundColor(.primary)
-            } else {
-                // Only use expensive highlighting when needed
-                createHighlightedText(message.text)
                     .font(.system(size: fontSize + adjustedFontSize))
                     .foregroundColor(.primary)
             }
@@ -548,29 +595,18 @@ struct MessageView: View {
         .offset(x: 8, y: 8)
     }
 
-    // Text highlighting for search matches
-    private func createHighlightedText(_ text: String) -> SwiftUI.Text {
+    // Enhanced text highlighting for search matches
+    private func createHighlightedText(_ text: String, ranges: [NSRange]) -> SwiftUI.Text {
         if #available(macOS 12.0, *) {
-            var attributed = AttributedString(text)
-            let lowerSearch = searchQuery.lowercased()
-            
-            guard !lowerSearch.isEmpty else {
-                return Text(attributed)
-            }
-            
-            let lowerText = text.lowercased()
-            var searchStartIndex = lowerText.startIndex
-            while let range = lowerText.range(of: lowerSearch, options: .caseInsensitive, range: searchStartIndex..<lowerText.endIndex) {
-                if let start = AttributedString.Index(range.lowerBound, within: attributed),
-                   let end = AttributedString.Index(range.upperBound, within: attributed) {
-                    let attrRange = start..<end
-                    attributed[attrRange].backgroundColor = .yellow.opacity(0.8)
-                    attributed[attrRange].foregroundColor = .black
-                }
-                searchStartIndex = range.upperBound
-            }
-            
-            return Text(attributed)
+            let highlightedText = TextHighlighter.createHighlightedText(
+                text: text,
+                searchRanges: ranges,
+                fontSize: fontSize + adjustedFontSize,
+                highlightColor: .yellow,
+                textColor: .primary,
+                currentMatchIndex: currentHighlightIndex
+            )
+            return Text(highlightedText.attributedString)
         } else {
             // Fallback for older versions
             return Text(text)
@@ -602,6 +638,50 @@ struct MessageView: View {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+    
+    // MARK: - Search Match Scrolling
+    
+    private func setupScrollToMatchNotification() {
+        scrollToMatchNotification = NotificationCenter.default
+            .publisher(for: NSNotification.Name("ScrollToSearchMatch"))
+            .sink { notification in
+                guard let userInfo = notification.userInfo,
+                      let messageIndex = userInfo["messageIndex"] as? Int,
+                      let matchIndex = userInfo["matchIndex"] as? Int,
+                      let searchQuery = userInfo["searchQuery"] as? String else {
+                    return
+                }
+                
+                // Check if this notification is for this message
+                if let searchMatch = searchResult,
+                   searchMatch.messageIndex == messageIndex {
+                    currentHighlightIndex = matchIndex
+                    scrollToSpecificMatch(matchIndex: matchIndex, searchQuery: searchQuery)
+                }
+            }
+    }
+    
+    private func scrollToSpecificMatch(matchIndex: Int, searchQuery: String) {
+        guard let searchMatch = searchResult,
+              matchIndex < searchMatch.ranges.count else {
+            return
+        }
+        
+        let targetRange = searchMatch.ranges[matchIndex]
+        
+        // For WebView content (markdown), send JavaScript to scroll to the match
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("ScrollToMatchInWebView"),
+                object: nil,
+                userInfo: [
+                    "range": targetRange,
+                    "searchQuery": searchQuery,
+                    "matchIndex": matchIndex
+                ]
+            )
+        }
+    }
 }
 
 // MARK: - CustomWKWebView
@@ -623,7 +703,16 @@ class CustomWKWebView: WKWebView {
 struct HTMLStringView: NSViewRepresentable {
     let htmlContent: String
     let fontSize: CGFloat
+    let searchRanges: [NSRange]
     @Binding var dynamicHeight: CGFloat
+    @State private var scrollToMatchNotification: AnyCancellable?
+    
+    init(htmlContent: String, fontSize: CGFloat, searchRanges: [NSRange] = [], dynamicHeight: Binding<CGFloat>) {
+        self.htmlContent = htmlContent
+        self.fontSize = fontSize
+        self.searchRanges = searchRanges
+        self._dynamicHeight = dynamicHeight
+    }
     
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -632,6 +721,7 @@ struct HTMLStringView: NSViewRepresentable {
         
         // Set up message handler for copy action
         config.userContentController.add(context.coordinator, name: "copyHandler")
+        config.userContentController.add(context.coordinator, name: "searchHandler")
         
         let webView = CustomWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -644,11 +734,52 @@ struct HTMLStringView: NSViewRepresentable {
             scrollView.scrollerStyle = .overlay
         }
         
+        // Set up scroll to match notification
+        context.coordinator.setupScrollToMatchNotification(webView: webView)
+        
         return webView
     }
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        nsView.loadHTMLString(wrapHTMLContent(htmlContent), baseURL: nil)
+        let htmlWithHighlights = addSearchHighlights(to: wrapHTMLContent(htmlContent))
+        
+        // Only reload if content has actually changed to preserve text selection
+        if htmlWithHighlights != context.coordinator.lastLoadedContent {
+            context.coordinator.lastLoadedContent = htmlWithHighlights
+            nsView.loadHTMLString(htmlWithHighlights, baseURL: nil)
+        }
+        
+        context.coordinator.searchRanges = searchRanges
+    }
+    
+    private func addSearchHighlights(to html: String) -> String {
+        guard !searchRanges.isEmpty else { return html }
+        
+        // Enhanced CSS for highlighting with better visibility
+        let highlightCSS = """
+        <style>
+        .search-highlight {
+            background-color: #ffff00 !important;
+            color: #000000 !important;
+            font-weight: bold !important;
+            padding: 1px 2px !important;
+            border-radius: 2px !important;
+            box-shadow: 0 0 3px rgba(255, 255, 0, 0.5) !important;
+        }
+        .search-highlight-current {
+            background-color: #ff6b35 !important;
+            color: #ffffff !important;
+            animation: pulse 1s ease-in-out !important;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        </style>
+        """
+        
+        return html.replacingOccurrences(of: "<head>", with: "<head>\(highlightCSS)")
     }
     
     func makeCoordinator() -> Coordinator {
@@ -659,9 +790,100 @@ struct HTMLStringView: NSViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: HTMLStringView
+        var searchRanges: [NSRange] = []
+        var lastLoadedContent: String = "" // Track last loaded content to prevent unnecessary reloads
+        private var scrollToMatchNotification: AnyCancellable?
         
         init(_ parent: HTMLStringView) {
             self.parent = parent
+        }
+        
+        func setupScrollToMatchNotification(webView: WKWebView) {
+            scrollToMatchNotification = NotificationCenter.default
+                .publisher(for: NSNotification.Name("ScrollToMatchInWebView"))
+                .sink { notification in
+                    guard let userInfo = notification.userInfo,
+                          let range = userInfo["range"] as? NSRange,
+                          let searchQuery = userInfo["searchQuery"] as? String,
+                          let matchIndex = userInfo["matchIndex"] as? Int else {
+                        return
+                    }
+                    
+                    self.scrollToMatchInWebView(webView: webView, range: range, searchQuery: searchQuery, matchIndex: matchIndex)
+                }
+        }
+        
+        private func scrollToMatchInWebView(webView: WKWebView, range: NSRange, searchQuery: String, matchIndex: Int) {
+            let escapedQuery = searchQuery.replacingOccurrences(of: "'", with: "\\'")
+            
+            let javascript = """
+            (function() {
+                // Remove previous highlights
+                document.querySelectorAll('.search-highlight, .search-highlight-current').forEach(el => {
+                    el.outerHTML = el.innerHTML;
+                });
+                
+                // Function to highlight text
+                function highlightText(node, query, targetIndex) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const text = node.textContent;
+                        const regex = new RegExp(query.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'gi');
+                        let match;
+                        let currentIndex = 0;
+                        let lastIndex = 0;
+                        const fragments = [];
+                        
+                        while ((match = regex.exec(text)) !== null) {
+                            // Add text before match
+                            if (match.index > lastIndex) {
+                                fragments.push(document.createTextNode(text.substring(lastIndex, match.index)));
+                            }
+                            
+                            // Create highlighted span
+                            const span = document.createElement('span');
+                            span.className = currentIndex === targetIndex ? 'search-highlight-current' : 'search-highlight';
+                            span.textContent = match[0];
+                            fragments.push(span);
+                            
+                            // Scroll to current match
+                            if (currentIndex === targetIndex) {
+                                setTimeout(() => {
+                                    span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }, 100);
+                            }
+                            
+                            lastIndex = regex.lastIndex;
+                            currentIndex++;
+                        }
+                        
+                        // Add remaining text
+                        if (lastIndex < text.length) {
+                            fragments.push(document.createTextNode(text.substring(lastIndex)));
+                        }
+                        
+                        if (fragments.length > 1) {
+                            const parent = node.parentNode;
+                            fragments.forEach(fragment => parent.insertBefore(fragment, node));
+                            parent.removeChild(node);
+                        }
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Skip code blocks and other elements that shouldn't be highlighted
+                        if (!['CODE', 'PRE', 'SCRIPT', 'STYLE'].includes(node.tagName)) {
+                            Array.from(node.childNodes).forEach(child => highlightText(child, query, targetIndex));
+                        }
+                    }
+                }
+                
+                // Start highlighting from body
+                highlightText(document.body, '\(escapedQuery)', \(matchIndex));
+            })();
+            """
+            
+            webView.evaluateJavaScript(javascript) { result, error in
+                if let error = error {
+                    print("JavaScript error: \(error)")
+                }
+            }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -752,51 +974,139 @@ struct HTMLStringView: NSViewRepresentable {
                     margin: 0;
                     padding: 0;
                 }
-                pre {
+                /* Code block styling with overlay copy button */
+                .code-block-container {
                     position: relative;
                     background-color: var(--code-background-color);
-                    padding: 0;
                     border-radius: 6px;
+                    overflow: hidden;
+                    margin: 16px 0;
+                    border: 1px solid var(--border-color);
+                }
+                
+                .code-header {
+                    display: flex;
+                    justify-content: flex-start;
+                    align-items: center;
+                    background-color: var(--header-background-color);
+                    padding: 8px 12px;
+                    font-size: 12px;
+                    color: var(--secondary-text-color);
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+                    border-bottom: 1px solid var(--border-color);
+                }
+                
+                .code-header .language {
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: var(--text-color);
+                }
+                
+                .code-wrapper {
+                    position: relative;
+                }
+                
+                pre {
+                    background-color: var(--code-background-color);
+                    padding: 16px;
+                    margin: 0;
                     overflow: auto;
                     white-space: pre;
                     font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
                     font-size: \(fontSize - 2)px;
                     color: var(--code-text-color);
-                    margin: 16px 0;
                     max-width: 100%;
+                    border-radius: 0;
                 }
+                
                 pre code {
                     display: block;
-                    padding: 12px;
-                    background-color: var(--code-background-color);
+                    background-color: transparent;
                     color: var(--code-text-color);
                     margin: 0;
-                }
-                .code-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    background-color: #21262d;
-                    padding: 4px 8px;
-                    font-size: 12px;
-                    color: #8b949e;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-                }
-                .code-header .language {
-                    font-weight: 500;
-                    margin-left: 8px; /* Added spacing for alignment */
-                }
-                .code-header button {
-                    background: none;
                     border: none;
-                    color: #8b949e;
+                    border-radius: 0;
+                    padding: 0;
+                }
+                
+                .code-footer {
+                    background-color: var(--header-background-color);
+                    padding: 8px 12px;
+                    border-top: 1px solid var(--border-color);
+                    display: flex;
+                    justify-content: flex-end;
+                }
+                
+                .copy-button-bottom {
+                    background: rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    color: var(--secondary-text-color);
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     font-size: 12px;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    transition: all 0.2s ease;
+                    font-family: inherit;
+                    min-width: 100px;
+                    justify-content: center;
+                    user-select: none;
+                    -webkit-user-select: none;
+                    pointer-events: auto !important;
+                    z-index: 10 !important;
                 }
-                .code-header button svg {
-                    margin-right: 4px;
+                
+                .copy-button-bottom:hover {
+                    background: rgba(255, 255, 255, 0.15);
+                    border-color: rgba(255, 255, 255, 0.3);
+                    color: var(--text-color);
+                    transform: translateY(-1px);
+                }
+                
+                .copy-button-bottom:active {
+                    transform: translateY(0);
+                    background: rgba(255, 255, 255, 0.2);
+                }
+                
+                .copy-button-bottom svg {
+                    margin-right: 6px;
+                    flex-shrink: 0;
+                    width: 14px;
+                    height: 14px;
+                }
+                
+                .copy-button-bottom.copying {
+                    background: rgba(34, 197, 94, 0.2);
+                    border-color: rgba(34, 197, 94, 0.4);
+                    color: #22c55e;
+                }
+                
+                .copy-button-bottom.copying .copy-icon,
+                .copy-button-bottom.copying .copy-text {
+                    display: none;
+                }
+                
+                .copy-button-bottom.copying .copied-icon,
+                .copy-button-bottom.copying .copied-text {
+                    display: inline-flex !important;
+                }
+                
+                /* Ensure button stays clickable during text generation */
+                .copy-button-bottom {
+                    pointer-events: auto !important;
+                    z-index: 10 !important;
+                }
+                
+                /* Animation for copy feedback */
+                @keyframes copySuccess {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+                
+                .copy-button-bottom.success {
+                    animation: copySuccess 0.3s ease;
                 }
                 code {
                     font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
@@ -883,16 +1193,177 @@ struct HTMLStringView: NSViewRepresentable {
             \(content)
             <script>
                 hljs.highlightAll();
-        
-                function copyCode(button) {
-                    var code = button.parentElement.nextElementSibling.innerText;
-                    window.webkit.messageHandlers.copyHandler.postMessage(code);
-        
-                    button.innerHTML = '<svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16"><path fill="currentColor" d="M3 2.5A1.5 1.5 0 014.5 1h6A1.5 1.5 0 0112 2.5V3h.5A1.5 1.5 0 0114 4.5v8A1.5 1.5 0 0112.5 14h-6A1.5 1.5 0 015 12.5V12H4.5A1.5 1.5 0 013 10.5v-8zM5 12.5a.5.5 0 00.5.5h6a.5.5 0 00.5-.5v-8a.5.5 0 00-.5-.5H12v6A1.5 1.5 0 0110.5 12H5v.5zM4 10.5v-8a.5.5 0 01.5-.5H5v6A1.5 1.5 0 006.5 9H12v1.5a.5.5 0 01-.5.5H5A1.5 1.5 0 013.5 9V4.5a.5.5 0 01.5-.5H4v6z"></path></svg> Copied';
-                    setTimeout(function() {
-                        button.innerHTML = '<svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16"><path fill="currentColor" d="M3 2.5A1.5 1.5 0 014.5 1h6A1.5 1.5 0 0112 2.5V3h.5A1.5 1.5 0 0114 4.5v8A1.5 1.5 0 0112.5 14h-6A1.5 1.5 0 015 12.5V12H4.5A1.5 1.5 0 013 10.5v-8zM5 12.5a.5.5 0 00.5.5h6a.5.5 0 00.5-.5v-8a.5.5 0 00-.5-.5H12v6A1.5 1.5 0 0110.5 12H5v.5zM4 10.5v-8a.5.5 0 01.5-.5H5v6A1.5 1.5 0 006.5 9H12v1.5a.5.5 0 01-.5.5H5A1.5 1.5 0 013.5 9V4.5a.5.5 0 01.5-.5H4v6z"></path></svg> Copy code';
+                
+                // Enhanced copy function with better reliability
+                function copyCodeAdvanced(button, codeBlockId) {
+                    // Prevent multiple clicks during animation
+                    if (button.classList.contains('copying')) {
+                        return;
+                    }
+                    
+                    try {
+                        // Get the code content more reliably
+                        const codeBlock = document.getElementById(codeBlockId);
+                        if (!codeBlock) {
+                            console.error('Code block not found:', codeBlockId);
+                            return;
+                        }
+                        
+                        const codeElement = codeBlock.querySelector('code');
+                        if (!codeElement) {
+                            console.error('Code element not found in block:', codeBlockId);
+                            return;
+                        }
+                        
+                        // Get the raw text content, preserving formatting
+                        let codeText = codeElement.textContent || codeElement.innerText || '';
+                        
+                        // Clean up any extra whitespace but preserve code structure
+                        codeText = codeText.trim();
+                        
+                        // Send to native clipboard handler
+                        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyHandler) {
+                            window.webkit.messageHandlers.copyHandler.postMessage(codeText);
+                        } else {
+                            // Fallback for testing
+                            console.log('Code copied:', codeText);
+                        }
+                        
+                        // Visual feedback
+                        showCopyFeedback(button);
+                        
+                    } catch (error) {
+                        console.error('Error copying code:', error);
+                        showCopyError(button);
+                    }
+                }
+                
+                function showCopyFeedback(button) {
+                    // Add copying state
+                    button.classList.add('copying', 'success');
+                    
+                    // Update button content
+                    const copyIcon = button.querySelector('.copy-icon');
+                    const copyText = button.querySelector('.copy-text');
+                    const copiedIcon = button.querySelector('.copied-icon');
+                    const copiedText = button.querySelector('.copied-text');
+                    
+                    if (copyIcon) copyIcon.style.display = 'none';
+                    if (copyText) copyText.style.display = 'none';
+                    if (copiedIcon) copiedIcon.style.display = 'inline';
+                    if (copiedText) copiedText.style.display = 'inline';
+                    
+                    // Reset after delay
+                    setTimeout(() => {
+                        button.classList.remove('copying', 'success');
+                        
+                        if (copyIcon) copyIcon.style.display = 'inline';
+                        if (copyText) copyText.style.display = 'inline';
+                        if (copiedIcon) copiedIcon.style.display = 'none';
+                        if (copiedText) copiedText.style.display = 'none';
                     }, 2000);
                 }
+                
+                function showCopyError(button) {
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '❌ Error';
+                    button.style.color = '#ef4444';
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.style.color = '';
+                    }, 2000);
+                }
+                
+                // Legacy function for backward compatibility
+                function copyCode(button) {
+                    try {
+                        const codeElement = button.parentElement.nextElementSibling;
+                        if (codeElement && codeElement.tagName === 'CODE') {
+                            const code = codeElement.textContent || codeElement.innerText || '';
+                            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyHandler) {
+                                window.webkit.messageHandlers.copyHandler.postMessage(code.trim());
+                            }
+                            showCopyFeedback(button);
+                        }
+                    } catch (error) {
+                        console.error('Error in legacy copy function:', error);
+                        showCopyError(button);
+                    }
+                }
+                
+                // Ensure buttons remain clickable during dynamic content updates
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Set up mutation observer to maintain button functionality
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'childList') {
+                                // Re-enable copy buttons if they were affected
+                                const copyButtons = document.querySelectorAll('.copy-button');
+                                copyButtons.forEach(button => {
+                                    button.style.pointerEvents = 'auto';
+                                    button.style.zIndex = '1000';
+                                });
+                            }
+                        });
+                    });
+                    
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                });
+                
+                // Text selection preservation functions
+                let savedSelection = null;
+                
+                function saveSelection() {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        savedSelection = {
+                            startContainer: range.startContainer,
+                            startOffset: range.startOffset,
+                            endContainer: range.endContainer,
+                            endOffset: range.endOffset,
+                            collapsed: range.collapsed
+                        };
+                    }
+                }
+                
+                function restoreSelection() {
+                    if (savedSelection && window.getSelection) {
+                        try {
+                            const selection = window.getSelection();
+                            const range = document.createRange();
+                            
+                            // Verify nodes still exist in DOM
+                            if (document.contains(savedSelection.startContainer) && 
+                                document.contains(savedSelection.endContainer)) {
+                                range.setStart(savedSelection.startContainer, savedSelection.startOffset);
+                                range.setEnd(savedSelection.endContainer, savedSelection.endOffset);
+                                
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                            }
+                        } catch (e) {
+                            // Selection restoration failed, clear saved selection
+                            savedSelection = null;
+                        }
+                    }
+                }
+                
+                // Save selection before any potential DOM updates
+                document.addEventListener('selectionchange', function() {
+                    saveSelection();
+                });
+                
+                // Prevent text selection interference with copy buttons
+                document.addEventListener('selectstart', function(e) {
+                    if (e.target.closest('.copy-button-bottom')) {
+                        e.preventDefault();
+                    }
+                });
             </script>
         </body>
         </html>

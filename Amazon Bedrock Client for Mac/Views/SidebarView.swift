@@ -10,7 +10,7 @@ import AppKit
 
 // MARK: - Chat Search Index
 
-/// Optimized search index for O(log n) chat content searching
+/// Optimized search index for O(log n) chat content searching with relevance scoring
 @MainActor
 class ChatSearchIndex {
     // Map of chat IDs to indexed chat content tokens
@@ -20,9 +20,20 @@ class ChatSearchIndex {
     // Inverted index: keyword -> chat IDs that contain it
     var keywordIndex: [String: Set<String>] = [:]
     private var _keywordIndex: [String: Set<String>] = [:]
-
+    
+    // Chat metadata for relevance scoring
+    var chatMetadata: [String: ChatMetadata] = [:]
+    
     // Minimum word length for indexing
     private let minWordLength = 2
+    
+    struct ChatMetadata {
+        let title: String
+        let modelName: String
+        let messageCount: Int
+        let lastMessageDate: Date
+        let totalTextLength: Int
+    }
 
     func updateIndexDirect(chatIndexMap: [String: Set<String>], keywordIndex: [String: Set<String>]) {
         self._chatIndexMap = chatIndexMap
@@ -34,15 +45,21 @@ class ChatSearchIndex {
         // Create new indexes to avoid race conditions
         var newChatIndexMap: [String: Set<String>] = [:]
         var newKeywordIndex: [String: Set<String>] = [:]
+        var newChatMetadata: [String: ChatMetadata] = [:]
         
         for chat in chats {
-            // Index chat title and model name
-            var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
-            
-            // Get chat messages and add to searchable content
+            // Get chat messages
             let messages = chatManager.getMessages(for: chat.chatId)
+            
+            // Index chat title and model name with higher weight
+            var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
+            var totalTextLength = searchableContent.count
+            
+            // Add message content
             for message in messages {
-                searchableContent += " \(message.text.lowercased())"
+                let messageText = message.text.lowercased()
+                searchableContent += " \(messageText)"
+                totalTextLength += messageText.count
             }
             
             // Tokenize content into words for faster searching
@@ -54,6 +71,15 @@ class ChatSearchIndex {
             // Store tokenized content
             let wordSet = Set(words)
             newChatIndexMap[chat.chatId] = wordSet
+            
+            // Store metadata for relevance scoring
+            newChatMetadata[chat.chatId] = ChatMetadata(
+                title: chat.title,
+                modelName: chat.name,
+                messageCount: messages.count,
+                lastMessageDate: chat.lastMessageDate,
+                totalTextLength: totalTextLength
+            )
             
             // Update inverted index
             for word in wordSet {
@@ -67,12 +93,18 @@ class ChatSearchIndex {
         // Update class properties
         chatIndexMap = newChatIndexMap
         keywordIndex = newKeywordIndex
+        chatMetadata = newChatMetadata
     }
     
-    /// Performs optimized search with O(log n) complexity
+    /// Performs optimized search with relevance scoring
     func search(query: String) -> [String] {
         if query.isEmpty {
-            return Array(chatIndexMap.keys)
+            // Return all chats sorted by last message date
+            return chatMetadata.keys.sorted { chatId1, chatId2 in
+                let date1 = chatMetadata[chatId1]?.lastMessageDate ?? Date.distantPast
+                let date2 = chatMetadata[chatId2]?.lastMessageDate ?? Date.distantPast
+                return date1 > date2
+            }
         }
         
         // Tokenize query
@@ -82,36 +114,89 @@ class ChatSearchIndex {
             .filter { $0.count >= minWordLength }
         
         if searchTerms.isEmpty {
-            return Array(chatIndexMap.keys)
+            return []
         }
         
-        // Find matching chat IDs
-        var result: Set<String>?
+        // Calculate relevance scores for each chat
+        var chatScores: [String: Double] = [:]
         
-        for term in searchTerms {
-            var matchingChats = Set<String>()
+        for (chatId, words) in chatIndexMap {
+            var score = 0.0
+            var hasMatch = false
             
-            // Find chats containing this term
-            for (keyword, chatIds) in keywordIndex {
-                if keyword.contains(term) {
-                    matchingChats.formUnion(chatIds)
+            for term in searchTerms {
+                var termMatched = false
+                
+                // Exact word match
+                if words.contains(term) {
+                    score += 10.0
+                    termMatched = true
+                    hasMatch = true
+                }
+                
+                // Partial word match (only if term is at least 3 characters and matches beginning or contains)
+                if term.count >= 3 {
+                    for word in words {
+                        if word != term && (word.hasPrefix(term) || (word.count >= 4 && word.contains(term))) {
+                            score += 3.0
+                            termMatched = true
+                            hasMatch = true
+                        }
+                    }
+                }
+                
+                // Title and model name matches (more strict)
+                if let metadata = chatMetadata[chatId] {
+                    let titleLower = metadata.title.lowercased()
+                    let modelLower = metadata.modelName.lowercased()
+                    
+                    // Title exact match
+                    if titleLower.contains(term) {
+                        score += 20.0
+                        termMatched = true
+                        hasMatch = true
+                    }
+                    
+                    // Model name exact match
+                    if modelLower.contains(term) {
+                        score += 15.0
+                        termMatched = true
+                        hasMatch = true
+                    }
+                }
+                
+                // If this term didn't match anything, this chat is not relevant
+                if !termMatched {
+                    score = 0.0
+                    hasMatch = false
+                    break
                 }
             }
             
-            // Intersect with previous results
-            if result == nil {
-                result = matchingChats
-            } else {
-                result?.formIntersection(matchingChats)
-            }
-            
-            // Early exit if no matches
-            if result?.isEmpty ?? true {
-                return []
+            // Only include chats that have actual matches
+            if hasMatch && score > 0 {
+                // Add bonus scores only if there's a base match
+                if let metadata = chatMetadata[chatId] {
+                    // Recency bonus (more recent chats get higher scores)
+                    let daysSinceLastMessage = Date().timeIntervalSince(metadata.lastMessageDate) / (24 * 60 * 60)
+                    let recencyBonus = max(0, 3.0 - daysSinceLastMessage * 0.05)
+                    score += recencyBonus
+                    
+                    // Message count bonus (more active chats get slight bonus)
+                    let activityBonus = min(Double(metadata.messageCount) * 0.05, 2.0)
+                    score += activityBonus
+                }
+                
+                chatScores[chatId] = score
             }
         }
         
-        return Array(result ?? [])
+        // Sort by relevance score (highest first)
+        return chatScores.keys.sorted { chatId1, chatId2 in
+            let score1 = chatScores[chatId1] ?? 0
+            let score2 = chatScores[chatId2] ?? 0
+            return score1 > score2
+        }
     }
 }
 
@@ -131,6 +216,7 @@ struct SidebarView: View {
     @State private var searchIndex = ChatSearchIndex()
     @State private var searchResults: [String] = []
     @State private var isSearching: Bool = false
+    @State private var searchDebounceTimer: Timer?
     @Environment(\.colorScheme) private var colorScheme
     
     // Performance optimization properties
@@ -463,14 +549,24 @@ struct SidebarView: View {
     
     // MARK: - Methods
 
-    /// Executes search against the index and updates results
+    /// Executes search against the index and updates results with debouncing
     private func performSearch() {
+        // Cancel previous timer
+        searchDebounceTimer?.invalidate()
+        
+        // Set new timer for debounced search (faster than chat search - 0.2s)
+        searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
+            executeSearch()
+        }
+    }
+    
+    private func executeSearch() {
         if searchText.isEmpty {
             searchResults = []
             return
         }
         
-        // Run search in the background
+        // Run search in the background with higher priority for sidebar
         Task(priority: .userInitiated) {
             isSearching = true
             let results = await MainActor.run {
@@ -531,13 +627,18 @@ struct SidebarView: View {
     // Incremental update: Add new chat to search index
     @MainActor
     private func incrementalUpdateSearchIndex(for chat: ChatModel) {
+        // Get chat messages
+        let messages = chatManager.getMessages(for: chat.chatId)
+        
         // Optimize by only indexing one chat
         var searchableContent = "\(chat.title.lowercased()) \(chat.name.lowercased())"
+        var totalTextLength = searchableContent.count
         
         // Get chat messages - this could also be optimized if there are many messages
-        let messages = chatManager.getMessages(for: chat.chatId)
         for message in messages {
-            searchableContent += " \(message.text.lowercased())"
+            let messageText = message.text.lowercased()
+            searchableContent += " \(messageText)"
+            totalTextLength += messageText.count
         }
         
         // Tokenize content
@@ -561,8 +662,19 @@ struct SidebarView: View {
             updatedKeywordIndex[word]?.insert(chat.chatId)
         }
         
+        // Update metadata
+        var updatedChatMetadata = self.searchIndex.chatMetadata
+        updatedChatMetadata[chat.chatId] = ChatSearchIndex.ChatMetadata(
+            title: chat.title,
+            modelName: chat.name,
+            messageCount: messages.count,
+            lastMessageDate: chat.lastMessageDate,
+            totalTextLength: totalTextLength
+        )
+        
         // Apply index updates
         self.searchIndex.updateIndexDirect(chatIndexMap: updatedChatIndexMap, keywordIndex: updatedKeywordIndex)
+        self.searchIndex.chatMetadata = updatedChatMetadata
     }
     
     // Throttled organization function (prevents multiple calls in short time)

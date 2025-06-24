@@ -20,21 +20,24 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sharedMediaDataSource = SharedMediaDataSource()
     @StateObject private var transcribeManager = TranscribeStreamingManager()
+    @StateObject private var searchEngine = SearchEngine()
     @ObservedObject var backendModel: BackendModel
     
     @FocusState private var isSearchFocused: Bool
     @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
     
     @State private var isAtBottom: Bool = true
+    @State private var isSearchActive: Bool = false // Add search state tracking
     
     // Font size adjustment state
     @AppStorage("adjustedFontSize") private var adjustedFontSize: Int = -1
     
-    // Search bar
+    // Enhanced search state
     @State private var showSearchBar: Bool = false
     @State private var searchQuery: String = ""
     @State private var currentMatchIndex: Int = 0
-    @State private var matches: [Int] = []
+    @State private var searchResult: SearchResult = SearchResult(matches: [], totalMatches: 0, searchTime: 0)
+    @State private var searchDebounceTimer: Timer?
     
     init(chatId: String, backendModel: BackendModel) {
         let sharedMediaDataSource = SharedMediaDataSource()
@@ -85,13 +88,14 @@ struct ChatView: View {
         .onChange(of: showSearchBar) { _, newValue in
             AppStateManager.shared.isSearchFieldActive = newValue && isSearchFocused
             if !newValue {
-                searchQuery = ""
-                matches = []
-                currentMatchIndex = 0
+                clearSearch()
             }
         }
         .onChange(of: isSearchFocused) { _, newValue in
             AppStateManager.shared.isSearchFieldActive = showSearchBar && newValue
+        }
+        .onChange(of: searchQuery) { _, newQuery in
+            performDebouncedSearch(query: newQuery)
         }
         .onAppear {
             registerKeyboardShortcuts()
@@ -165,8 +169,8 @@ struct ChatView: View {
                 .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
                     handleBottomAnchorChange(bottomY, containerHeight: outerGeo.size.height)
                 }
-                .onChange(of: matches) { _, newMatches in
-                    jumpToFirstMatch(newMatches, proxy: proxy)
+                .onChange(of: searchResult) { _, newResult in
+                    jumpToFirstMatch(newResult, proxy: proxy)
                 }
                 .onChange(of: currentMatchIndex) { _, idx in
                     jumpToMatchIndex(idx, proxy: proxy)
@@ -181,7 +185,11 @@ struct ChatView: View {
     ) -> some View {
         let messageList = VStack(spacing: 2) {
             ForEach(Array(viewModel.messages.enumerated()), id: \.offset) { idx, message in
-                MessageView(message: message, searchQuery: searchQuery, adjustedFontSize: CGFloat(adjustedFontSize))
+                MessageView(
+                    message: message, 
+                    searchResult: getSearchResultForMessage(idx),
+                    adjustedFontSize: CGFloat(adjustedFontSize)
+                )
                     .id(idx)
                     .frame(maxWidth: .infinity)
             }
@@ -198,8 +206,8 @@ struct ChatView: View {
             messageList
         }
         .onChange(of: viewModel.messages) { _, _ in
-            // If the user was at bottom, wait briefly for layout and scroll down again
-            if isAtBottom {
+            // If the user was at bottom and not searching, wait briefly for layout and scroll down again
+            if isAtBottom && searchQuery.isEmpty {
                 Task {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
                     withAnimation {
@@ -208,10 +216,12 @@ struct ChatView: View {
                 }
             }
         }
-        // Scroll to bottom whenever the count of messages changes
+        // Scroll to bottom whenever the count of messages changes (but not during search)
         .onChange(of: viewModel.messages.count) { _, _ in
-            withAnimation {
-                proxy.scrollTo("Bottom", anchor: .bottom)
+            if searchQuery.isEmpty {
+                withAnimation {
+                    proxy.scrollTo("Bottom", anchor: .bottom)
+                }
             }
         }
         .task {
@@ -291,45 +301,74 @@ struct ChatView: View {
                 .frame(minWidth: 140)
                 .focused($isSearchFocused)
                 .onSubmit { goToNextMatch() }
-                .onChange(of: searchQuery) { _, _ in
-                    performSearch()
+                .onReceive(NotificationCenter.default.publisher(for: NSControl.textDidChangeNotification)) { _ in
+                    // Additional change detection for more responsive search
                 }
         }
     }
     
     private var matchCounterComponent: some View {
-        Text("\(currentMatchIndex + (matches.isEmpty ? 0 : 1)) of \(matches.count)")
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
-            .frame(width: 70, alignment: .leading)
-            .opacity(matches.isEmpty ? 0.5 : 1.0)
+        HStack(spacing: 4) {
+            if searchResult.totalMatches > 0 {
+                Text("\(currentMatchIndex + 1) of \(searchResult.totalMatches)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                
+                if searchResult.searchTime > 0.001 {
+                    Text("(\(String(format: "%.1f", searchResult.searchTime * 1000))ms)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            } else if !searchQuery.isEmpty {
+                Text("No matches")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Enter search term")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(minWidth: 100, alignment: .leading)
     }
     
     private var navigationButtonsComponent: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             Button(action: goToPrevMatch) {
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 13))
-                    .foregroundColor(matches.isEmpty ? Color.secondary.opacity(0.5) : Color.secondary)
-                    .padding(4)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(searchResult.totalMatches == 0 ? Color.secondary.opacity(0.5) : Color.primary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                    )
             }
             .buttonStyle(PlainButtonStyle())
-            .disabled(matches.isEmpty)
-            .contentShape(Rectangle())
+            .disabled(searchResult.totalMatches == 0)
+            .help("Previous match")
             
             Button(action: goToNextMatch) {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 13))
-                    .foregroundColor(matches.isEmpty ? Color.secondary.opacity(0.5) : Color.secondary)
-                    .padding(4)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(searchResult.totalMatches == 0 ? Color.secondary.opacity(0.5) : Color.primary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                    )
             }
             .buttonStyle(PlainButtonStyle())
-            .disabled(matches.isEmpty)
-            .contentShape(Rectangle())
+            .disabled(searchResult.totalMatches == 0)
+            .help("Next match")
         }
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.7))
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                )
         )
     }
     
@@ -337,9 +376,7 @@ struct ChatView: View {
         Button(action: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 showSearchBar = false
-                searchQuery = ""
-                matches = []
-                currentMatchIndex = 0
+                clearSearch()
             }
         }) {
             Text("Done")
@@ -383,54 +420,108 @@ struct ChatView: View {
         .padding(.top, 12)
     }
     
-    // MARK: - Search Logic
+    // MARK: - Enhanced Search Logic
+    
+    private func performDebouncedSearch(query: String) {
+        // Cancel previous timer
+        searchDebounceTimer?.invalidate()
+        
+        // Set new timer for debounced search
+        searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+            performSearch(query: query)
+        }
+    }
+    
+    private func performSearch(query: String) {
+        let result = searchEngine.search(query: query, in: viewModel.messages)
+        
+        DispatchQueue.main.async {
+            self.searchResult = result
+            self.currentMatchIndex = 0
+        }
+    }
+    
+    private func clearSearch() {
+        searchQuery = ""
+        searchResult = SearchResult(matches: [], totalMatches: 0, searchTime: 0)
+        currentMatchIndex = 0
+        searchDebounceTimer?.invalidate()
+    }
+    
+    private func getSearchResultForMessage(_ messageIndex: Int) -> SearchMatch? {
+        return searchResult.matches.first { $0.messageIndex == messageIndex }
+    }
     
     private func handleBottomAnchorChange(_ bottomY: CGFloat, containerHeight: CGFloat) {
         let threshold: CGFloat = 50
         isAtBottom = (bottomY <= containerHeight + threshold)
     }
     
-    private func jumpToFirstMatch(_ newMatches: [Int], proxy: ScrollViewProxy) {
-        if let first = newMatches.first {
-            withAnimation {
-                proxy.scrollTo(first, anchor: .center)
+    private func jumpToFirstMatch(_ result: SearchResult, proxy: ScrollViewProxy) {
+        guard let firstMatch = result.matches.first else { return }
+        scrollToMatch(messageIndex: firstMatch.messageIndex, matchIndex: 0, proxy: proxy)
+    }
+    
+    private func jumpToMatchIndex(_ idx: Int, proxy: ScrollViewProxy) {
+        guard searchResult.totalMatches > 0 else { return }
+        
+        // Find the message and match position for the current match index
+        var currentCount = 0
+        for match in searchResult.matches {
+            let matchCount = match.ranges.count
+            if idx < currentCount + matchCount {
+                let localMatchIndex = idx - currentCount
+                scrollToMatch(messageIndex: match.messageIndex, matchIndex: localMatchIndex, proxy: proxy)
+                return
+            }
+            currentCount += matchCount
+        }
+    }
+    
+    private func scrollToMatch(messageIndex: Int, matchIndex: Int, proxy: ScrollViewProxy) {
+        // Temporarily disable auto-scroll to bottom
+        let wasAtBottom = isAtBottom
+        isAtBottom = false
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            // First scroll to the message
+            proxy.scrollTo(messageIndex, anchor: .center)
+        }
+        
+        // Then notify the specific message to highlight and scroll to the exact match
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("ScrollToSearchMatch"),
+                object: nil,
+                userInfo: [
+                    "messageIndex": messageIndex,
+                    "matchIndex": matchIndex,
+                    "searchQuery": self.searchQuery
+                ]
+            )
+            
+            // Keep auto-scroll disabled for a bit longer to prevent interference
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                // Only restore auto-scroll if we were actually at bottom before
+                if wasAtBottom {
+                    self.isAtBottom = true
+                }
             }
         }
     }
     
-    private func jumpToMatchIndex(_ idx: Int, proxy: ScrollViewProxy) {
-        guard matches.indices.contains(idx) else { return }
-        let targetId = matches[idx]
-        withAnimation {
-            proxy.scrollTo(targetId, anchor: .center)
-        }
-    }
-    
-    private func performSearch() {
-        let lowerQuery = searchQuery.lowercased()
-        if lowerQuery.isEmpty {
-            matches = []
-            currentMatchIndex = 0
-            return
-        }
-        matches = viewModel.messages.indices.filter { idx in
-            viewModel.messages[idx].text.lowercased().contains(lowerQuery)
-        }
-        currentMatchIndex = 0
-    }
-    
     private func goToPrevMatch() {
-        guard !matches.isEmpty else { return }
+        guard searchResult.totalMatches > 0 else { return }
         if currentMatchIndex > 0 {
             currentMatchIndex -= 1
         } else {
-            currentMatchIndex = matches.count - 1
+            currentMatchIndex = searchResult.totalMatches - 1
         }
     }
     
     private func goToNextMatch() {
-        guard !matches.isEmpty else { return }
-        if currentMatchIndex < matches.count - 1 {
+        guard searchResult.totalMatches > 0 else { return }
+        if currentMatchIndex < searchResult.totalMatches - 1 {
             currentMatchIndex += 1
         } else {
             currentMatchIndex = 0

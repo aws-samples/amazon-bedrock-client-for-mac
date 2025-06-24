@@ -205,15 +205,31 @@ class ChatViewModel: ObservableObject {
         self.chatManager = chatManager
         self.sharedMediaDataSource = sharedMediaDataSource
         
-        guard let model = chatManager.getChatModel(for: chatId) else {
-            fatalError("Chat model not found for id: \(chatId)")
+        // Try to get existing chat model, or create a temporary one if not found
+        if let model = chatManager.getChatModel(for: chatId) {
+            self.chatModel = model
+            self.selectedPlaceholder = ""
+            setupStreamingEnabled()
+            setupBindings()
+        } else {
+            // Create a temporary model and load asynchronously
+            logger.warning("Chat model not found for id: \(chatId), will attempt to load or create")
+            self.chatModel = ChatModel(
+                id: chatId,
+                chatId: chatId,
+                name: "Loading...",
+                title: "Loading...",
+                description: "",
+                provider: "bedrock",
+                lastMessageDate: Date()
+            )
+            self.selectedPlaceholder = ""
+            
+            // Try to load the model asynchronously
+            Task {
+                await loadChatModel()
+            }
         }
-        self.chatModel = model
-        
-        self.selectedPlaceholder = ""
-        
-        setupStreamingEnabled()
-        setupBindings()
     }
     
     // MARK: - Setup Methods
@@ -242,16 +258,43 @@ class ChatViewModel: ObservableObject {
     }
     
     private func loadChatModel() async {
-        for _ in 0..<10 {
+        // Try to find existing model for up to 10 attempts
+        for attempt in 0..<10 {
             if let model = chatManager.getChatModel(for: chatId) {
-                self.chatModel = model
-                setupStreamingEnabled()
-                setupBindings()
+                await MainActor.run {
+                    self.chatModel = model
+                    setupStreamingEnabled()
+                    setupBindings()
+                }
+                logger.info("Successfully loaded chat model for id: \(chatId) after \(attempt + 1) attempts")
                 return
             }
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
         }
-        logger.error("Error: Chat model not found for id: \(chatId)")
+        
+        // If still not found, create a new chat
+        logger.warning("Chat model still not found for id: \(chatId) after 10 attempts, creating new chat")
+        
+        await MainActor.run {
+            // Use default values since we can't access BackendModel properties directly
+            chatManager.createNewChat(
+                modelId: "claude-3-5-sonnet-20241022-v2:0", // Default model
+                modelName: "Claude 3.5 Sonnet",
+                modelProvider: "anthropic"
+            ) { [weak self] newModel in
+                guard let self = self else { return }
+                
+                // Update the chat ID if it was changed during creation
+                if newModel.id != self.chatId {
+                    logger.info("Chat ID changed from \(self.chatId) to \(newModel.id)")
+                }
+                
+                self.chatModel = newModel
+                self.setupStreamingEnabled()
+                self.setupBindings()
+                logger.info("Successfully created new chat model with id: \(newModel.id)")
+            }
+        }
     }
     
     // MARK: - Public Methods

@@ -19,6 +19,7 @@ struct MainView: View {
     @State private var isHovering = false
     @State private var alertInfo: AlertInfo?
     @State private var hasInitialized = false
+    @State private var isCreatingInitialChat = false // 중복 생성 방지 플래그
     @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
     private var logger = Logger(label: "MainView")
     
@@ -56,8 +57,8 @@ struct MainView: View {
             }
         }
         .onChange(of: organizedChatModels) { _, _ in
-            // Auto-create chat when models are loaded
-            if hasInitialized && selection == nil {
+            // Auto-create chat when models are loaded (only once)
+            if hasInitialized && selection == nil && !isCreatingInitialChat {
                 createNewChatIfNeeded()
             }
         }
@@ -239,11 +240,21 @@ struct MainView: View {
     // MARK: - Chat Creation
     
     private func createNewChatIfNeeded() {
+        // 이미 채팅 생성 중이면 중단
+        guard !isCreatingInitialChat else {
+            logger.info("Chat creation already in progress, skipping...")
+            return
+        }
+        
         // Only create if we have a selected model and no current chat
         guard case let .chat(selectedModel) = menuSelection,
               selection == nil || selection == .newChat else {
             return
         }
+        
+        // 중복 생성 방지 플래그 설정
+        isCreatingInitialChat = true
+        logger.info("Creating new chat with model: \(selectedModel.name)")
         
         chatManager.createNewChat(
             modelId: selectedModel.id,
@@ -253,6 +264,8 @@ struct MainView: View {
             newChat.lastMessageDate = Date()
             DispatchQueue.main.async {
                 self.selection = .chat(newChat)
+                self.isCreatingInitialChat = false // 플래그 해제
+                self.logger.info("Successfully created new chat: \(newChat.chatId)")
             }
         }
     }
@@ -301,7 +314,6 @@ struct MainView: View {
                 .help("Settings")
                 
                 if case .chat(let selectedModel) = menuSelection {
-                    // Backend 인스턴스를 전달
                     InferenceConfigDropdown(
                         currentModelId: .constant(selectedModel.id),
                         backend: backendModel.backend
