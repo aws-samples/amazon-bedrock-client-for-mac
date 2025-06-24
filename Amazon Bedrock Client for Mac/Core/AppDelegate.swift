@@ -24,8 +24,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private var logger = Logger(label: "AppDelegate")
     
-    // Flag to control update check
-    private var hasCheckedForUpdates = false
+    // Track last update check time to prevent excessive checking
+    private var lastUpdateCheckTime: Date?
+    private let updateCheckInterval: TimeInterval = 3600 * 24 // 60 * 24 minutes minimum between checks
+    
+    // Flag to track if this is the first activation
+    private var isFirstActivation = true
 
     @objc func newChat(_ sender: Any?) {
         // Trigger new chat creation through the coordinator
@@ -48,19 +52,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Start the localhost server for local communication
         startLocalhostServer()
         
-        // Schedule update check with a delay and only if not already checked
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            guard let self = self, !self.hasCheckedForUpdates else { return }
-            self.hasCheckedForUpdates = true
-            
-            self.logger.info("Starting update check after launch delay")
-            // Access updateManager lazily here
-            self.updateManager?.checkForUpdates()
+        // Register for app activation notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
+        // No update check here - only in applicationDidBecomeActive
+        logger.info("App finished launching, update check will happen on first activation")
+    }
+    
+    @objc func applicationDidBecomeActive(_ notification: Notification) {
+        if isFirstActivation {
+            // First activation after launch - do initial update check
+            isFirstActivation = false
+            logger.info("First activation - performing initial update check")
+            performUpdateCheck()
+        } else {
+            // Regular activation - check if we should update based on time interval
+            logger.info("App became active - checking if update check is needed")
+            checkForUpdatesIfNeeded()
         }
+    }
+    
+    private func checkForUpdatesIfNeeded() {
+        let now = Date()
+        
+        // Check if enough time has passed since last update check
+        if let lastCheck = lastUpdateCheckTime {
+            let timeSinceLastCheck = now.timeIntervalSince(lastCheck)
+            if timeSinceLastCheck < updateCheckInterval {
+                logger.info("Skipping update check - only \(Int(timeSinceLastCheck)) seconds since last check")
+                return
+            }
+        }
+        
+        performUpdateCheck()
+    }
+    
+    private func performUpdateCheck() {
+        lastUpdateCheckTime = Date()
+        logger.info("Performing update check")
+        updateManager?.checkForUpdates()
     }
     
     func applicationWillTerminate(_ notification: Notification) {
         logger.info("Application will terminate")
+        
+        // Remove notification observers
+        NotificationCenter.default.removeObserver(self)
         
         // Only access updateManager if it was previously initialized
         if let manager = updateManager {

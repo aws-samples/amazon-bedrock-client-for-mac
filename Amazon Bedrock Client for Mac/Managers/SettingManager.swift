@@ -86,6 +86,11 @@ class SettingManager: ObservableObject {
             saveFavoriteModels()
         }
     }
+    @Published var modelInferenceConfigs: [String: ModelInferenceConfig] = [:] {
+        didSet {
+            saveModelInferenceConfigs()
+        }
+    }
 
     private var cancellables = Set<AnyCancellable>()
     
@@ -112,6 +117,14 @@ class SettingManager: ObservableObject {
             self.favoriteModelIds = decoded
         } else {
             self.favoriteModelIds = []
+        }
+        
+        // Load model inference configs
+        if let data = UserDefaults.standard.data(forKey: "modelInferenceConfigs"),
+           let decoded = try? JSONDecoder().decode([String: ModelInferenceConfig].self, from: data) {
+            self.modelInferenceConfigs = decoded
+        } else {
+            self.modelInferenceConfigs = [:]
         }
         setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
@@ -484,6 +497,42 @@ class SettingManager: ObservableObject {
                 logger.error("Failed to save MCP config file: \(error)")
             }
         }
+    }
+    
+    // MARK: - Model Inference Configuration Methods
+    
+    func getInferenceConfig(for modelId: String) -> ModelInferenceConfig {
+        // Return saved config if exists and override is enabled, otherwise return default
+        if let savedConfig = modelInferenceConfigs[modelId], savedConfig.overrideDefault {
+            return savedConfig
+        } else {
+            // Return default config based on model range
+            let range = ModelInferenceRange.getRangeForModel(modelId)
+            return ModelInferenceConfig(
+                maxTokens: range.defaultMaxTokens,
+                temperature: range.defaultTemperature,
+                topP: range.defaultTopP,
+                thinkingBudget: range.defaultThinkingBudget,
+                overrideDefault: false
+            )
+        }
+    }
+    
+    func setInferenceConfig(_ config: ModelInferenceConfig, for modelId: String) {
+        modelInferenceConfigs[modelId] = config
+        logger.info("Updated inference config for model \(modelId): override=\(config.overrideDefault)")
+    }
+    
+    func resetInferenceConfig(for modelId: String) {
+        modelInferenceConfigs.removeValue(forKey: modelId)
+        logger.info("Reset inference config for model \(modelId)")
+    }
+    
+    private func saveModelInferenceConfigs() {
+        if let encoded = try? JSONEncoder().encode(modelInferenceConfigs) {
+            UserDefaults.standard.set(encoded, forKey: "modelInferenceConfigs")
+        }
+        logger.debug("Saved model inference configs")
     }
 
     deinit {

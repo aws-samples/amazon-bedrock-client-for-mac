@@ -13,11 +13,12 @@ import AwsCommonRuntimeKit
 import Logging
 
 struct MainView: View {
-    @State private var selection: SidebarSelection? = .newChat
+    @State private var selection: SidebarSelection? = nil
     @State private var menuSelection: SidebarSelection? = nil
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var isHovering = false
     @State private var alertInfo: AlertInfo?
+    @State private var hasInitialized = false
     @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
     private var logger = Logger(label: "MainView")
     
@@ -46,12 +47,18 @@ struct MainView: View {
             fetchModels()
         }
         .onChange(of: selection) { _, newValue in
-            // If the selected chat doesn't exist, revert to newChat
+            // If the selected chat doesn't exist, create a new one
             if case .chat(let chat) = newValue {
                 if !chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
-                    selection = .newChat
+                    createNewChatIfNeeded()
                 }
                 menuSelection = .chat(chat)
+            }
+        }
+        .onChange(of: organizedChatModels) { _, _ in
+            // Auto-create chat when models are loaded
+            if hasInitialized && selection == nil {
+                createNewChatIfNeeded()
             }
         }
     }
@@ -59,37 +66,99 @@ struct MainView: View {
     // MARK: - Content
     @ViewBuilder
     private func contentView() -> some View {
-        switch selection {
-        case .newChat:
-            HomeView(selection: $selection, menuSelection: $menuSelection)
-        case .chat(let selectedChat):
-            ChatView(chatId: selectedChat.chatId, backendModel: backendModel)
-                .background(Color.background)
-                .id(selectedChat.chatId)
-        case .none:
-            emptyStateView
+        if let currentSelection = selection {
+            switch currentSelection {
+            case .newChat:
+                // This case shouldn't happen anymore, but fallback to creating new chat
+                Color.clear
+                    .onAppear {
+                        createNewChatIfNeeded()
+                    }
+            case .chat(let selectedChat):
+                ChatView(chatId: selectedChat.chatId, backendModel: backendModel)
+                    .background(Color.background)
+                    .id(selectedChat.chatId)
+            }
+        } else {
+            // Show loading or placeholder while initializing
+            welcomePlaceholderView
         }
     }
     
-    // MARK: - Empty State View
-    private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.blue)
+    // MARK: - Welcome Placeholder View (shown while loading models)
+    private var welcomePlaceholderView: some View {
+        VStack(spacing: 32) {
+            Spacer()
             
-            Text("Select a chat or start a new conversation")
-                .font(.title3)
-                .foregroundStyle(.secondary)
+            // Modern service icon with subtle elevation
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 72, height: 72)
+                    .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(.quaternary, lineWidth: 0.5)
+                    )
+                
+                Image("bedrock")
+                    .font(.system(size: 32, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.primary)
+            }
+            
+            // Clean title section
+            VStack(spacing: 12) {
+                Text("Amazon Bedrock")
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .tracking(-0.8)
+                
+                Text("Initializing generative AI models...")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            // Modern loading indicator
+            VStack(spacing: 16) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
+                    .scaleEffect(0.9)
+                    .opacity(0.8)
+                
+                Text("This may take a moment")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(
+            ZStack {
+                // Clean background
+                Color(NSColor.windowBackgroundColor)
+                
+                // Subtle radial overlay for depth
+                RadialGradient(
+                    colors: [
+                        Color.accentColor.opacity(0.03),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 200,
+                    endRadius: 600
+                )
+            }
+            .ignoresSafeArea()
+        )
     }
     
     // MARK: - Lifecycle
     
     private func setup() {
+        hasInitialized = true
         fetchModels()
     }
     
@@ -123,6 +192,11 @@ struct MainView: View {
                     self.organizedChatModels = mergedChatModels
                     self.selectDefaultModel()
                     settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
+                    
+                    // Auto-create first chat if none exists
+                    if selection == nil {
+                        createNewChatIfNeeded()
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -133,16 +207,13 @@ struct MainView: View {
     }
     
     private func handleFetchModelsError(_ error: Error) {
-        // Create a BedrockError from the raw error
         let bedrockError = BedrockError(error: error)
         
-        // Set the alert info using the BedrockError's title and message
         self.alertInfo = AlertInfo(
             title: bedrockError.title,
             message: bedrockError.message
         )
         
-        // Log detailed error information
         logger.error("\(bedrockError.title): \(bedrockError.message)")
         logger.error("Original error type: \(type(of: error))")
         logger.error("Original error description: \(error)")
@@ -165,16 +236,35 @@ struct MainView: View {
         }
     }
     
+    // MARK: - Chat Creation
+    
+    private func createNewChatIfNeeded() {
+        // Only create if we have a selected model and no current chat
+        guard case let .chat(selectedModel) = menuSelection,
+              selection == nil || selection == .newChat else {
+            return
+        }
+        
+        chatManager.createNewChat(
+            modelId: selectedModel.id,
+            modelName: selectedModel.name,
+            modelProvider: selectedModel.provider
+        ) { newChat in
+            newChat.lastMessageDate = Date()
+            DispatchQueue.main.async {
+                self.selection = .chat(newChat)
+            }
+        }
+    }
+    
     // MARK: - Toolbar
     
     @ToolbarContentBuilder
     private func toolbarContent() -> some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             HStack(spacing: 8) {
-                // Trick for model selector
                 Spacer().frame(width: 1)
                 
-                // Enhanced model selector
                 ModelSelectorDropdown(
                     organizedChatModels: organizedChatModels,
                     menuSelection: $menuSelection,
@@ -209,8 +299,33 @@ struct MainView: View {
                 }
                 .buttonStyle(ToolbarButtonStyle())
                 .help("Settings")
+                
+                if case .chat(let selectedModel) = menuSelection {
+                    // Backend 인스턴스를 전달
+                    InferenceConfigDropdown(
+                        currentModelId: .constant(selectedModel.id),
+                        backend: backendModel.backend
+                    )
+                }
             }
             .padding(.trailing, 8)
+        }
+    }
+    
+    // MARK: - Actions
+    
+    private func createNewChat() {
+        guard case let .chat(selectedModel) = menuSelection else { return }
+        
+        chatManager.createNewChat(
+            modelId: selectedModel.id,
+            modelName: selectedModel.name,
+            modelProvider: selectedModel.provider
+        ) { newChat in
+            newChat.lastMessageDate = Date()
+            DispatchQueue.main.async {
+                self.selection = .chat(newChat)
+            }
         }
     }
     
@@ -250,7 +365,14 @@ struct MainView: View {
     
     func deleteCurrentChat() {
         guard case .chat(let chat) = selection else { return }
-        selection = chatManager.deleteChat(with: chat.chatId)
+        let newSelection = chatManager.deleteChat(with: chat.chatId)
+        
+        // If we deleted the last chat, create a new one
+        if newSelection == .newChat || chatManager.chats.isEmpty {
+            createNewChatIfNeeded()
+        } else {
+            selection = newSelection
+        }
     }
     
     private func handleMenuSelectionChange(_ newValue: SidebarSelection?) {
@@ -322,432 +444,6 @@ struct ToolbarButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - ModelSelectorDropdown
-/// A custom dropdown menu for model selection with search and favorites
-struct ModelSelectorDropdown: View {
-    let organizedChatModels: [String: [ChatModel]]
-    @Binding var menuSelection: SidebarSelection?
-    let handleSelectionChange: (SidebarSelection?) -> Void
-    
-    @State private var isShowingPopover = false
-    @State private var searchText = ""
-    @State private var isHovering = false
-    @ObservedObject private var settingManager = SettingManager.shared
-    @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
-    
-    var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                isShowingPopover.toggle()
-            }
-        }) {
-            HStack(spacing: 10) {
-                if case let .chat(model) = menuSelection {
-                    // Display model image inside dropdown button
-                    getModelImage(for: model.id)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 32, height: 32)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.provider)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(model.name)
-                            .fontWeight(.medium)
-                    }
-                } else {
-                    Text("Select Model")
-                        .fontWeight(.medium)
-                }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.down")
-                    .foregroundColor(.secondary)
-                    .rotationEffect(isShowingPopover ? Angle(degrees: 180) : Angle(degrees: 0))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isShowingPopover)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(colorScheme == .dark ?
-                          Color(NSColor.controlBackgroundColor).opacity(0.8) :
-                            Color(NSColor.controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isHovering ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.05), radius: isHovering ? 3 : 2, x: 0, y: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovering = hovering
-            }
-            
-            if hovering {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
-            }
-        }
-        .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
-            ModelSelectorPopoverContent(
-                organizedChatModels: organizedChatModels,
-                searchText: $searchText,
-                menuSelection: $menuSelection,
-                handleSelectionChange: { selection in
-                    handleSelectionChange(selection)
-                    isShowingPopover = false
-                },
-                isShowingPopover: $isShowingPopover
-            )
-            .frame(width: 360, height: 400)
-        }
-    }
-    
-    // Helper function to get model image based on ID
-    private func getModelImage(for modelId: String) -> Image {
-        switch modelId.lowercased() {
-        case let id where id.contains("anthropic"):
-            return Image("anthropic")
-        case let id where id.contains("meta"):
-            return Image("meta")
-        case let id where id.contains("cohere"):
-            return Image("cohere")
-        case let id where id.contains("mistral"):
-            return Image("mistral")
-        case let id where id.contains("ai21"):
-            return Image("AI21")
-        case let id where id.contains("amazon"):
-            return Image("amazon")
-        case let id where id.contains("deepseek"):
-            return Image("deepseek")
-        case let id where id.contains("stability"):
-            return Image("stability ai")
-        default:
-            return Image("bedrock")
-        }
-    }
-}
-
-// MARK: - ModelSelectorPopoverContent
-struct ModelSelectorPopoverContent: View {
-    let organizedChatModels: [String: [ChatModel]]
-    @Binding var searchText: String
-    @Binding var menuSelection: SidebarSelection?
-    let handleSelectionChange: (SidebarSelection?) -> Void
-    @Binding var isShowingPopover: Bool
-    @ObservedObject private var settingManager = SettingManager.shared
-    @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
-    
-    @FocusState private var isSearchFocused: Bool
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Enhanced search field
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                
-                TextField("Search models...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .font(.system(size: 14))
-                    .focused($isSearchFocused)
-                
-                if !searchText.isEmpty {
-                    Button(action: {
-                        withAnimation {
-                            searchText = ""
-                        }
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .transition(.opacity)
-                }
-            }
-            .padding(12)
-            .background(Color(NSColor.textBackgroundColor).opacity(0.7))
-            
-            Divider()
-            
-            // Enhanced model list
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    // Favorites section
-                    if !filteredFavorites.isEmpty {
-                        SectionHeader(title: "Favorites")
-                        
-                        ForEach(filteredFavorites, id: \.id) { model in
-                            EnhancedModelRowView(
-                                model: model,
-                                isSelected: isModelSelected(model),
-                                isFavorite: true,
-                                toggleFavorite: {
-                                    settingManager.toggleFavoriteModel(model.id)
-                                },
-                                selectModel: {
-                                    selectModel(model)
-                                }
-                            )
-                        }
-                        
-                        Divider()
-                            .padding(.vertical, 8)
-                    }
-                    
-                    // Providers by section
-                    ForEach(filteredProviders, id: \.self) { provider in
-                        SectionHeader(title: provider)
-                        
-                        ForEach(filteredModelsByProvider[provider] ?? [], id: \.id) { model in
-                            EnhancedModelRowView(
-                                model: model,
-                                isSelected: isModelSelected(model),
-                                isFavorite: settingManager.isModelFavorite(model.id),
-                                toggleFavorite: {
-                                    settingManager.toggleFavoriteModel(model.id)
-                                },
-                                selectModel: {
-                                    selectModel(model)
-                                }
-                            )
-                        }
-                        
-                        if provider != filteredProviders.last {
-                            Divider()
-                                .padding(.vertical, 8)
-                        }
-                    }
-                    
-                    // No results state
-                    if filteredProviders.isEmpty && filteredFavorites.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 32))
-                                .foregroundColor(.secondary)
-                                .padding(.top, 40)
-                            
-                            Text("No models found")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            
-                            Text("Try a different search term")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary.opacity(0.7))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                    }
-                }
-                .padding(.bottom, 10)
-            }
-        }
-        .onAppear {
-            // Focus search field when popover appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isSearchFocused = true
-            }
-        }
-    }
-    
-    // Helper methods
-    private func isModelSelected(_ model: ChatModel) -> Bool {
-        if case let .chat(selectedModel) = menuSelection {
-            return selectedModel.id == model.id
-        }
-        return false
-    }
-    
-    private func selectModel(_ model: ChatModel) {
-        menuSelection = .chat(model)
-        handleSelectionChange(menuSelection)
-    }
-    
-    // Filtering methods
-    private var filteredModelsByProvider: [String: [ChatModel]] {
-        var result: [String: [ChatModel]] = [:]
-        
-        for (provider, models) in organizedChatModels {
-            let filteredModels = models.filter { model in
-                searchText.isEmpty ||
-                model.name.localizedCaseInsensitiveContains(searchText) ||
-                model.id.localizedCaseInsensitiveContains(searchText) ||
-                provider.localizedCaseInsensitiveContains(searchText)
-            }
-            
-            if !filteredModels.isEmpty {
-                result[provider] = filteredModels
-            }
-        }
-        
-        return result
-    }
-    
-    private var filteredProviders: [String] {
-        return filteredModelsByProvider.keys.sorted()
-    }
-    
-    private var filteredFavorites: [ChatModel] {
-        var favorites: [ChatModel] = []
-        
-        for models in organizedChatModels.values {
-            for model in models {
-                if settingManager.isModelFavorite(model.id) &&
-                    (searchText.isEmpty ||
-                     model.name.localizedCaseInsensitiveContains(searchText) ||
-                     model.id.localizedCaseInsensitiveContains(searchText)) {
-                    favorites.append(model)
-                }
-            }
-        }
-        
-        return favorites
-    }
-}
-
-// MARK: - Helper Views
-
-struct SectionHeader: View {
-    let title: String
-    
-    var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .padding(.bottom, 6)
-    }
-}
-
-struct EnhancedModelRowView: View {
-    let model: ChatModel
-    let isSelected: Bool
-    let isFavorite: Bool
-    let toggleFavorite: () -> Void
-    let selectModel: () -> Void
-    
-    @State private var isHovering = false
-    @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            getModelImage(for: model.id)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 42, height: 42)
-            
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(model.name)
-                        .font(.system(size: 13, weight: .medium))
-                        .lineLimit(1)
-                    
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                }
-                
-                Text(model.id)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            Button(action: toggleFavorite) {
-                Image(systemName: isFavorite ? "star.fill" : "star")
-                    .foregroundColor(isFavorite ? .yellow : .gray)
-                    .font(.system(size: 12))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .opacity(isHovering || isFavorite ? 1.0 : 0.5)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ?
-                      Color.blue.opacity(colorScheme == .dark ? 0.2 : 0.1) :
-                        (isHovering ? Color.gray.opacity(0.1) : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
-        )
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovering = hovering
-            }
-            if hovering {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
-            }
-        }
-        .onTapGesture(perform: selectModel)
-    }
-    
-    // Helper function to get model image based on ID
-    private func getModelImage(for modelId: String) -> Image {
-        switch modelId.lowercased() {
-        case let id where id.contains("anthropic"):
-            return Image("anthropic")
-        case let id where id.contains("meta"):
-            return Image("meta")
-        case let id where id.contains("cohere"):
-            return Image("cohere")
-        case let id where id.contains("mistral"):
-            return Image("mistral")
-        case let id where id.contains("ai21"):
-            return Image("AI21")
-        case let id where id.contains("amazon"):
-            return Image("amazon")
-        case let id where id.contains("deepseek"):
-            return Image("deepseek")
-        case let id where id.contains("stability"):
-            return Image("stability ai")
-        default:
-            return Image("bedrock")
-        }
-    }
-    
-    // Provider-specific gradient colors
-    private func providerGradient(for provider: String) -> [Color] {
-        switch provider.lowercased() {
-        case let p where p.contains("anthropic"):
-            return [Color(hex: "5436DA"), Color(hex: "7B6EE6")]
-        case let p where p.contains("meta"):
-            return [Color(hex: "1877F2"), Color(hex: "5BB5FF")]
-        case let p where p.contains("cohere"):
-            return [Color(hex: "63DBD9"), Color(hex: "2F95E0")]
-        case let p where p.contains("mistral"):
-            return [Color(hex: "00A9A5"), Color(hex: "00C8A0")]
-        case let p where p.contains("ai21"):
-            return [Color(hex: "FF4571"), Color(hex: "FF7547")]
-        case let p where p.contains("amazon"):
-            return [Color(hex: "FF9900"), Color(hex: "FFB347")]
-        case let p where p.contains("stability"):
-            return [Color(hex: "7C3AED"), Color(hex: "A78BFA")]
-        default:
-            return [Color.blue, Color.purple.opacity(0.8)]
-        }
-    }
-}
-
 // MARK: - AlertInfo
 struct AlertInfo: Identifiable {
     let id = UUID()
@@ -755,4 +451,29 @@ struct AlertInfo: Identifiable {
     let message: String
 }
 
-// 중복 init(hex:) 함수는 제거했습니다 - HomeView에 이미 정의되어 있음
+// MARK: - Color Extension
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}

@@ -623,7 +623,7 @@ class Backend: Equatable {
             
             if isThinkingEnabled {
                 return BedrockRuntimeClientTypes.InferenceConfiguration(
-                    maxTokens: 64000,
+                    maxTokens: 8192,
                     temperature: 1.0
                 )
             } else {
@@ -638,7 +638,7 @@ class Backend: Equatable {
             
             if isThinkingEnabled {
                 return BedrockRuntimeClientTypes.InferenceConfiguration(
-                    maxTokens: 32000,
+                    maxTokens: 8192,
                     temperature: 1.0
                 )
             } else {
@@ -720,8 +720,8 @@ class Backend: Equatable {
     }
     
     
-    // MARK: - Converse Stream API (Unified for Text Models)
-    
+    // MARK: - Converse Stream API (Unified for Text Models) 부분만 수정
+
     /// Unified converseStream method for all text generation models
     /// This is the primary method that should be used for all text-based LLMs
     func converseStream(
@@ -734,7 +734,49 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         
         // Create default inference config if not provided
-        let config = inferenceConfig ?? getDefaultInferenceConfig(for: modelType)
+        // Get model-specific inference config
+        let modelConfig = SettingManager.shared.getInferenceConfig(for: modelId)
+        let config: BedrockRuntimeClientTypes.InferenceConfiguration
+        
+        // Check if reasoning is enabled for this model
+        let isThinkingEnabled = SettingManager.shared.enableModelThinking
+        let isReasoningModel = isReasoningSupported(modelId) && !hasAlwaysOnReasoning(modelId)
+        let shouldOverrideForReasoning = isReasoningModel && isThinkingEnabled
+        
+        if modelConfig.overrideDefault {
+            // Custom config - but override temperature and topP if reasoning is enabled
+            if shouldOverrideForReasoning {
+                config = BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: modelConfig.maxTokens,
+                    temperature: 1.0,  // Force temperature to 1.0 for reasoning
+                    topp: nil          // Disable topP for reasoning
+                )
+                logger.info("Using custom inference config for \(modelId) with reasoning override: maxTokens=\(modelConfig.maxTokens), temperature=1.0 (forced), topP=disabled")
+            } else {
+                config = BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: modelConfig.maxTokens,
+                    temperature: modelConfig.temperature,
+                    topp: modelConfig.topP
+                )
+                logger.info("Using custom inference config for \(modelId): maxTokens=\(modelConfig.maxTokens), temperature=\(modelConfig.temperature), topP=\(modelConfig.topP)")
+            }
+        } else {
+            // Default config - but modify for reasoning if needed
+            let defaultConfig = getDefaultInferenceConfig(for: modelType)
+            
+            if shouldOverrideForReasoning {
+                // Override default config for reasoning requirements
+                config = BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: defaultConfig.maxTokens,
+                    temperature: 1.0,  // Force temperature to 1.0 for reasoning
+                    topp: nil          // Disable topP for reasoning
+                )
+                logger.info("Using default inference config for \(modelType) with reasoning override: temperature=1.0 (forced), topP=disabled")
+            } else {
+                config = defaultConfig
+                logger.info("Using default inference config for model type: \(modelType)")
+            }
+        }
         
         // Create converse stream request
         var request = ConverseStreamInput(
@@ -750,24 +792,22 @@ class Backend: Equatable {
         }
         
         // Add reasoning configuration only for models that support configurable reasoning
-        if isReasoningSupported(modelId) && !hasAlwaysOnReasoning(modelId) {
-            let isThinkingEnabled = SettingManager.shared.enableModelThinking
-            
-            if isThinkingEnabled {
-                // Create reasoning configuration
-                do {
-                    let reasoningConfig = [
-                        "reasoning_config": [
-                            "type": "enabled",
-                            "budget_tokens": 2048
-                        ]
+        if isReasoningModel && isThinkingEnabled {
+            // Create reasoning configuration with custom thinking budget
+            do {
+                let thinkingBudget = modelConfig.overrideDefault ? modelConfig.thinkingBudget : 2048
+                
+                let reasoningConfig = [
+                    "reasoning_config": [
+                        "type": "enabled",
+                        "budget_tokens": thinkingBudget  // 커스텀 thinking budget 사용
                     ]
-                    
-                    request.additionalModelRequestFields = try Document.make(from: reasoningConfig)
-                    logger.info("Added reasoning configuration for \(modelId)")
-                } catch {
-                    logger.error("Failed to create reasoning config document: \(error)")
-                }
+                ]
+                
+                request.additionalModelRequestFields = try Document.make(from: reasoningConfig)
+                logger.info("Added reasoning configuration for \(modelId) with thinking budget: \(thinkingBudget)")
+            } catch {
+                logger.error("Failed to create reasoning config document: \(error)")
             }
         } else if hasAlwaysOnReasoning(modelId) {
             // Log that we're skipping explicit reasoning config for models with always-on reasoning
@@ -797,8 +837,6 @@ class Backend: Equatable {
             }
         }
     }
-    
-    
     
     // MARK: - Image Generation Models
     
