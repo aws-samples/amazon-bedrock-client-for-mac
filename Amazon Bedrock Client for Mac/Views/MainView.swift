@@ -166,7 +166,7 @@ struct MainView: View {
     private func fetchModels() {
         Task {
             logger.info("Fetching models...")
-            
+
             async let foundationModelsResult = backendModel.backend.listFoundationModels()
             async let inferenceProfilesResult = backendModel.backend.listInferenceProfiles()
             

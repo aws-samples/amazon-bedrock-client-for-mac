@@ -8,11 +8,13 @@
 import AWSBedrock
 import AWSBedrockRuntime
 import AWSClientRuntime
+import AWSSDKCommon
 import AWSSDKIdentity
 import AWSSSO
 import AWSSSOOIDC
 import AWSSTS
 import AwsCommonRuntimeKit
+import ClientRuntime
 import Combine
 import Foundation
 import Logging
@@ -190,51 +192,10 @@ class Backend: Equatable {
         self.runtimeEndpoint = runtimeEndpoint
         
         // Try to initialize credentials in order of preference
-        do {
-            // First try: Use the specified profile from SettingManager
-            if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
-                 switch selectedProfile.type {
-                 case .sso:
-                     self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
-                     logger.info("Using SSO credentials for profile: \(profile)")
-                 case .credentialProcess:
-                     // For credential_process profiles, we use ProfileAWSCredentialIdentityResolver
-                     // which automatically handles credential_process directives
-                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-                     logger.info("Using credential_process for profile: \(profile)")
-                 case .credentials:
-                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-                     logger.info("Using standard credentials for profile: \(profile)")
-                 }
-            }
-            // Second try: Use default profile if specified profile not found
-            else if profile != "default" {
-                logger.warning("Profile '\(profile)' not found, falling back to 'default' profile")
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
-            }
-            // Third try: Use default profile directly
-            else {
-                logger.info("Using default profile")
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
-            }
-        } catch {
-            // Final try: Use DefaultAWSCredentialIdentityResolverChain as last resort
-            logger.warning("Failed to initialize with profile '\(profile)': \(error.localizedDescription)")
-            logger.info("Attempting to use DefaultAWSCredentialIdentityResolverChain")
-            
-            do {
-                self.awsCredentialIdentityResolver = try DefaultAWSCredentialIdentityResolverChain()
-                logger.info("Successfully initialized with DefaultAWSCredentialIdentityResolverChain")
-            } catch {
-                // If even the default chain fails, we have no choice but to throw
-                logger.error("Failed to initialize with DefaultAWSCredentialIdentityResolverChain: \(error.localizedDescription)")
-                throw error
-            }
-        }
-        
+        self.awsCredentialIdentityResolver = try await createCredentialsResolver(region: region, profile: SettingManager.shared.profiles.first(where: { $0.name == profile })?.name ?? "default")
         logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
     }
-    
+
     /// Initializes Backend with a custom credential resolver
     init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, awsCredentialIdentityResolver: any AWSCredentialIdentityResolver) {
         self.region = region
@@ -246,6 +207,136 @@ class Backend: Equatable {
         logger.info(
             "Backend initialized with custom credential resolver, region: \(region), profile: \(profile)"
         )
+    }
+    
+    private func createCredentialsResolver(region: String, profile: String) async throws -> any AWSCredentialIdentityResolver {
+        // Load the AWS configuration files
+        let fileBasedConfig = try FileBasedConfiguration()
+
+        // Find the specified profile
+        guard let profileConfig = fileBasedConfig.getSection(name: profile, sectionType: FileBasedConfiguration.SectionType.profile) else {
+            throw BedrockError.credentialsError("Profile '\(profile)' not found")
+        }
+        
+        // Give the profile a try first
+        logger.info("Attempting to use ProfileAWSCredentialIdentityResolver with profile '\(profile)'")
+        let resolver = ProfileAWSCredentialIdentityResolver(profileName: profile)
+        do {
+            let _ = try await resolver.getIdentity()
+            print("Successfully loaded credentials from profile '\(profile)'")
+            return resolver
+        } catch let error as ClientError where error.localizedDescription.contains("Missing credentials") || error.localizedDescription.contains("token expired") || error.localizedDescription.contains("token is invalid") {
+            logger.info("SSO session for '\(profile)' is not active or expired, got '\(error)', Initiating browser login.")
+            return try await performSSO(profile: profile, fileBasedConfig: fileBasedConfig, profileConfig: profileConfig)
+        } catch {
+            // Use DefaultAWSCredentialIdentityResolverChain as last resort - this will notably use the 'default' profile automatically
+            logger.info("Attempting to use DefaultAWSCredentialIdentityResolverChain")
+            return DefaultAWSCredentialIdentityResolverChain()
+        }
+    }
+    
+    private func performSSO(profile: String, fileBasedConfig: FileBasedConfiguration, profileConfig: FileBasedConfiguration.Section) async throws -> any AWSCredentialIdentityResolver {
+        // Recurse to any specified source_profile, which is common for cases where the SSO portal is in another organizational account
+        var ssoProfile = profileConfig
+        if let sourceProfileName = profileConfig.getProperty(name: "source_profile") {
+            guard let sourceProfile = fileBasedConfig.getSection(name: sourceProfileName.value, sectionType: FileBasedConfiguration.SectionType.profile) else {
+                throw BedrockError.credentialsError("Source profile '\(profile)' not found")
+            }
+            ssoProfile = sourceProfile
+        }
+        
+        // Get the SSO Session block if specified
+        var ssoSession: FileBasedConfiguration.Section? = nil
+        if let ssoSessionName = ssoProfile.getProperty(name: "sso_session") {
+            guard let ssoSessionBlock = fileBasedConfig.getSection(name: ssoSessionName.value, sectionType: FileBasedConfiguration.SectionType.ssoSession) else {
+                throw BedrockError.credentialsError("SSO session '\(ssoSessionName)\' not found")
+            }
+            ssoSession = ssoSessionBlock
+        }
+        
+        // Read the required SSO parameters
+        func ssoProperty(name: String) throws -> String {
+            if let value = ssoSession?.getProperty(name: name)?.value {
+                return value
+            } else if let value = ssoProfile.getProperty(name: name)?.value {
+                return value
+            } else {
+                throw BedrockError.credentialsError("Missing required property '\(name)' in SSO configuration")
+            }
+        }
+        let ssoRegion = try ssoProperty(name: "sso_region")
+        let ssoStartUrl = try ssoProperty(name: "sso_start_url")
+        let ssoAccountId = try ssoProperty(name: "sso_account_id")
+        let ssoRoleName = try ssoProperty(name: "sso_role_name")
+    
+        logger.info("Starting SSO login with startUrl: \(ssoStartUrl) and region: \(ssoRegion)")
+    
+        // Register SSO client
+        let oidcClient = try SSOOIDCClient(region: ssoRegion)
+        let registerClientInput = RegisterClientInput(
+            clientName: "Amazon Bedrock Client for Mac",
+            clientType: "public",
+            scopes: ["sso:account:access"]
+        )
+        let registerClientOutput = try await oidcClient.registerClient(input: registerClientInput)
+        guard let registeredClientId = registerClientOutput.clientId, let registeredClientSecret = registerClientOutput.clientSecret else {
+            throw BedrockError.credentialsError("Failed to register OIDC client")
+        }
+        
+        // Start device authorization
+        let startAuthInput = StartDeviceAuthorizationInput(
+            clientId: registeredClientId,
+            clientSecret: registeredClientSecret,
+            startUrl: ssoStartUrl
+        )
+        let startAuthOutput = try await oidcClient.startDeviceAuthorization(input: startAuthInput)
+        guard let verificationUri = startAuthOutput.verificationUriComplete else {
+            throw BedrockError.credentialsError("Failed to get SSO verification URI.")
+        }
+        NSWorkspace.shared.open(URL(string: verificationUri)!)
+        
+        // Poll until token is received
+        let startTime = Date()
+        let createTokenInput = CreateTokenInput(
+            clientId: registeredClientId,
+            clientSecret: registeredClientSecret,
+            deviceCode: startAuthOutput.deviceCode,
+            grantType: "urn:ietf:params:oauth:grant-type:device_code"
+        )
+        while Date().timeIntervalSince(startTime) < Double(startAuthOutput.expiresIn) {
+            do {
+                // Try to get the token
+                let tokenOutput = try await oidcClient.createToken(input: createTokenInput)
+                guard let accessToken = tokenOutput.accessToken else {
+                    throw BedrockError.credentialsError("Access token not available")
+                }
+                
+                // Exchange the token for credentials - this will cache the credentials to disk for later use
+                let ssoClient = try SSOClient(region: ssoRegion)
+                let getRoleCredsInput = GetRoleCredentialsInput(
+                    accessToken: accessToken,
+                    accountId: ssoAccountId,
+                    roleName: ssoRoleName
+                )
+                let roleCredsOutput = try await ssoClient.getRoleCredentials(input: getRoleCredsInput)
+                guard let credentials = roleCredsOutput.roleCredentials else {
+                    throw BedrockError.credentialsError("Failed to get role credentials from SSO.")
+                }
+                
+                logger.info("Completed SSO login successfully")
+                return ProfileAWSCredentialIdentityResolver(profileName: profile)
+            } catch let error as AuthorizationPendingException {
+                // Authorization is pending; wait for the specified interval and retry
+                logger.info("Authorization pending. Waiting for user to complete authentication.")
+                try await Task.sleep(nanoseconds: UInt64(startAuthOutput.interval) * 1_000_000_000)
+            } catch {
+                // Other errors
+                logger.error("Token polling error: \(error)")
+                throw error
+            }
+        }
+        
+        throw BedrockError.credentialsError("SSO login timed out.")
     }
     
     private func createBedrockClient() throws -> BedrockClient {
@@ -1065,6 +1156,7 @@ class Backend: Equatable {
             logger.error("Failed to fetch inference profiles: \(error.localizedDescription)")
             return []
         }
+        return []
     }
     
     // MARK: - Utility Methods

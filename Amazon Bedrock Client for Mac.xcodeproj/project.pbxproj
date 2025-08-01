@@ -15,7 +15,6 @@
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
 		793FE0B82DE56292004236B9 /* ModelInferenceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793FE0B72DE56292004236B9 /* ModelInferenceConfig.swift */; };
 		794C0A242C9A7800003B6E34 /* MarkdownKit in Frameworks */ = {isa = PBXBuildFile; productRef = 794C0A232C9A7800003B6E34 /* MarkdownKit */; };
-		7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7953C5AA2C345B8700663438 /* SSOManager.swift */; };
 		7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8422AD247CC008B03D3 /* AWSRegion.swift */; };
 		7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8442AD247DF008B03D3 /* SettingsView.swift */; };
 		7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8462AD249A7008B03D3 /* SettingManager.swift */; };
@@ -92,7 +91,6 @@
 		791461202AD0E51B00C454DC /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		7937953C2B46CAF1000C94A5 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
 		793FE0B72DE56292004236B9 /* ModelInferenceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelInferenceConfig.swift; sourceTree = "<group>"; };
-		7953C5AA2C345B8700663438 /* SSOManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSOManager.swift; sourceTree = "<group>"; };
 		7954F8422AD247CC008B03D3 /* AWSRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSRegion.swift; sourceTree = "<group>"; };
 		7954F8442AD247DF008B03D3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7954F8462AD249A7008B03D3 /* SettingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingManager.swift; sourceTree = "<group>"; };
@@ -251,7 +249,6 @@
 				790804232B99F0DA00930011 /* SharedMediaDataSource.swift */,
 				7954F8462AD249A7008B03D3 /* SettingManager.swift */,
 				797A12B72C2DB33100494DD9 /* SettingsWindowManager.swift */,
-				7953C5AA2C345B8700663438 /* SSOManager.swift */,
 				7937953C2B46CAF1000C94A5 /* UpdateManager.swift */,
 				793FE0B72DE56292004236B9 /* ModelInferenceConfig.swift */,
 			);
@@ -479,7 +476,6 @@
 				79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */,
 				797A12BC2C2EB4C300494DD9 /* CoreDataStack.swift in Sources */,
 				79FF2B352D925F2E0075249D /* MCPModels.swift in Sources */,
-				7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */,
 				79FDE2592DFBF410003960BC /* ModelSelectorDropdown.swift in Sources */,
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,

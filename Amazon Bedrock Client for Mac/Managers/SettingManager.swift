@@ -289,11 +289,13 @@ class SettingManager: ObservableObject {
         // Function to add the current profile with appropriate type
         func addCurrentProfile() {
             if let profile = currentProfile {
-                if isSSO {
-                    profiles.append(ProfileInfo(name: profile, type: .sso))
-                } else if hasCredentialProcess {
-                    profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
-                }
+                // TODO: We can remove all of those notions..
+                // TODO: We may also be able to rely on the SDK to list all profiles rather than iterating like so.
+                //if isSSO {
+                profiles.append(ProfileInfo(name: profile, type: .sso))
+                //} else if hasCredentialProcess {
+                //    profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
+                //}
             }
         }
         
