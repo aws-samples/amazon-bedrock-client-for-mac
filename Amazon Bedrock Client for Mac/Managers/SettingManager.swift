@@ -234,8 +234,7 @@ class SettingManager: ObservableObject {
         var profiles: [ProfileInfo] = []
         
         // Read regular profiles from ~/.aws/credentials
-        let credentialsProfiles = readProfilesFromFile(
-            path: "~/.aws/credentials", type: .credentials)
+        let credentialsProfiles = readProfilesFromFile(path: "~/.aws/credentials")
         profiles.append(contentsOf: credentialsProfiles)
         
         // Read profiles from ~/.aws/config including SSO and credential_process
@@ -247,7 +246,7 @@ class SettingManager: ObservableObject {
     }
     
     // Read profiles from a file (used for ~/.aws/credentials)
-    static func readProfilesFromFile(path: String, type: ProfileInfo.ProfileType) -> [ProfileInfo] {
+    static func readProfilesFromFile(path: String) -> [ProfileInfo] {
         let expandedPath = NSString(string: path).expandingTildeInPath
         
         // Attempt to read the file contents
@@ -263,7 +262,7 @@ class SettingManager: ObservableObject {
         for line in lines {
             if line.starts(with: "[") && line.hasSuffix("]") {
                 let profileName = String(line.dropFirst().dropLast())
-                profiles.append(ProfileInfo(name: profileName, type: type))
+                profiles.append(ProfileInfo(name: profileName))
             }
         }
         
@@ -272,55 +271,22 @@ class SettingManager: ObservableObject {
     
     // Read all profiles from ~/.aws/config including SSO and credential_process
     static func readProfilesFromConfig(path: String) -> [ProfileInfo] {
-        let expandedPath = NSString(string: path).expandingTildeInPath
-        
         // Attempt to read the file contents
+        let expandedPath = NSString(string: path).expandingTildeInPath
         guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
             staticLogger.info("Error reading file: \(path)")
             return []
         }
         
+        // Parse each line to find profiles
         let lines = contents.components(separatedBy: .newlines)
         var profiles: [ProfileInfo] = []
-        var currentProfile: String?
-        var isSSO = false
-        var hasCredentialProcess = false
-        
-        // Function to add the current profile with appropriate type
-        func addCurrentProfile() {
-            if let profile = currentProfile {
-                // TODO: We can remove all of those notions..
-                // TODO: We may also be able to rely on the SDK to list all profiles rather than iterating like so.
-                //if isSSO {
-                profiles.append(ProfileInfo(name: profile, type: .sso))
-                //} else if hasCredentialProcess {
-                //    profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
-                //}
-            }
-        }
-        
-        // Parse each line to find profiles
         for line in lines {
             let trimmedLine = line.trimmingCharacters(in: .whitespaces)
             if trimmedLine.starts(with: "[profile ") && trimmedLine.hasSuffix("]") {
-                // If we've found a new profile, add the previous one if applicable
-                addCurrentProfile()
-                
-                // Start tracking a new profile
-                currentProfile = String(trimmedLine.dropFirst(9).dropLast())
-                isSSO = false
-                hasCredentialProcess = false
-            } else if trimmedLine.starts(with: "sso_") {
-                // If we find an SSO-related setting, mark this profile as SSO
-                isSSO = true
-            } else if trimmedLine.starts(with: "credential_process") {
-                // If we find credential_process setting, mark this profile
-                hasCredentialProcess = true
+                profiles.append(ProfileInfo(name: String(trimmedLine.dropFirst(9).dropLast())))
             }
         }
-        
-        // Add the last profile
-        addCurrentProfile()
         
         return profiles
     }
@@ -547,13 +513,6 @@ class SettingManager: ObservableObject {
 struct ProfileInfo: Identifiable, Hashable {
     let id = UUID()
     let name: String
-    let type: ProfileType
-    
-    enum ProfileType {
-        case credentials
-        case sso
-        case credentialProcess
-    }
 }
 
 extension Array where Element: Hashable {

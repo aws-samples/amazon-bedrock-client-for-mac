@@ -25,33 +25,72 @@ import Smithy
 
 class BackendModel: ObservableObject {
     @Published var backend: Backend
-    @Published var alertMessage: String?  // Used to trigger alerts in the UI
+    @Published var alertMessage: String? // Used to trigger alerts in the UI
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(label: "BackendModel")
-    @Published var isLoggedIn = false
     
     init() {
-        do {
-            self.backend = try BackendModel.createBackend()
-            logger.info("Backend initialized successfully")
-            self.isLoggedIn = true
-        } catch {
-            logger.error("Failed to initialize Backend: \(error)")
-            
-            // Create Backend with default credentials when an error occurs
-            do {
-                let defaultCredentialProvider = try DefaultAWSCredentialIdentityResolverChain()
-                self.backend = Backend(
-                    region: "us-east-1",
-                    profile: "default",
-                    endpoint: "",
-                    runtimeEndpoint: "",
-                    awsCredentialIdentityResolver: defaultCredentialProvider
-                )
-            } catch {
-                fatalError("Failed to create even fallback Backend: \(error)")
+        let region = SettingManager.shared.selectedRegion.rawValue
+        let profile = SettingManager.shared.selectedProfile
+        let endpoint = SettingManager.shared.endpoint
+        let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
+        self.backend = Backend(
+            region: region,
+            profile: profile,
+            endpoint: endpoint,
+            runtimeEndpoint: runtimeEndpoint,
+            awsCredentialIdentityResolver: DefaultAWSCredentialIdentityResolverChain()
+        )
+        Task {
+            await self.refreshBackend()
+        }
+        setupObservers()
+    }
+
+    private func setupObservers() {
+        let regionPublisher = SettingManager.shared.$selectedRegion
+        let profilePublisher = SettingManager.shared.$selectedProfile
+        let endpointPublisher = SettingManager.shared.$endpoint
+        let runtimeEndpointPublisher = SettingManager.shared.$runtimeEndpoint
+        
+        Publishers.CombineLatest(regionPublisher, profilePublisher)
+            .combineLatest(endpointPublisher)
+            .combineLatest(runtimeEndpointPublisher)
+            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
+            .sink { [weak self] combined in
+                Task {
+                    await self?.refreshBackend()
+                }
             }
-            
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: .awsCredentialsChanged)
+            .sink { [weak self] _ in
+                Task {
+                    await self?.refreshBackend()
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func refreshBackend() async {
+        let region = SettingManager.shared.selectedRegion.rawValue
+        let profile = SettingManager.shared.selectedProfile
+        let endpoint = SettingManager.shared.endpoint
+        let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
+        
+        do {
+            let newBackend = try await Backend(
+                region: region,
+                profile: profile,
+                endpoint: endpoint,
+                runtimeEndpoint: runtimeEndpoint
+            )
+            await MainActor.run {
+                self.backend = newBackend
+            }
+            logger.info("Backend refreshed successfully")
+        } catch {
             // Extract more detailed error information
             if let commonRuntimeError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
                 // Use Mirror to access internal properties of CommonRunTimeError
@@ -85,73 +124,10 @@ class BackendModel: ObservableObject {
                     alertMessage = "AWS error: \(commonRuntimeError.localizedDescription)"
                 }
             } else if let awsServiceError = error as? AWSClientRuntime.AWSServiceError {
-                alertMessage = "AWS service error: \(awsServiceError.message)"
+                alertMessage = "AWS service error: \(awsServiceError.message ?? "no error message")"
             } else {
                 alertMessage = "Error: \(error.localizedDescription)"
             }
-            
-            self.isLoggedIn = false
-        }
-        setupObservers()
-    }
-    
-    private static func createBackend() throws -> Backend {
-        let region = SettingManager.shared.selectedRegion.rawValue
-        let profile = SettingManager.shared.selectedProfile
-        let endpoint = SettingManager.shared.endpoint
-        let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
-        
-        return try Backend(
-            region: region,
-            profile: profile,
-            endpoint: endpoint,
-            runtimeEndpoint: runtimeEndpoint
-        )
-    }
-    
-    private func setupObservers() {
-        let regionPublisher = SettingManager.shared.$selectedRegion
-        let profilePublisher = SettingManager.shared.$selectedProfile
-        let endpointPublisher = SettingManager.shared.$endpoint
-        let runtimeEndpointPublisher = SettingManager.shared.$runtimeEndpoint
-        
-        Publishers.CombineLatest(regionPublisher, profilePublisher)
-            .combineLatest(endpointPublisher)
-            .combineLatest(runtimeEndpointPublisher)
-            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
-            .sink { [weak self] combined in
-                let (((region, profile), endpoint), runtimeEndpoint) = combined
-                self?.refreshBackend()
-            }
-            .store(in: &cancellables)
-        
-        NotificationCenter.default.publisher(for: .awsCredentialsChanged)
-            .sink { [weak self] _ in
-                self?.refreshBackend()
-            }
-            .store(in: &cancellables)
-    }
-    
-    private func refreshBackend() {
-        let region = SettingManager.shared.selectedRegion.rawValue
-        let profile = SettingManager.shared.selectedProfile
-        let endpoint = SettingManager.shared.endpoint
-        let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
-        
-        do {
-            let newBackend = try Backend(
-                region: region,
-                profile: profile,
-                endpoint: endpoint,
-                runtimeEndpoint: runtimeEndpoint
-            )
-            self.backend = newBackend
-            logger.info("Backend refreshed successfully")
-        } catch {
-            logger.error(
-                "Failed to refresh Backend: \(error.localizedDescription). Retaining current Backend."
-            )
-            alertMessage = "Failed to refresh Backend: \(error.localizedDescription)."
         }
     }
 }
@@ -162,7 +138,7 @@ class Backend: Equatable {
     let endpoint: String
     let runtimeEndpoint: String
     let logger = Logger(label: "Backend")
-    public let awsCredentialIdentityResolver: any AWSCredentialIdentityResolver
+    public var awsCredentialIdentityResolver: (any AWSCredentialIdentityResolver)?
     
     private(set) lazy var bedrockClient: BedrockClient = {
         do {
@@ -183,9 +159,18 @@ class Backend: Equatable {
         }
     }()
     
+    // Initializes a default backend with default resolver
+    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, awsCredentialIdentityResolver: any AWSCredentialIdentityResolver) {
+        self.region = region
+        self.profile = profile
+        self.endpoint = endpoint
+        self.runtimeEndpoint = runtimeEndpoint
+        self.awsCredentialIdentityResolver = awsCredentialIdentityResolver
+    }
+    
     /// Initializes Backend with given parameters.
     /// Uses SettingManager's profiles to determine if SSO or standard credentials should be used.
-    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) throws {
+    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) async throws {
         self.region = region
         self.profile = profile
         self.endpoint = endpoint
@@ -194,19 +179,6 @@ class Backend: Equatable {
         // Try to initialize credentials in order of preference
         self.awsCredentialIdentityResolver = try await createCredentialsResolver(region: region, profile: SettingManager.shared.profiles.first(where: { $0.name == profile })?.name ?? "default")
         logger.info("Backend initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
-    }
-
-    /// Initializes Backend with a custom credential resolver
-    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, awsCredentialIdentityResolver: any AWSCredentialIdentityResolver) {
-        self.region = region
-        self.profile = profile
-        self.endpoint = endpoint
-        self.runtimeEndpoint = runtimeEndpoint
-        self.awsCredentialIdentityResolver = awsCredentialIdentityResolver
-        
-        logger.info(
-            "Backend initialized with custom credential resolver, region: \(region), profile: \(profile)"
-        )
     }
     
     private func createCredentialsResolver(region: String, profile: String) async throws -> any AWSCredentialIdentityResolver {
@@ -319,13 +291,13 @@ class Backend: Equatable {
                     roleName: ssoRoleName
                 )
                 let roleCredsOutput = try await ssoClient.getRoleCredentials(input: getRoleCredsInput)
-                guard let credentials = roleCredsOutput.roleCredentials else {
+                guard let _ = roleCredsOutput.roleCredentials else {
                     throw BedrockError.credentialsError("Failed to get role credentials from SSO.")
                 }
                 
                 logger.info("Completed SSO login successfully")
                 return ProfileAWSCredentialIdentityResolver(profileName: profile)
-            } catch let error as AuthorizationPendingException {
+            } catch _ as AuthorizationPendingException {
                 // Authorization is pending; wait for the specified interval and retry
                 logger.info("Authorization pending. Waiting for user to complete authentication.")
                 try await Task.sleep(nanoseconds: UInt64(startAuthOutput.interval) * 1_000_000_000)
@@ -1156,7 +1128,6 @@ class Backend: Equatable {
             logger.error("Failed to fetch inference profiles: \(error.localizedDescription)")
             return []
         }
-        return []
     }
     
     // MARK: - Utility Methods

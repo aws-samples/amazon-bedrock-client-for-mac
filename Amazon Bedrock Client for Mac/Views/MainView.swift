@@ -171,7 +171,9 @@ struct MainView: View {
             async let inferenceProfilesResult = backendModel.backend.listInferenceProfiles()
             
             do {
-                let (foundationModels, inferenceProfiles) = try await (
+                logger.info("Fetching models from initialized backend...")
+
+                let (foundationModels, inferenceProfiles) = await (
                     foundationModelsResult,
                     inferenceProfilesResult
                 )
