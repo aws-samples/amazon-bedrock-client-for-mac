@@ -389,6 +389,8 @@ struct ModelImageHelper {
             return Image("deepseek")
         case let id where id.contains("stability"):
             return Image("stability ai")
+        case let id where id.contains("openai"):
+            return Image("openai")
         default:
             return Image("bedrock")
         }

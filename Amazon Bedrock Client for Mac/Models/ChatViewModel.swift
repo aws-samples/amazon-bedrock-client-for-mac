@@ -392,7 +392,15 @@ class ChatViewModel: ObservableObject {
             } else if backendModel.backend.isEmbeddingModel(chatModel.id) {
                 try await handleEmbeddingModel(userMessage)
             } else {
-                try await handleTextLLMWithConverseStream(userMessage)
+                // Check if streaming is enabled for this model
+                let modelConfig = settingManager.getInferenceConfig(for: chatModel.id)
+                let shouldUseStreaming = modelConfig.overrideDefault ? modelConfig.enableStreaming : true
+                
+                if shouldUseStreaming {
+                    try await handleTextLLMWithConverseStream(userMessage)
+                } else {
+                    try await handleTextLLMWithNonStreaming(userMessage)
+                }
             }
         } catch let error as ToolUseError {
             let errorMessage = MessageData(
@@ -1391,7 +1399,8 @@ class ChatViewModel: ObservableObject {
             var contents: [MessageContent] = []
             
             // Add thinking content if present for assistant messages
-            if role == .assistant, let thinking = message.thinking, !thinking.isEmpty {
+            // Skip thinking content for OpenAI models as they don't support signature field
+            if role == .assistant, let thinking = message.thinking, !thinking.isEmpty, !isOpenAIModel(chatModel.id) {
                 let signatureToUse = message.thinkingSignature ?? UUID().uuidString
                 contents.append(.thinking(.init(text: thinking, signature: signatureToUse)))
             }
@@ -1495,7 +1504,8 @@ class ChatViewModel: ObservableObject {
             case .thinking(let thinkingContent):
                 // Skip reasoning content for user messages
                 // Also skip for DeepSeek models due to a server-side validation error
-                if message.role == .user || isDeepSeekModel(modelId) {
+                // Also skip for OpenAI models that don't support signature field
+                if message.role == .user || isDeepSeekModel(modelId) || isOpenAIModel(modelId) {
                     continue
                 }
                 
@@ -1632,12 +1642,18 @@ class ChatViewModel: ObservableObject {
             id.contains("deepseek") ||
             id.contains("command") ||
             id.contains("jurassic") ||
-            id.contains("jamba")
+            id.contains("jamba") ||
+            id.contains("openai")
         }
     }
     
     private func isDeepSeekModel(_ modelId: String) -> Bool {
         return modelId.lowercased().contains("deepseek")
+    }
+    
+    private func isOpenAIModel(_ modelId: String) -> Bool {
+        let modelType = backendModel.backend.getModelType(modelId)
+        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b
     }
     
     /// Handles image generation models that don't use converseStream
@@ -1919,5 +1935,152 @@ class ChatViewModel: ObservableObject {
         } catch {
             logger.error("Error updating chat title: \(error)")
         }
+    }
+    
+    // MARK: - Non-Streaming Text LLM Handling
+    
+    private func handleTextLLMWithNonStreaming(_ userMessage: MessageData) async throws {
+        // Create message content from user message (similar to streaming version)
+        var messageContents: [MessageContent] = []
+        
+        // Always include a text prompt as required when sending documents
+        let textToSend = userMessage.text.isEmpty &&
+        (userMessage.documentBase64Strings?.isEmpty == false) ?
+        "Please analyze this document." : userMessage.text
+        messageContents.append(.text(textToSend))
+        
+        // Add images if present
+        if let imageBase64Strings = userMessage.imageBase64Strings, !imageBase64Strings.isEmpty {
+            for (index, base64String) in imageBase64Strings.enumerated() {
+                let fileExtension = index < sharedMediaDataSource.fileExtensions.count ?
+                sharedMediaDataSource.fileExtensions[index].lowercased() : "jpeg"
+                
+                let format: ImageFormat
+                switch fileExtension {
+                case "jpg", "jpeg": format = .jpeg
+                case "png": format = .png
+                case "gif": format = .gif
+                case "webp": format = .webp
+                default: format = .jpeg
+                }
+                
+                messageContents.append(.image(MessageContent.ImageContent(
+                    format: format,
+                    base64Data: base64String
+                )))
+            }
+        }
+        
+        // Add documents if present
+        if let documentBase64Strings = userMessage.documentBase64Strings,
+           let documentFormats = userMessage.documentFormats,
+           let documentNames = userMessage.documentNames,
+           !documentBase64Strings.isEmpty {
+            
+            for (index, base64String) in documentBase64Strings.enumerated() {
+                guard index < documentFormats.count && index < documentNames.count else {
+                    continue
+                }
+                
+                let fileExt = documentFormats[index].lowercased()
+                let fileName = documentNames[index]
+                
+                let docFormat = MessageContent.DocumentFormat.fromExtension(fileExt)
+                messageContents.append(.document(MessageContent.DocumentContent(
+                    format: docFormat,
+                    base64Data: base64String,
+                    name: fileName
+                )))
+            }
+        }
+
+        // Get conversation history
+        var conversationHistory = await getConversationHistory()
+        await saveConversationHistory(conversationHistory)
+        
+        // Get system prompt
+        let systemPrompt = settingManager.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Get tool configurations if MCP is enabled (but disable for non-streaming for now)
+        let toolConfig: AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolConfiguration? = nil
+        
+        // Get Bedrock messages in AWS SDK format
+        let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0, modelId: chatModel.id) }
+        
+        // Convert to system prompt format used by AWS SDK
+        let systemContentBlock: [AWSBedrockRuntime.BedrockRuntimeClientTypes.SystemContentBlock]? =
+        systemPrompt.isEmpty ? nil : [.text(systemPrompt)]
+        
+        logger.info("Starting non-streaming converse request with model ID: \(chatModel.id)")
+        
+        // Use the non-streaming Converse API
+        let request = AWSBedrockRuntime.ConverseInput(
+            inferenceConfig: nil,
+            messages: bedrockMessages,
+            modelId: chatModel.id,
+            system: backendModel.backend.isSystemPromptSupported(chatModel.id) ? systemContentBlock : nil,
+            toolConfig: toolConfig
+        )
+        
+        let response = try await backendModel.backend.bedrockRuntimeClient.converse(input: request)
+        
+        // Process the response
+        var responseText = ""
+        var thinking: String? = nil
+        var thinkingSignature: String? = nil
+        
+        if let output = response.output {
+            switch output {
+            case .message(let message):
+                for content in message.content ?? [] {
+                    switch content {
+                    case .text(let text):
+                        responseText += text
+                    case .reasoningcontent(let reasoning):
+                        switch reasoning {
+                        case .reasoningtext(let reasoningText):
+                            thinking = (thinking ?? "") + (reasoningText.text ?? "")
+                            if thinkingSignature == nil {
+                                thinkingSignature = reasoningText.signature
+                            }
+                        default:
+                            break
+                        }
+                    default:
+                        break
+                    }
+                }
+            case .sdkUnknown(let unknownValue):
+                logger.warning("Unknown output type received: \(unknownValue)")
+            }
+        }
+        
+        // Create assistant message
+        let assistantMessage = MessageData(
+            id: UUID(),
+            text: responseText,
+            thinking: thinking,
+            signature: thinkingSignature,
+            user: chatModel.name,
+            isError: false,
+            sentTime: Date()
+        )
+        addMessage(assistantMessage)
+        
+        // Create assistant message for conversation history
+        let assistantMsg = BedrockMessage(
+            role: .assistant,
+            content: thinking != nil ? [
+                .thinking(MessageContent.ThinkingContent(
+                    text: thinking!,
+                    signature: thinkingSignature ?? UUID().uuidString
+                )),
+                .text(responseText)
+            ] : [.text(responseText)]
+        )
+        
+        // Add to history and save
+        conversationHistory.append(assistantMsg)
+        await saveConversationHistory(conversationHistory)
     }
 }

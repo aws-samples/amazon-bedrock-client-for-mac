@@ -240,6 +240,9 @@ struct InferenceConfigPopoverContent: View {
                 if isThinkingBudgetEnabled {
                     thinkingBudgetControl
                 }
+                
+                // Streaming Control
+                streamingControl
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)
@@ -275,6 +278,7 @@ struct InferenceConfigPopoverContent: View {
                     if isThinkingBudgetEnabled {
                         Text("Thinking Budget: \(actualDefaultConfig.thinkingBudget) tokens")
                     }
+                    Text("Streaming: \(actualDefaultConfig.enableStreaming ? "Enabled" : "Disabled")")
                 }
                 .font(.system(size: 11))
                 .foregroundColor(.secondary.opacity(0.8))
@@ -284,7 +288,7 @@ struct InferenceConfigPopoverContent: View {
     }
     
     // actualDefaultConfig
-    private var actualDefaultConfig: (maxTokens: Int, temperature: Float, topP: Float?, thinkingBudget: Int) {
+    private var actualDefaultConfig: (maxTokens: Int, temperature: Float, topP: Float?, thinkingBudget: Int, enableStreaming: Bool) {
         let modelType = backend.getModelType(modelId)
         let defaultConfig = backend.getDefaultInferenceConfig(for: modelType)
         
@@ -292,7 +296,8 @@ struct InferenceConfigPopoverContent: View {
             maxTokens: defaultConfig.maxTokens ?? range.defaultMaxTokens,
             temperature: Float(defaultConfig.temperature ?? 0.7),
             topP: defaultConfig.topp.map { Float($0) },
-            thinkingBudget: range.defaultThinkingBudget
+            thinkingBudget: range.defaultThinkingBudget,
+            enableStreaming: true // 기본값은 스트리밍 활성화
         )
     }
     
@@ -649,6 +654,34 @@ struct InferenceConfigPopoverContent: View {
                 step: 256,
                 color: .purple
             )
+        }
+    }
+    
+    // MARK: - Streaming Control
+    private var streamingControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Enable Streaming", systemImage: "dot.radiowaves.right")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Toggle("", isOn: Binding(
+                    get: { config.enableStreaming },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.enableStreaming = newValue
+                        settingManager.setInferenceConfig(newConfig, for: modelId)
+                    }
+                ))
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .scaleEffect(0.8)
+            }
+            
+            Text("Controls whether the model responses are streamed in real-time or returned as a single response")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
         }
     }
     

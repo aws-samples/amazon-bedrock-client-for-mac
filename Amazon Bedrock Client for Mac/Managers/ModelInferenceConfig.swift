@@ -13,13 +13,15 @@ struct ModelInferenceConfig: Codable {
     var topP: Float
     var thinkingBudget: Int
     var overrideDefault: Bool
+    var enableStreaming: Bool
     
-    init(maxTokens: Int = 4096, temperature: Float = 0.7, topP: Float = 0.9, thinkingBudget: Int = 2048, overrideDefault: Bool = false) {
+    init(maxTokens: Int = 4096, temperature: Float = 0.7, topP: Float = 0.9, thinkingBudget: Int = 2048, overrideDefault: Bool = false, enableStreaming: Bool = true) {
         self.maxTokens = maxTokens
         self.temperature = temperature
         self.topP = topP
         self.thinkingBudget = thinkingBudget
         self.overrideDefault = overrideDefault
+        self.enableStreaming = enableStreaming
     }
 }
 
@@ -157,6 +159,18 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048
             )
             
+        case .openaiGptOss120b, .openaiGptOss20b:
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...4096, // 조정 가능한 reasoning budget
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 2048
+            )
+            
         default:
             return ModelInferenceRange(
                 maxTokensRange: 1...4096,
@@ -237,6 +251,13 @@ struct ModelInferenceRange {
         case "deepseek":
             if modelNameAndVersion.contains("r1") {
                 return .deepseekr1
+            }
+            
+        case "openai":
+            if modelNameAndVersion.contains("gpt-oss-120b") {
+                return .openaiGptOss120b
+            } else if modelNameAndVersion.contains("gpt-oss-20b") {
+                return .openaiGptOss20b
             }
             
         default:

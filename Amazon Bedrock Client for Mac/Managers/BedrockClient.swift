@@ -293,7 +293,7 @@ class Backend: Equatable {
     func isReasoningSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeOpus4, .deepseekr1:
+        case .claude37, .claudeSonnet4, .claudeOpus4, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b:
             return true
         default:
             return false
@@ -302,7 +302,13 @@ class Backend: Equatable {
 
     /// Check if a model has configurable reasoning (can be toggled on/off)
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
-        return getModelType(modelId) == .claude37 || getModelType(modelId) == .claudeSonnet4 || getModelType(modelId) == .claudeOpus4
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .claude37, .claudeSonnet4, .claudeOpus4, .openaiGptOss120b, .openaiGptOss20b:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Check if a model has always-on reasoning (can't be disabled)
@@ -351,6 +357,8 @@ class Backend: Equatable {
             return false
         case .deepseekr1:
             return true
+        case .openaiGptOss120b, .openaiGptOss20b:
+            return true
             
         // Models that don't support document chat
         case .mistralSmall, .novaMicro, .titanEmbed, .titanImage, .cohereEmbed,
@@ -379,6 +387,8 @@ class Backend: Equatable {
         case .jambaInstruct, .jambaLarge, .jambaMini:
             return true
         case .deepseekr1:
+            return true
+        case .openaiGptOss120b, .openaiGptOss20b:
             return true
             
         // Models with specific exceptions
@@ -430,6 +440,8 @@ class Backend: Equatable {
             return true
         case .jambaLarge, .jambaMini:
             return true
+        case .openaiGptOss120b, .openaiGptOss20b:
+            return true
             
         // Models that don't support tool use
         default:
@@ -447,6 +459,8 @@ class Backend: Equatable {
         case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return true
         case .cohereCommandR, .cohereCommandRPlus:
+            return true
+        case .openaiGptOss120b, .openaiGptOss20b:
             return true
             
         // Models that don't support streaming tool use
@@ -606,6 +620,13 @@ class Backend: Equatable {
             
         case "luma":
             return .luma
+            
+        case "openai":
+            if modelNameAndVersion.contains("gpt-oss-120b") {
+                return .openaiGptOss120b
+            } else if modelNameAndVersion.contains("gpt-oss-20b") {
+                return .openaiGptOss20b
+            }
 
         default:
             logger.warning("Could not identify model type for modelId: \(modelId)")
@@ -685,6 +706,12 @@ class Backend: Equatable {
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 8192,
                 temperature: 1
+            )
+        case .openaiGptOss120b, .openaiGptOss20b:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
             )
         case .mistral, .jambaInstruct:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -1110,6 +1137,8 @@ enum ModelType {
     case cohereCommand, cohereCommandLight, cohereCommandR, cohereCommandRPlus, cohereEmbed, cohereRerank
     // Stability models
     case stableDiffusion, stableImage
+    // OpenAI models
+    case openaiGptOss120b, openaiGptOss20b
     // Other models
     case deepseekr1, luma, unknown
 }
