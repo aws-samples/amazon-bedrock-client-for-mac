@@ -269,6 +269,9 @@ struct SidebarView: View {
     @State private var searchResults: [String] = []
     @State private var isSearching: Bool = false
     @State private var searchDebounceTimer: Timer?
+    @State private var renamingChatId: String? = nil
+    @State private var renameText: String = ""
+    @FocusState private var renamingTextfieldFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     
     // Performance optimization properties
@@ -477,6 +480,9 @@ struct SidebarView: View {
                         ForEach(chats, id: \.self) { chat in
                             chatRowView(for: chat)
                                 .contextMenu {
+                                    Button("Rename Chat", action: {
+                                        startRenaming(chat)
+                                    })
                                     Button("Delete Chat", action: {
                                         deleteChat(chat)
                                     })
@@ -520,13 +526,32 @@ struct SidebarView: View {
     func chatRowView(for chat: ChatModel) -> some View {
         let isHovered = hoverStates[chat.chatId, default: false]
         let isSelected = selection == .chat(chat)
+        let isRenaming = renamingChatId == chat.chatId
         
         return HStack(spacing: 12) {
             // Chat title and model name
             VStack(alignment: .leading, spacing: 3) {
-                Text(chat.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
+                if isRenaming {
+                    TextField("Chat title", text: $renameText)
+                        .font(.system(size: 13, weight: .medium))
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .focused($renamingTextfieldFocused)
+                        .onSubmit {
+                            finishRenaming(chat)
+                        }
+                        .onExitCommand {
+                            cancelRenaming()
+                        }
+                        .onChange(of: renamingTextfieldFocused) { _, newValue in
+                            if (!newValue) {
+                                finishRenaming(chat)
+                            }
+                        }
+                } else {
+                    Text(chat.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                }
                 
                 Text(chat.name)
                     .font(.system(size: 11))
@@ -556,17 +581,21 @@ struct SidebarView: View {
         )
         .contentShape(Rectangle())
         .onHover { hover in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                hoverStates[chat.chatId] = hover
-            }
-            if hover {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
+            if !isRenaming {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    hoverStates[chat.chatId] = hover
+                }
+                if hover {
+                    NSCursor.pointingHand.set()
+                } else {
+                    NSCursor.arrow.set()
+                }
             }
         }
         .onTapGesture {
-            selection = .chat(chat)
+            if !isRenaming {
+                selection = .chat(chat)
+            }
         }
     }
     
@@ -800,5 +829,34 @@ struct SidebarView: View {
                 }
             }
         }
+    }
+    
+    /// Starts renaming a chat
+    private func startRenaming(_ chat: ChatModel) {
+        renamingChatId = chat.chatId
+        renameText = chat.title
+        renamingTextfieldFocused = true
+    }
+    
+    /// Finishes renaming a chat and saves the new title
+    private func finishRenaming(_ chat: ChatModel) {
+        let trimmedTitle = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Only update if the title actually changed and is not empty
+        if !trimmedTitle.isEmpty && trimmedTitle != chat.title {
+            chatManager.updateChatTitle(for: chat.chatId, title: trimmedTitle)
+        }
+        
+        // Reset renaming state
+        renamingChatId = nil
+        renameText = ""
+        renamingTextfieldFocused = false
+    }
+    
+    /// Cancels renaming a chat without saving changes
+    private func cancelRenaming() {
+        renamingChatId = nil
+        renameText = ""
+        renamingTextfieldFocused = false
     }
 }
