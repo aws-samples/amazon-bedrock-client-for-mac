@@ -73,7 +73,7 @@ class SettingManager: ObservableObject {
     //    }
     @Published var virtualProfile: AWSProfile?
     @Published var availableModels: [ChatModel] = []
-    @Published var allowImagePasting: Bool = true
+    @AppStorage("allowImagePasting") var allowImagePasting: Bool = true
     @Published var mcpServers: [MCPServerConfig] = [] {
         didSet {
             // Save the complete list to UserDefaults
