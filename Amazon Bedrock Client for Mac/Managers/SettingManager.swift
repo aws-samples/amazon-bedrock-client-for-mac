@@ -514,6 +514,7 @@ class SettingManager: ObservableObject {
                 temperature: range.defaultTemperature,
                 topP: range.defaultTopP,
                 thinkingBudget: range.defaultThinkingBudget,
+                reasoningEffort: range.defaultReasoningEffort,
                 overrideDefault: false
             )
         }

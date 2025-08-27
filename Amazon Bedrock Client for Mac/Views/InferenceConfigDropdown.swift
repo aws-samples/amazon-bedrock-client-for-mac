@@ -21,6 +21,11 @@ struct InferenceConfigDropdown: View {
         settingManager.getInferenceConfig(for: currentModelId)
     }
     
+    private var isGptOssModel: Bool {
+        let modelType = backend.getModelType(currentModelId)
+        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b
+    }
+    
     var body: some View {
         Button(action: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -92,6 +97,7 @@ struct InferenceConfigPopoverContent: View {
     @State private var tempTemperature = ""
     @State private var tempTopP = ""
     @State private var tempThinkingBudget = ""
+    @State private var selectedReasoningEffort = "medium"
     
     private var config: ModelInferenceConfig {
         settingManager.getInferenceConfig(for: modelId)
@@ -125,9 +131,15 @@ struct InferenceConfigPopoverContent: View {
         return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId)
     }
     
-    // Check if thinking budget should be enabled
+    // Check if this is a GPT-OSS model
+    private var isGptOssModel: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b
+    }
+    
+    // Check if thinking budget should be enabled (Claude models only, not GPT-OSS)
     private var isThinkingBudgetEnabled: Bool {
-        return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId)
+        return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId) && !isGptOssModel
     }
     
     var body: some View {
@@ -239,6 +251,11 @@ struct InferenceConfigPopoverContent: View {
                 // Thinking Budget (reasoning 지원 + thinking 활성화시에만)
                 if isThinkingBudgetEnabled {
                     thinkingBudgetControl
+                }
+                
+                // Reasoning Effort (GPT-OSS 모델에만)
+                if isGptOssModel && isReasoningSupported && settingManager.enableModelThinking {
+                    reasoningEffortControl
                 }
                 
                 // Streaming Control
@@ -749,6 +766,44 @@ struct InferenceConfigPopoverContent: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             isEditingThinkingBudget = false
         }
+    }
+    
+    // MARK: - Reasoning Effort Control
+    private var reasoningEffortControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Reasoning Effort", systemImage: "brain.head.profile")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Text(selectedReasoningEffort.capitalized)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.orange)
+            }
+            
+            // Reasoning effort picker
+            Picker("Reasoning Effort", selection: $selectedReasoningEffort) {
+                Text("Low").tag("low")
+                Text("Medium").tag("medium")
+                Text("High").tag("high")
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .onChange(of: selectedReasoningEffort) { newValue in
+                updateReasoningEffort(newValue)
+            }
+            .onAppear {
+                selectedReasoningEffort = config.reasoningEffort
+            }
+        }
+    }
+    
+    private func updateReasoningEffort(_ effort: String) {
+        var newConfig = config
+        newConfig.reasoningEffort = effort
+        newConfig.overrideDefault = true
+        settingManager.setInferenceConfig(newConfig, for: modelId)
     }
 }
 

@@ -12,14 +12,16 @@ struct ModelInferenceConfig: Codable {
     var temperature: Float
     var topP: Float
     var thinkingBudget: Int
+    var reasoningEffort: String
     var overrideDefault: Bool
     var enableStreaming: Bool
     
-    init(maxTokens: Int = 4096, temperature: Float = 0.7, topP: Float = 0.9, thinkingBudget: Int = 2048, overrideDefault: Bool = false, enableStreaming: Bool = true) {
+    init(maxTokens: Int = 4096, temperature: Float = 0.7, topP: Float = 0.9, thinkingBudget: Int = 2048, reasoningEffort: String = "medium", overrideDefault: Bool = false, enableStreaming: Bool = true) {
         self.maxTokens = maxTokens
         self.temperature = temperature
         self.topP = topP
         self.thinkingBudget = thinkingBudget
+        self.reasoningEffort = reasoningEffort
         self.overrideDefault = overrideDefault
         self.enableStreaming = enableStreaming
     }
@@ -34,6 +36,7 @@ struct ModelInferenceRange {
     let defaultTemperature: Float
     let defaultTopP: Float
     let defaultThinkingBudget: Int
+    let defaultReasoningEffort: String
     
     static func getRangeForModel(_ modelId: String) -> ModelInferenceRange {
         let modelType = getModelTypeFromId(modelId)
@@ -48,7 +51,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 8192,
                 defaultTemperature: 0.9,
                 defaultTopP: 0.7,
-                defaultThinkingBudget: 2048
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .claude37:
@@ -60,7 +64,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 8192,
                 defaultTemperature: 0.9,
                 defaultTopP: 0.7,
-                defaultThinkingBudget: 4096
+                defaultThinkingBudget: 4096,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .claude3, .claude35:
@@ -72,7 +77,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 4096,
                 defaultTemperature: 0.9,
                 defaultTopP: 0.7,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .novaPremier:
@@ -84,7 +90,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 10240,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .novaPro, .novaLite:
@@ -96,7 +103,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 10240,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .novaMicro:
@@ -108,7 +116,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 10240,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .llama31, .llama32Large, .llama33:
@@ -120,7 +129,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 8192,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .llama32Small, .llama3, .llama2:
@@ -132,7 +142,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 2048,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .mistralLarge, .mistralLarge2407:
@@ -144,7 +155,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 8192,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .deepseekr1:
@@ -156,7 +168,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 8192,
                 defaultTemperature: 1.0,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 2048
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
         case .openaiGptOss120b, .openaiGptOss20b:
@@ -168,7 +181,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 8192,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 2048
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"  // GPT-OSS 모델에만 실제로 적용됨
             )
             
         default:
@@ -180,7 +194,8 @@ struct ModelInferenceRange {
                 defaultMaxTokens: 4096,
                 defaultTemperature: 0.7,
                 defaultTopP: 0.9,
-                defaultThinkingBudget: 1024
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
         }
     }

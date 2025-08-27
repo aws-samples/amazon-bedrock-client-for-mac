@@ -871,17 +871,29 @@ class Backend: Equatable {
         // Add reasoning configuration if needed
         if isReasoningModel && isThinkingEnabled {
             do {
-                let thinkingBudget = modelConfig.overrideDefault ? modelConfig.thinkingBudget : 2048
+                let modelType = getModelType(modelId)
+                let reasoningConfig: [String: Any]
                 
-                let reasoningConfig = [
-                    "reasoning_config": [
-                        "type": "enabled",
-                        "budget_tokens": thinkingBudget
+                // OpenAI GPT-OSS models use different reasoning configuration format
+                if modelType == .openaiGptOss120b || modelType == .openaiGptOss20b {
+                    // Use user-configured reasoning effort if override is enabled, otherwise use default
+                    let effortLevel = modelConfig.overrideDefault ? modelConfig.reasoningEffort : "medium"
+                    reasoningConfig = [
+                        "reasoning_effort": effortLevel
                     ]
-                ]
+                } else {
+                    // Claude and other models use the budget-based format
+                    let thinkingBudget = modelConfig.overrideDefault ? modelConfig.thinkingBudget : 2048
+                    reasoningConfig = [
+                        "reasoning_config": [
+                            "type": "enabled",
+                            "budget_tokens": thinkingBudget
+                        ]
+                    ]
+                }
                 
                 request.additionalModelRequestFields = try Document.make(from: reasoningConfig)
-                logger.info("Added reasoning configuration for \(modelId) with thinking budget: \(thinkingBudget)")
+                logger.info("Added reasoning configuration for \(modelId)")
             } catch {
                 logger.error("Failed to create reasoning config document: \(error)")
             }
