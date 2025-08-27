@@ -618,7 +618,10 @@ struct AdvancedOptionsMenu: View {
             (id.contains("cohere") && id.contains("command-r")) ||
             
             // AI21 Jamba models (except Instruct)
-            (id.contains("ai21") && id.contains("jamba") && !id.contains("instruct"))
+            (id.contains("ai21") && id.contains("jamba") && !id.contains("instruct")) ||
+            
+            // OpenAI GPT-OSS models
+            (id.contains("openai") && id.contains("gpt-oss"))
         )
     }
 
