@@ -29,6 +29,7 @@ class SettingManager: ObservableObject {
     @AppStorage("allowWallpaperTinting") var allowWallpaperTinting: Bool = false
     @AppStorage("enableDebugLog") var enableDebugLog: Bool = true
     @AppStorage("enableModelThinking") var enableModelThinking: Bool = true
+    @AppStorage("showUsageInfo") var showUsageInfo: Bool = true
     @AppStorage("systemPrompt") var systemPrompt: String = ""
     @AppStorage("defaultDirector") var defaultDirectory: String = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
         "Amazon Bedrock Client"

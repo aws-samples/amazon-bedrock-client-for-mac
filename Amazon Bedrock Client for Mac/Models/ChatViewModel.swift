@@ -197,6 +197,32 @@ class ChatViewModel: ObservableObject {
     // Track current message ID being streamed to fix duplicate issue
     private var currentStreamingMessageId: UUID?
     
+    // Usage handler for displaying token usage information
+    var usageHandler: ((String) -> Void)?
+    
+    // Format usage information for display
+    private func formatUsageString(_ usage: UsageInfo) -> String {
+        var parts: [String] = []
+        
+        if let input = usage.inputTokens {
+            parts.append("Input: \(input)")
+        }
+        
+        if let output = usage.outputTokens {
+            parts.append("Output: \(output)")
+        }
+        
+        if let cacheRead = usage.cacheReadInputTokens, cacheRead > 0 {
+            parts.append("Cache Read: \(cacheRead)")
+        }
+        
+        if let cacheWrite = usage.cacheCreationInputTokens, cacheWrite > 0 {
+            parts.append("Cache Write: \(cacheWrite)")
+        }
+        
+        return parts.joined(separator: " • ")
+    }
+    
     // MARK: - Initialization
     
     init(chatId: String, backendModel: BackendModel, chatManager: ChatManager = .shared, sharedMediaDataSource: SharedMediaDataSource) {
@@ -767,7 +793,12 @@ class ChatViewModel: ObservableObject {
             messages: bedrockMessages,
             systemContent: systemContentBlock,
             inferenceConfig: nil,
-            toolConfig: toolConfig
+            toolConfig: toolConfig,
+            usageHandler: { [weak self] usage in
+                // Format usage information for toast display
+                let formattedUsage = self?.formatUsageString(usage) ?? ""
+                self?.usageHandler?(formattedUsage)
+            }
         ) {
             // Check for tool use in each chunk
             if let toolUseInfo = await extractToolUseFromChunk(chunk) {
@@ -1893,7 +1924,7 @@ class ChatViewModel: ObservableObject {
     /// Updates the chat title with a summary of the input.
     func updateChatTitle(with input: String) async {
         let summaryPrompt = """
-        Summarize user input <input>\(input)</input> as short as possible. Just in few words without punctuation. It should not be more than 5 words. It will be book title. Do as best as you can. If you don't know how to do summarize, please give me just 'Friendly Chat', but please do summary this without punctuation:
+        Summarize user input <input>\(input)</input> as short as possible. Just in few words without punctuation. It should not be more than 5 words. Do as best as you can. please do summary this without punctuation:
         """
         
         // Create message for converseStream
@@ -1903,7 +1934,7 @@ class ChatViewModel: ObservableObject {
         )
         
         // Use Claude-3 Haiku for title generation
-        let haikuModelId = "anthropic.claude-3-haiku-20240307-v1:0"
+        let haikuModelId = "us.amazon.nova-pro-v1:0"
         
         do {
             // Convert to AWS SDK format
@@ -1918,7 +1949,11 @@ class ChatViewModel: ObservableObject {
                 withId: haikuModelId,
                 messages: [awsMessage],
                 systemContent: systemContentBlocks,
-                inferenceConfig: nil
+                inferenceConfig: nil,
+                usageHandler: { usage in
+                    // Title generation usage info
+                    print("Title generation usage - Input: \(usage.inputTokens ?? 0), Output: \(usage.outputTokens ?? 0)")
+                }
             ) {
                 if let textChunk = extractTextFromChunk(chunk) {
                     title += textChunk

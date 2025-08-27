@@ -39,6 +39,11 @@ struct ChatView: View {
     @State private var searchResult: SearchResult = SearchResult(matches: [], totalMatches: 0, searchTime: 0)
     @State private var searchDebounceTimer: Timer?
     
+    // Usage toast state
+    @State private var showUsageToast: Bool = false
+    @State private var currentUsage: String = ""
+    @State private var usageToastTimer: Timer?
+    
     init(chatId: String, backendModel: BackendModel) {
         let sharedMediaDataSource = SharedMediaDataSource()
         _viewModel = StateObject(
@@ -65,10 +70,29 @@ struct ChatView: View {
                 messageScrollView
                 messageBarView
             }
+            
+            // Usage toast
+            if showUsageToast && SettingManager.shared.showUsageInfo {
+                VStack {
+                    usageToastView
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(5)
+                    Spacer()
+                }
+                .padding(.top, showSearchBar ? 80 : 12)
+                .allowsHitTesting(false)
+            }
         }
         .onAppear {
             // Restore existing messages from disk or other storage
             viewModel.loadInitialData()
+            
+            // Set up usage handler for toast notifications
+            viewModel.usageHandler = { usage in
+                DispatchQueue.main.async {
+                    showUsageToast(with: usage)
+                }
+            }
         }
         .toolbar {
             Button {
@@ -525,6 +549,52 @@ struct ChatView: View {
             currentMatchIndex += 1
         } else {
             currentMatchIndex = 0
+        }
+    }
+    
+    // MARK: - Usage Toast
+    
+    private var usageToastView: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.bar.doc.horizontal")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            
+            Text(currentUsage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(colorScheme == .dark ?
+                      Color(NSColor.windowBackgroundColor).opacity(0.95) :
+                      Color(NSColor.windowBackgroundColor).opacity(0.95))
+                .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+        )
+    }
+    
+    private func showUsageToast(with usage: String) {
+        currentUsage = usage
+        
+        // Cancel existing timer
+        usageToastTimer?.invalidate()
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showUsageToast = true
+        }
+        
+        // Hide after 3 seconds
+        usageToastTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                showUsageToast = false
+            }
         }
     }
 }

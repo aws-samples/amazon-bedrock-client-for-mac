@@ -198,6 +198,10 @@ struct GeneralSettingsView: View {
                     Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
                         .padding(.vertical, 2)
                     
+                    Toggle("Show Usage Information", isOn: $settingsManager.showUsageInfo)
+                        .help("Display token usage information below assistant messages")
+                        .padding(.vertical, 2)
+                    
                     // Appearance controls
                     HStack(alignment: .center) {
                         Text("Appearance:")

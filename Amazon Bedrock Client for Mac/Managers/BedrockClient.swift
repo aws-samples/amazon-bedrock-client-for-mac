@@ -316,6 +316,19 @@ class Backend: Equatable {
         return getModelType(modelId) == .deepseekr1
     }
 
+    /// Check if a model supports prompt caching
+    func isPromptCachingSupported(_ modelId: String) -> Bool {
+        let modelType = getModelType(modelId)
+        switch modelType {
+        // Anthropic models that support prompt caching
+        case .claude37, .claudeSonnet4, .claudeOpus4:
+            return true
+        // Models that don't support prompt caching (including Nova models due to image caching issues)
+        default:
+            return false
+        }
+    }
+
     /// Check if a model is an embedding model
     func isEmbeddingModel(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
@@ -488,6 +501,32 @@ class Backend: Equatable {
         }
     }
     
+    /// Add cache control to messages for prompt caching
+    private func addCacheControlToMessages(_ messages: [BedrockRuntimeClientTypes.Message]) -> [BedrockRuntimeClientTypes.Message] {
+        guard !messages.isEmpty else { return messages }
+        
+        var processedMessages = messages
+        let lastIndex = messages.count - 1
+        var lastMessage = messages[lastIndex]
+        
+        // Add cache point to the last message to enable caching for conversation history
+        if var content = lastMessage.content {
+            // Add a cache point at the end of the message content
+            let cachePoint = BedrockRuntimeClientTypes.CachePointBlock(
+                type: .default
+            )
+            content.append(.cachepoint(cachePoint))
+            
+            lastMessage = BedrockRuntimeClientTypes.Message(
+                content: content,
+                role: lastMessage.role
+            )
+            processedMessages[lastIndex] = lastMessage
+        }
+        
+        return processedMessages
+    }
+
     /// Helper function to determine the model type based on modelId
     func getModelType(_ modelId: String) -> ModelType {
         // Split by colon first to remove the version number
@@ -756,7 +795,8 @@ class Backend: Equatable {
         messages: [BedrockRuntimeClientTypes.Message],
         systemContent: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil,
         inferenceConfig: BedrockRuntimeClientTypes.InferenceConfiguration? = nil,
-        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil,
+        usageHandler: ((UsageInfo) -> Void)? = nil
     ) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Error> {
         let modelType = getModelType(modelId)
         
@@ -805,10 +845,20 @@ class Backend: Equatable {
             }
         }
         
+        // Apply prompt caching if supported by the model
+        var processedMessages = messages
+        
+        if isPromptCachingSupported(modelId) && !messages.isEmpty {
+            // Add cache control to the last user message to enable caching
+            // This allows the conversation history to be cached for subsequent requests
+            processedMessages = addCacheControlToMessages(messages)
+            logger.info("Prompt caching enabled for model: \(modelId)")
+        }
+        
         // Create converse stream request
         var request = ConverseStreamInput(
             inferenceConfig: config,
-            messages: messages,
+            messages: processedMessages,
             modelId: modelId,
             system: isSystemPromptSupported(modelId) ? systemContent : nil
         )
@@ -818,16 +868,15 @@ class Backend: Equatable {
             request.toolConfig = tools
         }
         
-        // Add reasoning configuration only for models that support configurable reasoning
+        // Add reasoning configuration if needed
         if isReasoningModel && isThinkingEnabled {
-            // Create reasoning configuration with custom thinking budget
             do {
                 let thinkingBudget = modelConfig.overrideDefault ? modelConfig.thinkingBudget : 2048
                 
                 let reasoningConfig = [
                     "reasoning_config": [
                         "type": "enabled",
-                        "budget_tokens": thinkingBudget  // 커스텀 thinking budget 사용
+                        "budget_tokens": thinkingBudget
                     ]
                 ]
                 
@@ -837,8 +886,7 @@ class Backend: Equatable {
                 logger.error("Failed to create reasoning config document: \(error)")
             }
         } else if hasAlwaysOnReasoning(modelId) {
-            // Log that we're skipping explicit reasoning config for models with always-on reasoning
-            logger.info("Skipping explicit reasoning configuration for model with built-in reasoning: \(modelId)")
+            logger.info("Model \(modelId) has built-in reasoning capabilities")
         }
         
         logger.info("Converse API Stream Request for model: \(modelId)")
@@ -855,6 +903,21 @@ class Backend: Equatable {
                     }
                     
                     for try await event in stream {
+                        // Extract usage information from metadata events
+                        if case .metadata(let metadataEvent) = event {
+                            if let usage = metadataEvent.usage {
+                                let usageInfo = UsageInfo(
+                                    inputTokens: usage.inputTokens,
+                                    outputTokens: usage.outputTokens,
+                                    cacheCreationInputTokens: usage.cacheWriteInputTokens,
+                                    cacheReadInputTokens: usage.cacheReadInputTokens
+                                )
+                                logger.info("Usage info - Input: \(usage.inputTokens ?? 0), Output: \(usage.outputTokens ?? 0), Cache Read: \(usage.cacheReadInputTokens ?? 0), Cache Write: \(usage.cacheWriteInputTokens ?? 0)")
+                                // Call the usage handler if provided
+                                usageHandler?(usageInfo)
+                            }
+                        }
+                        
                         continuation.yield(event)
                     }
                     continuation.finish()
@@ -864,6 +927,8 @@ class Backend: Equatable {
             }
         }
     }
+    
+
     
     // MARK: - Image Generation Models
     
@@ -1120,7 +1185,28 @@ class Backend: Equatable {
     }
 }
 
+// MARK: - Usage Information for Display
+
+/**
+ * Usage information for tracking token consumption and prompt caching metrics
+ */
+struct UsageInfo {
+    let inputTokens: Int?
+    let outputTokens: Int?
+    let cacheCreationInputTokens: Int?
+    let cacheReadInputTokens: Int?
+    
+    init(inputTokens: Int? = nil, outputTokens: Int? = nil, cacheCreationInputTokens: Int? = nil, cacheReadInputTokens: Int? = nil) {
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.cacheCreationInputTokens = cacheCreationInputTokens
+        self.cacheReadInputTokens = cacheReadInputTokens
+    }
+}
+
 // MARK: - Model Type and Parameter Definitions
+
+
 
 enum ModelType {
     // Anthropic models
