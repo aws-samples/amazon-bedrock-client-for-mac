@@ -1937,8 +1937,13 @@ class ChatViewModel: ObservableObject {
             content: [.text(summaryPrompt)]
         )
         
-        // Use Claude-3 Haiku for title generation
-        let haikuModelId = "us.amazon.nova-pro-v1:0"
+        // Select model for title generation with fallback
+        let preferredModelId = "us.amazon.nova-pro-v1:0"
+        let fallbackModelId = "anthropic.claude-3-haiku-20240307-v1:0"
+        
+        // Check if preferred model is available, otherwise use fallback
+        let availableModelIds = SettingManager.shared.availableModels.map { $0.id }
+        let titleModelId = availableModelIds.contains(preferredModelId) ? preferredModelId : fallbackModelId
         
         do {
             // Convert to AWS SDK format
@@ -1950,7 +1955,7 @@ class ChatViewModel: ObservableObject {
             let systemContentBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
             
             for try await chunk in try await backendModel.backend.converseStream(
-                withId: haikuModelId,
+                withId: titleModelId,
                 messages: [awsMessage],
                 systemContent: systemContentBlocks,
                 inferenceConfig: nil,
