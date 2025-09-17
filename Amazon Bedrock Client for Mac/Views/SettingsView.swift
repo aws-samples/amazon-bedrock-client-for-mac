@@ -462,6 +462,45 @@ struct DeveloperSettingsView: View {
                     Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
                         .padding(.vertical, 2)
                 }
+                
+                Divider().padding(.vertical, 8)
+                
+                // Local Server section
+                Group {
+                    Text("Local Server")
+                        .font(.headline)
+                    
+                    Toggle("Enable Local Server", isOn: $settingsManager.enableLocalServer)
+                        .help("Enable the local HTTP server for document previews and content rendering")
+                        .padding(.vertical, 2)
+                    
+                    if settingsManager.enableLocalServer {
+                        HStack(alignment: .center) {
+                            Text("Server Port:")
+                                .frame(width: 140, alignment: .leading)
+                            
+                            TextField("", value: $settingsManager.serverPort, formatter: NumberFormatter())
+                                .frame(width: 80)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .onChange(of: settingsManager.serverPort) { newValue in
+                                    if newValue < 1024 {
+                                        settingsManager.serverPort = 1024
+                                    } else if newValue > 65535 {
+                                        settingsManager.serverPort = 65535
+                                    }
+                                }
+                            
+                            Text("(Requires app restart)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                        
+                        Text("The local server is used for document previews and content rendering. Change the port if 8080 conflicts with other services.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)

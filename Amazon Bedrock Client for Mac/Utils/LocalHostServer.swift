@@ -17,6 +17,9 @@ class LocalhostServer {
         var env = try Environment.detect()
         app = Application(env)
         
+        // Configure the server port
+        app.http.server.configuration.port = settingManager.serverPort
+        
         // Determine directory and create if necessary
         let directoryURL = URL(fileURLWithPath: settingManager.defaultDirectory)
         let directoryPath = directoryURL.path

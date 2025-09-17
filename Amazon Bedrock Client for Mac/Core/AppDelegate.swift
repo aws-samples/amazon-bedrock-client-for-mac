@@ -111,13 +111,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startLocalhostServer() {
-        logger.info("Starting localhost server")
+        let settingsManager = SettingManager.shared
+        
+        guard settingsManager.enableLocalServer else {
+            logger.info("Local server is disabled in settings")
+            return
+        }
+        
+        logger.info("Starting localhost server on port \(settingsManager.serverPort)")
         
         DispatchQueue.global(qos: .background).async {
             do {
                 self.localhostServer = try LocalhostServer()
                 try self.localhostServer?.start()
-                self.logger.info("Localhost server started successfully")
+                self.logger.info("Localhost server started successfully on port \(settingsManager.serverPort)")
             } catch {
                 self.logger.error("Could not start localhost server: \(error)")
                 print("Could not start localhost server: \(error)")

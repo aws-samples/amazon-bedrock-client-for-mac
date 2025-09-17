@@ -36,6 +36,8 @@ class SettingManager: ObservableObject {
     ).path
     @AppStorage("defaultModelId") var defaultModelId: String = ""
     @AppStorage("maxToolUseTurns") var maxToolUseTurns: Int = 10
+    @AppStorage("serverPort") var serverPort: Int = 8080
+    @AppStorage("enableLocalServer") var enableLocalServer: Bool = true
 
     var mcpEnabled: Bool {
         get {
