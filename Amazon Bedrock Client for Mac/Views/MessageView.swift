@@ -9,6 +9,7 @@ import SwiftUI
 import MarkdownKit
 import WebKit
 import Combine
+import Foundation
 
 // MARK: - LazyMarkdownView
 struct LazyMarkdownView: View {
@@ -902,6 +903,19 @@ struct HTMLStringView: NSViewRepresentable {
                         self.parent.dynamicHeight = height
                     }
                 }
+            }
+        }
+        
+        // Handle link clicks - open in default browser instead of loading inline
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if navigationAction.navigationType == .linkActivated {
+                if let url = navigationAction.request.url {
+                    // Open in default browser instead of loading inline
+                    NSWorkspace.shared.open(url)
+                }
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
             }
         }
         
