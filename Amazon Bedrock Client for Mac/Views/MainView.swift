@@ -88,76 +88,17 @@ struct MainView: View {
     
     // MARK: - Welcome Placeholder View (shown while loading models)
     private var welcomePlaceholderView: some View {
-        VStack(spacing: 40) {
+        VStack {
             Spacer()
             
-            // Clean AWS Bedrock icon
-            VStack(spacing: 24) {
-                Image("bedrock")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-                    .foregroundStyle(.primary)
-                
-                // Clean title section with standard fonts
-                VStack(spacing: 8) {
-                    Text("Amazon Bedrock")
-                        .font(.system(size: 28, weight: .regular))
-                        .foregroundColor(.primary)
-                    
-                    if hasInitialized && !organizedChatModels.isEmpty {
-                        Text("Ready to start your conversation")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text("Loading models...")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-            }
-            
-            // Loading indicator or start button
             if hasInitialized && !organizedChatModels.isEmpty {
-                // Clean start button
-                Button(action: {
-                    createNewChatIfNeeded()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("New Chat")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.accentColor)
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-                .onHover { hovering in
-                    if hovering {
-                        NSCursor.pointingHand.set()
-                    } else {
-                        NSCursor.arrow.set()
-                    }
-                }
+                // Show nothing when ready - user can use sidebar to create new chat
+                EmptyView()
             } else {
-                // Clean loading indicator
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .secondary))
-                        .scaleEffect(0.8)
-                    
-                    Text("Please wait")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.secondary)
-                }
+                // Simple loading indicator like Settings app
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .scaleEffect(0.5)
             }
             
             Spacer()
