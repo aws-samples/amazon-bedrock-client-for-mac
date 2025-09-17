@@ -37,6 +37,8 @@ enum AWSRegion: String, CaseIterable, Identifiable {
     case apNorthEast3 = "ap-northeast-3" // Asia Pacific (Osaka) - KIX
     case apSouthEast1 = "ap-southeast-1" // Asia Pacific (Singapore) - SIN
     case apSouthEast2 = "ap-southeast-2" // Asia Pacific (Sydney) - SYD
+    case apSouthEast3 = "ap-southeast-3" // Asia Pacific (Jakarta) - CGK
+    case apSouthEast4 = "ap-southeast-4" // Asia Pacific (Melbourne) - MEL
 }
 
 // AWS 리전 상태
@@ -83,7 +85,9 @@ struct AWSRegionMapping {
         AWSRegionInfo(id: "ap-northeast-2", name: "Asia Pacific (Seoul)", airportCode: "ICN", status: .available),
         AWSRegionInfo(id: "ap-northeast-3", name: "Asia Pacific (Osaka)", airportCode: "KIX", status: .available),
         AWSRegionInfo(id: "ap-southeast-1", name: "Asia Pacific (Singapore)", airportCode: "SIN", status: .available),
-        AWSRegionInfo(id: "ap-southeast-2", name: "Asia Pacific (Sydney)", airportCode: "SYD", status: .available)
+        AWSRegionInfo(id: "ap-southeast-2", name: "Asia Pacific (Sydney)", airportCode: "SYD", status: .available),
+        AWSRegionInfo(id: "ap-southeast-3", name: "Asia Pacific (Jakarta)", airportCode: "CGK", status: .available),
+        AWSRegionInfo(id: "ap-southeast-4", name: "Asia Pacific (Melbourne)", airportCode: "MEL", status: .available)
     ]
     
     // ID로 리전 정보 조회
@@ -143,7 +147,7 @@ extension AWSRegion {
             return .northAmerica
         case .euWest1, .euWest2, .euWest3, .euCentral1, .euCentral2, .euSouth1, .euSouth2, .euNorth1:
             return .europe
-        case .apNorthEast1, .apNorthEast2, .apNorthEast3, .apSouthEast1, .apSouthEast2, .apSouth1, .apSouth2:
+        case .apNorthEast1, .apNorthEast2, .apNorthEast3, .apSouthEast1, .apSouthEast2, .apSouthEast3, .apSouthEast4, .apSouth1, .apSouth2:
             return .asiaPacific
         case .saEast1:
             return .other
