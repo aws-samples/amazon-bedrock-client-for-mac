@@ -234,11 +234,32 @@ struct SidebarView: View {
     
     // Keys sorted by date for grouping chats
     private var sortedDateKeys: [String] {
-        organizedChatModels.keys
-            .compactMap { dateFormatter.date(from: $0) }
-            .sorted()
-            .reversed()
-            .map { dateFormatter.string(from: $0) }
+        // Create a mapping of display keys to actual dates for proper sorting
+        var keyToDateMap: [String: Date] = [:]
+        
+        for key in organizedChatModels.keys {
+            // Try to parse the key back to a date
+            if let date = dateFormatter.date(from: key) {
+                keyToDateMap[key] = date
+            } else {
+                // Handle special cases like "Today" and "Yesterday"
+                let calendar = Calendar.current
+                if key == "Today" {
+                    keyToDateMap[key] = calendar.startOfDay(for: Date())
+                } else if key == "Yesterday" {
+                    if let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) {
+                        keyToDateMap[key] = calendar.startOfDay(for: yesterday)
+                    }
+                }
+            }
+        }
+        
+        // Sort by actual dates (most recent first)
+        return keyToDateMap.keys.sorted { key1, key2 in
+            let date1 = keyToDateMap[key1] ?? Date.distantPast
+            let date2 = keyToDateMap[key2] ?? Date.distantPast
+            return date1 > date2
+        }
     }
     
     // Filtered chat models based on search results
@@ -751,6 +772,19 @@ struct SidebarView: View {
     
     /// Formats a date for section headers
     private func formatDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        
+        // Check if date is today
+        if calendar.isDateInToday(date) {
+            return "Today"
+        }
+        
+        // Check if date is yesterday
+        if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+        
+        // For all other dates, use the standard format
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMMM dd, yyyy"
         return dateFormatter.string(from: date)
