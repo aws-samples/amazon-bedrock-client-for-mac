@@ -95,19 +95,21 @@ struct ChatView: View {
             }
         }
         .toolbar {
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showSearchBar.toggle()
+            ToolbarItem(placement: .confirmationAction) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showSearchBar.toggle()
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
                 }
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
+                .buttonStyle(ToolbarButtonStyle())
+                .help("Find")
+                .keyboardShortcut("f", modifiers: [.command])
             }
-            .buttonStyle(ToolbarButtonStyle())
-            .help("Find")
-            .keyboardShortcut("f", modifiers: [.command])
         }
         .onChange(of: showSearchBar) { _, newValue in
             AppStateManager.shared.isSearchFieldActive = newValue && isSearchFocused

@@ -226,53 +226,59 @@ struct MainView: View {
     
     @ToolbarContentBuilder
     private func toolbarContent() -> some ToolbarContent {
+        // Left side - Model selector (navigation area)
         ToolbarItem(placement: .navigation) {
-            HStack(spacing: 8) {
-                Spacer().frame(width: 1)
+            HStack(spacing: 6) {
+                Spacer().frame(width: 1) // Required for proper positioning
                 
                 ModelSelectorDropdown(
                     organizedChatModels: organizedChatModels,
                     menuSelection: $menuSelection,
                     handleSelectionChange: handleMenuSelectionChange
                 )
-                .frame(width: 350)
+                .frame(minWidth: 250, maxWidth: 420)
             }
         }
         
-        ToolbarItem(placement: .automatic) {
-            HStack(spacing: 16) {
-                if case .chat(let chat) = selection,
-                   chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
-                    Button(action: deleteCurrentChat) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 14))
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(ToolbarButtonStyle())
-                    .help("Delete current chat")
-                }
-                
-                Button(action: {
-                    let settingsView = SettingsView()
-                    SettingsWindowManager.shared.openSettings(view: settingsView)
-                }) {
-                    Image(systemName: "gearshape")
+        // Inference config dropdown - highest priority, never hidden
+        if case .chat(let selectedModel) = menuSelection {
+            ToolbarItem(placement: .confirmationAction) {
+                InferenceConfigDropdown(
+                    currentModelId: .constant(selectedModel.id),
+                    backend: backendModel.backend
+                )
+                .frame(minWidth: 80, maxWidth: 110)
+            }
+        }
+        
+        // Delete button - high priority
+        if case .chat(let chat) = selection,
+           chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: deleteCurrentChat) {
+                    Image(systemName: "trash")
                         .font(.system(size: 14))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(ToolbarButtonStyle())
-                .help("Settings")
-                
-                if case .chat(let selectedModel) = menuSelection {
-                    InferenceConfigDropdown(
-                        currentModelId: .constant(selectedModel.id),
-                        backend: backendModel.backend
-                    )
-                }
+                .help("Delete current chat")
             }
-            .padding(.trailing, 8)
+        }
+        
+        // Settings button - always visible
+        ToolbarItem(placement: .confirmationAction) {
+            Button(action: {
+                let settingsView = SettingsView()
+                SettingsWindowManager.shared.openSettings(view: settingsView)
+            }) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(ToolbarButtonStyle())
+            .help("Settings")
         }
     }
     
