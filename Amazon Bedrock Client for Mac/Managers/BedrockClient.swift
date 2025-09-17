@@ -189,36 +189,14 @@ class Backend: Equatable {
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
         
-        // Try to initialize credentials in order of preference
+        // Always use ProfileAWSCredentialIdentityResolver as it handles SSO, credential_process,
+        // and assume role configurations internally, which is more robust than trying to detect
+        // the profile type and use specific resolvers
         do {
-            // First try: Use the specified profile from SettingManager
-            if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
-                 switch selectedProfile.type {
-                 case .sso:
-                     self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
-                     logger.info("Using SSO credentials for profile: \(profile)")
-                 case .credentialProcess:
-                     // For credential_process profiles, we use ProfileAWSCredentialIdentityResolver
-                     // which automatically handles credential_process directives
-                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-                     logger.info("Using credential_process for profile: \(profile)")
-                 case .credentials:
-                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
-                     logger.info("Using standard credentials for profile: \(profile)")
-                 }
-            }
-            // Second try: Use default profile if specified profile not found
-            else if profile != "default" {
-                logger.warning("Profile '\(profile)' not found, falling back to 'default' profile")
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
-            }
-            // Third try: Use default profile directly
-            else {
-                logger.info("Using default profile")
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
-            }
+            self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+            logger.info("Using ProfileAWSCredentialIdentityResolver for profile: \(profile)")
         } catch {
-            // Final try: Use DefaultAWSCredentialIdentityResolverChain as last resort
+            // Fallback to DefaultAWSCredentialIdentityResolverChain if profile resolution fails
             logger.warning("Failed to initialize with profile '\(profile)': \(error.localizedDescription)")
             logger.info("Attempting to use DefaultAWSCredentialIdentityResolverChain")
             
