@@ -101,6 +101,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         logger.info("Application will terminate")
         
+        // Clean up temporary chats before terminating
+        ChatManager.shared.cleanupTemporaryChats()
+        
         // Remove notification observers
         NotificationCenter.default.removeObserver(self)
         

@@ -57,8 +57,8 @@ struct MainView: View {
             }
         }
         .onChange(of: organizedChatModels) { _, _ in
-            // Auto-create chat when models are loaded (only once)
-            if hasInitialized && selection == nil && !isCreatingInitialChat {
+            // Only auto-create chat if user has existing chats (has used the app before)
+            if hasInitialized && selection == nil && !isCreatingInitialChat && !chatManager.chats.isEmpty {
                 createNewChatIfNeeded()
             }
         }
@@ -115,22 +115,59 @@ struct MainView: View {
                     .foregroundStyle(.primary)
                     .tracking(-0.8)
                 
-                Text("Initializing generative AI models...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                if hasInitialized && !organizedChatModels.isEmpty {
+                    Text("Ready to start your conversation")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Initializing generative AI models...")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
             
-            // Modern loading indicator
-            VStack(spacing: 16) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
-                    .scaleEffect(0.9)
-                    .opacity(0.8)
-                
-                Text("This may take a moment")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.tertiary)
+            // Loading indicator or start button
+            if hasInitialized && !organizedChatModels.isEmpty {
+                // Show start button when ready
+                Button(action: {
+                    createNewChatIfNeeded()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.message")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Start New Chat")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.accentColor)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .onHover { hovering in
+                    if hovering {
+                        NSCursor.pointingHand.set()
+                    } else {
+                        NSCursor.arrow.set()
+                    }
+                }
+            } else {
+                // Show loading indicator
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
+                        .scaleEffect(0.9)
+                        .opacity(0.8)
+                    
+                    Text("This may take a moment")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
             }
             
             Spacer()
@@ -194,8 +231,9 @@ struct MainView: View {
                     self.selectDefaultModel()
                     settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
                     
-                    // Auto-create first chat if none exists
-                    if selection == nil {
+                    // Only auto-create chat if we have existing chats (user has used the app before)
+                    // or if user explicitly requests it
+                    if selection == nil && !chatManager.chats.isEmpty {
                         createNewChatIfNeeded()
                     }
                 }
@@ -246,9 +284,9 @@ struct MainView: View {
             return
         }
         
-        // Only create if we have a selected model and no current chat
-        guard case let .chat(selectedModel) = menuSelection,
-              selection == nil || selection == .newChat else {
+        // Only create if we have a selected model
+        guard case let .chat(selectedModel) = menuSelection else {
+            logger.info("No model selected, cannot create chat")
             return
         }
         

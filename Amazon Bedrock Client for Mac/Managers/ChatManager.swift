@@ -110,6 +110,7 @@ struct ConversationHistory: Codable {
 class ChatManager: ObservableObject {
     @Published var chats: [ChatModel] = []
     @Published var chatIsLoading: [String: Bool] = [:]
+    private var temporaryChats: [String: ChatModel] = [:] // Chats not yet saved to CoreData
     
     var hasChats: Bool {
         return !chats.isEmpty
@@ -135,6 +136,9 @@ class ChatManager: ObservableObject {
         
         // Check if we need to run migrations
         checkAndRunMigrations()
+        
+        // Clean up empty chats on startup
+        cleanupEmptyChats()
     }
     
     // MARK: - Migration
@@ -222,43 +226,145 @@ class ChatManager: ObservableObject {
     // MARK: - Chat Management
     
     func createNewChat(modelId: String, modelName: String, modelProvider: String, completion: @escaping (ChatModel) -> Void) {
+        // Create a temporary chat that's not saved to CoreData yet
+        let chatModel = ChatModel(
+            id: modelId,
+            chatId: UUID().uuidString,
+            name: modelName,
+            title: "New Chat",
+            description: modelId,
+            provider: modelProvider,
+            lastMessageDate: Date()
+        )
+        
+        // Store as temporary chat
+        temporaryChats[chatModel.chatId] = chatModel
+        
+        // Create empty conversation history in memory
+        let history = ConversationHistory(chatId: chatModel.chatId, modelId: chatModel.id)
+        saveConversationHistory(history, for: chatModel.chatId)
+        
+        DispatchQueue.main.async {
+            self.chats.append(chatModel)
+            self.chatIsLoading[chatModel.chatId] = false
+            self.objectWillChange.send()
+            completion(chatModel)
+        }
+    }
+    
+    // MARK: - Empty Chat Cleanup
+    
+    func cleanupEmptyChats() {
+        logger.info("Cleaning up empty chats...")
+        
+        let context = coreDataStack.viewContext
+        context.perform {
+            let fetchRequest: NSFetchRequest<ChatEntity> = ChatEntity.fetchRequest()
+            
+            do {
+                let allChats = try context.fetch(fetchRequest)
+                var chatsToDelete: [ChatEntity] = []
+                
+                for chat in allChats {
+                    guard let chatId = chat.chatId else { continue }
+                    
+                    // Check if chat has any messages
+                    if let history = self.getConversationHistory(for: chatId) {
+                        if history.messages.isEmpty {
+                            chatsToDelete.append(chat)
+                            self.logger.info("Marking empty chat for deletion: \(chatId)")
+                        }
+                    } else {
+                        // No history file means empty chat
+                        chatsToDelete.append(chat)
+                        self.logger.info("Marking chat with no history for deletion: \(chatId)")
+                    }
+                }
+                
+                // Delete empty chats
+                for chat in chatsToDelete {
+                    context.delete(chat)
+                    
+                    // Also clean up any associated files
+                    if let chatId = chat.chatId {
+                        self.cleanupChatFiles(chatId: chatId)
+                    }
+                }
+                
+                if !chatsToDelete.isEmpty {
+                    try context.save()
+                    self.logger.info("Deleted \(chatsToDelete.count) empty chats")
+                    
+                    // Reload chats to update UI
+                    DispatchQueue.main.async {
+                        self.loadChats()
+                    }
+                }
+                
+            } catch {
+                self.logger.error("Failed to cleanup empty chats: \(error)")
+            }
+        }
+    }
+    
+    func cleanupTemporaryChats() {
+        logger.info("Cleaning up \(temporaryChats.count) temporary chats")
+        
+        // Remove temporary chats from UI
+        let tempChatIds = Set(temporaryChats.keys)
+        DispatchQueue.main.async {
+            self.chats.removeAll { tempChatIds.contains($0.chatId) }
+            self.temporaryChats.removeAll()
+            self.objectWillChange.send()
+        }
+        
+        // Clean up any conversation history files for temporary chats
+        for chatId in tempChatIds {
+            cleanupChatFiles(chatId: chatId)
+        }
+    }
+    
+    private func cleanupChatFiles(chatId: String) {
+        let filesToDelete = [
+            getConversationHistoryFileURL(chatId: chatId)
+        ]
+        
+        for fileURL in filesToDelete {
+            if fileExists(at: fileURL) {
+                do {
+                    try FileManager.default.removeItem(at: fileURL)
+                    logger.info("Deleted file: \(fileURL.lastPathComponent)")
+                } catch {
+                    logger.error("Failed to delete file \(fileURL.lastPathComponent): \(error)")
+                }
+            }
+        }
+    }
+    
+    // Save temporary chat to CoreData when first message is added
+    private func saveTemporaryChatToCoreData(_ chatModel: ChatModel) {
+        guard temporaryChats[chatModel.chatId] != nil else { return }
+        
         let context = coreDataStack.viewContext
         context.perform {
             let newChat = NSEntityDescription.insertNewObject(forEntityName: "ChatEntity", into: context) as! ChatEntity
-            newChat.id = modelId
-            newChat.chatId = UUID().uuidString
-            newChat.name = modelName
-            newChat.title = "New Chat"
-            newChat.chatDescription = modelId
-            newChat.provider = modelProvider
-            newChat.lastMessageDate = Date()
+            newChat.id = chatModel.id
+            newChat.chatId = chatModel.chatId
+            newChat.name = chatModel.name
+            newChat.title = chatModel.title
+            newChat.chatDescription = chatModel.description
+            newChat.provider = chatModel.provider
+            newChat.lastMessageDate = chatModel.lastMessageDate
             
             do {
                 try context.save()
-                
-                let chatModel = ChatModel(
-                    id: newChat.id ?? "",
-                    chatId: newChat.chatId ?? "",
-                    name: newChat.name ?? "",
-                    title: newChat.title ?? "",
-                    description: newChat.chatDescription ?? "",
-                    provider: newChat.provider ?? "",
-                    lastMessageDate: newChat.lastMessageDate ?? Date()
-                )
-                
-                // Create empty conversation history for this chat
-                let history = ConversationHistory(chatId: chatModel.chatId, modelId: chatModel.id)
-                self.saveConversationHistory(history, for: chatModel.chatId)
-                
                 DispatchQueue.main.async {
-                    self.chats.append(chatModel)
-                    self.chatIsLoading[chatModel.chatId] = false
-                    self.objectWillChange.send()
-                    completion(chatModel)
+                    // Remove from temporary chats since it's now saved
+                    self.temporaryChats.removeValue(forKey: chatModel.chatId)
+                    self.logger.info("Saved temporary chat to CoreData: \(chatModel.chatId)")
                 }
             } catch {
-                self.logger.info("Failed to save context: \(error)")
-                completion(ChatModel(id: "", chatId: "", name: "", title: "", description: "", provider: "", lastMessageDate: Date()))
+                self.logger.error("Failed to save temporary chat to CoreData: \(error)")
             }
         }
     }
@@ -401,6 +507,11 @@ class ChatManager: ObservableObject {
     
     // The main add message function that handles conversation history updates
     func addMessage(_ message: Message, to chatId: String) {
+        // If this is a temporary chat, save it to CoreData now that we have a real message
+        if let tempChat = temporaryChats[chatId] {
+            saveTemporaryChatToCoreData(tempChat)
+        }
+        
         var history = getConversationHistory(for: chatId) ?? createNewConversationHistory(for: chatId)
         
         history.addMessage(message)
