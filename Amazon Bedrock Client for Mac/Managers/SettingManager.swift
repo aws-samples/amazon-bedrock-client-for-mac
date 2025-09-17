@@ -288,8 +288,6 @@ class SettingManager: ObservableObject {
         var currentProfile: String?
         var isSSO = false
         var hasCredentialProcess = false
-        var hasRoleArn = false
-        var hasSourceProfile = false
         
         // Function to add the current profile with appropriate type
         func addCurrentProfile() {
@@ -297,9 +295,6 @@ class SettingManager: ObservableObject {
                 if isSSO {
                     profiles.append(ProfileInfo(name: profile, type: .sso))
                 } else if hasCredentialProcess {
-                    profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
-                } else if hasRoleArn && hasSourceProfile {
-                    // Profile with role_arn and source_profile should be treated as assumable role
                     profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
                 }
             }
@@ -316,20 +311,12 @@ class SettingManager: ObservableObject {
                 currentProfile = String(trimmedLine.dropFirst(9).dropLast())
                 isSSO = false
                 hasCredentialProcess = false
-                hasRoleArn = false
-                hasSourceProfile = false
             } else if trimmedLine.starts(with: "sso_") {
                 // If we find an SSO-related setting, mark this profile as SSO
                 isSSO = true
             } else if trimmedLine.starts(with: "credential_process") {
                 // If we find credential_process setting, mark this profile
                 hasCredentialProcess = true
-            } else if trimmedLine.starts(with: "role_arn") {
-                // Profile has role_arn for assume role
-                hasRoleArn = true
-            } else if trimmedLine.starts(with: "source_profile") {
-                // Profile has source_profile for assume role
-                hasSourceProfile = true
             }
         }
         
