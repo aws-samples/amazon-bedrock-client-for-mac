@@ -30,8 +30,8 @@ class ChatSearchIndex: ObservableObject {
     var indexedChatIds: Set<String> = []
     var lastIndexUpdate: Date = Date.distantPast
     
-    // Minimum word length for indexing
-    private let minWordLength = 2
+    // Minimum word length for indexing (1 to catch single character searches like "응")
+    private let minWordLength = 1
     
     private init() {} // Singleton pattern
     
@@ -44,48 +44,30 @@ class ChatSearchIndex: ObservableObject {
     }
 
     func updateIndexDirect(chatIndexMap: [String: Set<String>], keywordIndex: [String: Set<String>]) {
-        self._chatIndexMap = chatIndexMap
-        self._keywordIndex = keywordIndex
+        self.chatIndexMap = chatIndexMap
+        self.keywordIndex = keywordIndex
     }
     
     /// Updates the search index with current chats and their content - optimized to avoid unnecessary reindexing
     func updateIndex(chats: [ChatModel], chatManager: ChatManager) {
         let currentChatIds = Set(chats.map { $0.chatId })
         
-        // Check if we need to update at all
-        let needsUpdate = currentChatIds != indexedChatIds || 
+        // Force update if we have no indexed chats or if chats have changed significantly
+        let needsUpdate = indexedChatIds.isEmpty || 
+                         currentChatIds != indexedChatIds || 
                          Date().timeIntervalSince(lastIndexUpdate) > 300 // 5 minutes
         
         if !needsUpdate {
             return // Skip reindexing if nothing changed
         }
         
-        // Only reindex new or modified chats
-        var newChatIndexMap = chatIndexMap
-        var newKeywordIndex = keywordIndex
-        var newChatMetadata = chatMetadata
+        // For simplicity and reliability, do a full reindex when there are changes
+        var newChatIndexMap: [String: Set<String>] = [:]
+        var newKeywordIndex: [String: Set<String>] = [:]
+        var newChatMetadata: [String: ChatMetadata] = [:]
         
-        // Remove deleted chats from index
-        let deletedChatIds = indexedChatIds.subtracting(currentChatIds)
-        for deletedId in deletedChatIds {
-            // Remove from chat index
-            if let words = newChatIndexMap[deletedId] {
-                newChatIndexMap.removeValue(forKey: deletedId)
-                
-                // Remove from keyword index
-                for word in words {
-                    newKeywordIndex[word]?.remove(deletedId)
-                    if newKeywordIndex[word]?.isEmpty == true {
-                        newKeywordIndex.removeValue(forKey: word)
-                    }
-                }
-            }
-            newChatMetadata.removeValue(forKey: deletedId)
-        }
-        
-        // Add or update new/modified chats
-        let newOrModifiedChatIds = currentChatIds.subtracting(indexedChatIds)
-        for chat in chats where newOrModifiedChatIds.contains(chat.chatId) {
+        // Index all current chats
+        for chat in chats {
             indexSingleChat(chat, chatManager: chatManager, 
                           chatIndexMap: &newChatIndexMap, 
                           keywordIndex: &newKeywordIndex, 
@@ -159,85 +141,47 @@ class ChatSearchIndex: ObservableObject {
             }
         }
         
-        // Tokenize query
-        let searchTerms = query.lowercased()
-            .split { !$0.isLetter && !$0.isNumber }
-            .map { String($0) }
-            .filter { $0.count >= minWordLength }
-        
-        if searchTerms.isEmpty {
-            return []
-        }
+        // Normalize query for better matching
+        let normalizedQuery = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Calculate relevance scores for each chat
         var chatScores: [String: Double] = [:]
         
         for (chatId, words) in chatIndexMap {
-            var score = 0.0
-            var hasMatch = false
+            guard let metadata = chatMetadata[chatId] else { continue }
             
-            for term in searchTerms {
-                var termMatched = false
-                
-                // Exact word match
-                if words.contains(term) {
-                    score += 10.0
-                    termMatched = true
-                    hasMatch = true
-                }
-                
-                // Partial word match (only if term is at least 3 characters and matches beginning or contains)
-                if term.count >= 3 {
-                    for word in words {
-                        if word != term && (word.hasPrefix(term) || (word.count >= 4 && word.contains(term))) {
-                            score += 3.0
-                            termMatched = true
-                            hasMatch = true
-                        }
+            var score = 0.0
+            
+            // Check title match (highest priority)
+            let titleLower = metadata.title.lowercased()
+            if titleLower.contains(normalizedQuery) {
+                score += 100.0
+            }
+            
+            // Check model name match
+            let modelLower = metadata.modelName.lowercased()
+            if modelLower.contains(normalizedQuery) {
+                score += 50.0
+            }
+            
+            // Check word matches in content
+            for word in words {
+                if word.contains(normalizedQuery) {
+                    if word == normalizedQuery {
+                        score += 20.0 // Exact match
+                    } else if word.hasPrefix(normalizedQuery) {
+                        score += 10.0 // Prefix match
+                    } else {
+                        score += 5.0 // Contains match
                     }
-                }
-                
-                // Title and model name matches (more strict)
-                if let metadata = chatMetadata[chatId] {
-                    let titleLower = metadata.title.lowercased()
-                    let modelLower = metadata.modelName.lowercased()
-                    
-                    // Title exact match
-                    if titleLower.contains(term) {
-                        score += 20.0
-                        termMatched = true
-                        hasMatch = true
-                    }
-                    
-                    // Model name exact match
-                    if modelLower.contains(term) {
-                        score += 15.0
-                        termMatched = true
-                        hasMatch = true
-                    }
-                }
-                
-                // If this term didn't match anything, this chat is not relevant
-                if !termMatched {
-                    score = 0.0
-                    hasMatch = false
-                    break
                 }
             }
             
-            // Only include chats that have actual matches
-            if hasMatch && score > 0 {
-                // Add bonus scores only if there's a base match
-                if let metadata = chatMetadata[chatId] {
-                    // Recency bonus (more recent chats get higher scores)
-                    let daysSinceLastMessage = Date().timeIntervalSince(metadata.lastMessageDate) / (24 * 60 * 60)
-                    let recencyBonus = max(0, 3.0 - daysSinceLastMessage * 0.05)
-                    score += recencyBonus
-                    
-                    // Message count bonus (more active chats get slight bonus)
-                    let activityBonus = min(Double(metadata.messageCount) * 0.05, 2.0)
-                    score += activityBonus
-                }
+            // Add recency bonus if there's any match
+            if score > 0 {
+                let daysSinceLastMessage = Date().timeIntervalSince(metadata.lastMessageDate) / (24 * 60 * 60)
+                let recencyBonus = max(0, 5.0 - daysSinceLastMessage * 0.1)
+                score += recencyBonus
                 
                 chatScores[chatId] = score
             }
@@ -355,7 +299,7 @@ struct SidebarView: View {
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
         .onAppear {
-            // Initial organization only - search index will be updated lazily when needed
+            // Initial organization only - search index will be built lazily when first search is performed
             organizeChatsInitial()
         }
         .onChange(of: chatManager.chats) { oldChats, newChats in
@@ -643,8 +587,10 @@ struct SidebarView: View {
             return
         }
         
-        // Ensure search index is up to date before searching
-        updateSearchIndexIfNeeded()
+        // Ensure search index is up to date before searching (lazy initialization)
+        if searchIndex.indexedChatIds.isEmpty && !chatManager.chats.isEmpty {
+            updateSearchIndexIfNeeded()
+        }
         
         // Set new timer for debounced search (faster than chat search - 0.2s)
         searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
@@ -772,10 +718,16 @@ struct SidebarView: View {
     
     // Optimized search index update - only called when needed and chats have changed
     private func updateSearchIndexIfNeeded() {
+        // Only update if we have chats and index is empty or outdated
+        guard !chatManager.chats.isEmpty else { return }
+        
         Task(priority: .background) {
-            await MainActor.run {
-                searchIndex.updateIndex(chats: chatManager.chats, chatManager: chatManager)
-            }
+            // Run indexing in background thread to avoid blocking UI
+            await Task.detached(priority: .background) {
+                await MainActor.run {
+                    searchIndex.updateIndex(chats: chatManager.chats, chatManager: chatManager)
+                }
+            }.value
         }
     }
     
