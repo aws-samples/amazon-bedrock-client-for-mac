@@ -471,11 +471,19 @@ struct SidebarView: View {
             }
             
             if !searchText.isEmpty && searchResults.isEmpty {
-                Text("No matching chats found")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .center)
+                if isSearching {
+                    Text("Indexing chats for search...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    Text("No matching chats found")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
             }
         }
         .contextMenu {
