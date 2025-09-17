@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7907BEAA2ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */; };
-		7907BEB42ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */; };
-		7907BEB62ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */; };
 		790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790804232B99F0DA00930011 /* SharedMediaDataSource.swift */; };
 		792D8E652DDFE55E00BB1C01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 792D8E642DDFE55E00BB1C01 /* MCP */; };
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
@@ -84,10 +81,7 @@
 /* Begin PBXFileReference section */
 		7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Amazon Bedrock Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA52ACD87A200C4D500 /* Amazon Bedrock Client for MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacTests.swift; sourceTree = "<group>"; };
 		7907BEAF2ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacUITests.swift; sourceTree = "<group>"; };
-		7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		790804232B99F0DA00930011 /* SharedMediaDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedMediaDataSource.swift; sourceTree = "<group>"; };
 		791461202AD0E51B00C454DC /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		7937953C2B46CAF1000C94A5 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
@@ -177,9 +171,6 @@
 				791461202AD0E51B00C454DC /* LICENSE */,
 				79BF645E2ACFF8FD00383300 /* README.md */,
 				79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */,
-				7907BEA82ACD87A200C4D500 /* Amazon Bedrock Client for MacTests */,
-				7907BEB22ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests */,
-				799703D82D100265009139F1 /* Frameworks */,
 				7907BE952ACD87A100C4D500 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -192,23 +183,6 @@
 				7907BEAF2ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		7907BEA82ACD87A200C4D500 /* Amazon Bedrock Client for MacTests */ = {
-			isa = PBXGroup;
-			children = (
-				7907BEA92ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift */,
-			);
-			path = "Amazon Bedrock Client for MacTests";
-			sourceTree = "<group>";
-		};
-		7907BEB22ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests */ = {
-			isa = PBXGroup;
-			children = (
-				7907BEB32ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift */,
-				7907BEB52ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift */,
-			);
-			path = "Amazon Bedrock Client for MacUITests";
 			sourceTree = "<group>";
 		};
 		79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */ = {
@@ -307,13 +281,6 @@
 				79610DD32AD22A2F00993D09 /* SidebarView.swift */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		799703D82D100265009139F1 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -511,7 +478,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7907BEAA2ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -519,8 +485,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7907BEB62ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITestsLaunchTests.swift in Sources */,
-				7907BEB42ACD87A200C4D500 /* Amazon_Bedrock_Client_for_MacUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -758,7 +722,6 @@
 		7907BEBD2ACD87A200C4D500 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -781,7 +744,6 @@
 		7907BEBE2ACD87A200C4D500 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -804,7 +766,6 @@
 		7907BEC02ACD87A200C4D500 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -826,7 +787,6 @@
 		7907BEC12ACD87A200C4D500 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
