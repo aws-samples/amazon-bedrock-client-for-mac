@@ -213,6 +213,7 @@ struct SidebarView: View {
     @State private var searchResults: [String] = []
     @State private var isSearching: Bool = false
     @State private var searchDebounceTimer: Timer?
+    @State private var hasInitiatedSearch: Bool = false // Track if user has ever searched
     @State private var renamingChatId: String? = nil
     @State private var renameText: String = ""
     @FocusState private var renamingTextfieldFocused: Bool
@@ -320,18 +321,27 @@ struct SidebarView: View {
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
         .onAppear {
-            // Initial organization only - search index will be built lazily when first search is performed
+            // Initial organization only - NO search indexing on startup
             organizeChatsInitial()
         }
         .onChange(of: chatManager.chats) { oldChats, newChats in
             // Only reorganize when chat count changes (add/remove)
             if oldChats.count != newChats.count {
                 throttledOrganizeChatsByDate()
-                // Update search index only when chats actually change
-                updateSearchIndexIfNeeded()
+                // NO indexing here - only when user searches
             }
         }
-        .onChange(of: searchText) { _, _ in
+        .onChange(of: searchText) { _, newValue in
+            // Mark that user has initiated search
+            if !newValue.isEmpty && !hasInitiatedSearch {
+                hasInitiatedSearch = true
+                // Trigger initial indexing in background when user first types
+                Task(priority: .background) {
+                    await MainActor.run {
+                        updateSearchIndexIfNeeded()
+                    }
+                }
+            }
             performSearch()
         }
         // Remove New Chat button from toolbar, keeping only Toggle Sidebar
@@ -602,20 +612,25 @@ struct SidebarView: View {
         // Cancel previous timer
         searchDebounceTimer?.invalidate()
         
-        // Update search index lazily only when search is actually used
         if searchText.isEmpty {
             searchResults = []
             return
         }
         
-        // Ensure search index is up to date before searching (lazy initialization)
+        // If index is not ready yet, show loading state and wait for background indexing
         if searchIndex.indexedChatIds.isEmpty && !chatManager.chats.isEmpty {
-            updateSearchIndexIfNeeded()
+            isSearching = true
+            // Don't trigger immediate indexing here - it's already happening in background
+            // Just wait for it to complete
+            searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                self.executeSearch()
+            }
+            return
         }
         
         // Set new timer for debounced search (faster than chat search - 0.2s)
         searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
-            executeSearch()
+            self.executeSearch()
         }
     }
     
