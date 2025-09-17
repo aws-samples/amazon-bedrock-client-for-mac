@@ -38,6 +38,11 @@ class SettingManager: ObservableObject {
     @AppStorage("maxToolUseTurns") var maxToolUseTurns: Int = 10
     @AppStorage("serverPort") var serverPort: Int = 8080
     @AppStorage("enableLocalServer") var enableLocalServer: Bool = true
+    
+    // Quick Access Hotkey Settings
+    @AppStorage("enableQuickAccess") var enableQuickAccess: Bool = true
+    @AppStorage("hotkeyModifiers") var hotkeyModifiers: UInt32 = UInt32(optionKey)
+    @AppStorage("hotkeyKeyCode") var hotkeyKeyCode: UInt32 = 49 // Space key
 
     var mcpEnabled: Bool {
         get {

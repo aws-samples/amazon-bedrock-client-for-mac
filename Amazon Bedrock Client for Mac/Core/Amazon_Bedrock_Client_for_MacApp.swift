@@ -135,6 +135,13 @@ struct Amazon_Bedrock_Client_for_MacApp: App {
                 NSApp.sendAction(#selector(AppDelegate.openSettings), to: nil, from: nil)
             }
             .keyboardShortcut(",", modifiers: [.command])
+            
+            Divider()
+            
+            Button("Show Quick Access") {
+                QuickAccessWindowManager.shared.showWindow()
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
         }
         
         // Add on the menu "View"

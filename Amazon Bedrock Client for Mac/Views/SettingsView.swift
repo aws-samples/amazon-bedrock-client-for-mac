@@ -202,6 +202,23 @@ struct GeneralSettingsView: View {
                         .help("Display token usage information below assistant messages")
                         .padding(.vertical, 2)
                     
+                    Toggle("Enable Quick Access", isOn: $settingsManager.enableQuickAccess)
+                        .help("Enable system-wide hotkey to quickly access Amazon Bedrock")
+                        .padding(.vertical, 2)
+                    
+                    if settingsManager.enableQuickAccess {
+                        HStack(alignment: .center) {
+                            Text("Hotkey:")
+                                .frame(width: 100, alignment: .leading)
+                            
+                            HotkeyRecorderView(
+                                modifiers: $settingsManager.hotkeyModifiers,
+                                keyCode: $settingsManager.hotkeyKeyCode
+                            )
+                        }
+                        .padding(.leading, 20)
+                    }
+                    
                     // Appearance controls
                     HStack(alignment: .center) {
                         Text("Appearance:")

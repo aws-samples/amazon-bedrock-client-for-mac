@@ -22,6 +22,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return UpdateManager.shared
     }()
     
+    // Hotkey manager for quick access
+    private lazy var hotkeyManager: HotkeyManager = {
+        Logger(label: "AppDelegate").info("Initializing HotkeyManager")
+        return HotkeyManager.shared
+    }()
+    
     private var logger = Logger(label: "AppDelegate")
     
     // Track last update check time to prevent excessive checking
@@ -51,6 +57,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start the localhost server for local communication
         startLocalhostServer()
+        
+        // Initialize hotkey manager for quick access
+        _ = hotkeyManager
+        logger.info("Hotkey manager initialized")
         
         // Register for app activation notifications
         NotificationCenter.default.addObserver(

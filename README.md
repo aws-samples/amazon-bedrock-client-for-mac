@@ -29,6 +29,7 @@ A modern, native macOS client for Amazon Bedrock, providing streamlined access t
 - In-chat search functionality (Cmd+F)
 - Real-time voice transcription
 - Keyboard shortcuts for font size adjustment, navigation, and sidebar toggle
+- **Quick Access Window**: System-wide hotkey (Option+Space) for instant AI assistance from any application
 - Consistent styling and animations across all views
 
 ### Document & Media Management
