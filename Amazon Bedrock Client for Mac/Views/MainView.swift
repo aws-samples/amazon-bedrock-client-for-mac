@@ -88,63 +88,54 @@ struct MainView: View {
     
     // MARK: - Welcome Placeholder View (shown while loading models)
     private var welcomePlaceholderView: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 40) {
             Spacer()
             
-            // Modern service icon with subtle elevation
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 72, height: 72)
-                    .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(.quaternary, lineWidth: 0.5)
-                    )
-                
+            // Clean AWS Bedrock icon
+            VStack(spacing: 24) {
                 Image("bedrock")
-                    .font(.system(size: 32, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 64)
                     .foregroundStyle(.primary)
-            }
-            
-            // Clean title section
-            VStack(spacing: 12) {
-                Text("Amazon Bedrock")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .tracking(-0.8)
                 
-                if hasInitialized && !organizedChatModels.isEmpty {
-                    Text("Ready to start your conversation")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                } else {
-                    Text("Initializing generative AI models...")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                // Clean title section with standard fonts
+                VStack(spacing: 8) {
+                    Text("Amazon Bedrock")
+                        .font(.system(size: 28, weight: .regular))
+                        .foregroundColor(.primary)
+                    
+                    if hasInitialized && !organizedChatModels.isEmpty {
+                        Text("Ready to start your conversation")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Loading models...")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
             
             // Loading indicator or start button
             if hasInitialized && !organizedChatModels.isEmpty {
-                // Show start button when ready
+                // Clean start button
                 Button(action: {
                     createNewChatIfNeeded()
                 }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.message")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Start New Chat")
-                            .font(.system(size: 14, weight: .medium))
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("New Chat")
+                            .font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 6)
                             .fill(Color.accentColor)
                     )
                 }
@@ -157,40 +148,22 @@ struct MainView: View {
                     }
                 }
             } else {
-                // Show loading indicator
-                VStack(spacing: 16) {
+                // Clean loading indicator
+                VStack(spacing: 12) {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
-                        .scaleEffect(0.9)
-                        .opacity(0.8)
+                        .progressViewStyle(CircularProgressViewStyle(tint: .secondary))
+                        .scaleEffect(0.8)
                     
-                    Text("This may take a moment")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.tertiary)
+                    Text("Please wait")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.secondary)
                 }
             }
             
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            ZStack {
-                // Clean background
-                Color(NSColor.windowBackgroundColor)
-                
-                // Subtle radial overlay for depth
-                RadialGradient(
-                    colors: [
-                        Color.accentColor.opacity(0.03),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 200,
-                    endRadius: 600
-                )
-            }
-            .ignoresSafeArea()
-        )
+        .background(Color(NSColor.windowBackgroundColor))
     }
     
     // MARK: - Lifecycle
