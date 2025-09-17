@@ -4,6 +4,7 @@
         <attribute name="chatDescription" optional="YES" attributeType="String"/>
         <attribute name="chatId" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isManuallyRenamed" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="lastMessageDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="provider" optional="YES" attributeType="String"/>

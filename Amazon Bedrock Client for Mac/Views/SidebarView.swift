@@ -796,7 +796,7 @@ struct SidebarView: View {
         
         // Only update if the title actually changed and is not empty
         if !trimmedTitle.isEmpty && trimmedTitle != chat.title {
-            chatManager.updateChatTitle(for: chat.chatId, title: trimmedTitle)
+            chatManager.updateChatTitle(for: chat.chatId, title: trimmedTitle, isManualRename: true)
         }
         
         // Reset renaming state

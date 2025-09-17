@@ -1923,6 +1923,10 @@ class ChatViewModel: ObservableObject {
     
     /// Updates the chat title with a summary of the input.
     func updateChatTitle(with input: String) async {
+        // Skip auto title generation if chat was manually renamed
+        if chatModel.isManuallyRenamed {
+            return
+        }
         let summaryPrompt = """
         Summarize user input <input>\(input)</input> as short as possible. Just in few words without punctuation. It should not be more than 5 words. Do as best as you can. please do summary this without punctuation:
         """

@@ -355,6 +355,7 @@ class ChatManager: ObservableObject {
             newChat.chatDescription = chatModel.description
             newChat.provider = chatModel.provider
             newChat.lastMessageDate = chatModel.lastMessageDate
+            newChat.isManuallyRenamed = chatModel.isManuallyRenamed
             
             do {
                 try context.save()
@@ -369,7 +370,7 @@ class ChatManager: ObservableObject {
         }
     }
     
-    func updateChatTitle(for chatId: String, title: String) {
+    func updateChatTitle(for chatId: String, title: String, isManualRename: Bool = false) {
         let context = coreDataStack.viewContext
         let fetchRequest: NSFetchRequest<ChatEntity> = ChatEntity.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "chatId == %@", chatId)
@@ -378,11 +379,17 @@ class ChatManager: ObservableObject {
             let results = try context.fetch(fetchRequest)
             if let chatEntity = results.first {
                 chatEntity.title = title
+                if isManualRename {
+                    chatEntity.isManuallyRenamed = true
+                }
                 coreDataStack.saveContext()
                 
                 DispatchQueue.main.async {
                     if let index = self.chats.firstIndex(where: { $0.chatId == chatId }) {
                         self.chats[index].title = title
+                        if isManualRename {
+                            self.chats[index].isManuallyRenamed = true
+                        }
                         self.objectWillChange.send()
                     }
                 }
@@ -795,7 +802,8 @@ class ChatManager: ObservableObject {
                         title: entity.title ?? "",
                         description: entity.chatDescription ?? "",
                         provider: entity.provider ?? "",
-                        lastMessageDate: entity.lastMessageDate ?? Date()
+                        lastMessageDate: entity.lastMessageDate ?? Date(),
+                        isManuallyRenamed: entity.isManuallyRenamed
                     )
                     uniqueChats[chatModel.chatId] = chatModel
                 }
