@@ -54,16 +54,18 @@ struct SettingsView: View {
     }
 }
 
-// Optimized multiline text field with better rendering performance
+// Optimized multiline text field with better rendering performance and delayed saving
 struct MultilineRoundedTextField: View {
     @Binding var text: String
     var placeholder: String
     @FocusState private var isFocused: Bool
+    @State private var localText: String = ""
+    @State private var saveTimer: Timer?
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Using TextEditor with optimized background handling
-            TextEditor(text: $text)
+            // Using TextEditor with local state for smooth typing
+            TextEditor(text: $localText)
                 .font(.body)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 12)
@@ -77,9 +79,35 @@ struct MultilineRoundedTextField: View {
                             isFocused ? Color.accentColor : Color.gray.opacity(0.5),
                             lineWidth: isFocused ? 2 : 1)
                 )
+                .onChange(of: localText) { newValue in
+                    // Cancel previous timer
+                    saveTimer?.invalidate()
+                    
+                    // Set a new timer to save after 1 second of no typing
+                    saveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
+                        text = newValue
+                    }
+                }
+                .onChange(of: isFocused) { focused in
+                    if !focused {
+                        // Save immediately when focus is lost
+                        saveTimer?.invalidate()
+                        text = localText
+                    }
+                }
+                .onAppear {
+                    // Initialize local text with current value
+                    localText = text
+                }
+                .onChange(of: text) { newValue in
+                    // Update local text if external value changes
+                    if newValue != localText {
+                        localText = newValue
+                    }
+                }
             
             // Placeholder with better hit testing
-            if text.isEmpty {
+            if localText.isEmpty {
                 Text(placeholder)
                     .font(.body)
                     .foregroundColor(Color.secondary)
@@ -90,6 +118,11 @@ struct MultilineRoundedTextField: View {
         }
         .background(Color(nsColor: .textBackgroundColor))
         .cornerRadius(6)
+        .onDisappear {
+            // Save when view disappears
+            saveTimer?.invalidate()
+            text = localText
+        }
     }
 }
 
@@ -99,6 +132,8 @@ struct GeneralSettingsView: View {
     @State private var showPausedRegions: Bool = false
     @State private var showGovCloudRegions: Bool = false
     @State private var loginError: String?
+    @State private var tempHotkeyModifiers: UInt32 = 0
+    @State private var tempHotkeyKeyCode: UInt32 = 0
     
     var body: some View {
         ScrollView {
@@ -212,11 +247,24 @@ struct GeneralSettingsView: View {
                                 .frame(width: 100, alignment: .leading)
                             
                             HotkeyRecorderView(
-                                modifiers: $settingsManager.hotkeyModifiers,
-                                keyCode: $settingsManager.hotkeyKeyCode
+                                modifiers: $tempHotkeyModifiers,
+                                keyCode: $tempHotkeyKeyCode
                             )
+                            .onAppear {
+                                tempHotkeyModifiers = settingsManager.hotkeyModifiers
+                                tempHotkeyKeyCode = settingsManager.hotkeyKeyCode
+                                print("DEBUG: Loaded hotkey settings - modifiers: \(tempHotkeyModifiers), keyCode: \(tempHotkeyKeyCode)")
+                            }
+                            .onChange(of: tempHotkeyModifiers) { newValue in
+                                settingsManager.hotkeyModifiers = newValue
+                                HotkeyManager.shared.updateHotkey(modifiers: newValue, keyCode: tempHotkeyKeyCode)
+                            }
+                            .onChange(of: tempHotkeyKeyCode) { newValue in
+                                settingsManager.hotkeyKeyCode = newValue
+                                HotkeyManager.shared.updateHotkey(modifiers: tempHotkeyModifiers, keyCode: newValue)
+                            }
                         }
-                        .padding(.leading, 20)
+                        .padding(.vertical, 2)
                     }
                     
                     // Appearance controls

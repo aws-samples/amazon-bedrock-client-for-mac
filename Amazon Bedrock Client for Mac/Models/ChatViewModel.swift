@@ -336,6 +336,15 @@ class ChatViewModel: ObservableObject {
         messageTask = Task { await sendMessageAsync() }
     }
     
+    func sendMessage(_ message: String) {
+        guard !message.isEmpty else { return }
+        
+        // Set the message and send it
+        userInput = message
+        messageTask?.cancel()
+        messageTask = Task { await sendMessageAsync() }
+    }
+    
     func cancelSending() {
         messageTask?.cancel()
         chatManager.setIsLoading(false, for: chatId)
@@ -471,7 +480,7 @@ class ChatViewModel: ObservableObject {
             return result.base64String
         }
         
-        // Process documents
+        // Process documents with improved error handling
         var documentBase64Strings: [String] = []
         var documentFormats: [String] = []
         var documentNames: [String] = []
@@ -479,16 +488,35 @@ class ChatViewModel: ObservableObject {
         for (index, docData) in sharedMediaDataSource.documents.enumerated() {
             let docIndex = sharedMediaDataSource.images.count + index
             
-            let fileExt = docIndex < sharedMediaDataSource.fileExtensions.count ?
-            sharedMediaDataSource.fileExtensions[docIndex] : "pdf"
+            // Ensure we have valid extension and filename
+            guard docIndex < sharedMediaDataSource.fileExtensions.count,
+                  docIndex < sharedMediaDataSource.filenames.count else {
+                logger.error("Missing extension or filename for document at index \(index)")
+                continue
+            }
             
-            let filename = docIndex < sharedMediaDataSource.filenames.count ?
-            sharedMediaDataSource.filenames[docIndex] : "document\(index+1)"
+            let fileExt = sharedMediaDataSource.fileExtensions[docIndex]
+            let filename = sharedMediaDataSource.filenames[docIndex]
+            
+            // Validate file extension is supported
+            let supportedExtensions = ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"]
+            guard supportedExtensions.contains(fileExt.lowercased()) else {
+                logger.error("Unsupported document format: \(fileExt)")
+                continue
+            }
+            
+            // Validate document data is not empty
+            guard !docData.isEmpty else {
+                logger.error("Empty document data for \(filename)")
+                continue
+            }
             
             let base64String = docData.base64EncodedString()
             documentBase64Strings.append(base64String)
             documentFormats.append(fileExt)
             documentNames.append(filename)
+            
+            logger.info("Added document: \(filename) (\(fileExt), \(docData.count) bytes)")
         }
         
         return MessageData(
@@ -901,7 +929,7 @@ class ChatViewModel: ObservableObject {
                 let assistantMessage: BedrockMessage
 
                 if let existingThinking = thinking, let existingSignature = thinkingSignature {
-                    // thinking이 있는 경우 - thinking, text, tooluse 순서로 추가
+                    // When thinking is present - add in order: thinking, text, tooluse
                     assistantMessage = BedrockMessage(
                         role: .assistant,
                         content: [
@@ -919,8 +947,8 @@ class ChatViewModel: ObservableObject {
                         ]
                     )
                 } else {
-                    // thinking이 없는 경우 - reasoning 비활성화 옵션을 사용해야 함
-                    // 따라서 API 호출 시 inferenceConfig에서 reasoning 비활성화 필요
+                    // When thinking is not present - need to use reasoning disabled option
+                    // Therefore need to disable reasoning in inferenceConfig when calling API
                     assistantMessage = BedrockMessage(
                         role: .assistant,
                         content: [

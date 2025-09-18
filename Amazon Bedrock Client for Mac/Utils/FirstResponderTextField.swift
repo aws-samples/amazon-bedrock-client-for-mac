@@ -140,7 +140,7 @@ final class MyTextView: NSTextView {
     private func handlePaste() {
         let pasteboard = NSPasteboard.general
         var pastedImages: [NSImage] = []
-        var pastedDocuments: [URL] = []  // 문서 URL을 저장할 배열 추가
+        var pastedDocuments: [URL] = []  // Array to store document URLs
         var pastedText: String = ""
         var fileProcessed = false // Track if any file was processed
         
@@ -165,7 +165,7 @@ final class MyTextView: NSTextView {
                 }
                 // Handle document files
                 else if supportedDocExtensions.contains(ext) {
-                    pastedDocuments.append(url)  // 문서 URL 저장
+                    pastedDocuments.append(url)  // Store document URL
                     fileProcessed = true
                 }
             }
@@ -315,13 +315,13 @@ final class MyTextView: NSTextView {
     
     // Implement the performKeyEquivalent to catch Command+V (paste)
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        // 검색 필드가 활성화되었는지 확인
+        // Check if search field is active
         if AppStateManager.shared.isSearchFieldActive {
-            // 검색 필드가 활성화된 경우 기본 동작 허용
+            // Allow default behavior when search field is active
             return super.performKeyEquivalent(with: event)
         }
         
-        // 검색 필드가 활성화되지 않은 경우 Command+V 처리
+        // Handle Command+V when search field is not active
         if event.modifierFlags.contains(.command) {
             if event.keyCode == 9 { // 'V' key
                 paste(nil)
@@ -441,7 +441,7 @@ struct FirstResponderTextView: NSViewRepresentable, Equatable {
             textView.textColor = NSColor(Color.text)
             textView.backgroundColor = .clear
             
-            // Placeholder 텍스트 추가
+            // Add placeholder text
             let placeholder = "Message Bedrock (⇧ + ↩ for new line)"
             textView.placeholderString = placeholder
             

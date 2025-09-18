@@ -41,23 +41,23 @@ enum AWSRegion: String, CaseIterable, Identifiable {
     case apSouthEast4 = "ap-southeast-4" // Asia Pacific (Melbourne) - MEL
 }
 
-// AWS 리전 상태
+// AWS region status
 enum AWSRegionStatus: String {
     case available = "Available Now"
     case paused = "Paused"
 }
 
-// AWS 리전 정보 구조체
+// AWS region information structure
 struct AWSRegionInfo {
-    let id: String          // 리전 코드 (e.g., "us-east-1")
-    let name: String        // 리전 이름 (e.g., "US East (N. Virginia)")
-    let airportCode: String // 공항 코드 (e.g., "IAD")
+    let id: String          // Region code (e.g., "us-east-1")
+    let name: String        // Region name (e.g., "US East (N. Virginia)")
+    let airportCode: String // Airport code (e.g., "IAD")
     let status: AWSRegionStatus
 }
 
-// 리전 매핑 테이블
+// Region mapping table
 struct AWSRegionMapping {
-    // 모든 리전 정보를 포함하는 배열
+    // Array containing all region information
     static let allRegions: [AWSRegionInfo] = [
         AWSRegionInfo(id: "us-east-1", name: "US East (N. Virginia)", airportCode: "IAD", status: .available),
         AWSRegionInfo(id: "us-east-2", name: "US East (Ohio)", airportCode: "CMH", status: .available),
@@ -90,40 +90,40 @@ struct AWSRegionMapping {
         AWSRegionInfo(id: "ap-southeast-4", name: "Asia Pacific (Melbourne)", airportCode: "MEL", status: .available)
     ]
     
-    // ID로 리전 정보 조회
+    // Get region information by ID
     static func getRegionInfo(for id: String) -> AWSRegionInfo? {
         return allRegions.first { $0.id == id }
     }
     
-    // 공항 코드로 리전 정보 조회
+    // Get region information by airport code
     static func getRegionInfo(byAirportCode code: String) -> AWSRegionInfo? {
         return allRegions.first { $0.airportCode == code }
     }
 }
 
-// AWSRegion enum 확장
+// AWSRegion enum extension
 extension AWSRegion {
-    // 리전 정보 조회
+    // Get region information
     var info: AWSRegionInfo? {
         return AWSRegionMapping.getRegionInfo(for: self.rawValue)
     }
     
-    // 리전 이름
+    // Region name
     var name: String {
         return info?.name ?? rawValue
     }
     
-    // 공항 코드
+    // Airport code
     var airportCode: String {
         return info?.airportCode ?? ""
     }
     
-    // 리전 상태
+    // Region status
     var status: AWSRegionStatus {
         return info?.status ?? .available
     }
     
-    // 사용 가능한 리전만 필터링
+    // Filter only available regions
     static var availableRegions: [AWSRegion] {
         return AWSRegion.allCases.filter { $0.status == .available }
     }
@@ -140,7 +140,7 @@ enum AWSRegionSection: String, CaseIterable, Identifiable {
 }
 
 extension AWSRegion {
-    // 각 리전이 속한 섹션 반환
+    // Return the section each region belongs to
     var section: AWSRegionSection {
         switch self {
         case .usEast1, .usEast2, .usWest1, .usWest2, .caCentral1:
@@ -156,7 +156,7 @@ extension AWSRegion {
         }
     }
     
-    // 특정 섹션에 속하는 리전 가져오기
+    // Get regions belonging to a specific section
     static func regions(in section: AWSRegionSection, includePaused: Bool = false) -> [AWSRegion] {
         return AWSRegion.allCases.filter {
             $0.section == section && (includePaused || $0.status != .paused)

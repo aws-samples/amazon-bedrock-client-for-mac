@@ -13,4 +13,8 @@ class AppCoordinator: ObservableObject {
 
     @Published var shouldCreateNewChat: Bool = false
     @Published var shouldDeleteChat: Bool = false
+    @Published var quickAccessMessage: String? = nil
+    @Published var quickAccessAttachments: SharedMediaDataSource? = nil
+    @Published var isProcessingQuickAccess: Bool = false
+    @Published var targetChatId: String? = nil
 }

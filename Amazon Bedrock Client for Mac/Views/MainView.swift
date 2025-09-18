@@ -19,7 +19,7 @@ struct MainView: View {
     @State private var isHovering = false
     @State private var alertInfo: AlertInfo?
     @State private var hasInitialized = false
-    @State private var isCreatingInitialChat = false // 중복 생성 방지 플래그
+    @State private var isCreatingInitialChat = false // Flag to prevent duplicate creation
     @SwiftUI.Environment(\.colorScheme) private var colorScheme: ColorScheme
     private var logger = Logger(label: "MainView")
     
@@ -39,7 +39,10 @@ struct MainView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
-        .onAppear(perform: setup)
+        .onAppear {
+            setupQuickAccessMessageHandler()
+            fetchModels()
+        }
         .toolbar {
             toolbarContent()
         }
@@ -192,7 +195,7 @@ struct MainView: View {
     // MARK: - Chat Creation
     
     private func createNewChatIfNeeded() {
-        // 이미 채팅 생성 중이면 중단
+        // Stop if chat creation is already in progress
         guard !isCreatingInitialChat else {
             logger.info("Chat creation already in progress, skipping...")
             return
@@ -204,7 +207,7 @@ struct MainView: View {
             return
         }
         
-        // 중복 생성 방지 플래그 설정
+        // Set flag to prevent duplicate creation
         isCreatingInitialChat = true
         logger.info("Creating new chat with model: \(selectedModel.name)")
         
@@ -216,7 +219,7 @@ struct MainView: View {
             newChat.lastMessageDate = Date()
             DispatchQueue.main.async {
                 self.selection = .chat(newChat)
-                self.isCreatingInitialChat = false // 플래그 해제
+                self.isCreatingInitialChat = false // Clear flag
                 self.logger.info("Successfully created new chat: \(newChat.chatId)")
             }
         }
@@ -343,6 +346,11 @@ struct MainView: View {
         } else {
             selection = newSelection
         }
+    }
+    
+    private func setupQuickAccessMessageHandler() {
+        // Quick Access processing is handled only in SidebarView, removed from MainView
+        // Keep as empty function to prevent duplicate NotificationCenter registration
     }
     
     private func handleMenuSelectionChange(_ newValue: SidebarSelection?) {

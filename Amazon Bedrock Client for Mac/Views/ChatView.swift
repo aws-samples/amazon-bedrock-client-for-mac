@@ -93,6 +93,9 @@ struct ChatView: View {
                     showUsageToast(with: usage)
                 }
             }
+            
+            // Handle quick access message if this is the target chat
+            handleQuickAccessMessage()
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -596,6 +599,48 @@ struct ChatView: View {
         usageToastTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 showUsageToast = false
+            }
+        }
+    }
+    
+    // MARK: - Quick Access Message Handler
+    
+    private func handleQuickAccessMessage() {
+        // Check if this chat is the target for a quick access message
+        guard let targetChatId = AppCoordinator.shared.targetChatId,
+              targetChatId == viewModel.chatId,
+              AppCoordinator.shared.isProcessingQuickAccess else { return }
+        
+        let message = AppCoordinator.shared.quickAccessMessage ?? ""
+        let attachments = AppCoordinator.shared.quickAccessAttachments
+        
+        // Must have either message or attachments
+        guard !message.isEmpty || (attachments != nil && (!attachments!.images.isEmpty || !attachments!.documents.isEmpty)) else { return }
+        
+        print("DEBUG: Handling quick access message for chat: \(viewModel.chatId)")
+        
+        // Handle attachments if present
+        if let attachments = attachments {
+            // Copy attachments to the view model's shared media data source
+            viewModel.sharedMediaDataSource.images = attachments.images
+            viewModel.sharedMediaDataSource.documents = attachments.documents
+            viewModel.sharedMediaDataSource.fileExtensions = attachments.fileExtensions
+            viewModel.sharedMediaDataSource.filenames = attachments.filenames
+            viewModel.sharedMediaDataSource.mediaTypes = attachments.mediaTypes
+        }
+        
+        // Clear the message and attachments to prevent re-processing
+        AppCoordinator.shared.quickAccessMessage = nil
+        AppCoordinator.shared.quickAccessAttachments = nil
+        
+        // Send the message after a delay to ensure UI is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if !message.isEmpty {
+                self.viewModel.sendMessage(message)
+            } else {
+                // If only attachments, send empty message to trigger attachment sending
+                self.viewModel.userInput = " " // Space to trigger send
+                self.viewModel.sendMessage()
             }
         }
     }

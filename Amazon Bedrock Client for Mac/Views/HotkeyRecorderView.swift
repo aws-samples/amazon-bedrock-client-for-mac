@@ -14,6 +14,7 @@ struct HotkeyRecorderView: View {
     
     @State private var isRecording = false
     @State private var displayText = ""
+    @State private var eventMonitor: Any?
     
     var body: some View {
         HStack {
@@ -49,17 +50,34 @@ struct HotkeyRecorderView: View {
         }
         .onAppear {
             updateDisplayText()
+            print("DEBUG: HotkeyRecorderView onAppear - modifiers: \(modifiers), keyCode: \(keyCode)")
+        }
+        .onChange(of: modifiers) { newValue in
+            updateDisplayText()
+            print("DEBUG: Modifiers changed to: \(newValue)")
+        }
+        .onChange(of: keyCode) { newValue in
+            updateDisplayText()
+            print("DEBUG: KeyCode changed to: \(newValue)")
+        }
+        .onDisappear {
+            stopRecording()
         }
     }
     
     private func startRecording() {
+        // Remove existing monitor first
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+        
         isRecording = true
         
-        // Create a local event monitor to capture key presses
-        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
-            if isRecording {
-                handleKeyEvent(event)
-                return nil // Consume the event
+        // Create local event monitor
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+            if self.isRecording {
+                return self.handleKeyEvent(event) ? nil : event
             }
             return event
         }
@@ -67,19 +85,63 @@ struct HotkeyRecorderView: View {
     
     private func stopRecording() {
         isRecording = false
+        
+        // Remove the event monitor
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+        
         updateDisplayText()
     }
     
-    private func handleKeyEvent(_ event: NSEvent) {
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        // Skip if not recording
+        guard isRecording else { return false }
+        
         let newModifiers = event.modifierFlags.carbonModifiers
         let newKeyCode = UInt32(event.keyCode)
         
-        // Only accept combinations with modifier keys
-        if newModifiers != 0 && event.type == .keyDown {
-            modifiers = newModifiers
-            keyCode = newKeyCode
-            stopRecording()
+        // Only accept key down events with modifier keys
+        if event.type == .keyDown && newModifiers != 0 {
+            // Validate that it's a reasonable key combination
+            if isValidHotkeyCombo(modifiers: newModifiers, keyCode: newKeyCode) {
+                DispatchQueue.main.async {
+                    self.modifiers = newModifiers
+                    self.keyCode = newKeyCode
+                    self.stopRecording()
+                }
+                return true // Consume the event
+            }
         }
+        
+        return false // Don't consume the event
+    }
+    
+    private func isValidHotkeyCombo(modifiers: UInt32, keyCode: UInt32) -> Bool {
+        // Must have at least one modifier
+        guard modifiers != 0 else { return false }
+        
+        // Avoid system reserved combinations
+        let hasCmd = (modifiers & UInt32(cmdKey)) != 0
+        let hasOpt = (modifiers & UInt32(optionKey)) != 0
+        let hasCtrl = (modifiers & UInt32(controlKey)) != 0
+        let hasShift = (modifiers & UInt32(shiftKey)) != 0
+        
+        // Avoid common system shortcuts
+        if hasCmd && !hasOpt && !hasCtrl {
+            // Avoid Cmd+common keys
+            switch keyCode {
+            case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11: // A-Z except some
+                return false
+            case 12, 13, 14, 15, 16, 17: // Q, W, E, R, Y, T
+                return false
+            default:
+                break
+            }
+        }
+        
+        return true
     }
     
     private func updateDisplayText() {
@@ -163,33 +225,56 @@ func keyCodeToString(_ keyCode: UInt32) -> String {
     case 103: return "F11"
     case 111: return "F12"
     default:
-        // For letter keys, try to get the actual character
-        let source = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
-        let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
-        
-        if let data = layoutData {
-            let keyboardLayout = unsafeBitCast(data, to: CFData.self)
-            var chars = [UniChar](repeating: 0, count: 4)
-            var actualStringLength = 0
-            
-            let status = UCKeyTranslate(
-                CFDataGetBytePtr(keyboardLayout).assumingMemoryBound(to: UCKeyboardLayout.self),
-                UInt16(keyCode),
-                UInt16(kUCKeyActionDisplay),
-                0,
-                UInt32(LMGetKbdType()),
-                OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &actualStringLength,
-                4,
-                &actualStringLength,
-                &chars
-            )
-            
-            if status == noErr && actualStringLength > 0 {
-                return String(utf16CodeUnits: chars, count: actualStringLength).uppercased()
-            }
+        // Simple key mapping for common keys
+        switch keyCode {
+        case 0: return "A"
+        case 1: return "S"
+        case 2: return "D"
+        case 3: return "F"
+        case 4: return "H"
+        case 5: return "G"
+        case 6: return "Z"
+        case 7: return "X"
+        case 8: return "C"
+        case 9: return "V"
+        case 11: return "B"
+        case 12: return "Q"
+        case 13: return "W"
+        case 14: return "E"
+        case 15: return "R"
+        case 16: return "Y"
+        case 17: return "T"
+        case 18: return "1"
+        case 19: return "2"
+        case 20: return "3"
+        case 21: return "4"
+        case 22: return "6"
+        case 23: return "5"
+        case 24: return "="
+        case 25: return "9"
+        case 26: return "7"
+        case 27: return "-"
+        case 28: return "8"
+        case 29: return "0"
+        case 30: return "]"
+        case 31: return "O"
+        case 32: return "U"
+        case 33: return "["
+        case 34: return "I"
+        case 35: return "P"
+        case 37: return "L"
+        case 38: return "J"
+        case 39: return "'"
+        case 40: return "K"
+        case 41: return ";"
+        case 42: return "\\"
+        case 43: return ","
+        case 44: return "/"
+        case 45: return "N"
+        case 46: return "M"
+        case 47: return "."
+        case 50: return "`"
+        default: return "Key \(keyCode)"
         }
-        
-        return "Key \(keyCode)"
     }
 }

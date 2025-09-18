@@ -30,7 +30,7 @@ class ChatSearchIndex: ObservableObject {
     var indexedChatIds: Set<String> = []
     var lastIndexUpdate: Date = Date.distantPast
     
-    // Minimum word length for indexing (1 to catch single character searches like "응")
+    // Minimum word length for indexing (1 to catch single character searches)
     private let minWordLength = 1
     
     private init() {} // Singleton pattern
@@ -304,7 +304,11 @@ struct SidebarView: View {
                     }
                 }
                 .onChange(of: appCoordinator.shouldCreateNewChat) { _, newValue in
-                    if newValue {
+                    if newValue && !appCoordinator.isProcessingQuickAccess {
+                        createNewChat()
+                        appCoordinator.shouldCreateNewChat = false
+                    } else if newValue && appCoordinator.isProcessingQuickAccess {
+                        // Quick access is processing, create chat for quick access
                         createNewChat()
                         appCoordinator.shouldCreateNewChat = false
                     }
@@ -681,9 +685,25 @@ struct SidebarView: View {
                         searchIndex.indexedChatIds.remove(newChat.chatId)
                     }
                 }
+                
+                // 5. Handle quick access message and attachments if available
+                if let quickMessage = AppCoordinator.shared.quickAccessMessage,
+                   AppCoordinator.shared.isProcessingQuickAccess {
+                    
+                    // Set target chat ID for the message
+                    AppCoordinator.shared.targetChatId = newChat.chatId
+                    
+                    // Clear processing flag after a delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        AppCoordinator.shared.isProcessingQuickAccess = false
+                        AppCoordinator.shared.targetChatId = nil
+                    }
+                }
             }
         }
     }
+    
+
 
     // Incremental update: Add a new chat to the appropriate date group
     private func incrementalAddChat(_ newChat: ChatModel) {

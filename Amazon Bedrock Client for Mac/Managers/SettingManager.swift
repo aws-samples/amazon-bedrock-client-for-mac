@@ -8,6 +8,7 @@
 import Combine
 import Logging
 import SwiftUI
+import Carbon
 
 extension Notification.Name {
     static let awsCredentialsChanged = Notification.Name("awsCredentialsChanged")
@@ -41,8 +42,26 @@ class SettingManager: ObservableObject {
     
     // Quick Access Hotkey Settings
     @AppStorage("enableQuickAccess") var enableQuickAccess: Bool = true
-    @AppStorage("hotkeyModifiers") var hotkeyModifiers: UInt32 = UInt32(optionKey)
-    @AppStorage("hotkeyKeyCode") var hotkeyKeyCode: UInt32 = 49 // Space key
+    
+    var hotkeyModifiers: UInt32 {
+        get {
+            let stored = UserDefaults.standard.integer(forKey: "hotkeyModifiers")
+            return stored == 0 ? UInt32(optionKey) : UInt32(stored) // Default to Option key
+        }
+        set {
+            UserDefaults.standard.set(Int(newValue), forKey: "hotkeyModifiers")
+        }
+    }
+    
+    var hotkeyKeyCode: UInt32 {
+        get {
+            let stored = UserDefaults.standard.integer(forKey: "hotkeyKeyCode")
+            return stored == 0 ? 49 : UInt32(stored) // Default to Space key (49)
+        }
+        set {
+            UserDefaults.standard.set(Int(newValue), forKey: "hotkeyKeyCode")
+        }
+    }
 
     var mcpEnabled: Bool {
         get {
@@ -109,6 +128,23 @@ class SettingManager: ObservableObject {
         self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
+        
+        // Set default hotkey values if not already set
+        if UserDefaults.standard.object(forKey: "hotkeyModifiers") == nil {
+            UserDefaults.standard.set(Int(optionKey), forKey: "hotkeyModifiers")
+            logger.info("Set default hotkey modifiers: \(optionKey)")
+        }
+        if UserDefaults.standard.object(forKey: "hotkeyKeyCode") == nil {
+            UserDefaults.standard.set(49, forKey: "hotkeyKeyCode") // Space key
+            logger.info("Set default hotkey keyCode: 49 (Space)")
+        }
+        
+        logger.info("Current hotkey settings - modifiers: \(hotkeyModifiers), keyCode: \(hotkeyKeyCode)")
+        
+        // Initialize HotkeyManager after setting defaults
+        DispatchQueue.main.async {
+            _ = HotkeyManager.shared
+        }
 
         self.profiles = Self.readAWSProfiles()
         

@@ -27,9 +27,8 @@ class HotkeyManager: ObservableObject {
         hotkeyModifiers = settingManager.hotkeyModifiers
         hotkeyKeyCode = settingManager.hotkeyKeyCode
         
-        setupEventHandler()
-        
         if settingManager.enableQuickAccess {
+            setupEventHandler()
             registerHotkey()
         }
         
@@ -48,19 +47,22 @@ class HotkeyManager: ObservableObject {
             let newKeyCode = self.settingManager.hotkeyKeyCode
             let enabled = self.settingManager.enableQuickAccess
             
-            if newModifiers != self.hotkeyModifiers || newKeyCode != self.hotkeyKeyCode {
+            // 핫키 설정이 변경되었거나 활성화 상태가 변경된 경우
+            if newModifiers != self.hotkeyModifiers || newKeyCode != self.hotkeyKeyCode || 
+               (enabled && self.hotKeyRef == nil) || (!enabled && self.hotKeyRef != nil) {
+                
                 self.hotkeyModifiers = newModifiers
                 self.hotkeyKeyCode = newKeyCode
                 
+                // 기존 핫키 해제
+                self.unregisterHotkey()
+                self.removeEventHandler()
+                
+                // 활성화된 경우에만 새로 등록
                 if enabled {
+                    self.setupEventHandler()
                     self.registerHotkey()
                 }
-            }
-            
-            if enabled && self.hotKeyRef == nil {
-                self.registerHotkey()
-            } else if !enabled && self.hotKeyRef != nil {
-                self.unregisterHotkey()
             }
         }
     }
@@ -72,7 +74,13 @@ class HotkeyManager: ObservableObject {
     }
     
     private func setupEventHandler() {
-        let eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed))
+        // 기존 핸들러가 있으면 제거
+        removeEventHandler()
+        
+        var eventSpec = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard), 
+            eventKind: OSType(kEventHotKeyPressed)
+        )
         
         let callback: EventHandlerProcPtr = { (nextHandler, theEvent, userData) -> OSStatus in
             guard let userData = userData else { return noErr }
@@ -83,7 +91,7 @@ class HotkeyManager: ObservableObject {
         
         let userDataPtr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         
-        InstallEventHandler(
+        let status = InstallEventHandler(
             GetApplicationEventTarget(),
             callback,
             1,
@@ -91,6 +99,10 @@ class HotkeyManager: ObservableObject {
             userDataPtr,
             &eventHandler
         )
+        
+        if status != noErr {
+            logger.error("Failed to install event handler with status: \(status)")
+        }
     }
     
     private func removeEventHandler() {
@@ -101,9 +113,9 @@ class HotkeyManager: ObservableObject {
     }
     
     func registerHotkey() {
-        unregisterHotkey() // Unregister existing hotkey first
+        unregisterHotkey() // 기존 핫키 해제
         
-        let hotkeyID = EventHotKeyID(signature: OSType(fourCharCodeFrom: "BEDR"), id: 1)
+        let hotkeyID = EventHotKeyID(signature: OSType(fourCharCodeFrom("QKAC")), id: 1)
         
         let status = RegisterEventHotKey(
             hotkeyKeyCode,
@@ -115,7 +127,7 @@ class HotkeyManager: ObservableObject {
         )
         
         if status == noErr {
-            logger.info("Hotkey registered successfully")
+            logger.info("Hotkey registered successfully: modifiers=\(hotkeyModifiers), keyCode=\(hotkeyKeyCode)")
         } else {
             logger.error("Failed to register hotkey with status: \(status)")
         }
@@ -123,20 +135,26 @@ class HotkeyManager: ObservableObject {
     
     func unregisterHotkey() {
         if let hotkey = hotKeyRef {
-            UnregisterEventHotKey(hotkey)
+            let status = UnregisterEventHotKey(hotkey)
             hotKeyRef = nil
-            logger.info("Hotkey unregistered")
+            if status == noErr {
+                logger.info("Hotkey unregistered successfully")
+            } else {
+                logger.error("Failed to unregister hotkey with status: \(status)")
+            }
         }
     }
     
     private func handleHotkeyPressed() {
         logger.info("Hotkey pressed - showing quick access window")
         DispatchQueue.main.async {
-            QuickAccessWindowManager.shared.showWindow()
+            QuickAccessWindowManager.shared.toggleWindow()
         }
     }
     
     func updateHotkey(modifiers: UInt32, keyCode: UInt32) {
+        logger.info("Updating hotkey: modifiers=\(modifiers), keyCode=\(keyCode)")
+        
         hotkeyModifiers = modifiers
         hotkeyKeyCode = keyCode
         
@@ -144,7 +162,13 @@ class HotkeyManager: ObservableObject {
         settingManager.hotkeyModifiers = modifiers
         settingManager.hotkeyKeyCode = keyCode
         
-        registerHotkey()
+        // Re-register with new settings if enabled
+        if settingManager.enableQuickAccess {
+            unregisterHotkey()
+            removeEventHandler()
+            setupEventHandler()
+            registerHotkey()
+        }
     }
 }
 
