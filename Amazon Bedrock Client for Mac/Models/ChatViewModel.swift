@@ -1275,11 +1275,6 @@ class ChatViewModel: ObservableObject {
             
             var contents: [MessageContent] = []
             
-            // Add text content
-            if !message.text.isEmpty {
-                contents.append(.text(message.text))
-            }
-            
             // Add thinking content if present
             if let thinking = message.thinking, !thinking.isEmpty {
                 contents.append(.thinking(MessageContent.ThinkingContent(
@@ -1288,17 +1283,7 @@ class ChatViewModel: ObservableObject {
                 )))
             }
             
-            // Add images if present
-            if let imageBase64Strings = message.imageBase64Strings {
-                for base64String in imageBase64Strings {
-                    contents.append(.image(MessageContent.ImageContent(
-                        format: .jpeg,
-                        base64Data: base64String
-                    )))
-                }
-            }
-            
-            // Add documents if present
+            // Add documents FIRST (before text) to support prompt caching
             if let documentBase64Strings = message.documentBase64Strings,
                let documentFormats = message.documentFormats,
                let documentNames = message.documentNames {
@@ -1311,6 +1296,21 @@ class ChatViewModel: ObservableObject {
                         name: documentNames[i]
                     )))
                 }
+            }
+            
+            // Add images SECOND (before text) to support prompt caching
+            if let imageBase64Strings = message.imageBase64Strings {
+                for base64String in imageBase64Strings {
+                    contents.append(.image(MessageContent.ImageContent(
+                        format: .jpeg,
+                        base64Data: base64String
+                    )))
+                }
+            }
+            
+            // Add text content AFTER documents/images
+            if !message.text.isEmpty {
+                contents.append(.text(message.text))
             }
             
             // Add tool info if present
@@ -1464,22 +1464,8 @@ class ChatViewModel: ObservableObject {
                 contents.append(.thinking(.init(text: thinking, signature: signatureToUse)))
             }
             
-            // Add text content
-            if !message.text.isEmpty {
-                contents.append(.text(message.text))
-            }
-            
-            // Add images if present
-            if let imageBase64Strings = message.imageBase64Strings {
-                for base64String in imageBase64Strings {
-                    contents.append(.image(MessageContent.ImageContent(
-                        format: .jpeg,
-                        base64Data: base64String
-                    )))
-                }
-            }
-            
-            // Add documents if present
+            // Add documents FIRST (before text) to support prompt caching
+            // AWS Bedrock requires cache points to follow text blocks, not document/image blocks
             if let documentBase64Strings = message.documentBase64Strings,
                let documentFormats = message.documentFormats,
                let documentNames = message.documentNames {
@@ -1492,6 +1478,21 @@ class ChatViewModel: ObservableObject {
                         name: documentNames[i]
                     )))
                 }
+            }
+            
+            // Add images SECOND (before text) to support prompt caching
+            if let imageBase64Strings = message.imageBase64Strings {
+                for base64String in imageBase64Strings {
+                    contents.append(.image(MessageContent.ImageContent(
+                        format: .jpeg,
+                        base64Data: base64String
+                    )))
+                }
+            }
+            
+            // Add text content AFTER documents/images
+            if !message.text.isEmpty {
+                contents.append(.text(message.text))
             }
             
             // Handle Tool Use/Result
