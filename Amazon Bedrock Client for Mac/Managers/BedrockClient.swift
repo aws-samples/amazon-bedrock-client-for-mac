@@ -293,7 +293,7 @@ class Backend: Equatable {
     func isReasoningSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b:
             return true
         default:
             return false
@@ -304,7 +304,7 @@ class Backend: Equatable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .openaiGptOss120b, .openaiGptOss20b:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .openaiGptOss120b, .openaiGptOss20b:
             return true
         default:
             return false
@@ -321,7 +321,7 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Anthropic models that support prompt caching
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4:
+        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41:
             return true
         // Models that don't support prompt caching (including Nova models due to image caching issues)
         default:
@@ -347,7 +347,7 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
             // Models that support document chat
-        case .claude, .claude3, .claude35, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33:
             return true
@@ -389,7 +389,7 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support system prompts
-        case .claude, .claude3, .claude35, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33:
             return true
@@ -422,13 +422,17 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .novaPro, .llama32Large:
+        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .novaPro, .llama32Large:
             return true
             
         // Models with exceptions
         case .claude35:
             // Claude 3.5 Haiku doesn't support vision
             return !modelId.contains("haiku")
+        
+        // Claude 3.5 Haiku doesn't support vision
+        case .claude35Haiku:
+            return false
         
         // Models that don't support vision
         default:
@@ -441,7 +445,7 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support tool use
-        case .claude3, .claude35, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return true
@@ -467,7 +471,7 @@ class Backend: Equatable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support streaming tool use
-        case .claude3, .claude35, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro:
             return true
@@ -557,12 +561,16 @@ class Backend: Equatable {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
                 return .claudeHaiku45
+            } else if modelNameAndVersion.contains("claude-opus-4-1") {
+                return .claudeOpus41
             } else if modelNameAndVersion.contains("claude-sonnet-4") {
                 return .claudeSonnet4
             } else if modelNameAndVersion.contains("claude-opus-4") {
                 return .claudeOpus4
             } else if modelNameAndVersion.contains("claude-3-7") {
                 return .claude37
+            } else if modelNameAndVersion.contains("claude-3-5-haiku") {
+                return .claude35Haiku
             } else if modelNameAndVersion.contains("claude-3-5") {
                 return .claude35
             } else if modelNameAndVersion.contains("claude-3") {
@@ -682,13 +690,28 @@ class Backend: Equatable {
     
     func getDefaultInferenceConfig(for modelType: ModelType) -> BedrockRuntimeClientTypes.InferenceConfiguration {
         switch modelType {
-        case .claudeSonnet45, .claudeHaiku45:
-            // Claude Sonnet 4.5 and Haiku 4.5 only support temperature OR top_p, not both
+        case .claudeSonnet45:
+            // Claude Sonnet 4.5 only supports temperature OR top_p, not both
             // We prefer temperature as per the issue requirements
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 8192,
                 temperature: 0.9
             )
+        case .claudeHaiku45:
+            // Claude Haiku 4.5 only supports temperature OR top_p, not both
+            let isThinkingEnabled = SettingManager.shared.enableModelThinking
+            
+            if isThinkingEnabled {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 32000,
+                    temperature: 1.0
+                )
+            } else {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 32000,
+                    temperature: 0.9
+                )
+            }
         case .claudeSonnet4:
             let isThinkingEnabled = SettingManager.shared.enableModelThinking
             
@@ -704,7 +727,7 @@ class Backend: Equatable {
                     topp: 0.7
                 )
             }
-        case .claudeOpus4:
+        case .claudeOpus4, .claudeOpus41:
             let isThinkingEnabled = SettingManager.shared.enableModelThinking
             
             if isThinkingEnabled {
@@ -734,7 +757,7 @@ class Backend: Equatable {
                     topp: 0.7
                 )
             }
-        case .claude, .claude3:
+        case .claude, .claude3, .claude35, .claude35Haiku:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 4096,
                 temperature: 0.9,
@@ -1243,7 +1266,7 @@ struct UsageInfo {
 
 enum ModelType {
     // Anthropic models
-    case claude, claude3, claude35, claude37, claudeSonnet4, claudeSonnet45, claudeHaiku45, claudeOpus4
+    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeHaiku45, claudeOpus4, claudeOpus41
     // Meta models
     case llama2, llama3, llama31, llama32Small, llama32Large, llama33
     // Mistral models

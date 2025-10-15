@@ -42,8 +42,8 @@ struct ModelInferenceRange {
         let modelType = getModelTypeFromId(modelId)
         
         switch modelType {
-        case .claudeSonnet45, .claudeHaiku45:
-            // Claude Sonnet 4.5 and Haiku 4.5 have the same ranges but don't support top_p with temperature
+        case .claudeSonnet45:
+            // Claude Sonnet 4.5 doesn't support top_p with temperature
             return ModelInferenceRange(
                 maxTokensRange: 1...64000,
                 temperatureRange: 0.0...1.0,
@@ -55,7 +55,20 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "medium"
             )
-        case .claudeSonnet4, .claudeOpus4:
+        case .claudeHaiku45:
+            // Claude Haiku 4.5 doesn't support top_p with temperature
+            return ModelInferenceRange(
+                maxTokensRange: 1...64000,
+                temperatureRange: 0.0...1.0,
+                topPRange: 0.01...1.0,  // Range exists but can't be used with temperature
+                thinkingBudgetRange: 1024...8192,
+                defaultMaxTokens: 32000,
+                defaultTemperature: 0.9,
+                defaultTopP: 0.7,  // Not used by default since temperature is preferred
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"
+            )
+        case .claudeSonnet4, .claudeOpus4, .claudeOpus41:
             return ModelInferenceRange(
                 maxTokensRange: 1...64000,
                 temperatureRange: 0.0...1.0,
@@ -81,7 +94,7 @@ struct ModelInferenceRange {
                 defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
-        case .claude3, .claude35:
+        case .claude3, .claude35, .claude35Haiku:
             return ModelInferenceRange(
                 maxTokensRange: 1...8192,
                 temperatureRange: 0.0...1.0,
@@ -231,12 +244,16 @@ struct ModelInferenceRange {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
                 return .claudeHaiku45
+            } else if modelNameAndVersion.contains("claude-opus-4-1") {
+                return .claudeOpus41
             } else if modelNameAndVersion.contains("claude-sonnet-4") {
                 return .claudeSonnet4
             } else if modelNameAndVersion.contains("claude-opus-4") {
                 return .claudeOpus4
             } else if modelNameAndVersion.contains("claude-3-7") {
                 return .claude37
+            } else if modelNameAndVersion.contains("claude-3-5-haiku") {
+                return .claude35Haiku
             } else if modelNameAndVersion.contains("claude-3-5") {
                 return .claude35
             } else if modelNameAndVersion.contains("claude-3") {

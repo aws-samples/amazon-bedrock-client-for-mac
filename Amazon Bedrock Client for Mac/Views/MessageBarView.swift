@@ -581,8 +581,8 @@ struct AdvancedOptionsMenu: View {
     // Check if current model supports reasoning/thinking
     private var supportsThinking: Bool {
         let id = modelId.lowercased()
-        // Claude 3.7 and DeepSeek R1 support thinking
-        return id.contains("claude-3-7") || id.contains("claude-sonnet-4") ||  id.contains("claude-opus-4") || id.contains("deepseek") && id.contains("r1")
+        // Claude 3.7, Claude 4 series, and DeepSeek R1 support thinking
+        return id.contains("claude-3-7") || id.contains("claude-sonnet-4") || id.contains("claude-haiku-4") || id.contains("claude-opus-4") || id.contains("deepseek") && id.contains("r1")
     }
     
     // Check if model has always-on reasoning that can't be toggled
