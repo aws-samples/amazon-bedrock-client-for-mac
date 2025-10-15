@@ -121,15 +121,16 @@ struct InferenceConfigPopoverContent: View {
         return backend.isReasoningSupported(modelId)
     }
     
-    // Check if this is Claude Sonnet 4.5 which doesn't support both temperature and top_p
-    private var isSonnet45: Bool {
-        return backend.getModelType(modelId) == .claudeSonnet45
+    // Check if this is Claude Sonnet 4.5 or Haiku 4.5 which doesn't support both temperature and top_p
+    private var isSonnet45OrHaiku45: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45
     }
     
-    // Check if Top P should be disabled (when thinking is enabled OR for Claude Sonnet 4.5)
+    // Check if Top P should be disabled (when thinking is enabled OR for Claude Sonnet 4.5/Haiku 4.5)
     private var isTopPDisabled: Bool {
-        // Claude Sonnet 4.5 doesn't support both temperature and top_p
-        if isSonnet45 {
+        // Claude Sonnet 4.5 and Haiku 4.5 don't support both temperature and top_p
+        if isSonnet45OrHaiku45 {
             return true
         }
         return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId)
@@ -583,8 +584,8 @@ struct InferenceConfigPopoverContent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             
-            Text(isSonnet45 
-                ? "Claude Sonnet 4.5 only supports temperature or top_p, not both. Temperature is used by default."
+            Text(isSonnet45OrHaiku45 
+                ? "Claude 4.5 models only support temperature or top_p, not both. Temperature is used by default."
                 : "Top P is automatically disabled when Extended Reasoning is enabled")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)

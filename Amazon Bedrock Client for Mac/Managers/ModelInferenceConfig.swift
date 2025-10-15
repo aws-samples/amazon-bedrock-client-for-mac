@@ -42,8 +42,8 @@ struct ModelInferenceRange {
         let modelType = getModelTypeFromId(modelId)
         
         switch modelType {
-        case .claudeSonnet45:
-            // Claude Sonnet 4.5 has the same ranges but doesn't support top_p with temperature
+        case .claudeSonnet45, .claudeHaiku45:
+            // Claude Sonnet 4.5 and Haiku 4.5 have the same ranges but don't support top_p with temperature
             return ModelInferenceRange(
                 maxTokensRange: 1...64000,
                 temperatureRange: 0.0...1.0,
@@ -229,6 +229,8 @@ struct ModelInferenceRange {
         case "anthropic":
             if modelNameAndVersion.contains("claude-sonnet-4-5") {
                 return .claudeSonnet45
+            } else if modelNameAndVersion.contains("claude-haiku-4-5") {
+                return .claudeHaiku45
             } else if modelNameAndVersion.contains("claude-sonnet-4") {
                 return .claudeSonnet4
             } else if modelNameAndVersion.contains("claude-opus-4") {
