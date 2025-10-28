@@ -1,5 +1,5 @@
 # Amazon Bedrock Client for Mac
-<img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.png" />
+<img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.gif" />
 
 [![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
 [![Build Status](https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions)
