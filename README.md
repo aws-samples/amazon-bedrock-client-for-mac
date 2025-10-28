@@ -1,11 +1,11 @@
 # Amazon Bedrock Client for Mac
-<img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.gif" />
+<img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.png" />
 
 [![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
 [![Build Status](https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions)
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-green.svg?style=flat-square)](https://opensource.org/license/mit-0/)
 [![Platform](https://img.shields.io/badge/platform-macOS-blue.svg?style=flat-square)](https://developer.apple.com/macos/)
-[![Swift Version](https://img.shields.io/badge/Swift-5.9-orange.svg?style=flat-square)](https://swift.org)
+[![Swift Version](https://img.shields.io/badge/Swift-6.2-orange.svg?style=flat-square)](https://swift.org)
 
 A modern, native macOS client for Amazon Bedrock, providing streamlined access to AI models directly from your desktop.
 

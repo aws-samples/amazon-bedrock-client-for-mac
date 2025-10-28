@@ -11,7 +11,6 @@ import AWSClientRuntime
 import AWSSDKIdentity
 import AWSSSO
 import AWSSSOOIDC
-import AWSSTS
 import AwsCommonRuntimeKit
 import Combine
 import Foundation
@@ -21,6 +20,7 @@ import SmithyIdentityAPI
 import SwiftUI
 import Smithy
 
+@MainActor
 class BackendModel: ObservableObject {
     @Published var backend: Backend
     @Published var alertMessage: String?  // Used to trigger alerts in the UI
@@ -37,18 +37,27 @@ class BackendModel: ObservableObject {
             logger.error("Failed to initialize Backend: \(error)")
             
             // Create Backend with default credentials when an error occurs
-            do {
-                let defaultCredentialProvider = try DefaultAWSCredentialIdentityResolverChain()
-                self.backend = Backend(
-                    region: "us-east-1",
-                    profile: "default",
-                    endpoint: "",
-                    runtimeEndpoint: "",
-                    awsCredentialIdentityResolver: defaultCredentialProvider
-                )
-            } catch {
-                fatalError("Failed to create even fallback Backend: \(error)")
+            let defaultCredentialProvider: any AWSCredentialIdentityResolver
+            if let chain = try? DefaultAWSCredentialIdentityResolverChain() {
+                defaultCredentialProvider = chain
+            } else {
+                do {
+                    defaultCredentialProvider = try StaticAWSCredentialIdentityResolver(
+                        AWSCredentialIdentity(accessKey: "", secret: "")
+                    )
+                } catch {
+                    // If even static credentials fail, create a minimal backend
+                    logger.error("Failed to create any credential provider: \(error)")
+                    fatalError("Unable to initialize any AWS credential provider")
+                }
             }
+            self.backend = Backend(
+                region: "us-east-1",
+                profile: "default",
+                endpoint: "",
+                runtimeEndpoint: "",
+                awsCredentialIdentityResolver: defaultCredentialProvider
+            )
             
             // Extract more detailed error information
             if let commonRuntimeError = error as? AwsCommonRuntimeKit.CommonRunTimeError {
@@ -57,8 +66,8 @@ class BackendModel: ObservableObject {
                 
                 // Try to find the crtError property
                 if let crtErrorProperty = mirror.children.first(where: { $0.label == "crtError" }) {
-                    if let crtError = crtErrorProperty.value as? Any {
-                        let crtErrorMirror = Mirror(reflecting: crtError)
+                    let crtError = crtErrorProperty.value
+                    let crtErrorMirror = Mirror(reflecting: crtError)
                         
                         // Extract code, message and name from crtError
                         var errorCode: String = "unknown"
@@ -75,15 +84,12 @@ class BackendModel: ObservableObject {
                             }
                         }
                         
-                        alertMessage = "AWS error (\(errorName)): \(errorMessage) (Code: \(errorCode))"
-                    } else {
-                        alertMessage = "AWS error: \(commonRuntimeError.localizedDescription)"
-                    }
+                    alertMessage = "AWS error (\(errorName)): \(errorMessage) (Code: \(errorCode))"
                 } else {
                     alertMessage = "AWS error: \(commonRuntimeError.localizedDescription)"
                 }
             } else if let awsServiceError = error as? AWSClientRuntime.AWSServiceError {
-                alertMessage = "AWS service error: \(awsServiceError.message)"
+                alertMessage = "AWS service error: \(awsServiceError.message ?? "Unknown error")"
             } else {
                 alertMessage = "Error: \(error.localizedDescription)"
             }
@@ -93,17 +99,20 @@ class BackendModel: ObservableObject {
         setupObservers()
     }
     
+    @MainActor
     private static func createBackend() throws -> Backend {
         let region = SettingManager.shared.selectedRegion.rawValue
         let profile = SettingManager.shared.selectedProfile
         let endpoint = SettingManager.shared.endpoint
         let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
+        let profiles = SettingManager.shared.profiles
         
         return try Backend(
             region: region,
             profile: profile,
             endpoint: endpoint,
-            runtimeEndpoint: runtimeEndpoint
+            runtimeEndpoint: runtimeEndpoint,
+            profiles: profiles
         )
     }
     
@@ -117,8 +126,7 @@ class BackendModel: ObservableObject {
             .combineLatest(endpointPublisher)
             .combineLatest(runtimeEndpointPublisher)
             .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
-            .sink { [weak self] combined in
-                let (((region, profile), endpoint), runtimeEndpoint) = combined
+            .sink { [weak self] _ in
                 self?.refreshBackend()
             }
             .store(in: &cancellables)
@@ -131,30 +139,34 @@ class BackendModel: ObservableObject {
     }
     
     private func refreshBackend() {
-        let region = SettingManager.shared.selectedRegion.rawValue
-        let profile = SettingManager.shared.selectedProfile
-        let endpoint = SettingManager.shared.endpoint
-        let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
-        
-        do {
-            let newBackend = try Backend(
-                region: region,
-                profile: profile,
-                endpoint: endpoint,
-                runtimeEndpoint: runtimeEndpoint
-            )
-            self.backend = newBackend
-            logger.info("Backend refreshed successfully")
-        } catch {
-            logger.error(
-                "Failed to refresh Backend: \(error.localizedDescription). Retaining current Backend."
-            )
-            alertMessage = "Failed to refresh Backend: \(error.localizedDescription)."
+        Task { @MainActor in
+            let region = SettingManager.shared.selectedRegion.rawValue
+            let profile = SettingManager.shared.selectedProfile
+            let endpoint = SettingManager.shared.endpoint
+            let runtimeEndpoint = SettingManager.shared.runtimeEndpoint
+            let profiles = SettingManager.shared.profiles
+            
+            do {
+                let newBackend = try Backend(
+                    region: region,
+                    profile: profile,
+                    endpoint: endpoint,
+                    runtimeEndpoint: runtimeEndpoint,
+                    profiles: profiles
+                )
+                self.backend = newBackend
+                self.logger.info("Backend refreshed successfully")
+            } catch {
+                self.logger.error(
+                    "Failed to refresh Backend: \(error.localizedDescription). Retaining current Backend."
+                )
+                self.alertMessage = "Failed to refresh Backend: \(error.localizedDescription)."
+            }
         }
     }
 }
 
-class Backend: Equatable {
+class Backend: Equatable, @unchecked Sendable {
     let region: String
     let profile: String
     let endpoint: String
@@ -166,8 +178,8 @@ class Backend: Equatable {
         do {
             return try createBedrockClient()
         } catch {
-            logger.error("Failed to initialize Bedrock client: \(error.localizedDescription)")
-            fatalError("Unable to initialize Bedrock client.")
+            logger.error("Failed to create Bedrock client: \(error)")
+            fatalError("Unable to initialize Bedrock client")
         }
     }()
     
@@ -175,24 +187,26 @@ class Backend: Equatable {
         do {
             return try createBedrockRuntimeClient()
         } catch {
-            logger.error(
-                "Failed to initialize Bedrock Runtime client: \(error.localizedDescription)")
-            fatalError("Unable to initialize Bedrock Runtime client.")
+            logger.error("Failed to create Bedrock Runtime client: \(error)")
+            fatalError("Unable to initialize Bedrock Runtime client")
         }
     }()
     
     /// Initializes Backend with given parameters.
-    /// Uses SettingManager's profiles to determine if SSO or standard credentials should be used.
-    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String) throws {
+    /// Uses provided profiles to determine if SSO or standard credentials should be used.
+    init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, profiles: [ProfileInfo] = []) throws {
         self.region = region
         self.profile = profile
         self.endpoint = endpoint
         self.runtimeEndpoint = runtimeEndpoint
         
+        logger.info("Backend init called with \(profiles.count) profiles: \(profiles.map { $0.name }.joined(separator: ", "))")
+        logger.info("Looking for profile: \(profile)")
+        
         // Try to initialize credentials in order of preference
         do {
-            // First try: Use the specified profile from SettingManager
-            if let selectedProfile = SettingManager.shared.profiles.first(where: { $0.name == profile }) {
+            // First try: Use the specified profile from provided profiles
+            if let selectedProfile = profiles.first(where: { $0.name == profile }) {
                  switch selectedProfile.type {
                  case .sso:
                      self.awsCredentialIdentityResolver = try SSOAWSCredentialIdentityResolver(profileName: profile)
@@ -222,12 +236,12 @@ class Backend: Equatable {
             logger.warning("Failed to initialize with profile '\(profile)': \(error.localizedDescription)")
             logger.info("Attempting to use DefaultAWSCredentialIdentityResolverChain")
             
-            do {
-                self.awsCredentialIdentityResolver = try DefaultAWSCredentialIdentityResolverChain()
+            if let chain = try? DefaultAWSCredentialIdentityResolverChain() {
+                self.awsCredentialIdentityResolver = chain
                 logger.info("Successfully initialized with DefaultAWSCredentialIdentityResolverChain")
-            } catch {
+            } else {
                 // If even the default chain fails, we have no choice but to throw
-                logger.error("Failed to initialize with DefaultAWSCredentialIdentityResolverChain: \(error.localizedDescription)")
+                logger.error("Failed to initialize with DefaultAWSCredentialIdentityResolverChain")
                 throw error
             }
         }
@@ -688,7 +702,7 @@ class Backend: Equatable {
         return .unknown
     }
     
-    func getDefaultInferenceConfig(for modelType: ModelType) -> BedrockRuntimeClientTypes.InferenceConfiguration {
+    func getDefaultInferenceConfig(for modelType: ModelType, isThinkingEnabled: Bool = false) -> BedrockRuntimeClientTypes.InferenceConfiguration {
         switch modelType {
         case .claudeSonnet45:
             // Claude Sonnet 4.5 only supports temperature OR top_p, not both
@@ -699,7 +713,6 @@ class Backend: Equatable {
             )
         case .claudeHaiku45:
             // Claude Haiku 4.5 only supports temperature OR top_p, not both
-            let isThinkingEnabled = SettingManager.shared.enableModelThinking
             
             if isThinkingEnabled {
                 return BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -713,8 +726,6 @@ class Backend: Equatable {
                 )
             }
         case .claudeSonnet4:
-            let isThinkingEnabled = SettingManager.shared.enableModelThinking
-            
             if isThinkingEnabled {
                 return BedrockRuntimeClientTypes.InferenceConfiguration(
                     maxTokens: 8192,
@@ -728,8 +739,6 @@ class Backend: Equatable {
                 )
             }
         case .claudeOpus4, .claudeOpus41:
-            let isThinkingEnabled = SettingManager.shared.enableModelThinking
-            
             if isThinkingEnabled {
                 return BedrockRuntimeClientTypes.InferenceConfiguration(
                     maxTokens: 8192,
@@ -743,8 +752,6 @@ class Backend: Equatable {
                 )
             }
         case .claude37:
-            let isThinkingEnabled = SettingManager.shared.enableModelThinking
-            
             if isThinkingEnabled {
                 return BedrockRuntimeClientTypes.InferenceConfiguration(
                     maxTokens: 64000,
@@ -830,17 +837,17 @@ class Backend: Equatable {
         systemContent: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil,
         inferenceConfig: BedrockRuntimeClientTypes.InferenceConfiguration? = nil,
         toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil,
-        usageHandler: ((UsageInfo) -> Void)? = nil
+        usageHandler: (@Sendable (UsageInfo) -> Void)? = nil
     ) async throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Error> {
         let modelType = getModelType(modelId)
         
         // Create default inference config if not provided
         // Get model-specific inference config
-        let modelConfig = SettingManager.shared.getInferenceConfig(for: modelId)
+        let modelConfig = await MainActor.run { SettingManager.shared.getInferenceConfig(for: modelId) }
         let config: BedrockRuntimeClientTypes.InferenceConfiguration
         
         // Check if reasoning is enabled for this model
-        let isThinkingEnabled = SettingManager.shared.enableModelThinking
+        let isThinkingEnabled = await MainActor.run { SettingManager.shared.enableModelThinking }
         let isReasoningModel = isReasoningSupported(modelId) && !hasAlwaysOnReasoning(modelId)
         let shouldOverrideForReasoning = isReasoningModel && isThinkingEnabled
         

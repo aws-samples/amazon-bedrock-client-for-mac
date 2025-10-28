@@ -11,22 +11,21 @@ import Foundation
 import Combine
 import Logging
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     // UI components
     var settingsWindow: NSWindow?
     var localhostServer: LocalhostServer?
     
     // Use a lazy property for UpdateManager to ensure it's only initialized when needed
+    @MainActor
     private lazy var updateManager: UpdateManager? = {
         Logger(label: "AppDelegate").info("Initializing UpdateManager lazily")
         return UpdateManager.shared
     }()
     
     // Hotkey manager for quick access
-    private lazy var hotkeyManager: HotkeyManager = {
-        Logger(label: "AppDelegate").info("Initializing HotkeyManager")
-        return HotkeyManager.shared
-    }()
+    private var hotkeyManager: HotkeyManager?
     
     private var logger = Logger(label: "AppDelegate")
     
@@ -39,7 +38,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func newChat(_ sender: Any?) {
         // Trigger new chat creation through the coordinator
-        AppCoordinator.shared.shouldCreateNewChat = true
+        Task { @MainActor in
+            AppCoordinator.shared.shouldCreateNewChat = true
+        }
     }
     
     @objc func deleteChat(_ sender: Any?) {
@@ -59,8 +60,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         startLocalhostServer()
         
         // Initialize hotkey manager for quick access
-        _ = hotkeyManager
-        logger.info("Hotkey manager initialized")
+        Task { @MainActor in
+            self.hotkeyManager = HotkeyManager.shared
+            logger.info("Hotkey manager initialized")
+        }
         
         // Register for app activation notifications
         NotificationCenter.default.addObserver(
@@ -105,42 +108,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func performUpdateCheck() {
         lastUpdateCheckTime = Date()
         logger.info("Performing update check")
-        updateManager?.checkForUpdates()
+        Task { @MainActor in
+            updateManager?.checkForUpdates()
+        }
     }
     
     func applicationWillTerminate(_ notification: Notification) {
         logger.info("Application will terminate")
         
         // Clean up temporary chats before terminating
-        ChatManager.shared.cleanupTemporaryChats()
+        Task { @MainActor in
+            ChatManager.shared.cleanupTemporaryChats()
+        }
         
         // Remove notification observers
         NotificationCenter.default.removeObserver(self)
         
         // Only access updateManager if it was previously initialized
-        if let manager = updateManager {
-            manager.cleanup()
+        Task { @MainActor in
+            if let manager = self.updateManager {
+                manager.cleanup()
+            }
         }
     }
 
     private func startLocalhostServer() {
-        let settingsManager = SettingManager.shared
-        
-        guard settingsManager.enableLocalServer else {
-            logger.info("Local server is disabled in settings")
-            return
-        }
-        
-        logger.info("Starting localhost server on port \(settingsManager.serverPort)")
-        
-        DispatchQueue.global(qos: .background).async {
-            do {
-                self.localhostServer = try LocalhostServer()
-                try self.localhostServer?.start()
-                self.logger.info("Localhost server started successfully on port \(settingsManager.serverPort)")
-            } catch {
-                self.logger.error("Could not start localhost server: \(error)")
-                print("Could not start localhost server: \(error)")
+        Task { @MainActor in
+            let settingsManager = SettingManager.shared
+            
+            guard settingsManager.enableLocalServer else {
+                logger.info("Local server is disabled in settings")
+                return
+            }
+            
+            let serverPort = settingsManager.serverPort
+            logger.info("Starting localhost server on port \(serverPort)")
+            
+            let defaultDirectory = settingsManager.defaultDirectory
+            
+            Task.detached { [weak self] in
+                do {
+                    let server = try await LocalhostServer(serverPort: serverPort, defaultDirectory: defaultDirectory)
+                    try server.start()
+                    await MainActor.run { [weak self] in
+                        guard let self = self else { return }
+                        self.localhostServer = server
+                        self.logger.info("Localhost server started successfully on port \(serverPort)")
+                    }
+                } catch {
+                    await MainActor.run { [weak self] in
+                        self?.logger.error("Could not start localhost server: \(error)")
+                    }
+                    print("Could not start localhost server: \(error)")
+                }
             }
         }
     }
@@ -153,6 +173,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings(_ sender: Any?) {
         // Open the settings window using the singleton manager
         logger.info("Opening settings window")
-        SettingsWindowManager.shared.openSettings(view: SettingsView())
+        Task { @MainActor in
+            SettingsWindowManager.shared.openSettings(view: SettingsView())
+        }
     }
 }

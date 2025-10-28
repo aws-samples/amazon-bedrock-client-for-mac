@@ -41,11 +41,12 @@ struct MainView: View {
         }
         .onAppear {
             setupQuickAccessMessageHandler()
-            fetchModels()
+            setup()
         }
         .toolbar {
             toolbarContent()
         }
+        .modifier(ToolbarBackgroundModifier())
         .navigationTitle("")
         .onChange(of: backendModel.backend) { _, _ in
             fetchModels()
@@ -59,10 +60,20 @@ struct MainView: View {
                 menuSelection = .chat(chat)
             }
         }
-        .onChange(of: organizedChatModels) { _, _ in
-            // Only auto-create chat if user has existing chats (has used the app before)
-            if hasInitialized && selection == nil && !isCreatingInitialChat && !chatManager.chats.isEmpty {
+        .onChange(of: organizedChatModels) { oldValue, newValue in
+            // Only auto-create chat if:
+            // 1. We just loaded models for the first time (oldValue empty, newValue not empty)
+            // 2. User has NO existing chats (first time user)
+            // 3. Not already creating a chat
+            let isFirstLoad = oldValue.isEmpty && !newValue.isEmpty
+            if selection == nil && !isCreatingInitialChat && chatManager.chats.isEmpty && isFirstLoad {
                 createNewChatIfNeeded()
+            }
+        }
+        .onAppear {
+            // Mark as initialized on appear to prevent infinite loading
+            if !hasInitialized {
+                hasInitialized = true
             }
         }
     }
@@ -97,8 +108,11 @@ struct MainView: View {
             if hasInitialized && !organizedChatModels.isEmpty {
                 // Show nothing when ready - user can use sidebar to create new chat
                 EmptyView()
+            } else if hasInitialized && organizedChatModels.isEmpty {
+                // Models loaded but no chats exist
+                EmptyView()
             } else {
-                // Simple loading indicator like Settings app
+                // Still loading models - show progress indicator
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle())
                     .scaleEffect(0.5)
@@ -113,50 +127,48 @@ struct MainView: View {
     // MARK: - Lifecycle
     
     private func setup() {
-        hasInitialized = true
         fetchModels()
     }
     
     private func fetchModels() {
+        let backend = backendModel.backend
+        
         Task {
             logger.info("Fetching models...")
             
-            async let foundationModelsResult = backendModel.backend.listFoundationModels()
-            async let inferenceProfilesResult = backendModel.backend.listInferenceProfiles()
+            async let foundationModelsResult = backend.listFoundationModels()
+            async let inferenceProfilesResult = backend.listInferenceProfiles()
             
-            do {
-                let (foundationModels, inferenceProfiles) = try await (
-                    foundationModelsResult,
-                    inferenceProfilesResult
-                )
+            let (foundationModels, inferenceProfiles) = await (
+                foundationModelsResult,
+                inferenceProfilesResult
+            )
+            
+            let foundationChatModels = Dictionary(
+                grouping: (try? foundationModels.get())?.map(ChatModel.fromSummary) ?? []
+            ) { $0.provider }
+            
+            let inferenceChatModels = Dictionary(
+                grouping: inferenceProfiles.map { ChatModel.fromInferenceProfile($0) }
+            ) { $0.provider }
+            
+            // Merge
+            let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
+                current
+            }
+            
+            await MainActor.run {
+                self.organizedChatModels = mergedChatModels
+                self.selectDefaultModel()
+                settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
                 
-                let foundationChatModels = Dictionary(
-                    grouping: try foundationModels.get().map(ChatModel.fromSummary)
-                ) { $0.provider }
+                // Mark as initialized after models are loaded
+                self.hasInitialized = true
                 
-                let inferenceChatModels = Dictionary(
-                    grouping: inferenceProfiles.map { ChatModel.fromInferenceProfile($0) }
-                ) { $0.provider }
-                
-                // Merge
-                let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
-                    current
-                }
-                
-                await MainActor.run {
-                    self.organizedChatModels = mergedChatModels
-                    self.selectDefaultModel()
-                    settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
-                    
-                    // Only auto-create chat if we have existing chats (user has used the app before)
-                    // or if user explicitly requests it
-                    if selection == nil && !chatManager.chats.isEmpty {
-                        createNewChatIfNeeded()
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.handleFetchModelsError(error)
+                // Only auto-create chat if we have existing chats (user has used the app before)
+                // or if user explicitly requests it
+                if selection == nil && !chatManager.chats.isEmpty {
+                    createNewChatIfNeeded()
                 }
             }
         }
@@ -183,7 +195,7 @@ struct MainView: View {
             menuSelection = .chat(defaultModel)
         } else {
             // Try to pick a "Claude" model if any
-            if let claudeModel = allModels.first(where: { $0.id.contains("claude-3-5") })
+            if let claudeModel = allModels.first(where: { $0.id.contains("claude-3-7") })
                 ?? allModels.first(where: { $0.id.contains("claude-3") })
                 ?? allModels.first(where: { $0.id.contains("claude-v2") })
                 ?? allModels.first(where: { $0.name.contains("Claude") }) {
@@ -260,11 +272,10 @@ struct MainView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button(action: deleteCurrentChat) {
                     Image(systemName: "trash")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(ToolbarButtonStyle())
+                .buttonStyle(LiquidGlassToolbarButtonStyle())
                 .help("Delete current chat")
             }
         }
@@ -276,11 +287,10 @@ struct MainView: View {
                 SettingsWindowManager.shared.openSettings(view: settingsView)
             }) {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 14))
+                    .font(.system(size: 16))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(ToolbarButtonStyle())
+            .buttonStyle(LiquidGlassToolbarButtonStyle())
             .help("Settings")
         }
     }
@@ -396,29 +406,78 @@ struct MainView: View {
     }
 }
 
-// MARK: - ToolbarButtonStyle
-struct ToolbarButtonStyle: ButtonStyle {
+// MARK: - Liquid Glass Toolbar Button Style (macOS 26+ Tahoe compatible)
+struct LiquidGlassToolbarButtonStyle: ButtonStyle {
     @State private var isHovering = false
+    @SwiftUI.Environment(\.colorScheme) private var colorScheme
     
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(6)
-            .background(
-                Circle()
-                    .fill(configuration.isPressed ?
-                          Color.gray.opacity(0.2) :
-                            (isHovering ? Color.gray.opacity(0.1) : Color.clear))
-            )
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-            .onHover { hovering in
-                isHovering = hovering
-                if hovering {
-                    NSCursor.pointingHand.set()
-                } else {
-                    NSCursor.arrow.set()
+        if #available(macOS 26.0, *) {
+            // macOS 26+ (Tahoe): Show background only on hover
+            configuration.label
+                .padding(8)
+                .background(
+                    Group {
+                        if isHovering || configuration.isPressed {
+                            Circle()
+                                .fill(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.15))
+                        }
+                    }
+                )
+                .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+                .animation(.easeInOut(duration: 0.15), value: isHovering)
+                .onHover { hovering in
+                    isHovering = hovering
+                    if hovering {
+                        NSCursor.pointingHand.set()
+                    } else {
+                        NSCursor.arrow.set()
+                    }
                 }
-            }
+        } else {
+            // macOS 25 and earlier: Show background only on hover
+            configuration.label
+                .padding(8)
+                .background(
+                    Circle()
+                        .fill(configuration.isPressed ?
+                              Color.gray.opacity(0.2) :
+                                (isHovering ? Color.gray.opacity(0.1) : Color.clear))
+                )
+                .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+                .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+                .onHover { hovering in
+                    isHovering = hovering
+                    if hovering {
+                        NSCursor.pointingHand.set()
+                    } else {
+                        NSCursor.arrow.set()
+                    }
+                }
+        }
+    }
+}
+
+// MARK: - Toolbar Background Modifier (macOS 26+ only)
+struct ToolbarBackgroundModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.toolbarBackground(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Scroll Edge Effect Modifier (Shared)
+struct ScrollEdgeEffectModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
+        }
     }
 }
 

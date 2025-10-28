@@ -41,6 +41,24 @@ struct MessageBarView: View {
     
     var logger = Logger(label: "MessageBarView")
     
+    // MARK: - Liquid Glass Background (Messages App Style - macOS 26+ only)
+    @ViewBuilder
+    private var messageBarBackground: some View {
+        if #available(macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: 22)
+                .fill(Color.clear)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
+        } else {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+        }
+    }
+    
     // MARK: - Body
     var body: some View {
         VStack(spacing: 0) {
@@ -72,15 +90,7 @@ struct MessageBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(NSColor.windowBackgroundColor))
-                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-            )
+            .background(messageBarBackground)
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
             
@@ -113,7 +123,7 @@ struct MessageBarView: View {
         .onAppear {
             syncAttachments()
         }
-        .onChange(of: sharedMediaDataSource.images.count) { newValue in
+        .onChange(of: sharedMediaDataSource.images.count) { _, _ in
             syncAttachments()
         }
     }
@@ -131,8 +141,10 @@ struct MessageBarView: View {
     private var fileUploadButton: some View {
         Button(action: {
             let panel = NSOpenPanel()
-            panel.allowedFileTypes = ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md",
-                                       "jpg", "jpeg", "png", "gif", "tiff", "webp"]
+            panel.allowedContentTypes = [.pdf, .commaSeparatedText, .html, .plainText, .jpeg, .png, .gif, .tiff, .webP,
+                                          UTType(filenameExtension: "doc")!, UTType(filenameExtension: "docx")!,
+                                          UTType(filenameExtension: "xls")!, UTType(filenameExtension: "xlsx")!,
+                                          UTType(filenameExtension: "md")!].compactMap { $0 }
             panel.allowsMultipleSelection = true
             
             panel.begin { response in
@@ -219,7 +231,9 @@ struct MessageBarView: View {
         .buttonStyle(PlainButtonStyle())
         .disabled(userInput.isEmpty && sharedMediaDataSource.images.isEmpty && !isLoading)
         .opacity((userInput.isEmpty && sharedMediaDataSource.images.isEmpty && !isLoading) ? 0.6 : 1)
-        .onChange(of: chatManager.getIsLoading(for: chatID)) { isLoading = $0 }
+        .onChange(of: chatManager.getIsLoading(for: chatID)) { _, newValue in
+            isLoading = newValue
+        }
     }
     
     // MARK: - Helper Methods

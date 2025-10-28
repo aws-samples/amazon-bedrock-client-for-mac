@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import AppKit
 
+@MainActor
 class SettingsWindowManager: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = SettingsWindowManager()
     private var settingsWindow: NSWindow?

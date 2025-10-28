@@ -11,7 +11,6 @@
 		792D8E652DDFE55E00BB1C01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 792D8E642DDFE55E00BB1C01 /* MCP */; };
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
 		793FE0B82DE56292004236B9 /* ModelInferenceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793FE0B72DE56292004236B9 /* ModelInferenceConfig.swift */; };
-		794C0A242C9A7800003B6E34 /* MarkdownKit in Frameworks */ = {isa = PBXBuildFile; productRef = 794C0A232C9A7800003B6E34 /* MarkdownKit */; };
 		7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7953C5AA2C345B8700663438 /* SSOManager.swift */; };
 		7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8422AD247CC008B03D3 /* AWSRegion.swift */; };
 		7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7954F8442AD247DF008B03D3 /* SettingsView.swift */; };
@@ -35,6 +34,7 @@
 		797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */; };
 		798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = 798A9CE52AD3AB2E00E9D039 /* Vapor */; };
 		798A9CE82AD3AB4300E9D039 /* LocalHostServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */; };
+		79A305692EB05A2200DAE32F /* MarkdownKit in Frameworks */ = {isa = PBXBuildFile; productRef = 79A305682EB05A2200DAE32F /* MarkdownKit */; };
 		79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78972C31691800BD6FB1 /* AWSSSO */; };
 		79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78992C31691800BD6FB1 /* AWSSSOOIDC */; };
 		79AF97552D9E332A00313A4C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF97542D9E332500313A4C /* NSImage.swift */; };
@@ -49,10 +49,9 @@
 		79D6E6A32C99BFF300314D86 /* GithubTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D6E6A22C99BFF300314D86 /* GithubTheme.swift */; };
 		79E0AC5B2D63EDDC0041829A /* TranscribeStreamingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E0AC5A2D63EDDB0041829A /* TranscribeStreamingManager.swift */; };
 		79E0AC5D2D63EE4F0041829A /* AWSTranscribeStreaming in Frameworks */ = {isa = PBXBuildFile; productRef = 79E0AC5C2D63EE4F0041829A /* AWSTranscribeStreaming */; };
-		79E0AC642D63F63D0041829A /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 79E0AC632D63F63D0041829A /* Info.plist */; };
 		79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFD2ACDA88700DC6657 /* AWSBedrock */; };
 		79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */; };
-		79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */ = {isa = PBXBuildFile; productRef = 79E5A0012ACDA88700DC6657 /* AWSSTS */; };
+		79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 79F2C4012EB0705A003F46E6 /* Bedrock.icon */; };
 		79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */; };
 		79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */; };
 		79F53C892E7B0B3800F129F4 /* QuickAccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C882E7B0B3800F129F4 /* QuickAccessView.swift */; };
@@ -125,7 +124,7 @@
 		79D6E6A22C99BFF300314D86 /* GithubTheme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = GithubTheme.swift; path = "Amazon Bedrock Client for Mac/Utils/GithubTheme.swift"; sourceTree = SOURCE_ROOT; };
 		79E0AC5A2D63EDDB0041829A /* TranscribeStreamingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscribeStreamingManager.swift; sourceTree = "<group>"; };
 		79E0AC5E2D63F49F0041829A /* Amazon Bedrock Client for Mac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Amazon Bedrock Client for Mac.entitlements"; sourceTree = "<group>"; };
-		79E0AC632D63F63D0041829A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		79F2C4012EB0705A003F46E6 /* Bedrock.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Bedrock.icon; sourceTree = "<group>"; };
 		79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessWindowManager.swift; sourceTree = "<group>"; };
 		79F53C882E7B0B3800F129F4 /* QuickAccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessView.swift; sourceTree = "<group>"; };
@@ -147,10 +146,9 @@
 				79E0AC5D2D63EE4F0041829A /* AWSTranscribeStreaming in Frameworks */,
 				79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */,
 				79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */,
-				794C0A242C9A7800003B6E34 /* MarkdownKit in Frameworks */,
-				79E5A0022ACDA88700DC6657 /* AWSSTS in Frameworks */,
 				798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */,
 				79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */,
+				79A305692EB05A2200DAE32F /* MarkdownKit in Frameworks */,
 				79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -175,10 +173,10 @@
 		7907BE8B2ACD87A000C4D500 = {
 			isa = PBXGroup;
 			children = (
-				79E0AC632D63F63D0041829A /* Info.plist */,
 				791461202AD0E51B00C454DC /* LICENSE */,
 				79BF645E2ACFF8FD00383300 /* README.md */,
 				79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */,
+				79A305662EB0599300DAE32F /* Frameworks */,
 				7907BE952ACD87A100C4D500 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -196,6 +194,7 @@
 		79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */ = {
 			isa = PBXGroup;
 			children = (
+				79F2C4012EB0705A003F46E6 /* Bedrock.icon */,
 				79E0AC5E2D63F49F0041829A /* Amazon Bedrock Client for Mac.entitlements */,
 				79610DC22AD22A2F00993D09 /* Assets.xcassets */,
 				79610DBB2AD22A2F00993D09 /* Core */,
@@ -295,6 +294,13 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		79A305662EB0599300DAE32F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -314,13 +320,12 @@
 			packageProductDependencies = (
 				79E59FFD2ACDA88700DC6657 /* AWSBedrock */,
 				79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */,
-				79E5A0012ACDA88700DC6657 /* AWSSTS */,
 				798A9CE52AD3AB2E00E9D039 /* Vapor */,
 				79AC78972C31691800BD6FB1 /* AWSSSO */,
 				79AC78992C31691800BD6FB1 /* AWSSSOOIDC */,
-				794C0A232C9A7800003B6E34 /* MarkdownKit */,
 				79E0AC5C2D63EE4F0041829A /* AWSTranscribeStreaming */,
 				792D8E642DDFE55E00BB1C01 /* MCP */,
+				79A305682EB05A2200DAE32F /* MarkdownKit */,
 			);
 			productName = "Amazon Bedrock Client for Mac";
 			productReference = 7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */;
@@ -370,7 +375,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1540;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					7907BE932ACD87A000C4D500 = {
 						CreatedOnToolsVersion = 15.0;
@@ -397,8 +402,8 @@
 			packageReferences = (
 				79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
 				798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */,
-				794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */,
 				792D8E632DDFE55E00BB1C01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
+				79A305672EB05A2200DAE32F /* XCRemoteSwiftPackageReference "swift-markdownkit" */,
 			);
 			productRefGroup = 7907BE952ACD87A100C4D500 /* Products */;
 			projectDirPath = "";
@@ -417,8 +422,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				79BF645F2ACFF8FD00383300 /* README.md in Resources */,
+				79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */,
 				79610DE42AD22A2F00993D09 /* Preview Assets.xcassets in Resources */,
-				79E0AC642D63F63D0041829A /* Info.plist in Resources */,
 				79610DDB2AD22A2F00993D09 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -577,10 +582,11 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Amazon Bedrock";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -637,9 +643,10 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Amazon Bedrock";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -647,17 +654,21 @@
 		7907BEBA2ACD87A200C4D500 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Bedrock;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.3.17;
+				CURRENT_PROJECT_VERSION = 1.4.0;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_FILE[sdk=*]" = Info.plist;
@@ -677,15 +688,19 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.3.17;
+				MARKETING_VERSION = 1.4.0;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = YES;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -693,17 +708,21 @@
 		7907BEBB2ACD87A200C4D500 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Bedrock;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.3.17;
+				CURRENT_PROJECT_VERSION = 1.4.0;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_FILE[sdk=*]" = Info.plist;
@@ -723,14 +742,18 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.3.17;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = YES;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -871,20 +894,20 @@
 				minimumVersion = 0.8.2;
 			};
 		};
-		794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/objecthub/swift-markdownkit";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.0;
-			};
-		};
 		798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/vapor/vapor.git";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 4.84.4;
+			};
+		};
+		79A305672EB05A2200DAE32F /* XCRemoteSwiftPackageReference "swift-markdownkit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/objecthub/swift-markdownkit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
 			};
 		};
 		79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */ = {
@@ -903,15 +926,15 @@
 			package = 792D8E632DDFE55E00BB1C01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
 		};
-		794C0A232C9A7800003B6E34 /* MarkdownKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 794C0A222C9A7800003B6E34 /* XCRemoteSwiftPackageReference "swift-markdownkit" */;
-			productName = MarkdownKit;
-		};
 		798A9CE52AD3AB2E00E9D039 /* Vapor */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */;
 			productName = Vapor;
+		};
+		79A305682EB05A2200DAE32F /* MarkdownKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79A305672EB05A2200DAE32F /* XCRemoteSwiftPackageReference "swift-markdownkit" */;
+			productName = MarkdownKit;
 		};
 		79AC78972C31691800BD6FB1 /* AWSSSO */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -937,11 +960,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSBedrockRuntime;
-		};
-		79E5A0012ACDA88700DC6657 /* AWSSTS */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = AWSSTS;
 		};
 /* End XCSwiftPackageProductDependency section */
 

@@ -748,7 +748,7 @@ class ChatViewModel: ObservableObject {
         }
 
         // Get conversation history and add new user message (implicit)
-        var conversationHistory = await getConversationHistory()
+        let conversationHistory = await getConversationHistory()
         await saveConversationHistory(conversationHistory)
         
         // Get system prompt
@@ -770,7 +770,7 @@ class ChatViewModel: ObservableObject {
         await ToolUseTracker.shared.reset()
         
         let maxTurns = settingManager.maxToolUseTurns
-        var turn_count = 0
+        let turn_count = 0
         
         // Get Bedrock messages in AWS SDK format
         let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0, modelId: chatModel.id) }
@@ -815,17 +815,23 @@ class ChatViewModel: ObservableObject {
         // Reset tool tracker
         await ToolUseTracker.shared.reset()
         
+        // Capture backend locally to avoid data races
+        let backend = await MainActor.run { backendModel.backend }
+        
         // Stream chunks from the model
-        for try await chunk in try await backendModel.backend.converseStream(
+        for try await chunk in try await backend.converseStream(
             withId: chatModel.id,
             messages: bedrockMessages,
             systemContent: systemContentBlock,
             inferenceConfig: nil,
             toolConfig: toolConfig,
-            usageHandler: { [weak self] usage in
+            usageHandler: { @Sendable [weak self] usage in
                 // Format usage information for toast display
-                let formattedUsage = self?.formatUsageString(usage) ?? ""
-                self?.usageHandler?(formattedUsage)
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    let formattedUsage = self.formatUsageString(usage)
+                    self.usageHandler?(formattedUsage)
+                }
             }
         ) {
             // Check for tool use in each chunk
@@ -1078,8 +1084,6 @@ class ChatViewModel: ObservableObject {
                     // Handle multi-modal content
                     if let content = mcpToolResult["content"] as? [[String: Any]] {
                         var textResults: [String] = []
-                        var hasImages = false
-                        var hasAudio = false
                         
                         for contentItem in content {
                             if let type = contentItem["type"] as? String {
@@ -1089,14 +1093,12 @@ class ChatViewModel: ObservableObject {
                                         textResults.append(text)
                                     }
                                 case "image":
-                                    hasImages = true
                                     if let description = contentItem["description"] as? String {
                                         textResults.append("🖼️ \(description)")
                                     } else {
                                         textResults.append("🖼️ Generated image")
                                     }
                                 case "audio":
-                                    hasAudio = true
                                     if let description = contentItem["description"] as? String {
                                         textResults.append("🔊 \(description)")
                                     } else {
@@ -1131,10 +1133,6 @@ class ChatViewModel: ObservableObject {
                     }
                 }
             }
-        } catch {
-            resultStatus = "error"
-            resultError = error.localizedDescription
-            resultText = "Exception during tool execution: \(error.localizedDescription)"
         }
         
         return SendableToolResult(status: resultStatus, text: resultText, error: resultError)
@@ -1355,7 +1353,6 @@ class ChatViewModel: ObservableObject {
             var thinkingText: String? = nil
             var thinkingSignature: String? = nil
             var toolUseForStorage: Message.ToolUse? = nil
-            var extractedResultTextForUserMessage: String? = nil
             
             // Add image and document collections
             var imageBase64Strings: [String]? = nil
@@ -1735,8 +1732,11 @@ class ChatViewModel: ObservableObject {
     
     /// Handles embedding models by directly parsing JSON responses
     private func handleEmbeddingModel(_ userMessage: MessageData) async throws {
+        // Capture backend locally to avoid data races
+        let backend = await MainActor.run { backendModel.backend }
+        
         // Invoke embedding model to get raw data response
-        let responseData = try await backendModel.backend.invokeEmbeddingModel(
+        let responseData = try await backend.invokeEmbeddingModel(
             withId: chatModel.id,
             text: userMessage.text
         )
@@ -1796,7 +1796,8 @@ class ChatViewModel: ObservableObject {
     
     /// Invokes Titan Image model
     private func invokeTitanImageModel(prompt: String) async throws {
-        let data = try await backendModel.backend.invokeImageModel(
+        let backend = await MainActor.run { backendModel.backend }
+        let data = try await backend.invokeImageModel(
             withId: chatModel.id,
             prompt: prompt,
             modelType: .titanImage
@@ -1807,7 +1808,8 @@ class ChatViewModel: ObservableObject {
     
     /// Invokes Nova Canvas image model
     private func invokeNovaCanvasModel(prompt: String) async throws {
-        let data = try await backendModel.backend.invokeImageModel(
+        let backend = await MainActor.run { backendModel.backend }
+        let data = try await backend.invokeImageModel(
             withId: chatModel.id,
             prompt: prompt,
             modelType: .novaCanvas
@@ -1818,7 +1820,8 @@ class ChatViewModel: ObservableObject {
     
     /// Invokes Stable Diffusion image model
     private func invokeStableDiffusionModel(prompt: String) async throws {
-        let data = try await backendModel.backend.invokeImageModel(
+        let backend = await MainActor.run { backendModel.backend }
+        let data = try await backend.invokeImageModel(
             withId: chatModel.id,
             prompt: prompt,
             modelType: .stableDiffusion
@@ -1982,13 +1985,14 @@ class ChatViewModel: ObservableObject {
             var title = ""
             
             let systemContentBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
+            let backend = await MainActor.run { backendModel.backend }
             
-            for try await chunk in try await backendModel.backend.converseStream(
+            for try await chunk in try await backend.converseStream(
                 withId: titleModelId,
                 messages: [awsMessage],
                 systemContent: systemContentBlocks,
                 inferenceConfig: nil,
-                usageHandler: { usage in
+                usageHandler: { @Sendable usage in
                     // Title generation usage info
                     print("Title generation usage - Input: \(usage.inputTokens ?? 0), Output: \(usage.outputTokens ?? 0)")
                 }
@@ -2086,16 +2090,19 @@ class ChatViewModel: ObservableObject {
         
         logger.info("Starting non-streaming converse request with model ID: \(chatModel.id)")
         
+        // Capture backend locally to avoid data races
+        let backend = await MainActor.run { backendModel.backend }
+        
         // Use the non-streaming Converse API
         let request = AWSBedrockRuntime.ConverseInput(
             inferenceConfig: nil,
             messages: bedrockMessages,
             modelId: chatModel.id,
-            system: backendModel.backend.isSystemPromptSupported(chatModel.id) ? systemContentBlock : nil,
+            system: backend.isSystemPromptSupported(chatModel.id) ? systemContentBlock : nil,
             toolConfig: toolConfig
         )
         
-        let response = try await backendModel.backend.bedrockRuntimeClient.converse(input: request)
+        let response = try await backend.bedrockRuntimeClient.converse(input: request)
         
         // Process the response
         var responseText = ""

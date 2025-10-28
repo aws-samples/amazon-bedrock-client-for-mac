@@ -52,11 +52,11 @@ struct HotkeyRecorderView: View {
             updateDisplayText()
             print("DEBUG: HotkeyRecorderView onAppear - modifiers: \(modifiers), keyCode: \(keyCode)")
         }
-        .onChange(of: modifiers) { newValue in
+        .onChange(of: modifiers) { _, newValue in
             updateDisplayText()
             print("DEBUG: Modifiers changed to: \(newValue)")
         }
-        .onChange(of: keyCode) { newValue in
+        .onChange(of: keyCode) { _, newValue in
             updateDisplayText()
             print("DEBUG: KeyCode changed to: \(newValue)")
         }
@@ -126,7 +126,7 @@ struct HotkeyRecorderView: View {
         let hasCmd = (modifiers & UInt32(cmdKey)) != 0
         let hasOpt = (modifiers & UInt32(optionKey)) != 0
         let hasCtrl = (modifiers & UInt32(controlKey)) != 0
-        let hasShift = (modifiers & UInt32(shiftKey)) != 0
+        let _ = (modifiers & UInt32(shiftKey)) != 0  // hasShift - reserved for future use
         
         // Avoid common system shortcuts
         if hasCmd && !hasOpt && !hasCtrl {

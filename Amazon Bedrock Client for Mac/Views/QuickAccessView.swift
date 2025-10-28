@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Logging
+import UniformTypeIdentifiers
 
 struct QuickAccessView: View {
     @State private var inputText: String = ""
@@ -21,6 +22,23 @@ struct QuickAccessView: View {
     private let onClose: () -> Void
     private let onHeightChange: (CGFloat) -> Void
     private let logger = Logger(label: "QuickAccessView")
+    
+    @ViewBuilder
+    private var quickAccessBarBackground: some View {
+        if #available(macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: 22)
+                .fill(Color.clear)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
+        } else {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+        }
+    }
     
     init(onClose: @escaping () -> Void, onHeightChange: @escaping (CGFloat) -> Void = { _ in }) {
         self.onClose = onClose
@@ -51,15 +69,7 @@ struct QuickAccessView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(NSColor.windowBackgroundColor))
-                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-            )
+            .background(quickAccessBarBackground)
             
             // Loading indicator
             if isPasting {
@@ -71,14 +81,14 @@ struct QuickAccessView: View {
             setupEscapeKeyHandler()
             syncAttachments()
         }
-        .onChange(of: calculatedHeight) { newHeight in
+        .onChange(of: calculatedHeight) { _, _ in
             updateWindowHeight()
         }
-        .onChange(of: sharedMediaDataSource.images.count) { _ in
+        .onChange(of: sharedMediaDataSource.images.count) { _, _ in
             syncAttachments()
             updateWindowHeight()
         }
-        .onChange(of: sharedMediaDataSource.documents.count) { _ in
+        .onChange(of: sharedMediaDataSource.documents.count) { _, _ in
             syncAttachments()
             updateWindowHeight()
         }
@@ -92,7 +102,7 @@ struct QuickAccessView: View {
                 )
             }
         }
-        .onChange(of: showImagePreview) { isShowing in
+        .onChange(of: showImagePreview) { _, isShowing in
             // Update state when image preview opens or closes
             QuickAccessWindowManager.shared.setFileUploadInProgress(isShowing)
             
@@ -113,8 +123,13 @@ struct QuickAccessView: View {
             QuickAccessWindowManager.shared.setFileUploadInProgress(true)
             
             let panel = NSOpenPanel()
-            panel.allowedFileTypes = ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md",
-                                       "jpg", "jpeg", "png", "gif", "tiff", "webp"]
+            var types: [UTType] = [.pdf, .commaSeparatedText, .html, .plainText, .jpeg, .png, .gif, .tiff, .webP]
+            if let doc = UTType(filenameExtension: "doc") { types.append(doc) }
+            if let docx = UTType(filenameExtension: "docx") { types.append(docx) }
+            if let xls = UTType(filenameExtension: "xls") { types.append(xls) }
+            if let xlsx = UTType(filenameExtension: "xlsx") { types.append(xlsx) }
+            if let md = UTType(filenameExtension: "md") { types.append(md) }
+            panel.allowedContentTypes = types
             panel.allowsMultipleSelection = true
             
             panel.begin { response in
