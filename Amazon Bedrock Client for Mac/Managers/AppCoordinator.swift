@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class AppCoordinator: ObservableObject {
     static let shared = AppCoordinator()
     private init() {}

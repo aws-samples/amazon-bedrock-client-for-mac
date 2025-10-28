@@ -207,8 +207,25 @@ final class MyTextView: NSTextView {
                 let group = DispatchGroup()
                 let queue = DispatchQueue(label: "com.amazon.bedrock.imagefetching", qos: .userInitiated)
                 
-                // Array to process image URLs sequentially
-                var orderedImages = [(Int, NSImage)]()
+                // Thread-safe array using NSLock
+                final class ImageStorage: @unchecked Sendable {
+                    private let lock = NSLock()
+                    private var images: [(Int, NSImage)] = []
+                    
+                    func append(_ item: (Int, NSImage)) {
+                        lock.lock()
+                        defer { lock.unlock() }
+                        images.append(item)
+                    }
+                    
+                    func getSorted() -> [NSImage] {
+                        lock.lock()
+                        defer { lock.unlock() }
+                        return images.sorted { $0.0 < $1.0 }.map { $0.1 }
+                    }
+                }
+                
+                let imageStorage = ImageStorage()
                 
                 for (index, imageURL) in urlsToProcess.enumerated() {
                     group.enter()
@@ -218,16 +235,14 @@ final class MyTextView: NSTextView {
                             defer { group.leave() }
                             
                             if let data = data, let image = NSImage(data: data) {
-                                // Store image with index
-                                orderedImages.append((index, image))
+                                imageStorage.append((index, image))
                             }
                         }.resume()
                     }
                 }
                 
                 group.notify(queue: .main) {
-                    // Sort images by original order
-                    let sortedImages = orderedImages.sorted { $0.0 < $1.0 }.map { $0.1 }
+                    let sortedImages = imageStorage.getSorted()
                     
                     // Check for duplication (ignore if already processed)
                     if !fileProcessed {
@@ -374,7 +389,7 @@ extension NSImage {
 }
 
 /// SwiftUI view for integrating an `NSTextView` into SwiftUI, supporting dynamic height adjustments and text operations.
-struct FirstResponderTextView: NSViewRepresentable, Equatable {
+struct FirstResponderTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var isDisabled: Bool
     @Binding var calculatedHeight: CGFloat
@@ -502,14 +517,16 @@ public class Coordinator: NSObject, NSTextViewDelegate {
         updateText(textView)
     }
     
+    @MainActor
     private func updateText(_ textView: MyTextView) {
         parent.text = textView.string
         parent.updateHeight(textView: textView)
     }
     
     @objc func handleTranscriptUpdate(_ notification: Notification) {
-        DispatchQueue.main.async { [weak self] in
-            self?.textView?.moveCursorToEnd()
+        guard let textView = self.textView else { return }
+        Task { @MainActor in
+            textView.moveCursorToEnd()
         }
     }
 }

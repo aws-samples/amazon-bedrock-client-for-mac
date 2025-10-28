@@ -35,6 +35,16 @@ struct SettingsView: View {
         }
     }
     
+    @ViewBuilder
+    private var liquidGlassBackground: some View {
+        if #available(macOS 26.0, *) {
+            Color.clear
+                .background(.ultraThinMaterial)
+        } else {
+            Color(NSColor.windowBackgroundColor)
+        }
+    }
+    
     var body: some View {
         TabView(selection: $selectedTab) {
             GeneralSettingsView()
@@ -51,6 +61,7 @@ struct SettingsView: View {
         }
         .frame(width: 550, height: 550)
         .padding()
+        .background(liquidGlassBackground)
     }
 }
 
@@ -79,16 +90,18 @@ struct MultilineRoundedTextField: View {
                             isFocused ? Color.accentColor : Color.gray.opacity(0.5),
                             lineWidth: isFocused ? 2 : 1)
                 )
-                .onChange(of: localText) { newValue in
+                .onChange(of: localText) { _, newValue in
                     // Cancel previous timer
                     saveTimer?.invalidate()
                     
                     // Set a new timer to save after 1 second of no typing
-                    saveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
-                        text = newValue
+                    saveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [newValue] _ in
+                        Task { @MainActor in
+                            text = newValue
+                        }
                     }
                 }
-                .onChange(of: isFocused) { focused in
+                .onChange(of: isFocused) { _, focused in
                     if !focused {
                         // Save immediately when focus is lost
                         saveTimer?.invalidate()
@@ -99,7 +112,7 @@ struct MultilineRoundedTextField: View {
                     // Initialize local text with current value
                     localText = text
                 }
-                .onChange(of: text) { newValue in
+                .onChange(of: text) { _, newValue in
                     // Update local text if external value changes
                     if newValue != localText {
                         localText = newValue
@@ -255,11 +268,11 @@ struct GeneralSettingsView: View {
                                 tempHotkeyKeyCode = settingsManager.hotkeyKeyCode
                                 print("DEBUG: Loaded hotkey settings - modifiers: \(tempHotkeyModifiers), keyCode: \(tempHotkeyKeyCode)")
                             }
-                            .onChange(of: tempHotkeyModifiers) { newValue in
+                            .onChange(of: tempHotkeyModifiers) { _, newValue in
                                 settingsManager.hotkeyModifiers = newValue
                                 HotkeyManager.shared.updateHotkey(modifiers: newValue, keyCode: tempHotkeyKeyCode)
                             }
-                            .onChange(of: tempHotkeyKeyCode) { newValue in
+                            .onChange(of: tempHotkeyKeyCode) { _, newValue in
                                 settingsManager.hotkeyKeyCode = newValue
                                 HotkeyManager.shared.updateHotkey(modifiers: tempHotkeyModifiers, keyCode: newValue)
                             }
@@ -273,13 +286,13 @@ struct GeneralSettingsView: View {
                             .frame(width: 100, alignment: .leading)
                         
                         Picker("", selection: $settingsManager.appearance) {
-                            Text("Light").tag("Light")
-                            Text("Dark").tag("Dark")
-                            Text("Auto").tag("Auto")
+                            Text("Light").tag("light")
+                            Text("Dark").tag("dark")
+                            Text("Auto").tag("auto")
                         }
                         .pickerStyle(SegmentedPickerStyle())
                         .labelsHidden()
-                        .onChange(of: settingsManager.appearance) { newValue in
+                        .onChange(of: settingsManager.appearance) { _, newValue in
                             applyAppearance(newValue)
                         }
                     }
@@ -324,13 +337,13 @@ struct GeneralSettingsView: View {
     }
     
     private func applyAppearance(_ appearance: String) {
-        switch appearance {
-        case "Light":
+        switch appearance.lowercased() {
+        case "light":
             NSApp.appearance = NSAppearance(named: .aqua)
-        case "Dark":
+        case "dark":
             NSApp.appearance = NSAppearance(named: .darkAqua)
         default:
-            NSApp.appearance = nil  // Use system default
+            NSApp.appearance = nil  // Use system default (auto)
         }
     }
 }
@@ -407,7 +420,7 @@ struct DeveloperSettingsView: View {
                                 TextField("", value: $settingsManager.maxToolUseTurns, formatter: NumberFormatter())
                                     .frame(width: 60)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .onChange(of: settingsManager.maxToolUseTurns) { newValue in
+                                    .onChange(of: settingsManager.maxToolUseTurns) { _, newValue in
                                         if newValue < 1 {
                                             settingsManager.maxToolUseTurns = 1
                                         } else if newValue > 1000 {
@@ -547,7 +560,7 @@ struct DeveloperSettingsView: View {
                             TextField("", value: $settingsManager.serverPort, formatter: NumberFormatter())
                                 .frame(width: 80)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .onChange(of: settingsManager.serverPort) { newValue in
+                                .onChange(of: settingsManager.serverPort) { _, newValue in
                                     if newValue < 1024 {
                                         settingsManager.serverPort = 1024
                                     } else if newValue > 65535 {

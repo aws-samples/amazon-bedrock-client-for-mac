@@ -8,7 +8,7 @@
 import Foundation
 import AWSBedrock
 
-class ChatModel: ObservableObject, Identifiable, Equatable, Hashable {
+class ChatModel: ObservableObject, Identifiable, Equatable, Hashable, @unchecked Sendable {
     var id: String
     var chatId: String
     var name: String

@@ -14,6 +14,7 @@ class QuickAccessWindow: NSPanel {
     override var canBecomeMain: Bool { return true }
 }
 
+@MainActor
 class QuickAccessWindowManager: NSObject, ObservableObject {
     static let shared = QuickAccessWindowManager()
     

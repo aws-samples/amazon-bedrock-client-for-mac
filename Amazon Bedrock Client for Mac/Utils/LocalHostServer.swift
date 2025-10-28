@@ -10,18 +10,20 @@ import Foundation
 
 class LocalhostServer {
     let app: Application
-    private var settingManager = SettingManager.shared
+    private let serverPort: Int
 
-    init() throws {
+    init(serverPort: Int = 11434, defaultDirectory: String = NSHomeDirectory()) async throws {
+        self.serverPort = serverPort
+        
         // Create a new Vapor application
-        var env = try Environment.detect()
-        app = Application(env)
+        let env = try await Environment.detect()
+        app = try await Application.make(env)
         
         // Configure the server port
-        app.http.server.configuration.port = settingManager.serverPort
+        app.http.server.configuration.port = serverPort
         
         // Determine directory and create if necessary
-        let directoryURL = URL(fileURLWithPath: settingManager.defaultDirectory)
+        let directoryURL = URL(fileURLWithPath: defaultDirectory)
         let directoryPath = directoryURL.path
         
         if !FileManager.default.fileExists(atPath: directoryPath) {

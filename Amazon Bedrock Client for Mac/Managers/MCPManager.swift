@@ -15,6 +15,7 @@ import System
  * Manages Model Context Protocol (MCP) integrations.
  * Handles server connections, tool discovery, and tool execution.
  */
+@MainActor
 class MCPManager: ObservableObject {
     static let shared = MCPManager()
     private var logger = Logger(label: "MCPManager")
@@ -263,20 +264,20 @@ class MCPManager: ObservableObject {
                     let outputFileDescriptor = FileDescriptor(rawValue: stdinFD)
                     
                     // Create stdio transport with properly typed file descriptors
+                    let logger = await MainActor.run { self.logger }
                     let transport = StdioTransport(
                         input: inputFileDescriptor,
                         output: outputFileDescriptor,
-                        logger: self.logger
+                        logger: logger
                     )
 
-                    try await client.connect(transport: transport)
-
-                    // Initialize the connection
-                    let result = try await client.initialize()
+                    let result = try await client.connect(transport: transport)
                     
                     // Check if server supports tools
                     if result.capabilities.tools != nil {
-                        self.logger.info("Server \(server.name) supports tools")
+                        await MainActor.run {
+                            self.logger.info("Server \(server.name) supports tools")
+                        }
                     }
                     
                     return client
@@ -333,7 +334,7 @@ class MCPManager: ObservableObject {
      * @return The result of the operation if completed within timeout
      * @throws Error if timeout occurs or operation fails
      */
-    func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+    func withTimeout<T: Sendable>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { group in
             // Task to perform the actual operation
             group.addTask {
@@ -603,8 +604,25 @@ class MCPManager: ObservableObject {
                     if let metadata = metadata {
                         imageResult["metadata"] = metadata
                         
-                        if let width = metadata["width"] as? Int,
-                           let height = metadata["height"] as? Int {
+                        // Safely extract width and height
+                        var width = 0
+                        var height = 0
+                        
+                        // Safely extract width
+                        if let widthInt = metadata["width"] as? Int {
+                            width = widthInt
+                        } else if let widthValue = metadata["width"] as? String, let widthInt = Int(widthValue) {
+                            width = widthInt
+                        }
+                        
+                        // Safely extract height
+                        if let heightInt = metadata["height"] as? Int {
+                            height = heightInt
+                        } else if let heightValue = metadata["height"] as? String, let heightInt = Int(heightValue) {
+                            height = heightInt
+                        }
+                        
+                        if width > 0 && height > 0 {
                             imageResult["description"] = "Generated \(width)x\(height) image"
                         } else {
                             imageResult["description"] = "Generated image"

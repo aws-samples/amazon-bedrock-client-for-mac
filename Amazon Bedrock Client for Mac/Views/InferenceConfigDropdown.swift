@@ -50,17 +50,7 @@ struct InferenceConfigDropdown: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(colorScheme == .dark ?
-                          Color(NSColor.controlBackgroundColor).opacity(0.8) :
-                            Color(NSColor.controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isHovering ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.05), radius: isHovering ? 3 : 2, x: 0, y: 1)
-            )
+            .modifier(LiquidGlassDropdownModifier(isHovering: isHovering, colorScheme: colorScheme))
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovering in
@@ -183,6 +173,7 @@ struct InferenceConfigPopoverContent: View {
                         .frame(height: 20)
                 }
             }
+            .modifier(ScrollEdgeEffectModifier())
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: config.overrideDefault)
         }
     }
@@ -802,7 +793,7 @@ struct InferenceConfigPopoverContent: View {
                 Text("High").tag("high")
             }
             .pickerStyle(SegmentedPickerStyle())
-            .onChange(of: selectedReasoningEffort) { newValue in
+            .onChange(of: selectedReasoningEffort) { _, newValue in
                 updateReasoningEffort(newValue)
             }
             .onAppear {
@@ -911,3 +902,4 @@ struct CustomSlider: View {
         }
     }
 }
+

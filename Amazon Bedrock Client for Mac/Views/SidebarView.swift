@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import Logging
 
 // MARK: - Chat Search Index
 
@@ -204,6 +205,8 @@ struct SidebarView: View {
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @ObservedObject var appCoordinator = AppCoordinator.shared
     
+    private let logger = Logger(label: "SidebarView")
+    
     @State private var showingClearChatAlert = false
     @State private var organizedChatModels: [String: [ChatModel]] = [:]
     @State private var selectionId = UUID()
@@ -232,6 +235,8 @@ struct SidebarView: View {
         formatter.dateFormat = "MMMM dd, yyyy"
         return formatter
     }()
+    
+
     
     // Keys sorted by date for grouping chats
     private var sortedDateKeys: [String] {
@@ -304,13 +309,15 @@ struct SidebarView: View {
                     }
                 }
                 .onChange(of: appCoordinator.shouldCreateNewChat) { _, newValue in
-                    if newValue && !appCoordinator.isProcessingQuickAccess {
-                        createNewChat()
+                    if newValue {
+                        // Prevent duplicate chat creation
                         appCoordinator.shouldCreateNewChat = false
-                    } else if newValue && appCoordinator.isProcessingQuickAccess {
-                        // Quick access is processing, create chat for quick access
-                        createNewChat()
-                        appCoordinator.shouldCreateNewChat = false
+                        
+                        // Small delay to ensure state is clean
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                            self.createNewChat()
+                        }
                     }
                 }
                 .onChange(of: appCoordinator.shouldDeleteChat) { _, newValue in
@@ -329,9 +336,36 @@ struct SidebarView: View {
             organizeChatsInitial()
         }
         .onChange(of: chatManager.chats) { oldChats, newChats in
-            // Only reorganize when chat count changes (add/remove)
+            // Immediately reorganize when chat count changes (add/remove)
             if oldChats.count != newChats.count {
-                throttledOrganizeChatsByDate()
+                // Skip throttle for immediate UI update
+                let calendar = Calendar.current
+                let sortedChats = newChats.sorted { $0.lastMessageDate > $1.lastMessageDate }
+                let groupedChats = Dictionary(grouping: sortedChats) { chat -> DateComponents in
+                    calendar.dateComponents([.year, .month, .day], from: chat.lastMessageDate)
+                }
+                
+                let sortedDateComponents = groupedChats.keys.sorted {
+                    if $0.year != $1.year {
+                        return $0.year! > $1.year!
+                    } else if $0.month != $1.month {
+                        return $0.month! > $1.month!
+                    } else {
+                        return $0.day! > $1.day!
+                    }
+                }
+                
+                var newOrganizedModels: [String: [ChatModel]] = [:]
+                for components in sortedDateComponents {
+                    if let date = calendar.date(from: components) {
+                        let key = self.formatDate(date)
+                        if let chatsForDate = groupedChats[components] {
+                            newOrganizedModels[key] = chatsForDate
+                        }
+                    }
+                }
+                
+                self.organizedChatModels = newOrganizedModels
                 // NO indexing here - only when user searches
             }
         }
@@ -376,20 +410,7 @@ struct SidebarView: View {
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(colorScheme == .dark ?
-                          Color(NSColor.controlBackgroundColor) :
-                          Color(NSColor.controlColor))
-                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(colorScheme == .dark ?
-                            Color.white.opacity(0.1) :
-                            Color.black.opacity(0.1),
-                            lineWidth: 0.5)
-            )
+            .modifier(LiquidGlassButtonModifier(colorScheme: colorScheme))
         }
         .buttonStyle(PlainButtonStyle())
         .help("Start a new chat")
@@ -427,20 +448,7 @@ struct SidebarView: View {
             }
         }
         .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(colorScheme == .dark ?
-                      Color(NSColor.textBackgroundColor).opacity(0.8) :
-                        Color(NSColor.textBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                            Color.black.opacity(0.1),
-                        lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .modifier(LiquidGlassSearchBarModifier(colorScheme: colorScheme))
     }
     
     // MARK: - Chat List View
@@ -490,6 +498,7 @@ struct SidebarView: View {
                 }
             }
         }
+        .modifier(ScrollEdgeEffectModifier())
         .contextMenu {
             Button("Delete All Chats", action: {
                 showingClearChatAlert = true
@@ -559,13 +568,10 @@ struct SidebarView: View {
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected ?
-                      Color.blue.opacity(0.15) :
-                        (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+                      Color.accentColor.opacity(0.12) :
+                        (isHovered ? Color.gray.opacity(0.08) : Color.clear))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
-        )
+        .modifier(ChatRowBorderModifier(isSelected: isSelected))
         .contentShape(Rectangle())
         .onHover { hover in
             if !isRenaming {
@@ -635,14 +641,18 @@ struct SidebarView: View {
             // Don't trigger immediate indexing here - it's already happening in background
             // Just wait for it to complete
             searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                self.executeSearch()
+                Task { @MainActor in
+                    executeSearch()
+                }
             }
             return
         }
         
         // Set new timer for debounced search (faster than chat search - 0.2s)
         searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
-            self.executeSearch()
+            Task { @MainActor in
+                executeSearch()
+            }
         }
     }
     
@@ -667,37 +677,37 @@ struct SidebarView: View {
     
     /// Creates a new chat with the currently selected model
     private func createNewChat() {
-        if let modelSelection = menuSelection, case .chat(let model) = modelSelection {
-            chatManager.createNewChat(modelId: model.id, modelName: model.name, modelProvider: model.provider) { newChat in
-                // 1. Add only the new chat, without resorting the entire list
-                incrementalAddChat(newChat)
-                
-                // 2. Update selection
-                self.selection = .chat(newChat)
-                
-                // 3. Update selectionId (needed only for selection changes)
-                self.selectionId = UUID()
-                
-                // 4. Mark that search index needs update for this new chat
-                Task(priority: .background) {
-                    await MainActor.run {
-                        // Reset indexed chat IDs to force reindex when search is used
-                        searchIndex.indexedChatIds.remove(newChat.chatId)
-                    }
+        guard let modelSelection = menuSelection, case .chat(let model) = modelSelection else {
+            logger.warning("No model selected for new chat creation")
+            return
+        }
+        
+        chatManager.createNewChat(modelId: model.id, modelName: model.name, modelProvider: model.provider) { newChat in
+            // ChatManager already added the chat to its array, so we don't need to add it again
+            // Just update the selection
+            self.selection = .chat(newChat)
+            self.selectionId = UUID()
+            
+            // Mark that search index needs update for this new chat
+            Task(priority: .background) {
+                await MainActor.run {
+                    // Reset indexed chat IDs to force reindex when search is used
+                    self.searchIndex.indexedChatIds.remove(newChat.chatId)
                 }
+            }
+            
+            // Handle quick access message and attachments if available
+            if let _ = AppCoordinator.shared.quickAccessMessage,
+               AppCoordinator.shared.isProcessingQuickAccess {
                 
-                // 5. Handle quick access message and attachments if available
-                if let quickMessage = AppCoordinator.shared.quickAccessMessage,
-                   AppCoordinator.shared.isProcessingQuickAccess {
-                    
-                    // Set target chat ID for the message
-                    AppCoordinator.shared.targetChatId = newChat.chatId
-                    
-                    // Clear processing flag after a delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        AppCoordinator.shared.isProcessingQuickAccess = false
-                        AppCoordinator.shared.targetChatId = nil
-                    }
+                // Set target chat ID for the message
+                AppCoordinator.shared.targetChatId = newChat.chatId
+                
+                // Clear processing flag after a delay
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                    AppCoordinator.shared.isProcessingQuickAccess = false
+                    AppCoordinator.shared.targetChatId = nil
                 }
             }
         }
@@ -887,5 +897,97 @@ struct SidebarView: View {
         renamingChatId = nil
         renameText = ""
         renamingTextfieldFocused = false
+    }
+}
+
+
+// MARK: - Liquid Glass Modifiers for Sidebar
+
+// MARK: - Sidebar UI Modifiers (macOS 26+ Messages App Style, earlier versions with borders)
+
+struct LiquidGlassButtonModifier: ViewModifier {
+    let colorScheme: ColorScheme
+    
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            // macOS 26+: Subtle glass effect
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ?
+                              Color.white.opacity(0.08) :
+                              Color.black.opacity(0.05))
+                )
+        } else {
+            // macOS 25 and earlier: Original style with border and shadow
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ?
+                              Color(NSColor.controlBackgroundColor) :
+                              Color(NSColor.controlColor))
+                        .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(colorScheme == .dark ?
+                                Color.white.opacity(0.1) :
+                                Color.black.opacity(0.1),
+                                lineWidth: 0.5)
+                )
+        }
+    }
+}
+
+struct LiquidGlassSearchBarModifier: ViewModifier {
+    let colorScheme: ColorScheme
+    
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            // macOS 26+: Subtle glass effect
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ?
+                              Color.white.opacity(0.08) :
+                              Color.black.opacity(0.05))
+                )
+        } else {
+            // macOS 25 and earlier: Original style with border and shadow
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ?
+                              Color(NSColor.textBackgroundColor).opacity(0.8) :
+                              Color(NSColor.textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(colorScheme == .dark ?
+                                Color.white.opacity(0.1) :
+                                Color.black.opacity(0.1),
+                                lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        }
+    }
+}
+
+// MARK: - Chat Row Border Modifier (macOS 25 and earlier only)
+struct ChatRowBorderModifier: ViewModifier {
+    let isSelected: Bool
+    
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            // macOS 26+: No border
+            content
+        } else {
+            // macOS 25 and earlier: Show border when selected
+            content
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
+        }
     }
 }

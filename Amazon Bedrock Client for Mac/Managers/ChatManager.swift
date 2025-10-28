@@ -105,7 +105,6 @@ struct ConversationHistory: Codable {
     }
 }
 
-// Fix for concurrency issues
 @MainActor
 class ChatManager: ObservableObject {
     @Published var chats: [ChatModel] = []
@@ -226,7 +225,6 @@ class ChatManager: ObservableObject {
     // MARK: - Chat Management
     
     func createNewChat(modelId: String, modelName: String, modelProvider: String, completion: @escaping (ChatModel) -> Void) {
-        // Create a temporary chat that's not saved to CoreData yet
         let chatModel = ChatModel(
             id: modelId,
             chatId: UUID().uuidString,
@@ -237,18 +235,50 @@ class ChatManager: ObservableObject {
             lastMessageDate: Date()
         )
         
-        // Store as temporary chat
-        temporaryChats[chatModel.chatId] = chatModel
+        let chatId = chatModel.chatId
+        let modelIdValue = chatModel.id
         
-        // Create empty conversation history in memory
-        let history = ConversationHistory(chatId: chatModel.chatId, modelId: chatModel.id)
-        saveConversationHistory(history, for: chatModel.chatId)
+        // Immediately add to UI
+        self.chats.append(chatModel)
+        self.chatIsLoading[chatId] = false
+        self.objectWillChange.send()
         
-        DispatchQueue.main.async {
-            self.chats.append(chatModel)
-            self.chatIsLoading[chatModel.chatId] = false
-            self.objectWillChange.send()
-            completion(chatModel)
+        // Create empty conversation history
+        let history = ConversationHistory(chatId: chatId, modelId: modelIdValue)
+        self.saveConversationHistory(history, for: chatId)
+        
+        // Call completion immediately
+        completion(chatModel)
+        
+        // Save to CoreData in background
+        let context = coreDataStack.viewContext
+        Task {
+            await context.perform { [weak self] in
+                guard let self = self else { return }
+                
+                let newChat = NSEntityDescription.insertNewObject(forEntityName: "ChatEntity", into: context) as! ChatEntity
+                newChat.id = chatModel.id
+                newChat.chatId = chatModel.chatId
+                newChat.name = chatModel.name
+                newChat.title = chatModel.title
+                newChat.chatDescription = chatModel.description
+                newChat.provider = chatModel.provider
+                newChat.lastMessageDate = chatModel.lastMessageDate
+                newChat.isManuallyRenamed = chatModel.isManuallyRenamed
+                
+                do {
+                    try context.save()
+                    Task { @MainActor [weak self] in
+                        self?.logger.info("Saved new chat to CoreData: \(chatId)")
+                    }
+                } catch {
+                    Task { @MainActor [weak self] in
+                        self?.logger.error("Failed to save new chat to CoreData: \(error)")
+                        // Mark as temporary chat if CoreData save fails
+                        self?.temporaryChats[chatId] = chatModel
+                    }
+                }
+            }
         }
     }
     
@@ -257,8 +287,10 @@ class ChatManager: ObservableObject {
     func cleanupEmptyChats() {
         logger.info("Cleaning up empty chats...")
         
-        let context = coreDataStack.viewContext
-        context.perform {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            
+            let context = self.coreDataStack.viewContext
             let fetchRequest: NSFetchRequest<ChatEntity> = ChatEntity.fetchRequest()
             
             do {
@@ -268,16 +300,27 @@ class ChatManager: ObservableObject {
                 for chat in allChats {
                     guard let chatId = chat.chatId else { continue }
                     
+                    // Skip cleanup for temporary chats (not yet saved to CoreData)
+                    if self.temporaryChats[chatId] != nil {
+                        continue
+                    }
+                    
+                    // Only delete chats that are older than 5 minutes and have no messages
+                    let chatAge = Date().timeIntervalSince(chat.lastMessageDate ?? Date())
+                    if chatAge < 300 { // 5 minutes
+                        continue
+                    }
+                    
                     // Check if chat has any messages
                     if let history = self.getConversationHistory(for: chatId) {
                         if history.messages.isEmpty {
                             chatsToDelete.append(chat)
-                            self.logger.info("Marking empty chat for deletion: \(chatId)")
+                            self.logger.info("Marking old empty chat for deletion: \(chatId)")
                         }
                     } else {
-                        // No history file means empty chat
+                        // No history file means empty chat, but only delete if old enough
                         chatsToDelete.append(chat)
-                        self.logger.info("Marking chat with no history for deletion: \(chatId)")
+                        self.logger.info("Marking old chat with no history for deletion: \(chatId)")
                     }
                 }
                 
@@ -294,11 +337,7 @@ class ChatManager: ObservableObject {
                 if !chatsToDelete.isEmpty {
                     try context.save()
                     self.logger.info("Deleted \(chatsToDelete.count) empty chats")
-                    
-                    // Reload chats to update UI
-                    DispatchQueue.main.async {
-                        self.loadChats()
-                    }
+                    self.loadChats()
                 }
                 
             } catch {
@@ -343,29 +382,37 @@ class ChatManager: ObservableObject {
     
     // Save temporary chat to CoreData when first message is added
     private func saveTemporaryChatToCoreData(_ chatModel: ChatModel) {
-        guard temporaryChats[chatModel.chatId] != nil else { return }
+        let chatId = chatModel.chatId
         
-        let context = coreDataStack.viewContext
-        context.perform {
-            let newChat = NSEntityDescription.insertNewObject(forEntityName: "ChatEntity", into: context) as! ChatEntity
-            newChat.id = chatModel.id
-            newChat.chatId = chatModel.chatId
-            newChat.name = chatModel.name
-            newChat.title = chatModel.title
-            newChat.chatDescription = chatModel.description
-            newChat.provider = chatModel.provider
-            newChat.lastMessageDate = chatModel.lastMessageDate
-            newChat.isManuallyRenamed = chatModel.isManuallyRenamed
+        Task { @MainActor [weak self, chatModel] in
+            guard let self = self else { return }
+            guard temporaryChats[chatId] != nil else { return }
             
-            do {
-                try context.save()
-                DispatchQueue.main.async {
-                    // Remove from temporary chats since it's now saved
-                    self.temporaryChats.removeValue(forKey: chatModel.chatId)
-                    self.logger.info("Saved temporary chat to CoreData: \(chatModel.chatId)")
+            let context = coreDataStack.viewContext
+            await context.perform {
+                let newChat = NSEntityDescription.insertNewObject(forEntityName: "ChatEntity", into: context) as! ChatEntity
+                newChat.id = chatModel.id
+                newChat.chatId = chatModel.chatId
+                newChat.name = chatModel.name
+                newChat.title = chatModel.title
+                newChat.chatDescription = chatModel.description
+                newChat.provider = chatModel.provider
+                newChat.lastMessageDate = chatModel.lastMessageDate
+                newChat.isManuallyRenamed = chatModel.isManuallyRenamed
+                
+                do {
+                    try context.save()
+                    Task { @MainActor [weak self] in
+                        guard let self = self else { return }
+                        // Remove from temporary chats since it's now saved
+                        self.temporaryChats.removeValue(forKey: chatId)
+                        self.logger.info("Saved temporary chat to CoreData: \(chatId)")
+                    }
+                } catch {
+                    Task { @MainActor [weak self] in
+                        self?.logger.error("Failed to save temporary chat to CoreData: \(error)")
+                    }
                 }
-            } catch {
-                self.logger.error("Failed to save temporary chat to CoreData: \(error)")
             }
         }
     }
@@ -418,6 +465,7 @@ class ChatManager: ObservableObject {
         // Remove from in-memory array
         if let index = chats.firstIndex(where: { $0.chatId == chatId }) {
             chats.remove(at: index)
+            objectWillChange.send()
         }
         
         // Delete all associated files

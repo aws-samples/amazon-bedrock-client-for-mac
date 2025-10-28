@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import Logging
 
+@MainActor
 class UpdateManager {
     // Singleton instance
     static let shared: UpdateManager = {
@@ -64,28 +65,30 @@ class UpdateManager {
         updateTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
             
-            if let error = error {
-                self.logger.error("Update check failed: \(error.localizedDescription)")
-                return
+            Task { @MainActor in
+                if let error = error {
+                    self.logger.error("Update check failed: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    self.logger.error("Invalid response from update server")
+                    return
+                }
+                
+                guard let data = data else {
+                    self.logger.error("No data received from update server")
+                    return
+                }
+                
+                await self.processReleaseData(data)
             }
-            
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                self.logger.error("Invalid response from update server")
-                return
-            }
-            
-            guard let data = data else {
-                self.logger.error("No data received from update server")
-                return
-            }
-            
-            self.processReleaseData(data)
         }
         
         updateTask?.resume()
     }
     
-    private func processReleaseData(_ data: Data) {
+    private func processReleaseData(_ data: Data) async {
         do {
             let decoder = JSONDecoder()
             let releaseInfo = try decoder.decode(ReleaseInfo.self, from: data)
@@ -130,31 +133,33 @@ class UpdateManager {
     }
     
     private func showUpdateAlert(latestVersion: String, downloadURL: URL) {
-        let alert = NSAlert()
-        alert.messageText = "Update Available"
-        alert.informativeText = "A new version (\(latestVersion)) is available. Would you like to update now?"
-        alert.addButton(withTitle: "Update Now")
-        alert.addButton(withTitle: "Later")
-        alert.addButton(withTitle: "Disable Auto Updates")
-        
-        let response = alert.runModal()
-        
-        switch response {
-        case .alertFirstButtonReturn:
-            // User chose "Update Now"
-            downloadAndInstallUpdate(latestVersion: latestVersion, downloadURL: downloadURL)
-        case .alertThirdButtonReturn:
-            // User chose "Disable Auto Updates"
-            SettingManager.shared.checkForUpdates = false
+        Task { @MainActor in
+            let alert = NSAlert()
+            alert.messageText = "Update Available"
+            alert.informativeText = "A new version (\(latestVersion)) is available. Would you like to update now?"
+            alert.addButton(withTitle: "Update Now")
+            alert.addButton(withTitle: "Later")
+            alert.addButton(withTitle: "Disable Auto Updates")
             
-            let disabledAlert = NSAlert()
-            disabledAlert.messageText = "Auto Updates Disabled"
-            disabledAlert.informativeText = "Automatic updates have been disabled. You can re-enable them in the application settings."
-            disabledAlert.addButton(withTitle: "OK")
-            disabledAlert.runModal()
-        default:
-            // User chose "Later"
-            logger.debug("Update deferred by user")
+            let response = alert.runModal()
+            
+            switch response {
+            case .alertFirstButtonReturn:
+                // User chose "Update Now"
+                downloadAndInstallUpdate(latestVersion: latestVersion, downloadURL: downloadURL)
+            case .alertThirdButtonReturn:
+                // User chose "Disable Auto Updates"
+                SettingManager.shared.checkForUpdates = false
+                
+                let disabledAlert = NSAlert()
+                disabledAlert.messageText = "Auto Updates Disabled"
+                disabledAlert.informativeText = "Automatic updates have been disabled. You can re-enable them in the application settings."
+                disabledAlert.addButton(withTitle: "OK")
+                disabledAlert.runModal()
+            default:
+                // User chose "Later"
+                logger.debug("Update deferred by user")
+            }
         }
     }
     
@@ -178,7 +183,9 @@ class UpdateManager {
         let dmgPath = updatesDir.appendingPathComponent("AmazonBedrockClientUpdate.dmg")
         
         // Create progress window
-        progressWindow = createProgressWindow()
+        Task { @MainActor in
+            progressWindow = createProgressWindow()
+        }
         
         // Download DMG file
         downloadTask = URLSession.shared.downloadTask(with: downloadURL) { [weak self] localURL, response, error in
@@ -209,7 +216,9 @@ class UpdateManager {
                     // Move downloaded file to updates directory
                     try FileManager.default.moveItem(at: localURL, to: dmgPath)
                     
-                    self.installUpdate(dmgPath: dmgPath)
+                    Task { @MainActor in
+                        await self.installUpdate(dmgPath: dmgPath)
+                    }
                     
                 } catch {
                     self.logger.error("Failed to prepare update: \(error.localizedDescription)")
@@ -221,6 +230,7 @@ class UpdateManager {
         downloadTask?.resume()
     }
     
+    @MainActor
     private func createProgressWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 100),
@@ -245,12 +255,14 @@ class UpdateManager {
         window.contentView?.addSubview(progressIndicator)
         window.contentView?.addSubview(label)
         
-        window.makeKeyAndOrderFront(nil)
+        Task { @MainActor in
+            window.makeKeyAndOrderFront(nil)
+        }
         
         return window
     }
     
-    private func installUpdate(dmgPath: URL) {
+    private func installUpdate(dmgPath: URL) async {
         logger.info("Preparing installation script")
         
         // Create script in the updates directory
@@ -433,12 +445,16 @@ class UpdateManager {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcherScriptPath.path)
             
             // Show user notification before updating
-            let alert = NSAlert()
-            alert.messageText = "Ready to Update"
-            alert.informativeText = "The application will now restart to install the update."
-            alert.addButton(withTitle: "Install")
+            let shouldInstall = await MainActor.run {
+                let alert = NSAlert()
+                alert.messageText = "Ready to Update"
+                alert.informativeText = "The application will now restart to install the update."
+                alert.addButton(withTitle: "Install")
+                
+                return alert.runModal() == .alertFirstButtonReturn
+            }
             
-            if alert.runModal() == .alertFirstButtonReturn {
+            if shouldInstall {
                 // Use NSTask for more reliable script execution
                 let task = Process()
                 task.launchPath = "/bin/bash"

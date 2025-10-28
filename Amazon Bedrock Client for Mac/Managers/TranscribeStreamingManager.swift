@@ -5,13 +5,13 @@
 //  Created by Na, Sanghwa on 2/17/25.
 //
 
-import AVFoundation
+@preconcurrency import AVFoundation
 import AWSTranscribeStreaming
 import AWSClientRuntime
 import Combine
 import Foundation
 import SwiftUI
-import AVKit
+@preconcurrency import AVKit
 
 @MainActor
 class TranscribeStreamingManager: ObservableObject {
@@ -143,7 +143,7 @@ class TranscribeStreamingManager: ObservableObject {
     /// Creates an AsyncThrowingStream that sends microphone audio as PCM chunks.
     private func createAudioStream() -> AsyncThrowingStream<TranscribeStreamingClientTypes.AudioStream, Error> {
         // Capture audioEngine locally.
-        let engine = self.audioEngine
+        nonisolated(unsafe) let engine = self.audioEngine
         let hwFormat = engine.inputNode.inputFormat(forBus: 0)
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                          sampleRate: Double(sampleRate),
@@ -157,14 +157,6 @@ class TranscribeStreamingManager: ObservableObject {
                     userInfo: [NSLocalizedDescriptionKey: "Unable to create audio converter"]
                 ))
             }
-        }
-        
-        // Local conversion function; avoids capturing self.
-        let convertBuffer: (AVAudioPCMBuffer) -> Data? = { buffer in
-            guard let channelData = buffer.int16ChannelData else { return nil }
-            let channelDataPointer = channelData.pointee
-            let frameLength = Int(buffer.frameLength)
-            return Data(bytes: channelDataPointer, count: frameLength * MemoryLayout<Int16>.size)
         }
         
         return AsyncThrowingStream { continuation in

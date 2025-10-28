@@ -35,14 +35,8 @@ struct ModelSelectorDropdown: View {
                         .scaledToFit()
                         .frame(width: 32, height: 32)
                     
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.provider)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(model.name)
-                            .fontWeight(.medium)
-                    }
+                    Text(model.name)
+                        .fontWeight(.medium)
                 } else {
                     Text("Select Model")
                         .fontWeight(.medium)
@@ -57,17 +51,8 @@ struct ModelSelectorDropdown: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(colorScheme == .dark ?
-                          Color(NSColor.controlBackgroundColor).opacity(0.8) :
-                            Color(NSColor.controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isHovering ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.05), radius: isHovering ? 3 : 2, x: 0, y: 1)
-            )
+            .contentShape(Rectangle()) // Make entire area clickable
+            .modifier(LiquidGlassDropdownModifier(isHovering: isHovering, colorScheme: colorScheme))
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovering in
@@ -217,6 +202,7 @@ struct ModelSelectorPopoverContent: View {
                 }
                 .padding(.bottom, 10)
             }
+            .modifier(ScrollEdgeEffectModifier())
         }
         .onAppear {
             // Focus search field when popover appears
@@ -393,6 +379,33 @@ struct ModelImageHelper {
             return Image("openai")
         default:
             return Image("bedrock")
+        }
+    }
+}
+
+// MARK: - Liquid Glass Dropdown Modifier (macOS 26+ transparent, earlier versions with border)
+struct LiquidGlassDropdownModifier: ViewModifier {
+    let isHovering: Bool
+    let colorScheme: ColorScheme
+    
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            // macOS 26+: Transparent, no border
+            content
+        } else {
+            // macOS 25 and earlier: Show border and background
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ?
+                              Color(NSColor.controlBackgroundColor).opacity(0.8) :
+                              Color(NSColor.controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isHovering ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.05), radius: isHovering ? 3 : 2, x: 0, y: 1)
+                )
         }
     }
 }

@@ -15,6 +15,7 @@ extension Notification.Name {
     static let mcpEnabledChanged = Notification.Name("mcpEnabledChanged")  // 추가
 }
 
+@MainActor
 class SettingManager: ObservableObject {
     static let shared = SettingManager()
     private var logger = Logger(label: "SettingManager")
@@ -147,6 +148,7 @@ class SettingManager: ObservableObject {
         }
 
         self.profiles = Self.readAWSProfiles()
+        logger.info("Loaded \(self.profiles.count) AWS profiles: \(self.profiles.map { $0.name }.joined(separator: ", "))")
         
         //        if let data = UserDefaults.standard.data(forKey: "ssoTokenInfo"),
         //           let tokenInfo = try? JSONDecoder().decode(SSOTokenInfo.self, from: data) {
@@ -277,13 +279,16 @@ class SettingManager: ObservableObject {
     static func readAWSProfiles() -> [ProfileInfo] {
         var profiles: [ProfileInfo] = []
         
+        // Get the actual home directory (not sandboxed)
+        let actualHome = FileManager.default.homeDirectoryForCurrentUser.path
+        
         // Read regular profiles from ~/.aws/credentials
         let credentialsProfiles = readProfilesFromFile(
-            path: "~/.aws/credentials", type: .credentials)
+            path: "\(actualHome)/.aws/credentials", type: .credentials)
         profiles.append(contentsOf: credentialsProfiles)
         
         // Read profiles from ~/.aws/config including SSO and credential_process
-        let configProfiles = readProfilesFromConfig(path: "~/.aws/config")
+        let configProfiles = readProfilesFromConfig(path: "\(actualHome)/.aws/config")
         profiles.append(contentsOf: configProfiles)
         
         // Return unique profiles
@@ -292,14 +297,23 @@ class SettingManager: ObservableObject {
     
     // Read profiles from a file (used for ~/.aws/credentials)
     static func readProfilesFromFile(path: String, type: ProfileInfo.ProfileType) -> [ProfileInfo] {
-        let expandedPath = NSString(string: path).expandingTildeInPath
+        // Use the path as-is (already expanded in readAWSProfiles)
+        let expandedPath = path
+        staticLogger.info("Attempting to read profiles from: \(expandedPath)")
         
         // Attempt to read the file contents
         guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
-            staticLogger.info("Error reading file: \(path)")
+            staticLogger.error("Failed to read file: \(path) (expanded: \(expandedPath))")
+            // Check if file exists
+            if FileManager.default.fileExists(atPath: expandedPath) {
+                staticLogger.error("File exists but cannot be read - permission issue?")
+            } else {
+                staticLogger.error("File does not exist at path")
+            }
             return []
         }
         
+        staticLogger.info("Successfully read file, parsing profiles...")
         let lines = contents.components(separatedBy: .newlines)
         var profiles: [ProfileInfo] = []
         
@@ -308,21 +322,32 @@ class SettingManager: ObservableObject {
             if line.starts(with: "[") && line.hasSuffix("]") {
                 let profileName = String(line.dropFirst().dropLast())
                 profiles.append(ProfileInfo(name: profileName, type: type))
+                staticLogger.info("Found profile: \(profileName)")
             }
         }
         
+        staticLogger.info("Parsed \(profiles.count) profiles from \(path)")
         return profiles
     }
     
     // Read all profiles from ~/.aws/config including SSO and credential_process
     static func readProfilesFromConfig(path: String) -> [ProfileInfo] {
-        let expandedPath = NSString(string: path).expandingTildeInPath
+        // Use the path as-is (already expanded in readAWSProfiles)
+        let expandedPath = path
+        staticLogger.info("Attempting to read config from: \(expandedPath)")
         
         // Attempt to read the file contents
         guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
-            staticLogger.info("Error reading file: \(path)")
+            staticLogger.error("Failed to read config file: \(path)")
+            if FileManager.default.fileExists(atPath: expandedPath) {
+                staticLogger.error("Config file exists but cannot be read - permission issue?")
+            } else {
+                staticLogger.error("Config file does not exist at path")
+            }
             return []
         }
+        
+        staticLogger.info("Successfully read config file, parsing profiles...")
         
         let lines = contents.components(separatedBy: .newlines)
         var profiles: [ProfileInfo] = []
@@ -400,7 +425,9 @@ class SettingManager: ObservableObject {
         }
         
         // Update the server list without triggering didSet (to avoid immediate saving)
-        self.mcpServers = mergedServers
+        Task { @MainActor in
+            self.mcpServers = mergedServers
+        }
     }
     
     // Load server list from UserDefaults

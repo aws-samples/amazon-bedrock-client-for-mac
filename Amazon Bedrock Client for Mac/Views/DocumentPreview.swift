@@ -474,9 +474,10 @@ struct EnhancedPDFPreview: NSViewRepresentable {
             
             // Directly assign the non-optional Int value
             let pageIndex = document.index(for: currentPage)
+            let parent = self.parent
             
-            DispatchQueue.main.async {
-                self.parent.currentPage = pageIndex + 1
+            Task { @MainActor in
+                parent.currentPage = pageIndex + 1
             }
         }
     }

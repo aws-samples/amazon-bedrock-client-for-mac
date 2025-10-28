@@ -907,7 +907,8 @@ struct HTMLStringView: NSViewRepresentable {
         }
         
         // Handle link clicks - open in default browser instead of loading inline
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        @MainActor
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated {
                 if let url = navigationAction.request.url {
                     // Open in default browser instead of loading inline

@@ -10,6 +10,7 @@ import Carbon
 import SwiftUI
 import Logging
 
+@MainActor
 class HotkeyManager: ObservableObject {
     static let shared = HotkeyManager()
     
@@ -68,8 +69,8 @@ class HotkeyManager: ObservableObject {
     }
     
     deinit {
-        unregisterHotkey()
-        removeEventHandler()
+        // Note: Cannot safely call async methods in deinit
+        // Cleanup will happen when the object is deallocated
         NotificationCenter.default.removeObserver(self)
     }
     

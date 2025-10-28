@@ -40,7 +40,7 @@ struct MCPToolInfo: Identifiable, Hashable {
     init(serverName: String, tool: Tool) {
         self.serverName = serverName
         self.toolName = tool.name
-        self.description = tool.description ?? "No description available"
+        self.description = tool.description.isEmpty ? "No description available" : tool.description
         self.tool = tool
     }
     

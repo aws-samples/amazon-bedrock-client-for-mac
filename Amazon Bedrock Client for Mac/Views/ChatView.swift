@@ -10,7 +10,7 @@ import Combine
 
 struct BottomAnchorPreferenceKey: PreferenceKey {
     typealias Value = CGFloat
-    static var defaultValue: CGFloat = 0
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
@@ -105,11 +105,10 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(ToolbarButtonStyle())
+                .buttonStyle(LiquidGlassToolbarButtonStyle())
                 .help("Find")
                 .keyboardShortcut("f", modifiers: [.command])
             }
@@ -234,6 +233,7 @@ struct ChatView: View {
         return ScrollView {
             messageList
         }
+        .modifier(ScrollEdgeEffectModifier())
         .onChange(of: viewModel.messages) { _, _ in
             // If the user was at bottom and not searching, wait briefly for layout and scroll down again
             if isAtBottom && searchQuery.isEmpty {
@@ -457,7 +457,9 @@ struct ChatView: View {
         
         // Set new timer for debounced search
         searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
-            performSearch(query: query)
+            Task { @MainActor in
+                performSearch(query: query)
+            }
         }
     }
     
@@ -597,8 +599,10 @@ struct ChatView: View {
         
         // Hide after 3 seconds
         usageToastTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                showUsageToast = false
+            Task { @MainActor in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showUsageToast = false
+                }
             }
         }
     }
@@ -645,3 +649,4 @@ struct ChatView: View {
         }
     }
 }
+
