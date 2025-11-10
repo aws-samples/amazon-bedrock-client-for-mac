@@ -39,7 +39,7 @@ jobs:
     # Set Xcode Version - use stable 16.0 instead of RC
     - uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: '16.0'
+        xcode-version: '26.0.1'
 
     # Build Xcode Project for both architectures
     - name: Build Xcode Project
