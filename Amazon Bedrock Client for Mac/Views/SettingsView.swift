@@ -36,25 +36,29 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Custom tab bar
+            // Custom tab bar with icons
             HStack(spacing: 0) {
                 ForEach(SettingsTab.allCases) { tab in
                     Button {
                         selectedTab = tab
                     } label: {
-                        Text(tab.title)
-                            .font(.system(size: 13))
-                            .fontWeight(selectedTab == tab ? .semibold : .regular)
-                            .foregroundStyle(selectedTab == tab ? .primary : .secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                            .background(
-                                selectedTab == tab ?
-                                    Color(nsColor: .controlBackgroundColor) :
-                                    Color.clear
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.imageName)
+                                .font(.system(size: 13))
+                            Text(tab.title)
+                                .font(.system(size: 13))
+                        }
+                        .fontWeight(selectedTab == tab ? .semibold : .regular)
+                        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .background(
+                            selectedTab == tab ?
+                                Color(nsColor: .controlBackgroundColor) :
+                                Color.clear
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                 }
@@ -69,24 +73,61 @@ struct SettingsView: View {
             Group {
                 switch selectedTab {
                 case .general:
-                    GeneralSettingsView()
+                    GeneralSettingsView(organizedChatModels: organizedChatModels)
                 case .developer:
                     DeveloperSettingsView()
                 }
             }
         }
         .frame(width: 650, height: 650)
+        .onAppear {
+            fetchModels()
+        }
+    }
+    
+    @State private var organizedChatModels: [String: [ChatModel]] = [:]
+    
+    private func fetchModels() {
+        let backend = BackendModel().backend
+        
+        Task {
+            async let foundationModelsResult = backend.listFoundationModels()
+            async let inferenceProfilesResult = backend.listInferenceProfiles()
+            
+            let (foundationModels, inferenceProfiles) = await (
+                foundationModelsResult,
+                inferenceProfilesResult
+            )
+            
+            let foundationChatModels = Dictionary(
+                grouping: (try? foundationModels.get())?.map(ChatModel.fromSummary) ?? []
+            ) { $0.provider }
+            
+            let inferenceChatModels = Dictionary(
+                grouping: inferenceProfiles.map { ChatModel.fromInferenceProfile($0) }
+            ) { $0.provider }
+            
+            let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
+                current
+            }
+            
+            await MainActor.run {
+                self.organizedChatModels = mergedChatModels
+            }
+        }
     }
 }
 
 // MARK: - General Settings
 
 struct GeneralSettingsView: View {
+    let organizedChatModels: [String: [ChatModel]]
     @ObservedObject private var settingsManager = SettingManager.shared
     @State private var showPausedRegions: Bool = false
     @State private var showGovCloudRegions: Bool = false
     @State private var tempHotkeyModifiers: UInt32 = 0
     @State private var tempHotkeyKeyCode: UInt32 = 0
+    @State private var modelSelection: SidebarSelection?
     
     var body: some View {
         Form {
@@ -154,13 +195,10 @@ struct GeneralSettingsView: View {
             // Application Settings
             Section("Application") {
                 Toggle("Check for Updates", isOn: $settingsManager.checkForUpdates)
-                    .controlSize(.large)
                 
                 Toggle("Show Usage Information", isOn: $settingsManager.showUsageInfo)
-                    .controlSize(.large)
                 
                 Toggle("Enable Quick Access", isOn: $settingsManager.enableQuickAccess)
-                    .controlSize(.large)
                 
                 if settingsManager.enableQuickAccess {
                     LabeledContent("Hotkey") {
@@ -195,17 +233,42 @@ struct GeneralSettingsView: View {
                         applyAppearance(newValue)
                     }
                 }
+                
+                LabeledContent("Text Size") {
+                    FontSizeControl()
+                }
             }
             
             // Model Settings
             Section("Model Settings") {
-                LabeledContent("Default Model") {
-                    Picker("", selection: $settingsManager.defaultModelId) {
-                        ForEach(settingsManager.availableModels, id: \.id) { model in
-                            Text(model.id).tag(model.id)
-                        }
+                HStack(alignment: .center) {
+                    Text("Default Model")
+                    
+                    Spacer()
+                    
+                    if !organizedChatModels.isEmpty {
+                        ModelSelectorDropdown(
+                            organizedChatModels: organizedChatModels,
+                            menuSelection: $modelSelection,
+                            handleSelectionChange: { newSelection in
+                                if case let .chat(model) = newSelection {
+                                    settingsManager.defaultModelId = model.id
+                                }
+                            }
+                        )
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(maxWidth: 300, alignment: .trailing)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
                     }
-                    .labelsHidden()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onAppear {
+                    // Initialize modelSelection from defaultModelId
+                    if let defaultModel = settingsManager.availableModels.first(where: { $0.id == settingsManager.defaultModelId }) {
+                        modelSelection = .chat(defaultModel)
+                    }
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -222,6 +285,8 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             applyAppearance(settingsManager.appearance)
         }
@@ -253,7 +318,6 @@ struct DeveloperSettingsView: View {
             // Model Context Protocol
             Section {
                 Toggle("Enable MCP", isOn: $settingsManager.mcpEnabled)
-                    .controlSize(.large)
             } header: {
                 Text("Model Context Protocol")
             } footer: {
@@ -389,13 +453,11 @@ struct DeveloperSettingsView: View {
                 }
                 
                 Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
-                    .controlSize(.large)
             }
             
             // Local Server
             Section {
                 Toggle("Enable Local Server", isOn: $settingsManager.enableLocalServer)
-                    .controlSize(.large)
                 
                 if settingsManager.enableLocalServer {
                     LabeledContent("Server Port") {
@@ -425,6 +487,8 @@ struct DeveloperSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $showingAddServerSheet) {
             ServerFormView(isPresented: $showingAddServerSheet)
         }
@@ -936,5 +1000,62 @@ struct ServerFormView: View {
         }
         
         return true
+    }
+}
+
+// MARK: - Font Size Control
+
+struct FontSizeControl: View {
+    @AppStorage("adjustedFontSize") private var adjustedFontSize: Int = -1
+    
+    // Map internal values to display values (0-12 scale)
+    private var displayValue: Int {
+        adjustedFontSize + 5  // -4 becomes 1, -1 becomes 4, 0 becomes 5, 8 becomes 13
+    }
+    
+    private func setDisplayValue(_ value: Int) {
+        adjustedFontSize = value - 5  // Convert back to internal scale
+    }
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                if adjustedFontSize > -4 {
+                    adjustedFontSize -= 1
+                }
+            } label: {
+                Image(systemName: "textformat.size.smaller")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .disabled(adjustedFontSize <= -4)
+            .help("Decrease text size")
+            
+            Text(fontSizeLabel)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(width: 50)
+            
+            Button {
+                if adjustedFontSize < 8 {
+                    adjustedFontSize += 1
+                }
+            } label: {
+                Image(systemName: "textformat.size.larger")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .disabled(adjustedFontSize >= 8)
+            .help("Increase text size")
+        }
+    }
+    
+    private var fontSizeLabel: String {
+        let displayNum = displayValue
+        if adjustedFontSize == -1 {
+            return "Default"
+        } else {
+            return "\(displayNum)"
+        }
     }
 }
