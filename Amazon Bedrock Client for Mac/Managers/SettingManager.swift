@@ -64,18 +64,11 @@ class SettingManager: ObservableObject {
         }
     }
 
-    var mcpEnabled: Bool {
-        get {
-            return UserDefaults.standard.bool(forKey: "mcpEnabled")
-        }
-        set {
-            let oldValue = UserDefaults.standard.bool(forKey: "mcpEnabled")
-            if oldValue != newValue {
-                UserDefaults.standard.set(newValue, forKey: "mcpEnabled")
-                // 값이 변경되었을 때만 커스텀 알림 전송
-                logger.info("MCP enabled changed: \(oldValue) -> \(newValue)")
-                NotificationCenter.default.post(name: .mcpEnabledChanged, object: nil)
-            }
+    @Published var mcpEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(mcpEnabled, forKey: "mcpEnabled")
+            logger.info("MCP enabled changed: \(oldValue) -> \(mcpEnabled)")
+            NotificationCenter.default.post(name: .mcpEnabledChanged, object: nil)
         }
     }
 
@@ -129,6 +122,7 @@ class SettingManager: ObservableObject {
         self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
+        self.mcpEnabled = UserDefaults.standard.bool(forKey: "mcpEnabled")
         
         // Set default hotkey values if not already set
         if UserDefaults.standard.object(forKey: "hotkeyModifiers") == nil {
