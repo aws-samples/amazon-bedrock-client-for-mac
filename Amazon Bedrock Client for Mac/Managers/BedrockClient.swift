@@ -41,15 +41,9 @@ class BackendModel: ObservableObject {
             if let chain = try? DefaultAWSCredentialIdentityResolverChain() {
                 defaultCredentialProvider = chain
             } else {
-                do {
-                    defaultCredentialProvider = try StaticAWSCredentialIdentityResolver(
-                        AWSCredentialIdentity(accessKey: "", secret: "")
-                    )
-                } catch {
-                    // If even static credentials fail, create a minimal backend
-                    logger.error("Failed to create any credential provider: \(error)")
-                    fatalError("Unable to initialize any AWS credential provider")
-                }
+                defaultCredentialProvider = StaticAWSCredentialIdentityResolver(
+                    AWSCredentialIdentity(accessKey: "", secret: "")
+                )
             }
             self.backend = Backend(
                 region: "us-east-1",
@@ -214,22 +208,22 @@ class Backend: Equatable, @unchecked Sendable {
                  case .credentialProcess:
                      // For credential_process profiles, we use ProfileAWSCredentialIdentityResolver
                      // which automatically handles credential_process directives
-                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                     self.awsCredentialIdentityResolver = ProfileAWSCredentialIdentityResolver(profileName: profile)
                      logger.info("Using credential_process for profile: \(profile)")
                  case .credentials:
-                     self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: profile)
+                     self.awsCredentialIdentityResolver = ProfileAWSCredentialIdentityResolver(profileName: profile)
                      logger.info("Using standard credentials for profile: \(profile)")
                  }
             }
             // Second try: Use default profile if specified profile not found
             else if profile != "default" {
                 logger.warning("Profile '\(profile)' not found, falling back to 'default' profile")
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
+                self.awsCredentialIdentityResolver = ProfileAWSCredentialIdentityResolver(profileName: "default")
             }
             // Third try: Use default profile directly
             else {
                 logger.info("Using default profile")
-                self.awsCredentialIdentityResolver = try ProfileAWSCredentialIdentityResolver(profileName: "default")
+                self.awsCredentialIdentityResolver = ProfileAWSCredentialIdentityResolver(profileName: "default")
             }
         } catch {
             // Final try: Use DefaultAWSCredentialIdentityResolverChain as last resort

@@ -608,17 +608,13 @@ class MCPManager: ObservableObject {
                         var width = 0
                         var height = 0
                         
-                        // Safely extract width
-                        if let widthInt = metadata["width"] as? Int {
-                            width = widthInt
-                        } else if let widthValue = metadata["width"] as? String, let widthInt = Int(widthValue) {
+                        // Safely extract width - metadata values are strings
+                        if let widthValue = metadata["width"], let widthInt = Int(widthValue) {
                             width = widthInt
                         }
                         
-                        // Safely extract height
-                        if let heightInt = metadata["height"] as? Int {
-                            height = heightInt
-                        } else if let heightValue = metadata["height"] as? String, let heightInt = Int(heightValue) {
+                        // Safely extract height - metadata values are strings
+                        if let heightValue = metadata["height"], let heightInt = Int(heightValue) {
                             height = heightInt
                         }
                         

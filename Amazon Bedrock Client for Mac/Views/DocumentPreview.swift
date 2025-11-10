@@ -472,7 +472,7 @@ struct EnhancedPDFPreview: NSViewRepresentable {
                   let currentPage = pdfView.currentPage,
                   let document = pdfView.document else { return }
             
-            // Directly assign the non-optional Int value
+            // Capture values before async context
             let pageIndex = document.index(for: currentPage)
             let parent = self.parent
             
@@ -620,6 +620,8 @@ extension NSBezierPath {
                 path.addCurve(to: points[2], control1: points[0], control2: points[1])
             case .closePath:
                 path.closeSubpath()
+            case .quadraticCurveTo:
+                path.addQuadCurve(to: points[1], control: points[0])
             @unknown default:
                 break
             }
