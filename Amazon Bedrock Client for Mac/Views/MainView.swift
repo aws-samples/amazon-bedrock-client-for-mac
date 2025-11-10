@@ -31,6 +31,10 @@ struct MainView: View {
         NavigationView {
             SidebarView(selection: $selection, menuSelection: $menuSelection)
             contentView()
+                .toolbar {
+                    toolbarContent()
+                }
+                .navigationTitle("")
         }
         .alert(item: $alertInfo) { info in
             Alert(
@@ -43,11 +47,6 @@ struct MainView: View {
             setupQuickAccessMessageHandler()
             setup()
         }
-        .toolbar {
-            toolbarContent()
-        }
-        .modifier(ToolbarBackgroundModifier())
-        .navigationTitle("")
         .onChange(of: backendModel.backend) { _, _ in
             fetchModels()
         }
@@ -241,35 +240,44 @@ struct MainView: View {
     
     @ToolbarContentBuilder
     private func toolbarContent() -> some ToolbarContent {
-        // Left side - Model selector (navigation area)
+        // Left side - New Chat button
         ToolbarItem(placement: .navigation) {
-            HStack(spacing: 6) {
-                Spacer().frame(width: 1) // Required for proper positioning
-                
-                ModelSelectorDropdown(
-                    organizedChatModels: organizedChatModels,
-                    menuSelection: $menuSelection,
-                    handleSelectionChange: handleMenuSelectionChange
-                )
-                .frame(minWidth: 250, maxWidth: 420)
+            Button(action: createNewChat) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.primary)
             }
+            .buttonStyle(LiquidGlassToolbarButtonStyle())
+            .help("New Chat")
         }
         
-        // Inference config dropdown - highest priority, never hidden
-        if case .chat(let selectedModel) = menuSelection {
-            ToolbarItem(placement: .confirmationAction) {
+        // Left side - Model selector (right after pencil button)
+        ToolbarItem(placement: .principal) {
+            ModelSelectorDropdown(
+                organizedChatModels: organizedChatModels,
+                menuSelection: $menuSelection,
+                handleSelectionChange: handleMenuSelectionChange
+            )
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: 200, maxWidth: 420)
+        }
+
+        // Right side - Inference config dropdown
+        ToolbarItem(placement: .primaryAction) {
+            if case .chat(let selectedModel) = menuSelection {
                 InferenceConfigDropdown(
                     currentModelId: .constant(selectedModel.id),
                     backend: backendModel.backend
                 )
-                .frame(minWidth: 80, maxWidth: 110)
+            } else {
+                Color.clear.frame(width: 0, height: 0)
             }
         }
         
-        // Delete button - high priority
-        if case .chat(let chat) = selection,
-           chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
-            ToolbarItem(placement: .confirmationAction) {
+        // Right side - Delete button
+        ToolbarItem(placement: .primaryAction) {
+            if case .chat(let chat) = selection,
+               chatManager.chats.contains(where: { $0.chatId == chat.chatId }) {
                 Button(action: deleteCurrentChat) {
                     Image(systemName: "trash")
                         .font(.system(size: 16))
@@ -277,11 +285,13 @@ struct MainView: View {
                 }
                 .buttonStyle(LiquidGlassToolbarButtonStyle())
                 .help("Delete current chat")
+            } else {
+                Color.clear.frame(width: 0, height: 0)
             }
         }
         
-        // Settings button - always visible
-        ToolbarItem(placement: .confirmationAction) {
+        // Right side - Settings button
+        ToolbarItem(placement: .primaryAction) {
             Button(action: {
                 let settingsView = SettingsView()
                 SettingsWindowManager.shared.openSettings(view: settingsView)
@@ -459,16 +469,7 @@ struct LiquidGlassToolbarButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Toolbar Background Modifier (macOS 26+ only)
-struct ToolbarBackgroundModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.toolbarBackground(.hidden, for: .windowToolbar)
-        } else {
-            content
-        }
-    }
-}
+
 
 // MARK: - Scroll Edge Effect Modifier (Shared)
 struct ScrollEdgeEffectModifier: ViewModifier {

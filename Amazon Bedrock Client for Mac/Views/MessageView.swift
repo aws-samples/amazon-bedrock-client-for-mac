@@ -192,7 +192,7 @@ struct ExpandableMarkdownItem: View {
         VStack(alignment: .leading, spacing: 4) {
             // Toggle button
             Button(action: {
-                withAnimation(.easeInOut(duration: 0.3)) {
+                withAnimation(.spring(response: 0.12, dampingFraction: 0.9, blendDuration: 0)) {
                     isExpanded.toggle()
                 }
             }) {
@@ -200,6 +200,7 @@ struct ExpandableMarkdownItem: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: fontSize - 4))
                         .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : 0))
                     
                     Text(header)
                         .font(.system(size: fontSize - 1, weight: .medium))
@@ -218,24 +219,27 @@ struct ExpandableMarkdownItem: View {
                     searchRanges: searchRanges
                 )
                     .padding(.leading, fontSize / 2)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
+                        removal: .opacity
+                    ))
             }
         }
-        .padding(8)
+        .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(
                     colorScheme == .dark ?
-                    Color.gray.opacity(0.1) :
-                        Color.gray.opacity(0.05)
+                    Color.white.opacity(0.05) :
+                        Color.black.opacity(0.03)
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(
                     colorScheme == .dark ?
-                    Color.gray.opacity(0.2) :
-                        Color.gray.opacity(0.1),
+                    Color.white.opacity(0.1) :
+                        Color.black.opacity(0.06),
                     lineWidth: 0.5
                 )
         )
@@ -298,19 +302,19 @@ struct MessageView: View {
                 // Message content with images and markdown
                 assistantMessageContent
             }
-            .padding()
+            .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(colorScheme == .dark ?
-                          Color(NSColor.controlBackgroundColor).opacity(0.4) :
-                            Color(NSColor.controlBackgroundColor).opacity(0.6))
+                          Color(NSColor.controlBackgroundColor).opacity(0.5) :
+                            Color(NSColor.controlBackgroundColor).opacity(0.7))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(
                         colorScheme == .dark ?
-                        Color.gray.opacity(0.2) :
-                            Color.gray.opacity(0.15),
+                        Color.white.opacity(0.08) :
+                            Color.black.opacity(0.06),
                         lineWidth: 0.5
                     )
             )
@@ -477,16 +481,16 @@ struct MessageView: View {
     // MARK: - User Message Bubble
     private var userMessageBubble: some View {
         // Cache complex views to avoid unnecessary recalculations
-        let messageBackground = RoundedRectangle(cornerRadius: 12)
+        let messageBackground = RoundedRectangle(cornerRadius: 16)
             .fill(colorScheme == .dark ?
-                  Color.gray.opacity(0.25) :
-                  Color.gray.opacity(0.15))
+                  Color.white.opacity(0.08) :
+                  Color.black.opacity(0.04))
         
-        let messageBorder = RoundedRectangle(cornerRadius: 12)
+        let messageBorder = RoundedRectangle(cornerRadius: 16)
             .stroke(
                 colorScheme == .dark ?
-                Color.gray.opacity(0.25) :
-                Color.gray.opacity(0.2),
+                Color.white.opacity(0.12) :
+                Color.black.opacity(0.08),
                 lineWidth: 0.5
             )
         
@@ -527,7 +531,7 @@ struct MessageView: View {
                     textContent
                 }
             }
-            .padding(10)
+            .padding(14)
             .background(messageBackground)
             .overlay(messageBorder)
             
@@ -941,7 +945,13 @@ struct HTMLStringView: NSViewRepresentable {
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <link
               rel="stylesheet"
+              href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/github.min.css"
+              media="(prefers-color-scheme: light)"
+            >
+            <link
+              rel="stylesheet"
               href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/github-dark.min.css"
+              media="(prefers-color-scheme: dark)"
             >
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
             <style>
@@ -949,7 +959,7 @@ struct HTMLStringView: NSViewRepresentable {
                     --background-color: #ffffff;
                     --text-color: #24292e;
                     --secondary-text-color: #6a737d;
-                    --code-background-color: #f6f8fa;
+                    --code-background-color: #ffffff;
                     --code-text-color: #24292e;
                     --border-color: #e1e4e8;
                     --header-background-color: #f6f8fa;
@@ -962,7 +972,7 @@ struct HTMLStringView: NSViewRepresentable {
                         --background-color: #0d1117;
                         --text-color: #c9d1d9;
                         --secondary-text-color: #8b949e;
-                        --code-background-color: #161b22;
+                        --code-background-color: #0d1117;
                         --code-text-color: #c9d1d9;
                         --border-color: #30363d;
                         --header-background-color: #21262d;
@@ -989,14 +999,21 @@ struct HTMLStringView: NSViewRepresentable {
                     margin: 0;
                     padding: 0;
                 }
-                /* Code block styling with overlay copy button */
+                /* Code block styling - seamless integration */
                 .code-block-container {
                     position: relative;
-                    background-color: var(--code-background-color);
-                    border-radius: 6px;
+                    background-color: #f6f8fa;
+                    border-radius: 12px;
                     overflow: hidden;
-                    margin: 16px 0;
-                    border: 1px solid var(--border-color);
+                    margin: 12px 0;
+                    border: 0.5px solid var(--border-color);
+                }
+                
+                @media (prefers-color-scheme: dark) {
+                    .code-block-container {
+                        background-color: #0d1117;
+                        border: 0.5px solid rgba(255, 255, 255, 0.1);
+                    }
                 }
                 
                 .code-header {
@@ -1004,17 +1021,18 @@ struct HTMLStringView: NSViewRepresentable {
                     justify-content: flex-start;
                     align-items: center;
                     background-color: var(--header-background-color);
-                    padding: 8px 12px;
+                    padding: 10px 14px;
                     font-size: 12px;
                     color: var(--secondary-text-color);
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-                    border-bottom: 1px solid var(--border-color);
+                    border-bottom: 0.5px solid var(--border-color);
                 }
                 
                 .code-header .language {
                     font-weight: 600;
                     font-size: 13px;
                     color: var(--text-color);
+                    line-height: 1.4;
                 }
                 
                 .code-wrapper {
@@ -1023,7 +1041,7 @@ struct HTMLStringView: NSViewRepresentable {
                 
                 pre {
                     background-color: var(--code-background-color);
-                    padding: 16px;
+                    padding: 14px;
                     margin: 0;
                     overflow: auto;
                     white-space: pre;
@@ -1032,6 +1050,7 @@ struct HTMLStringView: NSViewRepresentable {
                     color: var(--code-text-color);
                     max-width: 100%;
                     border-radius: 0;
+                    line-height: 1.5;
                 }
                 
                 pre code {
@@ -1042,59 +1061,92 @@ struct HTMLStringView: NSViewRepresentable {
                     border: none;
                     border-radius: 0;
                     padding: 0;
+                    line-height: 1.5;
                 }
                 
                 .code-footer {
                     background-color: var(--header-background-color);
-                    padding: 8px 12px;
-                    border-top: 1px solid var(--border-color);
+                    padding: 10px 14px;
+                    border-top: 0.5px solid var(--border-color);
                     display: flex;
                     justify-content: flex-end;
                 }
                 
                 .copy-button-bottom {
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    color: var(--secondary-text-color);
-                    cursor: pointer;
-                    display: flex;
+                    background: #ffffff;
+                    border: 1px solid #d0d7de;
+                    color: #24292f;
+                    cursor: pointer !important;
+                    display: inline-flex;
                     align-items: center;
-                    font-size: 12px;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    transition: all 0.2s ease;
-                    font-family: inherit;
-                    min-width: 100px;
+                    font-size: 11px;
+                    padding: 5px 10px;
+                    border-radius: 6px;
+                    transition: all 0.15s ease;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+                    min-width: 90px;
                     justify-content: center;
                     user-select: none;
                     -webkit-user-select: none;
                     pointer-events: auto !important;
-                    z-index: 10 !important;
+                    z-index: 9999 !important;
+                    line-height: 1.4;
+                    position: relative;
+                    isolation: isolate;
+                }
+                
+                @media (prefers-color-scheme: dark) {
+                    .copy-button-bottom {
+                        background: rgba(255, 255, 255, 0.06);
+                        border: 0.5px solid rgba(255, 255, 255, 0.12);
+                        color: #c9d1d9;
+                    }
                 }
                 
                 .copy-button-bottom:hover {
-                    background: rgba(255, 255, 255, 0.15);
-                    border-color: rgba(255, 255, 255, 0.3);
-                    color: var(--text-color);
-                    transform: translateY(-1px);
+                    background: #f3f4f6;
+                    border-color: #b1b8c0;
+                    color: #24292f;
+                }
+                
+                @media (prefers-color-scheme: dark) {
+                    .copy-button-bottom:hover {
+                        background: rgba(255, 255, 255, 0.1);
+                        border-color: rgba(255, 255, 255, 0.2);
+                        color: #c9d1d9;
+                    }
                 }
                 
                 .copy-button-bottom:active {
-                    transform: translateY(0);
-                    background: rgba(255, 255, 255, 0.2);
+                    background: #e8eaed;
+                    border-color: #9ca3af;
+                }
+                
+                @media (prefers-color-scheme: dark) {
+                    .copy-button-bottom:active {
+                        background: rgba(255, 255, 255, 0.12);
+                    }
                 }
                 
                 .copy-button-bottom svg {
-                    margin-right: 6px;
+                    margin-right: 5px;
                     flex-shrink: 0;
-                    width: 14px;
-                    height: 14px;
+                    width: 12px;
+                    height: 12px;
                 }
                 
                 .copy-button-bottom.copying {
-                    background: rgba(34, 197, 94, 0.2);
-                    border-color: rgba(34, 197, 94, 0.4);
-                    color: #22c55e;
+                    background: #f3f4f6;
+                    border-color: #b1b8c0;
+                    color: #24292f;
+                }
+                
+                @media (prefers-color-scheme: dark) {
+                    .copy-button-bottom.copying {
+                        background: rgba(255, 255, 255, 0.12);
+                        border-color: rgba(255, 255, 255, 0.25);
+                        color: #c9d1d9;
+                    }
                 }
                 
                 .copy-button-bottom.copying .copy-icon,
@@ -1127,8 +1179,8 @@ struct HTMLStringView: NSViewRepresentable {
                     font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
                     font-size: \(fontSize - 2)px;
                     background-color: var(--inline-code-background-color);
-                    padding: 2px 4px;
-                    border-radius: 0 0 4px 4px;
+                    padding: 3px 6px;
+                    border-radius: 6px;
                     color: var(--inline-code-text-color);
                 }
                 table {
@@ -1308,26 +1360,37 @@ struct HTMLStringView: NSViewRepresentable {
                 }
                 
                 // Ensure buttons remain clickable during dynamic content updates
+                function ensureButtonsClickable() {
+                    const copyButtons = document.querySelectorAll('.copy-button-bottom');
+                    copyButtons.forEach(button => {
+                        button.style.pointerEvents = 'auto';
+                        button.style.zIndex = '9999';
+                        button.style.position = 'relative';
+                        button.style.isolation = 'isolate';
+                    });
+                }
+                
+                // Run immediately
+                ensureButtonsClickable();
+                
+                // Run on DOM ready
                 document.addEventListener('DOMContentLoaded', function() {
+                    ensureButtonsClickable();
+                    
                     // Set up mutation observer to maintain button functionality
                     const observer = new MutationObserver(function(mutations) {
-                        mutations.forEach(function(mutation) {
-                            if (mutation.type === 'childList') {
-                                // Re-enable copy buttons if they were affected
-                                const copyButtons = document.querySelectorAll('.copy-button');
-                                copyButtons.forEach(button => {
-                                    button.style.pointerEvents = 'auto';
-                                    button.style.zIndex = '1000';
-                                });
-                            }
-                        });
+                        ensureButtonsClickable();
                     });
                     
                     observer.observe(document.body, {
                         childList: true,
-                        subtree: true
+                        subtree: true,
+                        characterData: true
                     });
                 });
+                
+                // Also run periodically during streaming
+                setInterval(ensureButtonsClickable, 100);
                 
                 // Text selection preservation functions
                 let savedSelection = null;

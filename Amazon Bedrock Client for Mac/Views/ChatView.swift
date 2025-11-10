@@ -228,7 +228,7 @@ struct ChatView: View {
                     outerGeo[anchor].y
                 }
         }
-            .padding()
+        .padding()
         
         return ScrollView {
             messageList
@@ -239,18 +239,14 @@ struct ChatView: View {
             if isAtBottom && searchQuery.isEmpty {
                 Task {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
-                    withAnimation {
-                        proxy.scrollTo("Bottom", anchor: .bottom)
-                    }
+                    proxy.scrollTo("Bottom", anchor: .bottom)
                 }
             }
         }
         // Scroll to bottom whenever the count of messages changes (but not during search)
         .onChange(of: viewModel.messages.count) { _, _ in
             if searchQuery.isEmpty {
-                withAnimation {
-                    proxy.scrollTo("Bottom", anchor: .bottom)
-                }
+                proxy.scrollTo("Bottom", anchor: .bottom)
             }
         }
         .task {

@@ -293,13 +293,10 @@ struct SidebarView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            newChatButton
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-            
             searchBarView
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+                .padding(.top, 2)
+                .padding(.bottom, 4)
             
             chatListView
                 .onReceive(timer) { _ in
@@ -393,46 +390,23 @@ struct SidebarView: View {
         }
     }
     
-    // New Chat button view
-    private var newChatButton: some View {
-        Button(action: {
-            createNewChat()
-        }) {
-            HStack {
-                Image(systemName: "plus")
-                    .font(.system(size: 16, weight: .medium))
-                
-                Text("New Chat")
-                    .font(.system(size: 14))
-                
-                Spacer()
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .modifier(LiquidGlassButtonModifier(colorScheme: colorScheme))
-        }
-        .buttonStyle(PlainButtonStyle())
-        .help("Start a new chat")
-    }
-
     // MARK: - Search Bar View
     
-    /// Enhanced search bar for filtering chats
+    /// Enhanced search bar for filtering chats (Messages app style - compact)
     private var searchBarView: some View {
-        HStack {
+        HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
-                .font(.system(size: 14))
+                .font(.system(size: 13))
             
-            TextField("Search chats", text: $searchText)
+            TextField("Search", text: $searchText)
                 .textFieldStyle(PlainTextFieldStyle())
-                .font(.system(size: 14))
+                .font(.system(size: 13))
             
             if isSearching {
                 ProgressView()
-                    .scaleEffect(0.7)
-                    .frame(width: 16, height: 16)
+                    .scaleEffect(0.6)
+                    .frame(width: 14, height: 14)
             } else if !searchText.isEmpty {
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -441,13 +415,14 @@ struct SidebarView: View {
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
-                        .font(.system(size: 14))
+                        .font(.system(size: 13))
                 }
                 .buttonStyle(PlainButtonStyle())
                 .transition(.opacity)
             }
         }
-        .padding(8)
+        .padding(.vertical, 7)
+        .padding(.horizontal, 10)
         .modifier(LiquidGlassSearchBarModifier(colorScheme: colorScheme))
     }
     
@@ -466,17 +441,6 @@ struct SidebarView: View {
                     ) {
                         ForEach(chats, id: \.self) { chat in
                             chatRowView(for: chat)
-                                .contextMenu {
-                                    Button("Rename Chat", action: {
-                                        startRenaming(chat)
-                                    })
-                                    Button("Delete Chat", action: {
-                                        deleteChat(chat)
-                                    })
-                                    Button("Export Chat as Text", action: {
-                                        exportChatAsTextFile(chat)
-                                    })
-                                }
                         }
                     }
                 }
@@ -568,7 +532,7 @@ struct SidebarView: View {
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected ?
-                      Color.accentColor.opacity(0.12) :
+                      Color.accentColor.opacity(0.18) :
                         (isHovered ? Color.gray.opacity(0.08) : Color.clear))
         )
         .modifier(ChatRowBorderModifier(isSelected: isSelected))
@@ -583,6 +547,26 @@ struct SidebarView: View {
                 } else {
                     NSCursor.arrow.set()
                 }
+            }
+        }
+        .contextMenu {
+            // Edit
+            Button("Rename") {
+                startRenaming(chat)
+            }
+            
+            // Copy & Export
+            Button("Copy Entire Chat") {
+                copyEntireChat(chat)
+            }
+            
+            Button("Export as Text File") {
+                exportChatAsTextFile(chat)
+            }
+            
+            // Delete
+            Button("Delete", role: .destructive) {
+                deleteChat(chat)
             }
         }
         .onTapGesture {
@@ -673,6 +657,21 @@ struct SidebarView: View {
                 isSearching = false
             }
         }
+    }
+    
+    // MARK: - Chat Actions
+    
+    private func copyEntireChat(_ chat: ChatModel) {
+        let messages = chatManager.getMessages(for: chat.chatId)
+        var chatText = "Chat: \(chat.title)\nModel: \(chat.name)\n\n"
+        
+        for message in messages {
+            chatText += "\(message.user):\n\(message.text)\n\n"
+        }
+        
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(chatText, forType: .string)
     }
     
     /// Creates a new chat with the currently selected model
@@ -910,10 +909,10 @@ struct LiquidGlassButtonModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            // macOS 26+: Subtle glass effect
+            // macOS 26+: Perfect circle with subtle glass effect
             content
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    Capsule()
                         .fill(colorScheme == .dark ?
                               Color.white.opacity(0.08) :
                               Color.black.opacity(0.05))
@@ -944,10 +943,10 @@ struct LiquidGlassSearchBarModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            // macOS 26+: Subtle glass effect
+            // macOS 26+: Perfect circle with subtle glass effect
             content
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    Capsule()
                         .fill(colorScheme == .dark ?
                               Color.white.opacity(0.08) :
                               Color.black.opacity(0.05))

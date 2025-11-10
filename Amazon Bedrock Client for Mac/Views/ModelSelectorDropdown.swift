@@ -27,30 +27,33 @@ struct ModelSelectorDropdown: View {
                 isShowingPopover.toggle()
             }
         }) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 if case let .chat(model) = menuSelection {
-                    // Display model image inside dropdown button
+                    // Display model image inside dropdown button (larger icon)
                     getModelImage(for: model.id)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 32, height: 32)
+                        .frame(width: 20, height: 20)
                     
                     Text(model.name)
-                        .fontWeight(.medium)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("Select Model")
-                        .fontWeight(.medium)
+                        .font(.system(size: 13, weight: .medium))
                 }
-                
-                Spacer()
                 
                 Image(systemName: "chevron.down")
                     .foregroundColor(.secondary)
+                    .font(.system(size: 9, weight: .semibold))
                     .rotationEffect(isShowingPopover ? Angle(degrees: 180) : Angle(degrees: 0))
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isShowingPopover)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle()) // Make entire area clickable
             .modifier(LiquidGlassDropdownModifier(isHovering: isHovering, colorScheme: colorScheme))
         }

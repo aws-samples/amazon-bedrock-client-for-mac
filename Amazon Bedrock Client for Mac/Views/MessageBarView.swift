@@ -91,7 +91,7 @@ struct MessageBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(messageBarBackground)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
             
             // Loading indicator
@@ -681,19 +681,7 @@ struct AdvancedOptionsMenu: View {
                 }
             }
             
-            if !settingManager.systemPrompt.isEmpty {
-                Divider()
-                
-                Button {
-                    let alert = NSAlert()
-                    alert.messageText = "System Prompt"
-                    alert.informativeText = settingManager.systemPrompt
-                    alert.addButton(withTitle: "OK")
-                    alert.runModal()
-                } label: {
-                    Label("View System Prompt", systemImage: "info.circle")
-                }
-            }
+
         } label: {
             Image(systemName: shouldShowMCPTools
                   ? "plus.circle.fill"
