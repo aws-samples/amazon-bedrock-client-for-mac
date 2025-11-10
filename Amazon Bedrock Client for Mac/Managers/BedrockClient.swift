@@ -605,16 +605,16 @@ class Backend: Equatable, @unchecked Sendable {
                 return .titanImage
             } else if modelNameAndVersion.contains("titan") {
                 return .titan
-            } else if modelNameAndVersion.contains("nova-premier") {
-                return .novaPremier
-            } else if modelNameAndVersion.contains("nova-pro") {
-                return .novaPro
-            } else if modelNameAndVersion.contains("nova-lite") {
-                return .novaLite
-            } else if modelNameAndVersion.contains("nova-micro") {
-                return .novaMicro
             } else if modelNameAndVersion.contains("nova-canvas") {
                 return .novaCanvas
+            } else if modelNameAndVersion.contains("nova") && modelNameAndVersion.contains("premier") {
+                return .novaPremier
+            } else if modelNameAndVersion.contains("nova") && modelNameAndVersion.contains("pro") {
+                return .novaPro
+            } else if modelNameAndVersion.contains("nova") && modelNameAndVersion.contains("lite") {
+                return .novaLite
+            } else if modelNameAndVersion.contains("nova") && modelNameAndVersion.contains("micro") {
+                return .novaMicro
             } else if modelNameAndVersion.contains("rerank") {
                 return .rerank
             }
