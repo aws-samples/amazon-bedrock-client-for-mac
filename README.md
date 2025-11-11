@@ -1,126 +1,96 @@
 # Amazon Bedrock Client for Mac
+
+![macOS](https://img.shields.io/badge/macOS-14%2B-blue?style=flat-square) [![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest) [![Swift](https://img.shields.io/badge/Swift-6.2-orange?style=flat-square)](https://swift.org) [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-green.svg?style=flat-square)](https://opensource.org/license/mit-0/)
+
+A native macOS client that brings Amazon Bedrock's AI models directly to your desktop. Access Claude Sonnet 4.5, Opus 4, and other foundation models through a clean interface designed for macOS, with system-wide quick access and full AWS integration.
+
 <img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.gif" />
 
-[![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
-[![Build Status](https://github.com/aws-samples/amazon-bedrock-client-for-mac/workflows/Build/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions)
-[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-green.svg?style=flat-square)](https://opensource.org/license/mit-0/)
-[![Platform](https://img.shields.io/badge/platform-macOS-blue.svg?style=flat-square)](https://developer.apple.com/macos/)
-[![Swift Version](https://img.shields.io/badge/Swift-6.2-orange.svg?style=flat-square)](https://swift.org)
+## Get started
 
-A modern, native macOS client for Amazon Bedrock, providing streamlined access to AI models directly from your desktop.
+### Install via Homebrew (recommended)
 
-**[Download](#download) • [Features](#features) • [Getting Started](#getting-started) • [Usage](#usage) • [Troubleshooting](#troubleshooting) • [Contributing](#contributing)**
+```bash
+brew tap didhd/tap
+brew install amazon-bedrock-client --no-quarantine
+```
 
-----
-
-## Features
-
-### Model Support
-- Full access to Amazon Bedrock models including Claude 3.7 Sonnet, Llama, Mistral, DeepSeek R1, and Stable Diffusion
-- Support for text generation, image generation, and embedding models
-- Multi-modal capabilities with image upload for Claude 3 models
-- Model Context Protocol (MCP) integration with tool use tracking and execution
-- Enhanced reasoning capabilities with increased token budget (2048 tokens)
-
-### User Experience
-- Clean, native macOS interface with dark mode support
-- Real-time streaming responses with Claude 3.7 thinking support
-- Message history and conversation management
-- In-chat search functionality (Cmd+F)
-- Real-time voice transcription
-- Keyboard shortcuts for font size adjustment, navigation, and sidebar toggle
-- **Quick Access Window**: System-wide hotkey (Option+Space) for instant AI assistance from any application
-- Consistent styling and animations across all views
-
-### Document & Media Management
-- Expanded functionality to handle both images and documents
-- Document attachment support (PDF, Word, etc.) with proper rendering
-- Modern image viewer modal
-- Image compression and optimization utilities
-
-### Developer Features
-- AWS SSO and credential profile support
-- Multi-region capabilities
-- Custom system prompts and model parameters
-- Code generation with syntax highlighting
-- Unified ConverseStream API for all text generation models
-
-## Download
-
-Get the latest version:
+### Or download the DMG
 
 <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest/download/Amazon.Bedrock.Client.for.Mac.dmg">
   <img src="https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=apple" alt="Download Latest Release" height="36">
 </a>
 
-### Homebrew Installation
+### Configure and launch
 
-You can also install using Homebrew:
+1. Configure your AWS credentials (SSO or access keys in `~/.aws/credentials`)
+2. Press **Option+Space** from anywhere to start using AI
 
-```bash
-# Add the tap
-brew tap didhd/tap
-brew update
+## Core capabilities
 
-# Install Amazon Bedrock Client
-brew install amazon-bedrock-client --no-quarantine
-```
+**System-wide access**  
+Press Option+Space from any application to open a lightweight AI assistant window. Ask questions, analyze code, or process documents without switching contexts.
 
-## Getting Started
+**Native AWS integration**  
+Built on Amazon Bedrock's ConverseStream API with full support for AWS SSO, credential profiles, and multi-region deployments. Your credentials stay local and secure.
 
-### Requirements
+**Latest foundation models**  
+Access Claude Sonnet 4.5, Opus 4, Haiku 4.5, and other Bedrock models including Llama, Mistral, and DeepSeek. Multi-modal support for images and documents with prompt caching.
+
+**Model Context Protocol**  
+Extend capabilities with MCP tools and agents. Track tool usage and execution directly in your conversations.
+
+**Built for macOS**  
+Native Swift 6 application optimized for macOS 14+. Liquid glass UI effects on macOS 26+, dark mode support, and keyboard-first navigation throughout.
+
+## Features
+
+- Real-time streaming responses with extended thinking support
+- Document and image upload (PDF, Word, images) with compression
+- Conversation search and history management
+- Voice transcription for hands-free input
+- Custom system prompts and inference parameters
+- Code generation with syntax highlighting
+- Configurable hotkeys and keyboard shortcuts
+
+## Requirements
+
 - macOS 14 or later
-- AWS Account with Bedrock access
-- Configured AWS credentials
+- AWS account with Amazon Bedrock access
+- AWS credentials configured via SSO or access keys
 
-### Installation
-1. Download and open the DMG file
-2. Drag the app to your Applications folder
-3. Launch the app and configure your AWS settings (ensure ~/.aws/credentials and ~/.aws/config are properly set up with your access keys or SSO configuration)
-
-> **IMPORTANT:** When opening for the first time, macOS security features will block the application. You'll need to approve it manually in System Preferences > Privacy & Security by clicking "Open Anyway".
+> **First launch:** macOS will block the application. Approve it in System Preferences > Privacy & Security by clicking "Open Anyway".
 
 <img width="600" alt="Security approval dialog" src="https://github.com/user-attachments/assets/358213a1-2237-4513-96fc-0dd7af9de5e7" />
 
 ## Usage
 
-### Basic Operation
-1. Select your desired model from the dropdown
-2. Type your message or query
-3. Press Enter or click send
-4. View the AI's response in the conversation view
+Navigate to your project directory and press **Option+Space** to open Quick Access, or launch the full application from your Applications folder.
 
-### Advanced Features
+**Keyboard shortcuts:**
+- `Option+Space` - Quick Access window (customizable)
+- `Cmd+Shift+K` - Toggle Quick Access from menu
+- `Cmd+F` - Search conversations
+- `Cmd+N` - New chat
+- `Cmd+,` - Settings
 
-- **Search**: Use Cmd+F to search through conversation history
-- **Voice Input**: Click the microphone for speech-to-text
-- **Image Upload**: Use the image button for visual inputs (Claude 3)
-- **Document Upload**: Attach PDFs and other document formats
-- **Model Settings**: Configure system prompts and parameters
-- **AWS Profiles**: Switch between different credential profiles
-- **Sidebar Toggle**: Use keyboard shortcut to show/hide sidebar
+**Model configuration:**  
+Select models from the dropdown, configure system prompts, adjust temperature and reasoning parameters in Settings.
+
+**AWS profiles:**  
+Switch between credential profiles and regions in Settings > Developer tab.
 
 ## Troubleshooting
 
-For common issues and solutions, see our [Troubleshooting Guide](TROUBLESHOOTING.md).
-
-### Common Issues
-- AWS credential recognition problems
-- Model access permissions
-- Image generation formatting requirements
-- Nova models compatibility (fixed in v1.2.11)
+See the [Troubleshooting Guide](TROUBLESHOOTING.md) for common issues including AWS credential setup and parameter validation.
 
 ## Contributing
 
-We welcome contributions from the community:
-
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+Contributions are welcome. Fork the repository, create a feature branch, and submit a pull request. See the [CONTRIBUTING.md](CONTRIBUTING.md) file for details.
 
 ## License
 
-Licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file for details.
 
 ## Star History
 
