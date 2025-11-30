@@ -197,6 +197,11 @@ class ChatViewModel: ObservableObject {
     // Track current message ID being streamed to fix duplicate issue
     private var currentStreamingMessageId: UUID?
     
+    // Thinking summary generation state
+    private var lastThinkingSummaryLength: Int = 0
+    private let thinkingSummaryThreshold: Int = 200  // Generate summary every 200 chars
+    private var thinkingCompleted: Bool = false  // Stop summary generation when thinking is done
+    
     // Usage handler for displaying token usage information
     var usageHandler: ((String) -> Void)?
     
@@ -326,11 +331,24 @@ class ChatViewModel: ObservableObject {
     // MARK: - Public Methods
     
     func loadInitialData() {
-        messages = chatManager.getMessages(for: chatId)
+        var loadedMessages = chatManager.getMessages(for: chatId)
+        
+        // Mark tool result messages with "ToolResult" user so they are hidden in UI
+        // Tool result messages have: user == "User", toolUse != nil, toolResult != nil
+        for i in 0..<loadedMessages.count {
+            if loadedMessages[i].user == "User" &&
+               loadedMessages[i].toolUse != nil &&
+               loadedMessages[i].toolResult != nil {
+                loadedMessages[i].user = "ToolResult"
+            }
+        }
+        
+        messages = loadedMessages
     }
     
     func sendMessage() {
-        guard !userInput.isEmpty else { return }
+        // Allow sending if there's text, images, or documents
+        guard !userInput.isEmpty || !sharedMediaDataSource.images.isEmpty || !sharedMediaDataSource.documents.isEmpty else { return }
         
         messageTask?.cancel()
         messageTask = Task { await sendMessageAsync() }
@@ -417,9 +435,7 @@ class ChatViewModel: ObservableObject {
         addMessage(userMessage)
         
         userInput = ""
-        sharedMediaDataSource.images.removeAll()
-        sharedMediaDataSource.fileExtensions.removeAll()
-        sharedMediaDataSource.documents.removeAll()
+        sharedMediaDataSource.clear()
         
         do {
             if backendModel.backend.isImageGenerationModel(chatModel.id) {
@@ -481,22 +497,40 @@ class ChatViewModel: ObservableObject {
         }
         
         // Process documents with improved error handling
+        // Pasted text (has textPreview) is sent as text block, not document block
+        // This avoids Bedrock's 5 document limit in conversation history
         var documentBase64Strings: [String] = []
         var documentFormats: [String] = []
         var documentNames: [String] = []
+        var pastedTextInfos: [PastedTextInfo] = []  // For UI display
+        var pastedTextContents: [String] = []  // For text block in API
         
         for (index, docData) in sharedMediaDataSource.documents.enumerated() {
-            let docIndex = sharedMediaDataSource.images.count + index
+            // Check if this is pasted text (has textPreview)
+            let isPastedText = index < sharedMediaDataSource.textPreviews.count &&
+                               sharedMediaDataSource.textPreviews[index] != nil
             
-            // Ensure we have valid extension and filename
-            guard docIndex < sharedMediaDataSource.fileExtensions.count,
-                  docIndex < sharedMediaDataSource.filenames.count else {
+            if isPastedText {
+                // Convert pasted text to string and add to text contents
+                if let textContent = String(data: docData, encoding: .utf8) {
+                    let filename = index < sharedMediaDataSource.documentFilenames.count ?
+                        sharedMediaDataSource.documentFilenames[index] : "pasted_text.txt"
+                    pastedTextContents.append("[\(filename)]\n\(textContent)")
+                    pastedTextInfos.append(PastedTextInfo(filename: filename, content: textContent))
+                    logger.info("Added pasted text as text block: \(filename) (\(docData.count) bytes)")
+                }
+                continue  // Skip adding to document arrays
+            }
+            
+            // Regular document processing
+            guard index < sharedMediaDataSource.documentExtensions.count,
+                  index < sharedMediaDataSource.documentFilenames.count else {
                 logger.error("Missing extension or filename for document at index \(index)")
                 continue
             }
             
-            let fileExt = sharedMediaDataSource.fileExtensions[docIndex]
-            let filename = sharedMediaDataSource.filenames[docIndex]
+            let fileExt = sharedMediaDataSource.documentExtensions[index]
+            let filename = sharedMediaDataSource.documentFilenames[index]
             
             // Validate file extension is supported
             let supportedExtensions = ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"]
@@ -519,16 +553,41 @@ class ChatViewModel: ObservableObject {
             logger.info("Added document: \(filename) (\(fileExt), \(docData.count) bytes)")
         }
         
+        // Determine the text to send
+        // Bedrock API requires a text block when sending images or documents
+        // Include pasted text contents in the text block (not as documents)
+        var textToSend: String
+        
+        // Start with user input or default prompt
+        if userInput.isEmpty {
+            if !documentBase64Strings.isEmpty && !imageBase64Strings.isEmpty {
+                textToSend = "Please analyze these documents and images."
+            } else if !documentBase64Strings.isEmpty {
+                textToSend = "Please analyze this document."
+            } else if !imageBase64Strings.isEmpty {
+                textToSend = "Please analyze this image."
+            } else if !pastedTextContents.isEmpty {
+                textToSend = "Please analyze this text."
+            } else {
+                textToSend = userInput
+            }
+        } else {
+            textToSend = userInput
+        }
+        
+        // Store original text for UI display (pasted texts shown separately as chips)
+        // The pasted text content will be appended when converting to Bedrock message format
         return MessageData(
             id: UUID(),
-            text: userInput,
+            text: textToSend,  // Original user input only, not including pasted text
             user: "User",
             isError: false,
             sentTime: Date(),
             imageBase64Strings: imageBase64Strings.isEmpty ? nil : imageBase64Strings,
             documentBase64Strings: documentBase64Strings.isEmpty ? nil : documentBase64Strings,
             documentFormats: documentFormats.isEmpty ? nil : documentFormats,
-            documentNames: documentNames.isEmpty ? nil : documentNames
+            documentNames: documentNames.isEmpty ? nil : documentNames,
+            pastedTexts: pastedTextInfos.isEmpty ? nil : pastedTextInfos
         )
     }
     
@@ -696,10 +755,29 @@ class ChatViewModel: ObservableObject {
         // Create message content from user message
         var messageContents: [MessageContent] = []
         
-        // Always include a text prompt as required when sending documents
-        let textToSend = userMessage.text.isEmpty &&
-        (userMessage.documentBase64Strings?.isEmpty == false) ?
-        "Please analyze this document." : userMessage.text
+        // Build full text including pasted texts for API transmission
+        var fullText = userMessage.text
+        if let pastedTexts = userMessage.pastedTexts, !pastedTexts.isEmpty {
+            for pastedText in pastedTexts {
+                if !fullText.isEmpty {
+                    fullText += "\n\n---\n\n"
+                }
+                fullText += "[\(pastedText.filename)]:\n\(pastedText.content)"
+            }
+            logger.debug("[API] Added \(pastedTexts.count) pasted text(s) to message")
+        }
+        
+        // Always include a text prompt as required when sending documents/images/pasted texts
+        var textToSend = fullText
+        if textToSend.isEmpty {
+            if userMessage.documentBase64Strings?.isEmpty == false {
+                textToSend = "Please analyze this document."
+            } else if userMessage.imageBase64Strings?.isEmpty == false {
+                textToSend = "Please analyze this image."
+            } else if userMessage.pastedTexts?.isEmpty == false {
+                textToSend = "Please analyze this text."
+            }
+        }
         messageContents.append(.text(textToSend))
         
         // Add images if present
@@ -747,9 +825,10 @@ class ChatViewModel: ObservableObject {
             }
         }
 
-        // Get conversation history and add new user message (implicit)
+        // Save current messages first, then get conversation history
+        // This ensures the new user message (with pastedTexts) is included
+        await saveFromUIMessages()
         let conversationHistory = await getConversationHistory()
-        await saveConversationHistory(conversationHistory)
         
         // Get system prompt
         let systemPrompt = settingManager.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -757,12 +836,21 @@ class ChatViewModel: ObservableObject {
         // Get tool configurations if MCP is enabled
         var toolConfig: AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolConfiguration? = nil
         
+        // Check if any MCP server is actually connected (subprocess running)
+        let hasConnectedServer = mcpManager.connectionStatus.values.contains(.connected)
+        
         if settingManager.mcpEnabled &&
             !mcpManager.toolInfos.isEmpty &&
+            hasConnectedServer &&
             backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
-            logger.info("MCP enabled with \(mcpManager.toolInfos.count) tools for supported model \(chatModel.id).")
+            let toolCount = mcpManager.toolInfos.count
+            let connectedCount = mcpManager.connectionStatus.values.filter { $0 == .connected }.count
+            logger.info("MCP enabled with \(toolCount) tools from \(connectedCount) connected server(s) for model \(chatModel.id).")
             toolConfig = convertMCPToolsToBedrockFormat(mcpManager.toolInfos)
-        } else if settingManager.mcpEnabled && !mcpManager.toolInfos.isEmpty {
+            // MCP connection notification is sent from MCPManager when server connects
+        } else if settingManager.mcpEnabled && !mcpManager.toolInfos.isEmpty && !hasConnectedServer {
+            logger.info("MCP enabled but no servers connected yet.")
+        } else if settingManager.mcpEnabled && hasConnectedServer && !backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
             logger.info("MCP enabled, but model \(chatModel.id) does not support streaming tool use. Tools disabled.")
         }
         
@@ -805,12 +893,18 @@ class ChatViewModel: ObservableObject {
         var thinkingSignature: String? = nil
         var isFirstChunk = true
         var toolWasUsed = false
-        var conversationHistory = await getConversationHistory()
+        
+        // Use bedrockMessages directly instead of re-fetching conversation history
+        // This ensures tool_use/tool_result pairs are properly maintained
         
         // Use for message ID tracking
         let messageId = UUID()
         currentStreamingMessageId = messageId
         var currentToolInfo: ToolInfo? = nil
+        
+        // Reset thinking summary state for new message
+        lastThinkingSummaryLength = 0
+        thinkingCompleted = false
         
         // Reset tool tracker
         await ToolUseTracker.shared.reset()
@@ -848,10 +942,12 @@ class ChatViewModel: ObservableObject {
                 
                 // If this is our first message (no content streamed yet), create a new message
                 if isFirstChunk {
-                    // If first message, create initial message but don't update text later
+                    // If first message, create initial message with thinking if available
                     let initialMessage = MessageData(
                         id: messageId,
                         text: streamedText.isEmpty ? "Analyzing your request..." : streamedText,
+                        thinking: thinking,
+                        signature: thinkingSignature,
                         user: chatModel.name,
                         isError: false,
                         sentTime: Date(),
@@ -860,20 +956,30 @@ class ChatViewModel: ObservableObject {
                     addMessage(initialMessage)
                     isFirstChunk = false
                 } else {
-                    // If message already exists, keep text as is and only update tool info
+                    // If message already exists, update tool info and ensure thinking/signature are preserved
                     if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
                         // Preserve the current displayed text
                         let currentText = self.messages[index].text
                         
-                        // Update tool info in UI only
+                        // Update tool info in UI
                         self.messages[index].toolUse = currentToolInfo
                         
-                        // Update storage (without changing text)
+                        // Ensure thinking and signature are set (may have been streamed before tool use)
+                        if self.messages[index].thinking == nil && thinking != nil {
+                            self.messages[index].thinking = thinking
+                        }
+                        if self.messages[index].signature == nil && thinkingSignature != nil {
+                            self.messages[index].signature = thinkingSignature
+                        }
+                        
+                        // Update storage (without changing text, but include thinking/signature)
                         chatManager.updateMessageWithToolInfo(
                             for: chatId,
                             messageId: messageId,
                             newText: currentText, // Keep existing text
-                            toolInfo: currentToolInfo!
+                            toolInfo: currentToolInfo!,
+                            thinking: self.messages[index].thinking,
+                            thinkingSignature: self.messages[index].signature
                         )
                     }
                 }
@@ -969,17 +1075,42 @@ class ChatViewModel: ObservableObject {
                     )
                 }
 
-                // Add both messages to history
-                conversationHistory.append(assistantMessage)
-                conversationHistory.append(toolResultMessage)
-
                 logger.debug("Added assistant message with tool_use ID: \(toolUseInfo.toolUseId)")
                 logger.debug("Added user message with tool_result ID: \(toolUseInfo.toolUseId)")
 
-                await saveConversationHistory(conversationHistory)
+                // Convert BedrockMessage to AWS SDK format and append to existing messages
+                let awsAssistantMessage = try convertToBedrockMessage(assistantMessage, modelId: chatModel.id)
+                let awsToolResultMessage = try convertToBedrockMessage(toolResultMessage, modelId: chatModel.id)
                 
-                // Create updated messages list - important to correctly map conversation to SDK messages
-                let updatedMessages = try conversationHistory.map { try convertToBedrockMessage($0, modelId: chatModel.id) }
+                // Build updated messages array: existing + assistant with tool_use + user with tool_result
+                var updatedMessages = bedrockMessages
+                updatedMessages.append(awsAssistantMessage)
+                updatedMessages.append(awsToolResultMessage)
+                
+                // UI: tool result is displayed in the assistant message (via toolResult field)
+                // The streaming message already has toolUse and toolResult set via updateMessageWithToolInfo
+                // We need to add a hidden tool result entry for API history, but NOT display it as user message
+                
+                // Add tool result as a special "hidden" message for API history only
+                // Use "ToolResult" as user to distinguish from regular user messages
+                // This will be converted to user role for API but displayed on assistant side in UI
+                let toolResultMsg = MessageData(
+                    id: UUID(),
+                    text: "", // Empty text - result is shown in assistant message's toolResult field
+                    user: "ToolResult", // Special marker - not "User" so it won't show as user bubble
+                    isError: false,
+                    sentTime: Date(),
+                    toolUse: ToolInfo(
+                        id: toolUseInfo.toolUseId,
+                        name: toolUseInfo.name,
+                        input: JSONValue.from(toolUseInfo.input)
+                    ),
+                    toolResult: resultText
+                )
+                messages.append(toolResultMsg)
+                
+                // Save to persistent storage
+                await saveFromUIMessages()
                 
                 // Recursively continue with next turn
                 try await processToolCycles(
@@ -1040,21 +1171,20 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Create assistant message for conversation history
-            let assistantMsg = BedrockMessage(
-                role: .assistant,
-                content: thinking != nil ? [
-                    .thinking(MessageContent.ThinkingContent(
-                        text: thinking!,
-                        signature: thinkingSignature ?? UUID().uuidString
-                    )),
-                    .text(assistantText)  // thinking 다음에 text가 오도록 순서 변경
-                ] : [.text(assistantText)]
-            )
+            // Generate final thinking summary if thinking exists and not already completed
+            if let thinkingContent = thinking, !thinkingContent.isEmpty, !thinkingCompleted {
+                Task {
+                    await generateThinkingSummary(for: messageId, thinking: thinkingContent)
+                }
+            }
             
-            // Add to history and save
-            conversationHistory.append(assistantMsg)
-            await saveConversationHistory(conversationHistory)
+            // Reset thinking summary state for next message
+            lastThinkingSummaryLength = 0
+            thinkingCompleted = false
+            
+            // Save conversation history from UI messages
+            // This preserves all tool_use/tool_result information correctly
+            await saveFromUIMessages()
         }
         
         // Clear tracking of streaming message ID
@@ -1140,6 +1270,9 @@ class ChatViewModel: ObservableObject {
 
     // Helper method to append text during streaming
     private func appendTextToMessage(_ text: String, messageId: UUID, shouldCreateNewMessage: Bool = false) {
+        // Stop thinking summary generation when text starts
+        stopThinkingSummaryGeneration()
+        
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
@@ -1166,6 +1299,8 @@ class ChatViewModel: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
+            var currentThinking: String = ""
+            
             if shouldCreateNewMessage {
                 let newMessage = MessageData(
                     id: messageId,
@@ -1176,14 +1311,40 @@ class ChatViewModel: ObservableObject {
                     sentTime: Date()
                 )
                 self.messages.append(newMessage)
+                currentThinking = thinking
             } else {
                 if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
                     self.messages[index].thinking = (self.messages[index].thinking ?? "") + thinking
+                    currentThinking = self.messages[index].thinking ?? ""
                 }
             }
             
             self.objectWillChange.send()
+            
+            // Trigger real-time summary generation if enough new content
+            let thinkingLength = currentThinking.count
+            if thinkingLength - self.lastThinkingSummaryLength >= self.thinkingSummaryThreshold {
+                self.lastThinkingSummaryLength = thinkingLength
+                self.triggerThinkingSummary(for: messageId, thinking: currentThinking)
+            }
         }
+    }
+    
+    /// Trigger thinking summary generation immediately (runs in parallel)
+    private func triggerThinkingSummary(for messageId: UUID, thinking: String) {
+        // Skip only if thinking is completed (allow parallel execution)
+        guard !thinkingCompleted else { return }
+        
+        // Start new task immediately (parallel, no cancellation of previous)
+        Task { [weak self] in
+            guard self?.thinkingCompleted != true else { return }
+            await self?.generateThinkingSummary(for: messageId, thinking: thinking)
+        }
+    }
+    
+    /// Stop thinking summary generation (called when text starts streaming)
+    private func stopThinkingSummaryGeneration() {
+        thinkingCompleted = true
     }
     
     private func updateMessageText(messageId: UUID, newText: String) {
@@ -1229,16 +1390,20 @@ class ChatViewModel: ObservableObject {
             self.messages[index].toolResult = toolResult
         }
         
-        // Update storage
+        // Update storage with thinking/signature preserved
         if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
             let currentText = self.messages[index].text
+            let currentThinking = self.messages[index].thinking
+            let currentSignature = self.messages[index].signature
             
             chatManager.updateMessageWithToolInfo(
                 for: chatId,
                 messageId: messageId,
                 newText: currentText, // Always use current text to preserve original response
                 toolInfo: toolInfo!,
-                toolResult: toolResult
+                toolResult: toolResult,
+                thinking: currentThinking,
+                thinkingSignature: currentSignature
             )
         }
     }
@@ -1269,15 +1434,19 @@ class ChatViewModel: ObservableObject {
         var bedrockMessages: [BedrockMessage] = []
         
         for message in messages {
-            let role: MessageRole = message.user == "User" ? .user : .assistant
+            // "User" and "ToolResult" are both user role for API
+            let role: MessageRole = (message.user == "User" || message.user == "ToolResult") ? .user : .assistant
             
             var contents: [MessageContent] = []
             
             // Add thinking content if present
-            if let thinking = message.thinking, !thinking.isEmpty {
+            // IMPORTANT: Only include thinking block if we have a valid signature from the API
+            // Using a fake/generated signature will cause "Invalid signature in thinking block" error
+            if let thinking = message.thinking, !thinking.isEmpty,
+               let signature = message.signature, !signature.isEmpty {
                 contents.append(.thinking(MessageContent.ThinkingContent(
                     text: thinking,
-                    signature: message.signature ?? UUID().uuidString
+                    signature: signature
                 )))
             }
             
@@ -1306,28 +1475,36 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Add text content AFTER documents/images
-            if !message.text.isEmpty {
-                contents.append(.text(message.text))
-            }
-            
-            // Add tool info if present
-            if let toolUse = message.toolUse {
-                // For assistant, add as tooluse
-                if role == .assistant {
+            // Handle tool results specially - they should ONLY contain toolresult, no text
+            if role == .user, let toolUse = message.toolUse, let toolResult = message.toolResult {
+                // Tool result message - only add toolresult content
+                contents.append(.toolresult(MessageContent.ToolResultContent(
+                    toolUseId: toolUse.id,
+                    result: toolResult,
+                    status: "success"
+                )))
+            } else {
+                // Regular message - add text content AFTER documents/images
+                // Include pasted texts in the text block for API transmission
+                var fullText = message.text
+                if let pastedTexts = message.pastedTexts, !pastedTexts.isEmpty {
+                    for pastedText in pastedTexts {
+                        if !fullText.isEmpty {
+                            fullText += "\n\n---\n\n"
+                        }
+                        fullText += "[\(pastedText.filename)]:\n\(pastedText.content)"
+                    }
+                }
+                if !fullText.isEmpty {
+                    contents.append(.text(fullText))
+                }
+                
+                // Add tool info if present (for assistant messages with tool_use)
+                if let toolUse = message.toolUse, role == .assistant {
                     contents.append(.tooluse(MessageContent.ToolUseContent(
                         toolUseId: toolUse.id,
                         name: toolUse.name,
                         input: toolUse.input
-                    )))
-                }
-                
-                // For tool results in user messages
-                if role == .user, let toolResult = message.toolResult {
-                    contents.append(.toolresult(MessageContent.ToolResultContent(
-                        toolUseId: toolUse.id,
-                        result: toolResult,
-                        status: "success"
                     )))
                 }
             }
@@ -1337,111 +1514,56 @@ class ChatViewModel: ObservableObject {
         }
         
         // Save newly converted history
-        await saveConversationHistory(bedrockMessages)
+        await saveFromUIMessages()
         
         return bedrockMessages
     }
     
-    /// Saves conversation history
-    private func saveConversationHistory(_ history: [BedrockMessage]) async {
+    /// Saves conversation history directly from UI messages
+    /// This preserves all UI-specific data like pastedTexts without complex text parsing
+    private func saveFromUIMessages() async {
         var newConversationHistory = ConversationHistory(chatId: chatId, modelId: chatModel.id, messages: [])
-        logger.debug("[SaveHistory] Processing \(history.count) Bedrock messages for saving.")
+        logger.debug("[SaveHistory] Saving \(messages.count) messages directly from UI state.")
         
-        for bedrockMessage in history {
-            let role = bedrockMessage.role == .user ? Message.Role.user : Message.Role.assistant
-            var text = ""
-            var thinkingText: String? = nil
-            var thinkingSignature: String? = nil
-            var toolUseForStorage: Message.ToolUse? = nil
+        // Convert MessageData directly to Message for storage
+        // This preserves pastedTexts and other UI-specific data
+        for messageData in messages {
+            // "User" and "ToolResult" are both user role for API
+            // "ToolResult" is a special marker for tool results that display on assistant side in UI
+            let role: Message.Role = (messageData.user == "User" || messageData.user == "ToolResult") ? .user : .assistant
             
-            // Add image and document collections
-            var imageBase64Strings: [String]? = nil
-            var documentBase64Strings: [String]? = nil
-            var documentFormats: [String]? = nil
-            var documentNames: [String]? = nil
-            
-            // Extract content from the current BedrockMessage
-            for content in bedrockMessage.content {
-                switch content {
-                case .text(let txt):
-                    text += txt // Append text chunks
-                    
-                case .thinking(let tc):
-                    thinkingText = (thinkingText ?? "") + tc.text
-                    if thinkingSignature == nil {
-                        thinkingSignature = tc.signature
-                    }
-                    
-                case .image(let imageContent):
-                    // Process image content
-                    if imageBase64Strings == nil {
-                        imageBase64Strings = [imageContent.base64Data]
-                    } else {
-                        imageBase64Strings?.append(imageContent.base64Data)
-                    }
-                    
-                case .document(let documentContent):
-                    // Process document content
-                    if documentBase64Strings == nil {
-                        documentBase64Strings = [documentContent.base64Data]
-                        documentFormats = [documentContent.format.rawValue]
-                        documentNames = [documentContent.name]
-                    } else {
-                        documentBase64Strings?.append(documentContent.base64Data)
-                        documentFormats?.append(documentContent.format.rawValue)
-                        documentNames?.append(documentContent.name)
-                    }
-                    
-                case .tooluse(let tu):
-                    // If this is an assistant message with toolUse, prepare ToolUse for storage
-                    if bedrockMessage.role == .assistant {
-                        toolUseForStorage = Message.ToolUse(
-                            toolId: tu.toolUseId,
-                            toolName: tu.name,
-                            inputs: tu.input,
-                            result: nil // Result is initially nil
-                        )
-                        logger.debug("[SaveHistory] Found toolUse in ASSISTANT message: ID=\(tu.toolUseId)")
-                    } else {
-                        logger.warning("[SaveHistory] Found toolUse in non-assistant message. Ignoring for ToolUse struct.")
-                    }
-                    
-                case .toolresult(let tr):
-                    // If this is a user message with toolResult, simply extract the result text
-                    if bedrockMessage.role == .user {
-                        toolUseForStorage = Message.ToolUse(
-                            toolId: tr.toolUseId,
-                            toolName: "",
-                            inputs: JSONValue.null,
-                            result: tr.result
-                        )
-                        logger.debug("[SaveHistory] Found toolResult in USER message: ID=\(tr.toolUseId), Result=\(tr.result)")
-                    } else {
-                        logger.warning("[SaveHistory] Found toolResult in non-user message. Ignoring.")
-                    }
-                }
+            // Convert ToolInfo to Message.ToolUse if present
+            var toolUse: Message.ToolUse? = nil
+            if let toolInfo = messageData.toolUse {
+                toolUse = Message.ToolUse(
+                    toolId: toolInfo.id,
+                    toolName: toolInfo.name,
+                    inputs: toolInfo.input,
+                    result: messageData.toolResult
+                )
             }
             
-            // Create the Message
-            let unifiedMessage = Message(
-                id: UUID(),
-                text: text,
+            let message = Message(
+                id: messageData.id,
+                text: messageData.text,
                 role: role,
-                timestamp: Date(),
-                isError: false,
-                thinking: thinkingText,
-                thinkingSignature: thinkingSignature,
-                imageBase64Strings: imageBase64Strings,
-                documentBase64Strings: documentBase64Strings,
-                documentFormats: documentFormats,
-                documentNames: documentNames,
-                toolUse: toolUseForStorage
+                timestamp: messageData.sentTime,
+                isError: messageData.isError,
+                thinking: messageData.thinking,
+                thinkingSummary: messageData.thinkingSummary,
+                thinkingSignature: messageData.signature,
+                imageBase64Strings: messageData.imageBase64Strings,
+                documentBase64Strings: messageData.documentBase64Strings,
+                documentFormats: messageData.documentFormats,
+                documentNames: messageData.documentNames,
+                pastedTexts: messageData.pastedTexts,
+                toolUse: toolUse
             )
             
-            newConversationHistory.addMessage(unifiedMessage)
+            newConversationHistory.addMessage(message)
         }
         
-        logger.info("[SaveHistory] Finished processing. Saving \(newConversationHistory.messages.count) messages.")
+        logger.info("[SaveHistory] Saved \(newConversationHistory.messages.count) messages.")
         chatManager.saveConversationHistory(newConversationHistory, for: chatId)
     }
     
@@ -1456,9 +1578,13 @@ class ChatViewModel: ObservableObject {
             
             // Add thinking content if present for assistant messages
             // Skip thinking content for OpenAI models as they don't support signature field
-            if role == .assistant, let thinking = message.thinking, !thinking.isEmpty, !isOpenAIModel(chatModel.id) {
-                let signatureToUse = message.thinkingSignature ?? UUID().uuidString
-                contents.append(.thinking(.init(text: thinking, signature: signatureToUse)))
+            // IMPORTANT: Only include thinking block if we have a valid signature from the API
+            // Using a fake/generated signature will cause "Invalid signature in thinking block" error
+            if role == .assistant,
+               let thinking = message.thinking, !thinking.isEmpty,
+               let signature = message.thinkingSignature, !signature.isEmpty,
+               !isOpenAIModel(chatModel.id) {
+                contents.append(.thinking(.init(text: thinking, signature: signature)))
             }
             
             // Add documents FIRST (before text) to support prompt caching
@@ -1487,24 +1613,38 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Add text content AFTER documents/images
-            if !message.text.isEmpty {
-                contents.append(.text(message.text))
-            }
-            
-            // Handle Tool Use/Result
-            if role == .assistant, let toolUse = message.toolUse {
-                contents.append(.tooluse(.init(
-                    toolUseId: toolUse.toolId,
-                    name: toolUse.toolName,
-                    input: toolUse.inputs
-                )))
-            } else if role == .user, let toolUse = message.toolUse, let result = toolUse.result {
+            // Handle tool results specially - they should ONLY contain toolresult, no text
+            if role == .user, let toolUse = message.toolUse, let result = toolUse.result {
+                // Tool result message - only add toolresult content
                 contents.append(.toolresult(.init(
                     toolUseId: toolUse.toolId,
                     result: result,
                     status: "success"
                 )))
+            } else {
+                // Regular message - add text content AFTER documents/images
+                // Include pasted texts in the text block for API transmission
+                var fullText = message.text
+                if let pastedTexts = message.pastedTexts, !pastedTexts.isEmpty {
+                    for pastedText in pastedTexts {
+                        if !fullText.isEmpty {
+                            fullText += "\n\n---\n\n"
+                        }
+                        fullText += "[\(pastedText.filename)]:\n\(pastedText.content)"
+                    }
+                }
+                if !fullText.isEmpty {
+                    contents.append(.text(fullText))
+                }
+                
+                // Handle Tool Use for assistant messages
+                if role == .assistant, let toolUse = message.toolUse {
+                    contents.append(.tooluse(.init(
+                        toolUseId: toolUse.toolId,
+                        name: toolUse.toolName,
+                        input: toolUse.inputs
+                    )))
+                }
             }
             
             bedrockMessages.append(BedrockMessage(role: role, content: contents))
@@ -1785,13 +1925,8 @@ class ChatViewModel: ObservableObject {
         // Add message to chat
         addMessage(assistantMessage)
         
-        // Update conversation history
-        var conversationHistory = await getConversationHistory()
-        conversationHistory.append(BedrockMessage(
-            role: .assistant,
-            content: [.text(responseText)]
-        ))
-        await saveConversationHistory(conversationHistory)
+        // Save conversation history from UI messages
+        await saveFromUIMessages()
     }
     
     /// Invokes Titan Image model
@@ -1970,8 +2105,8 @@ class ChatViewModel: ObservableObject {
         )
         
         // Select model for title generation with fallback
-        let preferredModelId = "us.amazon.nova-pro-v1:0"
-        let fallbackModelId = "anthropic.claude-3-haiku-20240307-v1:0"
+        let preferredModelId = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        let fallbackModelId = "us.amazon.nova-pro-v1:0"
         
         // Check if preferred model is available, otherwise use fallback
         let availableModelIds = SettingManager.shared.availableModels.map { $0.id }
@@ -2011,6 +2146,80 @@ class ChatViewModel: ObservableObject {
             }
         } catch {
             logger.error("Error updating chat title: \(error)")
+        }
+    }
+    
+    // MARK: - Thinking Summary Generation
+    
+    /// Generate a brief summary of the thinking process using a lightweight model
+    private func generateThinkingSummary(for messageId: UUID, thinking: String) async {
+        // Skip if thinking is already completed
+        guard !thinkingCompleted else { return }
+        
+        // Truncate thinking if too long (keep first 1500 chars for faster summary)
+        let truncatedThinking = thinking.count > 1500 ? String(thinking.prefix(1500)) + "..." : thinking
+        
+        let summaryPrompt = """
+        Summarize this AI thinking in max 10 words. Be concise:
+        
+        <thinking>
+        \(truncatedThinking)
+        </thinking>
+        """
+        
+        // Create message for converseStream
+        let userMsg = BedrockMessage(
+            role: .user,
+            content: [.text(summaryPrompt)]
+        )
+        
+        // Select model for summary generation with fallback
+        let preferredModelId = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        let fallbackModelId = "us.amazon.nova-pro-v1:0"
+        
+        // Check if preferred model is available, otherwise use fallback
+        let availableModelIds = await MainActor.run { SettingManager.shared.availableModels.map { $0.id } }
+        let summaryModelId = availableModelIds.contains(preferredModelId) ? preferredModelId : fallbackModelId
+        
+        do {
+            // Convert to AWS SDK format
+            let awsMessage = try convertToBedrockMessage(userMsg)
+            
+            // Use converseStream API to get the summary
+            var summary = ""
+            
+            let systemContentBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
+            let backend = await MainActor.run { backendModel.backend }
+            
+            for try await chunk in try await backend.converseStream(
+                withId: summaryModelId,
+                messages: [awsMessage],
+                systemContent: systemContentBlocks,
+                inferenceConfig: BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 50,
+                    temperature: 0.3
+                ),
+                usageHandler: { @Sendable _ in }
+            ) {
+                if let textChunk = extractTextFromChunk(chunk) {
+                    summary += textChunk
+                }
+            }
+            
+            // Update message with thinking summary (only if thinking not completed)
+            if !summary.isEmpty && !thinkingCompleted {
+                let cleanedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                await MainActor.run { [weak self] in
+                    guard let self = self, !self.thinkingCompleted else { return }
+                    if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
+                        self.messages[index].thinkingSummary = cleanedSummary
+                        self.objectWillChange.send()
+                    }
+                }
+                logger.info("Generated thinking summary: \(cleanedSummary)")
+            }
+        } catch {
+            logger.error("Error generating thinking summary: \(error)")
         }
     }
     
@@ -2071,9 +2280,9 @@ class ChatViewModel: ObservableObject {
             }
         }
 
-        // Get conversation history
-        var conversationHistory = await getConversationHistory()
-        await saveConversationHistory(conversationHistory)
+        // Save current messages first, then get conversation history
+        await saveFromUIMessages()
+        let conversationHistory = await getConversationHistory()
         
         // Get system prompt
         let systemPrompt = settingManager.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2147,20 +2356,8 @@ class ChatViewModel: ObservableObject {
         )
         addMessage(assistantMessage)
         
-        // Create assistant message for conversation history
-        let assistantMsg = BedrockMessage(
-            role: .assistant,
-            content: thinking != nil ? [
-                .thinking(MessageContent.ThinkingContent(
-                    text: thinking!,
-                    signature: thinkingSignature ?? UUID().uuidString
-                )),
-                .text(responseText)
-            ] : [.text(responseText)]
-        )
-        
-        // Add to history and save
-        conversationHistory.append(assistantMsg)
-        await saveConversationHistory(conversationHistory)
+        // Save conversation history from UI messages
+        // This preserves all tool_use/tool_result information correctly
+        await saveFromUIMessages()
     }
 }

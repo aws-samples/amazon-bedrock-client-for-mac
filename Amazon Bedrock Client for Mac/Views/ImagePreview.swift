@@ -8,120 +8,102 @@
 import SwiftUI
 
 /**
- * Modal view for displaying full-sized image previews.
- * Shows the original image with filename and provides close functionality.
+ * Modern modal view for displaying full-sized image previews.
+ * Features smooth animations, gesture controls, and a clean UI.
  */
 struct ImagePreviewModal: View {
     var image: NSImage
     var filename: String
     @Binding var isPresented: Bool
+    
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
-    @State private var showInfo: Bool = true
+    @State private var isHoveringControls: Bool = false
+    
     @Environment(\.colorScheme) private var colorScheme
     
+    private let cornerRadius: CGFloat = 16
+    
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // Background overlay
-            backgroundLayer
+        ZStack {
+            // Dimmed background
+            Color.black.opacity(0.75)
+                .ignoresSafeArea()
+                .onTapGesture { dismiss() }
             
-            // Main content container
+            // Main container
             VStack(spacing: 0) {
-                headerView
-                imageViewer
-                footerView
+                headerBar
+                imageContent
+                footerBar
             }
             .frame(width: 900, height: 700)
-            .background(Color.black.opacity(0.2))
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
+            .background(containerBackground)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: .black.opacity(0.3), radius: 30, x: 0, y: 15)
         }
-        .transition(.opacity)
-        .onAppear(perform: resetImage)
+        .onAppear { resetView() }
     }
     
-    // MARK: - Subviews
-    
-    private var backgroundLayer: some View {
-        Color.black.opacity(0.7)
-            .edgesIgnoringSafeArea(.all)
-            .onTapGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isPresented = false
+    // MARK: - Header
+    private var headerBar: some View {
+        HStack(spacing: 12) {
+            // File info
+            HStack(spacing: 10) {
+                Image(systemName: "photo")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(filename)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Text("\(Int(image.size.width)) × \(Int(image.size.height))")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.6))
                 }
             }
-    }
-    
-    private var headerView: some View {
-        HStack {
-            Text(filename)
-                .font(.headline)
-                .foregroundColor(.white)
             
             Spacer()
             
-            controlButtons
+            // Action buttons
+            HStack(spacing: 4) {
+                toolbarButton(icon: "arrow.counterclockwise", action: resetView, help: "Reset")
+                toolbarButton(icon: "square.and.arrow.down", action: saveImage, help: "Save")
+                toolbarButton(icon: "doc.on.doc", action: copyToClipboard, help: "Copy")
+                
+                Divider()
+                    .frame(height: 20)
+                    .background(Color.white.opacity(0.2))
+                    .padding(.horizontal, 8)
+                
+                // Close button
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.white.opacity(0.15)))
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(20)
-        .background(Color.black.opacity(0.4))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color.black.opacity(0.5).background(.ultraThinMaterial))
     }
     
-    private var controlButtons: some View {
-        HStack(spacing: 16) {
-            Button(action: resetImage) {
-                Image(systemName: "arrow.counterclockwise")
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("Reset View")
-            
-            Button(action: saveImage) {
-                Image(systemName: "square.and.arrow.down")
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("Save Image")
-            
-            Button(action: copyImageToClipboard) {
-                Image(systemName: "doc.on.doc")
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("Copy to Clipboard")
-            
-            closeButton
-        }
-    }
-    
-    private var closeButton: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isPresented = false
-            }
-        }) {
-            Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(8)
-                .background(
-                    Circle()
-                        .fill(Color.black.opacity(0.5))
-                )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .contentShape(Circle())
-    }
-    
-    private var imageViewer: some View {
+    // MARK: - Image Content
+    private var imageContent: some View {
         GeometryReader { geo in
             ZStack {
-                Color.clear
+                // Checkerboard pattern for transparency
+                CheckerboardPattern()
+                    .opacity(0.1)
                 
                 Image(nsImage: image)
                     .resizable()
@@ -130,21 +112,82 @@ struct ImagePreviewModal: View {
                     .offset(offset)
                     .gesture(dragGesture)
                     .gesture(magnificationGesture)
-                    .onTapGesture(count: 2) {
-                        withAnimation(.spring()) {
-                            if scale > 1.0 {
-                                resetImage()
-                            } else {
-                                scale = 2.0
-                                lastScale = 2.0
-                            }
-                        }
-                    }
+                    .onTapGesture(count: 2) { toggleZoom() }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+        }
+        .background(Color.black.opacity(0.3))
+    }
+    
+    // MARK: - Footer
+    private var footerBar: some View {
+        HStack {
+            // Format info
+            Text(filename.components(separatedBy: ".").last?.uppercased() ?? "IMAGE")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.white.opacity(0.1)))
+            
+            Spacer()
+            
+            // Zoom controls
+            HStack(spacing: 12) {
+                Button(action: { zoomOut() }) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(scale <= 1.0 ? .white.opacity(0.3) : .white.opacity(0.8))
+                }
+                .buttonStyle(.plain)
+                .disabled(scale <= 1.0)
+                
+                Text("\(Int(scale * 100))%")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 50)
+                
+                Button(action: { zoomIn() }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(scale >= 5.0 ? .white.opacity(0.3) : .white.opacity(0.8))
+                }
+                .buttonStyle(.plain)
+                .disabled(scale >= 5.0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.white.opacity(0.1)))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.5).background(.ultraThinMaterial))
+    }
+    
+    // MARK: - Components
+    @ViewBuilder
+    private var containerBackground: some View {
+        if colorScheme == .dark {
+            Color(white: 0.1)
+        } else {
+            Color(white: 0.15)
         }
     }
     
+    private func toolbarButton(icon: String, action: @escaping () -> Void, help: String) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+    
+    // MARK: - Gestures
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
@@ -153,81 +196,26 @@ struct ImagePreviewModal: View {
                     height: lastOffset.height + value.translation.height
                 )
             }
-            .onEnded { value in
-                lastOffset = offset
-            }
+            .onEnded { _ in lastOffset = offset }
     }
     
     private var magnificationGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                scale = max(1.0, lastScale * value)
+                scale = min(5.0, max(0.5, lastScale * value))
             }
-            .onEnded { value in
-                lastScale = scale
-            }
+            .onEnded { _ in lastScale = scale }
     }
     
-    private var footerView: some View {
-        Group {
-            if showInfo {
-                HStack {
-                    imageInfoView
-                    Spacer()
-                    zoomControlsView
-                }
-                .padding(16)
-                .background(Color.black.opacity(0.4))
-            }
+    // MARK: - Actions
+    private func dismiss() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isPresented = false
         }
     }
     
-    private var imageInfoView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Dimensions: \(Int(image.size.width)) × \(Int(image.size.height))")
-            Text("Format: \(filename.components(separatedBy: ".").last?.uppercased() ?? "Unknown")")
-        }
-        .font(.caption)
-        .foregroundColor(.white)
-    }
-    
-    private var zoomControlsView: some View {
-        HStack(spacing: 16) {
-            Button(action: {
-                withAnimation(.spring()) {
-                    scale = max(1.0, scale - 0.25)
-                    lastScale = scale
-                }
-            }) {
-                Image(systemName: "minus.magnifyingglass")
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .disabled(scale <= 1.0)
-            
-            Text("\(Int(scale * 100))%")
-                .font(.caption)
-                .foregroundColor(.white)
-                .frame(width: 50)
-            
-            Button(action: {
-                withAnimation(.spring()) {
-                    scale += 0.25
-                    lastScale = scale
-                }
-            }) {
-                Image(systemName: "plus.magnifyingglass")
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-    }
-    
-    // MARK: - Helper functions
-    
-    /// Reset image to original position and scale
-    private func resetImage() {
-        withAnimation(.spring()) {
+    private func resetView() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             scale = 1.0
             lastScale = 1.0
             offset = .zero
@@ -235,7 +223,31 @@ struct ImagePreviewModal: View {
         }
     }
     
-    /// Save image to disk
+    private func toggleZoom() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if scale > 1.0 {
+                resetView()
+            } else {
+                scale = 2.0
+                lastScale = 2.0
+            }
+        }
+    }
+    
+    private func zoomIn() {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+            scale = min(5.0, scale + 0.25)
+            lastScale = scale
+        }
+    }
+    
+    private func zoomOut() {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+            scale = max(1.0, scale - 0.25)
+            lastScale = scale
+        }
+    }
+    
     private func saveImage() {
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.png, .jpeg]
@@ -249,21 +261,38 @@ struct ImagePreviewModal: View {
                     let properties: [NSBitmapImageRep.PropertyKey: Any] = type == .jpeg ? [.compressionFactor: 0.9] : [:]
                     
                     if let data = bitmap.representation(using: type, properties: properties) {
-                        do {
-                            try data.write(to: url)
-                        } catch {
-                            print("Failed to save image: \(error.localizedDescription)")
-                        }
+                        try? data.write(to: url)
                     }
                 }
             }
         }
     }
     
-    /// Copy image to clipboard
-    private func copyImageToClipboard() {
+    private func copyToClipboard() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
+    }
+}
+
+// MARK: - Checkerboard Pattern (for transparency)
+struct CheckerboardPattern: View {
+    var body: some View {
+        GeometryReader { geo in
+            let size: CGFloat = 10
+            let cols = Int(geo.size.width / size) + 1
+            let rows = Int(geo.size.height / size) + 1
+            
+            Canvas { context, _ in
+                for row in 0..<rows {
+                    for col in 0..<cols {
+                        if (row + col) % 2 == 0 {
+                            let rect = CGRect(x: CGFloat(col) * size, y: CGFloat(row) * size, width: size, height: size)
+                            context.fill(Path(rect), with: .color(.white))
+                        }
+                    }
+                }
+            }
+        }
     }
 }

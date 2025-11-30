@@ -29,11 +29,13 @@ struct Message: Codable, Identifiable {
     
     // Separate fields for different content types
     var thinking: String?
+    var thinkingSummary: String?  // Summary of thinking process
     var thinkingSignature: String?
     var imageBase64Strings: [String]?
     var documentBase64Strings: [String]?
     var documentFormats: [String]?
     var documentNames: [String]?
+    var pastedTexts: [PastedTextInfo]?  // Pasted text attachments
     
     // Tool use is a separate concern - not mixed with message text
     var toolUse: ToolUse?
@@ -643,11 +645,19 @@ class ChatManager: ObservableObject {
         }
     }
     
-    func updateMessageWithToolInfo(for chatId: String, messageId: UUID, newText: String, toolInfo: ToolInfo, toolResult: String? = nil) {
+    func updateMessageWithToolInfo(for chatId: String, messageId: UUID, newText: String, toolInfo: ToolInfo, toolResult: String? = nil, thinking: String? = nil, thinkingSignature: String? = nil) {
         if var history = getConversationHistory(for: chatId) {
             if let index = history.messages.firstIndex(where: { $0.id == messageId }) {
                 // Update message text
                 history.messages[index].text = newText
+                
+                // Update thinking and signature if provided
+                if let thinking = thinking {
+                    history.messages[index].thinking = thinking
+                }
+                if let signature = thinkingSignature {
+                    history.messages[index].thinkingSignature = signature
+                }
                 
                 // Convert ToolInfo to Message.ToolUse
                 let toolUse = Message.ToolUse(
@@ -678,6 +688,14 @@ class ChatManager: ObservableObject {
                 var message = messages[index]
                 message.text = newText
                 message.toolUse = toolInfo
+                
+                // Update thinking and signature if provided
+                if let thinking = thinking {
+                    message.thinking = thinking
+                }
+                if let signature = thinkingSignature {
+                    message.signature = signature
+                }
                 
                 if let result = toolResult {
                     message.toolResult = result
@@ -738,6 +756,7 @@ class ChatManager: ObservableObject {
                     id: message.id,
                     text: message.text,
                     thinking: message.thinking,
+                    thinkingSummary: message.thinkingSummary,
                     signature: message.thinkingSignature,
                     user: user,
                     isError: message.isError,
@@ -746,6 +765,7 @@ class ChatManager: ObservableObject {
                     documentBase64Strings: message.documentBase64Strings,
                     documentFormats: message.documentFormats,
                     documentNames: message.documentNames,
+                    pastedTexts: message.pastedTexts,
                     toolUse: toolUse,
                     toolResult: message.toolUse?.result
                 )
@@ -964,6 +984,7 @@ class ChatManager: ObservableObject {
                 // Optional fields with fallbacks
                 let isError = (json["isError"] as? Bool) ?? (json["is_error"] as? Bool) ?? false
                 let thinking = json["thinking"] as? String
+                let thinkingSummary = (json["thinkingSummary"] as? String) ?? (json["thinking_summary"] as? String)
                 let signature = json["signature"] as? String
                 
                 // Image attachments
@@ -1022,6 +1043,7 @@ class ChatManager: ObservableObject {
                     id: id,
                     text: text,
                     thinking: thinking,
+                    thinkingSummary: thinkingSummary,
                     signature: signature,
                     user: user,
                     isError: isError,

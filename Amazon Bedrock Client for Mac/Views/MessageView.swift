@@ -180,31 +180,47 @@ struct ExpandableMarkdownItem: View {
     let text: String
     let fontSize: CGFloat
     let searchRanges: [NSRange]
+    var summary: String? = nil  // Optional summary to show in header
+    var isStreaming: Bool = false  // Whether content is still streaming
     
-    init(header: String, text: String, fontSize: CGFloat, searchRanges: [NSRange] = []) {
+    init(header: String, text: String, fontSize: CGFloat, searchRanges: [NSRange] = [], summary: String? = nil, isStreaming: Bool = false) {
         self.header = header
         self.text = text
         self.fontSize = fontSize
         self.searchRanges = searchRanges
+        self.summary = summary
+        self.isStreaming = isStreaming
+    }
+    
+    // Display text for header - shows summary if available
+    private var displayHeader: String {
+        if let summary = summary, !summary.isEmpty {
+            return summary
+        } else {
+            return header
+        }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Toggle button
+            // Toggle button with summary
             Button(action: {
-                withAnimation(.spring(response: 0.12, dampingFraction: 0.9, blendDuration: 0)) {
-                    isExpanded.toggle()
-                }
+                isExpanded.toggle()
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: fontSize - 4))
                         .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 0 : 0))
                     
-                    Text(header)
-                        .font(.system(size: fontSize - 1, weight: .medium))
-                        .foregroundColor(.secondary)
+                    // Show animated dots only when streaming without summary
+                    if isStreaming && summary == nil {
+                        ThinkingDotsView(fontSize: fontSize)
+                    } else {
+                        Text(displayHeader)
+                            .font(.system(size: fontSize - 1, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
                     
                     Spacer()
                 }
@@ -214,15 +230,11 @@ struct ExpandableMarkdownItem: View {
             // Expandable content
             if isExpanded {
                 LazyMarkdownView(
-                    text: text, 
+                    text: text,
                     fontSize: fontSize - 2,
                     searchRanges: searchRanges
                 )
-                    .padding(.leading, fontSize / 2)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
-                        removal: .opacity
-                    ))
+                .padding(.leading, fontSize / 2)
             }
         }
         .padding(10)
@@ -246,6 +258,21 @@ struct ExpandableMarkdownItem: View {
     }
 }
 
+// Separate view for animated dots using TimelineView
+private struct ThinkingDotsView: View {
+    let fontSize: CGFloat
+    
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.4)) { timeline in
+            let seconds = Calendar.current.component(.nanosecond, from: timeline.date) / 100_000_000
+            let dotCount = (seconds % 3) + 1
+            Text("Thinking" + String(repeating: ".", count: dotCount))
+                .font(.system(size: fontSize - 1, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
 // MARK: - MessageView
 struct MessageView: View {
     let message: MessageData
@@ -262,23 +289,31 @@ struct MessageView: View {
     private let imageSize: CGFloat = 100
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                if message.user == "User" {
-                    Spacer()
-                    userMessageBubble
-                        .padding(.horizontal)
-                } else {
-                    assistantMessageBubble
-                        .padding(.horizontal)
-                    Spacer()
+        Group {
+            // Hide "ToolResult" messages - they are only for API history
+            // Tool results are displayed in the assistant message's toolResult field
+            if message.user == "ToolResult" {
+                EmptyView()
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        if message.user == "User" {
+                            Spacer()
+                            userMessageBubble
+                                .padding(.horizontal)
+                        } else {
+                            assistantMessageBubble
+                                .padding(.horizontal)
+                            Spacer()
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
-            }
-            .padding(.vertical, 4)
-        }
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovering = hovering
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isHovering = hovering
+                    }
+                }
             }
         }
         .onAppear {
@@ -362,7 +397,9 @@ struct MessageView: View {
                     header: "Thinking",
                     text: thinking,
                     fontSize: fontSize + adjustedFontSize - 2,
-                    searchRanges: searchResult?.ranges ?? []
+                    searchRanges: searchResult?.ranges ?? [],
+                    summary: message.thinkingSummary,
+                    isStreaming: message.text.isEmpty  // Still streaming if no text yet
                 )
                 .padding(.vertical, 2)
             }
@@ -499,7 +536,8 @@ struct MessageView: View {
             VStack(alignment: .trailing, spacing: 6) {
                 // Only load attachments if they exist
                 if (message.imageBase64Strings?.isEmpty == false) ||
-                   (message.documentBase64Strings?.isEmpty == false) {
+                   (message.documentBase64Strings?.isEmpty == false) ||
+                   (message.pastedTexts?.isEmpty == false) {
                     
                     AttachmentsView(
                         imageBase64Strings: message.imageBase64Strings,
@@ -511,19 +549,9 @@ struct MessageView: View {
                         documentBase64Strings: message.documentBase64Strings,
                         documentFormats: message.documentFormats,
                         documentNames: message.documentNames,
+                        pastedTexts: message.pastedTexts,
                         alignment: .trailing
                     )
-                }
-                
-                // Tool result section (new addition for user messages)
-                if let toolResult = message.toolResult, !toolResult.isEmpty {
-                    ExpandableMarkdownItem(
-                        header: "Tool Result",
-                        text: toolResult,
-                        fontSize: fontSize + adjustedFontSize - 2,
-                        searchRanges: searchResult?.ranges ?? []
-                    )
-                    .padding(.vertical, 2)
                 }
                 
                 // Only create text if non-empty
@@ -1519,6 +1547,9 @@ struct AttachmentsView: View {
     let documentFormats: [String]?
     let documentNames: [String]?
     
+    // Pasted text properties
+    let pastedTexts: [PastedTextInfo]?
+    
     // Alignment control
     let alignment: HorizontalAlignment
     
@@ -1527,13 +1558,21 @@ struct AttachmentsView: View {
     
     private var hasAttachments: Bool {
         return (imageBase64Strings?.isEmpty == false) ||
-        (documentBase64Strings?.isEmpty == false)
+        (documentBase64Strings?.isEmpty == false) ||
+        (pastedTexts?.isEmpty == false)
     }
     
     var body: some View {
         Group {
             if hasAttachments {
                 HStack(spacing: 10) {
+                    // Pasted text attachments (displayed as chips)
+                    if let pastedTexts = pastedTexts, !pastedTexts.isEmpty {
+                        ForEach(pastedTexts) { pastedText in
+                            pastedTextContent(pastedText: pastedText)
+                        }
+                    }
+                    
                     // Document attachments
                     if let documentBase64Strings = documentBase64Strings,
                        let documentFormats = documentFormats,
@@ -1560,9 +1599,81 @@ struct AttachmentsView: View {
         }
     }
     
+    // Pasted text content view
+    private func pastedTextContent(pastedText: PastedTextInfo) -> some View {
+        Button(action: {
+            if let data = pastedText.content.data(using: .utf8) {
+                onSelectDocument(data, "txt", pastedText.filename)
+            }
+        }) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(pastedText.preview)
+                    .font(.system(size: fontSize - 3))
+                    .foregroundColor(.primary.opacity(0.8))
+                    .lineLimit(4)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: 250, alignment: .leading)
+                
+                HStack(spacing: 6) {
+                    Text("PASTED")
+                        .font(.system(size: fontSize - 5, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
+                )
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(colorScheme == .dark ?
+                          Color.white.opacity(0.08) :
+                          Color.black.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .contextMenu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(pastedText.content, forType: .string)
+            } label: {
+                Label("Copy Content", systemImage: "doc.on.doc")
+            }
+        }
+    }
+    
     // Document content extracted to its own function
     private func documentContent(name: String, format: String) -> some View {
-        Button(action: {
+        let docColor = documentColor(for: format)
+        let isTextFile = ["txt", "md"].contains(format.lowercased())
+        let isPastedText = isTextFile && name.lowercased().contains("pasted")
+        
+        // Get text preview for all text documents (txt, md)
+        let textPreview: String? = {
+            if isTextFile,
+               let index = documentNames?.firstIndex(of: name),
+               let docStrings = documentBase64Strings,
+               index < docStrings.count,
+               let docData = Data(base64Encoded: docStrings[index]),
+               let text = String(data: docData, encoding: .utf8) {
+                let truncated = String(text.prefix(150))
+                let cleaned = truncated
+                    .split(separator: "\n", omittingEmptySubsequences: false)
+                    .joined(separator: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return cleaned.count > 100 ? String(cleaned.prefix(97)) + "..." : cleaned
+            }
+            return nil
+        }()
+        
+        return Button(action: {
             if let index = documentNames?.firstIndex(of: name),
                let docStrings = documentBase64Strings,
                index < docStrings.count,
@@ -1570,48 +1681,88 @@ struct AttachmentsView: View {
                 onSelectDocument(docData, format, name)
             }
         }) {
-            HStack(spacing: 10) {
-                // Document icon
-                ZStack {
+            if let preview = textPreview {
+                // Text file preview style (Claude Desktop style)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(preview)
+                        .font(.system(size: fontSize - 3))
+                        .foregroundColor(.primary.opacity(0.8))
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: 250, alignment: .leading)
+                    
+                    HStack(spacing: 6) {
+                        // Show "PASTED" for pasted text, filename for regular files
+                        Text(isPastedText ? "PASTED" : name)
+                            .font(.system(size: fontSize - 5, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                        
+                        if !isPastedText {
+                            Text("•")
+                                .font(.system(size: fontSize - 5))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Text(format.uppercased())
+                                .font(.system(size: fontSize - 5, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.7))
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
+                    )
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(colorScheme == .dark ?
+                              Color.white.opacity(0.08) :
+                              Color.black.opacity(0.04))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+            } else {
+                // Regular document style
+                HStack(spacing: 10) {
+                    // Document icon with color
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(docColor.opacity(0.15))
+                            .frame(width: 36, height: 36)
+                        
+                        Image(systemName: documentIcon(for: format))
+                            .font(.system(size: 18))
+                            .foregroundColor(docColor)
+                    }
+                    
+                    // Document name
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name)
+                            .font(.system(size: fontSize - 2, weight: .medium))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        Text("\(format.uppercased()) document")
+                            .font(.system(size: fontSize - 4))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(6)
+                .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(colorScheme == .dark ?
-                              Color.gray.opacity(0.2) :
-                                Color.gray.opacity(0.1))
-                        .frame(width: 36, height: 36)
-                    
-                    Image(systemName: documentIcon(for: format))
-                        .font(.system(size: 18))
-                        .foregroundColor(.primary)
-                }
-                
-                // Document name
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(.system(size: fontSize - 2, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                    
-                    Text("\(format.uppercased()) document")
-                        .font(.system(size: fontSize - 4))
-                        .foregroundColor(.secondary)
-                }
+                              Color.gray.opacity(0.15) :
+                              Color.gray.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(docColor.opacity(0.3), lineWidth: 1)
+                )
             }
-            .padding(6) // Reduced padding
-            .background(
-                RoundedRectangle(cornerRadius: 8) // Reduced corner radius
-                    .fill(colorScheme == .dark ?
-                          Color.gray.opacity(0.15) :
-                            Color.gray.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(
-                        colorScheme == .dark ?
-                        Color.gray.opacity(0.3) :
-                            Color.gray.opacity(0.2),
-                        lineWidth: 1
-                    )
-            )
         }.buttonStyle(PlainButtonStyle())
     }
     
@@ -1624,6 +1775,18 @@ struct AttachmentsView: View {
         case "txt", "md": return "doc.plaintext.fill"
         case "html": return "globe"
         default: return "doc.fill"
+        }
+    }
+    
+    // Helper function to determine document color based on file extension
+    private func documentColor(for fileExtension: String) -> Color {
+        switch fileExtension.lowercased() {
+        case "pdf": return .red
+        case "doc", "docx": return .blue
+        case "xls", "xlsx", "csv": return .green
+        case "txt", "md": return .gray
+        case "html": return .orange
+        default: return .gray
         }
     }
 }
@@ -1757,3 +1920,5 @@ extension NSImage {
         return data
     }
 }
+
+

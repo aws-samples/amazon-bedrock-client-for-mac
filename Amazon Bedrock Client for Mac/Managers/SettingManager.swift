@@ -12,7 +12,9 @@ import Carbon
 
 extension Notification.Name {
     static let awsCredentialsChanged = Notification.Name("awsCredentialsChanged")
-    static let mcpEnabledChanged = Notification.Name("mcpEnabledChanged")  // 추가
+    static let mcpEnabledChanged = Notification.Name("mcpEnabledChanged")
+    static let mcpServersLoaded = Notification.Name("mcpServersLoaded")
+    static let mcpServerConnected = Notification.Name("mcpServerConnected")
 }
 
 @MainActor
@@ -94,6 +96,7 @@ class SettingManager: ObservableObject {
     @Published var virtualProfile: AWSProfile?
     @Published var availableModels: [ChatModel] = []
     @AppStorage("allowImagePasting") var allowImagePasting: Bool = true
+    @AppStorage("treatLargeTextAsFile") var treatLargeTextAsFile: Bool = true
     @Published var mcpServers: [MCPServerConfig] = [] {
         didSet {
             // Save the complete list to UserDefaults
@@ -418,10 +421,11 @@ class SettingManager: ObservableObject {
             }
         }
         
-        // Update the server list without triggering didSet (to avoid immediate saving)
-        Task { @MainActor in
-            self.mcpServers = mergedServers
-        }
+        // Update the server list
+        self.mcpServers = mergedServers
+        
+        // Notify that MCP servers have been loaded
+        NotificationCenter.default.post(name: .mcpServersLoaded, object: nil)
     }
     
     // Load server list from UserDefaults

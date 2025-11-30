@@ -154,14 +154,16 @@ struct MessageData: Identifiable, Equatable, Codable {
     var id = UUID()
     var text: String // Changed to var to allow modification
     var thinking: String?
+    var thinkingSummary: String?  // Summary of thinking process for display
     var signature: String?
-    let user: String
+    var user: String
     var isError: Bool = false
     let sentTime: Date
     var imageBase64Strings: [String]?
     var documentBase64Strings: [String]?
     var documentFormats: [String]?
     var documentNames: [String]?
+    var pastedTexts: [PastedTextInfo]?  // Pasted text attachments (sent as text block, not document)
     var toolUse: ToolInfo?  // Information about tool usage in this message
     var toolResult: String?  // Result from tool execution
     
@@ -169,6 +171,7 @@ struct MessageData: Identifiable, Equatable, Codable {
         case id
         case text
         case thinking
+        case thinkingSummary = "thinking_summary"
         case signature
         case user
         case isError = "is_error"
@@ -177,6 +180,7 @@ struct MessageData: Identifiable, Equatable, Codable {
         case documentBase64Strings = "document_base64_strings"
         case documentFormats = "document_formats"
         case documentNames = "document_names"
+        case pastedTexts = "pasted_texts"
         case toolUse = "tool_use"
         case toolResult = "tool_result"
     }
@@ -185,12 +189,30 @@ struct MessageData: Identifiable, Equatable, Codable {
         return lhs.id == rhs.id &&
                lhs.text == rhs.text &&
                lhs.thinking == rhs.thinking &&
+               lhs.thinkingSummary == rhs.thinkingSummary &&
                lhs.toolResult == rhs.toolResult &&
                lhs.user == rhs.user &&
                lhs.isError == rhs.isError &&
                lhs.sentTime == rhs.sentTime &&
                lhs.documentBase64Strings == rhs.documentBase64Strings &&
                lhs.documentFormats == rhs.documentFormats &&
-               lhs.documentNames == rhs.documentNames
+               lhs.documentNames == rhs.documentNames &&
+               lhs.pastedTexts == rhs.pastedTexts
+    }
+}
+
+/// Pasted text information for UI display
+struct PastedTextInfo: Codable, Equatable, Identifiable {
+    var id = UUID()
+    let filename: String
+    let content: String
+    
+    var preview: String {
+        let truncated = String(content.prefix(150))
+        let cleaned = truncated
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.count > 100 ? String(cleaned.prefix(97)) + "..." : cleaned
     }
 }

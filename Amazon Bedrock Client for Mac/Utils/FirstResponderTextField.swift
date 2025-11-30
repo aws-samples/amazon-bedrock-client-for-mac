@@ -24,9 +24,13 @@ import UniformTypeIdentifiers
 final class MyTextView: NSTextView {
     var onPaste: ((NSImage) -> Void)?
     var onPasteDocument: ((URL) -> Void)?
+    var onPasteLargeText: ((String, String) -> Void)?  // (text content, suggested filename)
     var onCommit: (() -> Void)?
     var onPasteStarted: (() -> Void)?
     var onPasteCompleted: (() -> Void)?
+    var allowImagePasting: Bool = true  // Control whether image pasting is allowed
+    var treatLargeTextAsFile: Bool = true  // Control whether large text is treated as file attachment
+    var largeTextThreshold: Int = 10 * 1024  // 10KB threshold for treating text as file
     var placeholderString: String? {
         didSet {
             needsDisplay = true
@@ -93,8 +97,8 @@ final class MyTextView: NSTextView {
             for url in fileURLs {
                 let fileType = UTType(filenameExtension: url.pathExtension) ?? .data
                 
-                // Handle image files
-                if supportedImageTypes.contains(fileType),
+                // Handle image files - only if image pasting is allowed
+                if allowImagePasting && supportedImageTypes.contains(fileType),
                    let image = NSImage(contentsOf: url),
                    image.isValidImage(fileURL: url, maxSize: 10 * 1024 * 1024, maxWidth: 8000, maxHeight: 8000) {
                     DispatchQueue.main.async {
@@ -158,8 +162,8 @@ final class MyTextView: NSTextView {
                 
                 let ext = url.pathExtension.lowercased()
                 
-                // Handle image files
-                if supportedImageExtensions.contains(ext), let image = NSImage(contentsOf: url) {
+                // Handle image files - only if image pasting is allowed
+                if allowImagePasting && supportedImageExtensions.contains(ext), let image = NSImage(contentsOf: url) {
                     pastedImages.append(image)
                     fileProcessed = true
                 }
@@ -171,8 +175,8 @@ final class MyTextView: NSTextView {
             }
         }
         
-        // 2. Process image data directly - only if no files processed yet
-        if !fileProcessed && pastedImages.isEmpty {
+        // 2. Process image data directly - only if no files processed yet and image pasting is allowed
+        if allowImagePasting && !fileProcessed && pastedImages.isEmpty {
             let types: [NSPasteboard.PasteboardType] = [
                 .tiff,
                 .png,
@@ -193,13 +197,14 @@ final class MyTextView: NSTextView {
             }
         }
         
-        // 3. Try to extract image URLs from HTML content - only if no files processed yet
+        // 3. Try to extract image URLs from HTML content - only if no files processed yet and image pasting is allowed
         if !fileProcessed && pastedImages.isEmpty,
            let htmlString = pasteboard.string(forType: .html) {
             let (imageUrls, extractedText) = extractContentFromHTML(htmlString)
             pastedText = extractedText
             
-            if !imageUrls.isEmpty {
+            // Only process image URLs if image pasting is allowed
+            if allowImagePasting && !imageUrls.isEmpty {
                 // Limit to maximum allowed images
                 let urlsToProcess = imageUrls.prefix(maxImagesAllowed)
                 
@@ -267,9 +272,20 @@ final class MyTextView: NSTextView {
     }
 
     private func handlePastedContent(images: [NSImage], documents: [URL], text: String, fileProcessed: Bool) {
-        // Process images
-        if !images.isEmpty {
-            images.forEach { self.onPaste?($0) }
+        // Process text first
+        if !text.isEmpty {
+            let textData = text.data(using: .utf8) ?? Data()
+            // Only treat as file if setting is enabled
+            if treatLargeTextAsFile && textData.count >= largeTextThreshold, let handler = onPasteLargeText {
+                // Treat large text as a file attachment
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
+                let filename = "pasted_text_\(dateFormatter.string(from: Date())).txt"
+                handler(text, filename)
+            } else {
+                // Insert text normally
+                self.insertText(text, replacementRange: self.selectedRange())
+            }
         }
         
         // Process documents
@@ -277,13 +293,25 @@ final class MyTextView: NSTextView {
             documents.forEach { self.onPasteDocument?($0) }
         }
         
-        // Process text
-        if !text.isEmpty {
-            self.insertText(text, replacementRange: self.selectedRange())
+        // Process images - always process if available (both large text and images can coexist)
+        if !images.isEmpty {
+            images.forEach { self.onPaste?($0) }
         }
         
         // Fall back to standard paste if nothing was processed
         if !fileProcessed && images.isEmpty && documents.isEmpty && text.isEmpty {
+            // Check if clipboard has plain text that might be large
+            if let clipboardText = NSPasteboard.general.string(forType: .string) {
+                let textData = clipboardText.data(using: .utf8) ?? Data()
+                // Only treat as file if setting is enabled
+                if treatLargeTextAsFile && textData.count >= largeTextThreshold, let handler = onPasteLargeText {
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
+                    let filename = "pasted_text_\(dateFormatter.string(from: Date())).txt"
+                    handler(clipboardText, filename)
+                    return
+                }
+            }
             super.paste(nil)
         }
     }
@@ -394,9 +422,12 @@ struct FirstResponderTextView: NSViewRepresentable {
     @Binding var isDisabled: Bool
     @Binding var calculatedHeight: CGFloat
     @Binding var isPasting: Bool  // New binding for paste operation status
+    var allowImagePasting: Bool = true  // Control whether image pasting is allowed
+    var treatLargeTextAsFile: Bool = true  // Control whether large text is treated as file attachment
     var onCommit: () -> Void
     var onPaste: ((NSImage) -> Void)?
     var onPasteDocument: ((URL) -> Void)?
+    var onPasteLargeText: ((String, String) -> Void)?  // (text content, filename) - for large text as file
     
     func makeCoordinator() -> Coordinator {
         let coordinator = Coordinator(self, onPaste: onPaste)
@@ -413,7 +444,7 @@ struct FirstResponderTextView: NSViewRepresentable {
     }
     
     static func == (lhs: FirstResponderTextView, rhs: FirstResponderTextView) -> Bool {
-        lhs.text == rhs.text && lhs.isDisabled == rhs.isDisabled && lhs.isPasting == rhs.isPasting
+        lhs.text == rhs.text && lhs.isDisabled == rhs.isDisabled && lhs.isPasting == rhs.isPasting && lhs.allowImagePasting == rhs.allowImagePasting && lhs.treatLargeTextAsFile == rhs.treatLargeTextAsFile
     }
     
     func makeNSView(context: Context) -> NSScrollView {
@@ -426,9 +457,14 @@ struct FirstResponderTextView: NSViewRepresentable {
         
         if let textView = scrollView.documentView as? MyTextView {
             textView.delegate = context.coordinator
+            textView.allowImagePasting = allowImagePasting
+            textView.treatLargeTextAsFile = treatLargeTextAsFile
             textView.onPaste = { image in context.coordinator.parent.onPaste?(image) }
             textView.onPasteDocument = { url in
                 context.coordinator.parent.onPasteDocument?(url)
+            }
+            textView.onPasteLargeText = { text, filename in
+                context.coordinator.parent.onPasteLargeText?(text, filename)
             }
             textView.onCommit = { context.coordinator.parent.onCommit() }
             
@@ -484,6 +520,8 @@ struct FirstResponderTextView: NSViewRepresentable {
             updateHeight(textView: textView)
         }
         textView.isEditable = !self.isDisabled
+        textView.allowImagePasting = self.allowImagePasting
+        textView.treatLargeTextAsFile = self.treatLargeTextAsFile
     }
     
     public func updateHeight(textView: MyTextView) {

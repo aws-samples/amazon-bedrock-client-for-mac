@@ -200,6 +200,9 @@ struct GeneralSettingsView: View {
                 
                 Toggle("Enable Quick Access", isOn: $settingsManager.enableQuickAccess)
                 
+                Toggle("Treat Large Text as File", isOn: $settingsManager.treatLargeTextAsFile)
+                    .help("When enabled, large pasted text (10KB+) will be attached as a file instead of inline text")
+                
                 if settingsManager.enableQuickAccess {
                     LabeledContent("Hotkey") {
                         HotkeyRecorderView(

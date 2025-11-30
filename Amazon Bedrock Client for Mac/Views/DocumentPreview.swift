@@ -10,7 +10,7 @@ import PDFKit
 import AppKit
 
 /**
- * Modern document preview modal with macOS 15.3+ design language
+ * Modern document preview modal with clean design
  * Features multi-page PDF support and elegant UI
  */
 struct DocumentPreviewModal: View {
@@ -33,76 +33,106 @@ struct DocumentPreviewModal: View {
     // Environment
     @Environment(\.colorScheme) private var colorScheme
     
+    private let cornerRadius: CGFloat = 16
+    
     var body: some View {
         ZStack {
-            // Background blur
-            Color.black.opacity(0.5)
-                .edgesIgnoringSafeArea(.all)
-                .blur(radius: 30)
+            // Dimmed background
+            Color.black.opacity(0.75)
+                .ignoresSafeArea()
+                .onTapGesture { dismiss() }
             
             // Main content
             VStack(spacing: 0) {
-                // Header area
                 headerBar
-                
-                // Document viewer area
                 documentContent
                 
-                // Footer area - Page controls for PDFs
+                // Footer for PDFs with multiple pages
                 if isPDF() && totalPages > 1 {
                     pageControls
+                } else if isTextDocument() {
+                    textFooter
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(colorScheme == .dark ?
-                          NSColor.windowBackgroundColor : NSColor.controlBackgroundColor))
-                    .shadow(color: Color.black.opacity(0.25), radius: 20, x: 0, y: 10)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-            )
+            .background(containerBackground)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: .black.opacity(0.3), radius: 30, x: 0, y: 15)
             .frame(width: 900, height: 700)
         }
-        .transition(.opacity)
         .onAppear {
             createTemporaryFile()
-            if isPDF() {
-                updatePDFPageCount()
-            }
+            if isPDF() { updatePDFPageCount() }
         }
-        .onDisappear {
-            cleanupTemporaryFile()
-        }
+        .onDisappear { cleanupTemporaryFile() }
         .alert(isPresented: $isPresentingExternalAppAlert) {
             Alert(
                 title: Text("Open in External Application?"),
                 message: Text("This document will be opened with your default application for \(fileExtension.uppercased()) files."),
-                primaryButton: .default(Text("Open")) {
-                    openInExternalApp()
-                },
+                primaryButton: .default(Text("Open")) { openInExternalApp() },
                 secondaryButton: .cancel()
             )
         }
     }
     
+    private func dismiss() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isPresented = false
+        }
+    }
+    
+    @ViewBuilder
+    private var containerBackground: some View {
+        if colorScheme == .dark {
+            Color(NSColor.windowBackgroundColor)
+        } else {
+            Color(NSColor.controlBackgroundColor)
+        }
+    }
+    
+    // MARK: - Text Footer
+    private var textFooter: some View {
+        HStack {
+            Text(fileExtension.uppercased())
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.primary.opacity(0.08)))
+            
+            Spacer()
+            
+            Text(formattedFileSize)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.primary.opacity(0.03))
+    }
+    
     // MARK: - UI Components
     
     private var headerBar: some View {
-        HStack {
+        HStack(spacing: 12) {
             // File icon and name
             HStack(spacing: 10) {
-                Image(systemName: documentIconName)
-                    .font(.system(size: 24))
-                    .foregroundColor(.primary)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(documentIconColor.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: documentIconName)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(documentIconColor)
+                }
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(filename)
-                        .font(.headline)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
                     
                     Text("\(fileExtension.uppercased()) • \(formattedFileSize)")
-                        .font(.caption)
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
             }
@@ -110,82 +140,84 @@ struct DocumentPreviewModal: View {
             Spacer()
             
             // Toolbar buttons
-            HStack(spacing: 16) {
+            HStack(spacing: 8) {
                 if isPDF() {
                     // Zoom controls for PDF
-                    Button(action: {
-                        scale = max(0.5, scale - 0.25)
-                        lastScale = scale
-                    }) {
-                        Image(systemName: "minus")
-                            .padding(6)
+                    HStack(spacing: 8) {
+                        toolbarButton(icon: "minus", action: {
+                            scale = max(0.5, scale - 0.25)
+                            lastScale = scale
+                        })
+                        .disabled(scale <= 0.5)
+                        
+                        Text("\(Int(scale * 100))%")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 40)
+                        
+                        toolbarButton(icon: "plus", action: {
+                            scale = min(3.0, scale + 0.25)
+                            lastScale = scale
+                        })
+                        .disabled(scale >= 3.0)
                     }
-                    .buttonStyle(CustomToolbarButtonStyle())
-                    .disabled(scale <= 0.5)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
                     
-                    Text("\(Int(scale * 100))%")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 45)
-                    
-                    Button(action: {
-                        scale = min(3.0, scale + 0.25)
-                        lastScale = scale
-                    }) {
-                        Image(systemName: "plus")
-                            .padding(6)
-                    }
-                    .buttonStyle(CustomToolbarButtonStyle())
-                    .disabled(scale >= 3.0)
+                    Divider().frame(height: 20)
                 }
                 
-                Divider()
-                    .frame(height: 16)
+                toolbarButton(icon: "square.and.arrow.down", action: saveDocument)
+                    .help("Save Document")
                 
-                // Save button
-                Button(action: saveDocument) {
-                    Image(systemName: "square.and.arrow.down")
-                        .padding(6)
+                if isPDF() || isTextDocument() {
+                    toolbarButton(icon: "doc.on.doc", action: copyDocumentToClipboard)
+                        .help("Copy to Clipboard")
                 }
-                .buttonStyle(CustomToolbarButtonStyle())
-                .help("Save Document")
                 
-                // Copy button for PDF
-                if isPDF() {
-                    Button(action: copyDocumentToClipboard) {
-                        Image(systemName: "doc.on.doc")
-                            .padding(6)
-                    }
-                    .buttonStyle(CustomToolbarButtonStyle())
-                    .help("Copy to Clipboard")
-                }
+                toolbarButton(icon: "arrow.up.forward.square", action: { isPresentingExternalAppAlert = true })
+                    .help("Open in External App")
+                
+                Divider().frame(height: 20)
                 
                 // Close button
-                Button(action: {
-                    withAnimation(.spring(response: 0.3)) {
-                        isPresented = false
-                    }
-                }) {
+                Button(action: dismiss) {
                     Image(systemName: "xmark")
-                        .padding(6)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.primary.opacity(0.7))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.primary.opacity(0.1)))
                 }
-                .buttonStyle(CustomToolbarButtonStyle())
-                .help("Close")
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        // Updated background with frosted glass effect
-        .background(
-            ZStack {
-                if colorScheme == .dark {
-                    Color.black.opacity(0.3)
-                } else {
-                    Color.white.opacity(0.7)
-                }
-            }
-            .background(Material.regular)
-        )
-        .cornerRadius(16, corners: [.topLeft, .topRight])
+        .padding(.vertical, 14)
+        .background(Color.primary.opacity(0.03).background(.ultraThinMaterial))
+    }
+    
+    private func toolbarButton(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary.opacity(0.7))
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var documentIconColor: Color {
+        switch fileExtension.lowercased() {
+        case "pdf": return .red
+        case "doc", "docx": return .blue
+        case "xls", "xlsx", "csv": return .green
+        case "txt", "md": return .gray
+        case "html": return .orange
+        case "json", "xml": return .purple
+        default: return .gray
+        }
     }
 
     
@@ -388,13 +420,21 @@ struct DocumentPreviewModal: View {
     }
     
     private func copyDocumentToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        
         if isPDF(),
            let pdfDocument = PDFDocument(data: documentData),
            let firstPage = pdfDocument.page(at: 0) {
+            // Copy PDF as image
             let pageImage = firstPage.thumbnail(of: NSSize(width: 200, height: 200), for: .cropBox)
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
             pasteboard.writeObjects([pageImage])
+        } else if isTextDocument() {
+            // Copy text content
+            if let textContent = String(data: documentData, encoding: .utf8) ??
+                                 String(data: documentData, encoding: .isoLatin1) {
+                pasteboard.setString(textContent, forType: .string)
+            }
         }
     }
     
@@ -489,8 +529,21 @@ struct TextDocumentPreview: NSViewRepresentable {
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
-        if let textView = scrollView.documentView as? NSTextView,
-           let string = String(data: documentData, encoding: .utf8) {
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+        
+        if let textView = scrollView.documentView as? NSTextView {
+            // Try UTF-8 first, then other encodings
+            let string: String
+            if let utf8String = String(data: documentData, encoding: .utf8) {
+                string = utf8String
+            } else if let latin1String = String(data: documentData, encoding: .isoLatin1) {
+                string = latin1String
+            } else {
+                string = "Unable to decode text content"
+            }
+            
             textView.string = string
             textView.isEditable = false
             textView.isSelectable = true
@@ -504,8 +557,13 @@ struct TextDocumentPreview: NSViewRepresentable {
                 width: scrollView.contentSize.width,
                 height: CGFloat.greatestFiniteMagnitude
             )
-            textView.layoutManager?.allowsNonContiguousLayout = false
+            textView.layoutManager?.allowsNonContiguousLayout = true  // Better performance for large files
             textView.isAutomaticQuoteSubstitutionEnabled = false
+            textView.isAutomaticDashSubstitutionEnabled = false
+            textView.isAutomaticTextReplacementEnabled = false
+            
+            // Line numbers and better readability
+            textView.textContainerInset = NSSize(width: 16, height: 12)
         }
         
         return scrollView

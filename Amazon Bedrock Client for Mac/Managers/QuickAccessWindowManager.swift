@@ -46,6 +46,9 @@ class QuickAccessWindowManager: NSObject, ObservableObject {
         
         let hostingView = NSHostingView(rootView: contentView)
         
+        // Fix theme flickering - inherit from system appearance
+        hostingView.wantsLayer = true
+        
         // 윈도우 위치 계산 (화면 중앙)
         let screenFrame = NSScreen.main?.frame ?? NSRect.zero
         let windowWidth: CGFloat = 500
@@ -80,6 +83,9 @@ class QuickAccessWindowManager: NSObject, ObservableObject {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.delegate = self
+        
+        // Fix theme flickering - use system appearance
+        window.appearance = NSApp.effectiveAppearance
         
         // 트래픽 라이트 버튼 숨기기
         window.standardWindowButton(.closeButton)?.isHidden = true

@@ -10,6 +10,7 @@ import Logging
 import UniformTypeIdentifiers
 
 struct QuickAccessView: View {
+    // MARK: - State
     @State private var inputText: String = ""
     @State private var calculatedHeight: CGFloat = 40
     @State private var isPasting: Bool = false
@@ -18,72 +19,40 @@ struct QuickAccessView: View {
     @State private var documentAttachments: [DocumentAttachment] = []
     @State private var showImagePreview: Bool = false
     @State private var selectedImageIndex: Int? = nil
-    
+    @State private var showDocumentPreview: Bool = false
+    @State private var selectedDocumentIndex: Int? = nil
+    @ObservedObject private var settingManager = SettingManager.shared
+
+    // MARK: - Properties
     private let onClose: () -> Void
     private let onHeightChange: (CGFloat) -> Void
     private let logger = Logger(label: "QuickAccessView")
-    
-    @ViewBuilder
-    private var quickAccessBarBackground: some View {
-        if #available(macOS 26.0, *) {
-            RoundedRectangle(cornerRadius: 22)
-                .fill(Color.clear)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
-        } else {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
-        }
+
+    private var hasAttachments: Bool {
+        !sharedMediaDataSource.images.isEmpty || !sharedMediaDataSource.documents.isEmpty
     }
-    
+
+    private var totalAttachmentCount: Int {
+        attachments.count + documentAttachments.count
+    }
+
+    // MARK: - Init
     init(onClose: @escaping () -> Void, onHeightChange: @escaping (CGFloat) -> Void = { _ in }) {
         self.onClose = onClose
         self.onHeightChange = onHeightChange
     }
-    
+
+    // MARK: - Body
     var body: some View {
         VStack(spacing: 0) {
-            // Attachment list (when images or documents are present)
-            if (!sharedMediaDataSource.images.isEmpty || !sharedMediaDataSource.documents.isEmpty) {
-                QuickAccessAttachmentView(
-                    attachments: $attachments,
-                    documentAttachments: $documentAttachments,
-                    sharedMediaDataSource: sharedMediaDataSource,
-                    selectedImageIndex: $selectedImageIndex,
-                    showImagePreview: $showImagePreview,
-                    onRemoveAttachment: removeAttachment,
-                    onRemoveDocumentAttachment: removeDocumentAttachment,
-                    onRemoveAllAttachments: removeAllAttachments
-                )
-                .transition(.opacity)
-            }
-            
-            // Message input bar with buttons - identical structure to MessageBarView
-            HStack(alignment: .center, spacing: 2) {
-                fileUploadButton
-                inputArea
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(quickAccessBarBackground)
-            
-            // Loading indicator
-            if isPasting {
-                PasteLoadingView()
-            }
+            mainContainer
         }
         .onAppear {
             setupFocus()
             setupEscapeKeyHandler()
             syncAttachments()
         }
-        .onChange(of: calculatedHeight) { _, _ in
-            updateWindowHeight()
-        }
+        .onChange(of: calculatedHeight) { _, _ in updateWindowHeight() }
         .onChange(of: sharedMediaDataSource.images.count) { _, _ in
             syncAttachments()
             updateWindowHeight()
@@ -93,8 +62,7 @@ struct QuickAccessView: View {
             updateWindowHeight()
         }
         .sheet(isPresented: $showImagePreview) {
-            if let index = selectedImageIndex,
-               index < sharedMediaDataSource.images.count {
+            if let index = selectedImageIndex, index < sharedMediaDataSource.images.count {
                 ImagePreviewModal(
                     image: sharedMediaDataSource.images[index],
                     filename: getFileName(for: index),
@@ -102,11 +70,29 @@ struct QuickAccessView: View {
                 )
             }
         }
+        .sheet(isPresented: $showDocumentPreview) {
+            if let index = selectedDocumentIndex, index < documentAttachments.count {
+                let doc = documentAttachments[index]
+                DocumentPreviewModal(
+                    documentData: doc.data,
+                    filename: doc.filename,
+                    fileExtension: doc.fileExtension,
+                    isPresented: $showDocumentPreview
+                )
+            }
+        }
         .onChange(of: showImagePreview) { _, isShowing in
-            // Update state when image preview opens or closes
             QuickAccessWindowManager.shared.setFileUploadInProgress(isShowing)
-            
-            // Refocus window when preview closes
+            if !isShowing {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                }
+            }
+        }
+        .onChange(of: showDocumentPreview) { _, isShowing in
+            QuickAccessWindowManager.shared.setFileUploadInProgress(isShowing)
             if !isShowing {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
@@ -116,68 +102,288 @@ struct QuickAccessView: View {
             }
         }
     }
-    
-    private var fileUploadButton: some View {
-        Button(action: {
-            // Notify file upload start
-            QuickAccessWindowManager.shared.setFileUploadInProgress(true)
-            
-            let panel = NSOpenPanel()
-            var types: [UTType] = [.pdf, .commaSeparatedText, .html, .plainText, .jpeg, .png, .gif, .tiff, .webP]
-            if let doc = UTType(filenameExtension: "doc") { types.append(doc) }
-            if let docx = UTType(filenameExtension: "docx") { types.append(docx) }
-            if let xls = UTType(filenameExtension: "xls") { types.append(xls) }
-            if let xlsx = UTType(filenameExtension: "xlsx") { types.append(xlsx) }
-            if let md = UTType(filenameExtension: "md") { types.append(md) }
-            panel.allowedContentTypes = types
-            panel.allowsMultipleSelection = true
-            
-            panel.begin { response in
-                // Notify file upload completion
-                QuickAccessWindowManager.shared.setFileUploadInProgress(false)
-                
-                if response == .OK {
-                    handleFileImport(panel.urls)
-                }
-                
-                // Refocus window
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
-                        window.makeKeyAndOrderFront(nil)
-                    }
-                }
+
+    // MARK: - Main Container
+    @ViewBuilder
+    private var mainContainer: some View {
+        VStack(spacing: 0) {
+            // Input row
+            HStack(alignment: .center, spacing: 6) {
+                optionsMenuButton
+                attachButton
+                textInputArea
             }
-        }) {
-            Image(systemName: "paperclip")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, hasAttachments ? 6 : 10)
+
+            // Attachments row (if any)
+            if hasAttachments {
+                attachmentsRow
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
+            }
+
+            // Loading indicator
+            if isPasting {
+                loadingIndicator
+            }
         }
-        .buttonStyle(PlainButtonStyle())
-        .frame(width: 32, height: 32)
+        .background(containerBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
-    
-    private var inputArea: some View {
+
+    // MARK: - Container Background
+    @ViewBuilder
+    private var containerBackground: some View {
+        if #available(macOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18))
+        } else {
+            Color(NSColor.windowBackgroundColor)
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+        }
+    }
+
+    // MARK: - Options Menu Button (placeholder for future options)
+    private var optionsMenuButton: some View {
+        EmptyView()
+            .frame(width: 0, height: 0)
+    }
+
+    // MARK: - Attach Button
+    private var attachButton: some View {
+        Button(action: openFilePicker) {
+            Image(systemName: "paperclip")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 28, height: 28)
+    }
+
+    // MARK: - Text Input Area
+    private var textInputArea: some View {
         FirstResponderTextView(
             text: $inputText,
             isDisabled: .constant(false),
             calculatedHeight: $calculatedHeight,
             isPasting: $isPasting,
-            onCommit: {
-                sendMessage()
-            },
-            onPaste: { image in
-                handleImagePaste(image)
-            },
-            onPasteDocument: { url in
-                handleFileImport([url])
-            }
+            allowImagePasting: settingManager.allowImagePasting,
+            treatLargeTextAsFile: settingManager.treatLargeTextAsFile,
+            onCommit: sendMessage,
+            onPaste: handleImagePaste,
+            onPasteDocument: { url in handleFileImport([url]) },
+            onPasteLargeText: handleLargeTextPaste
         )
-        .frame(minHeight: 40, maxHeight: min(calculatedHeight, 200)) // Limit maximum height to 200px
+        .frame(minHeight: 36, maxHeight: max(36, min(calculatedHeight, 180)))
+    }
+
+    // MARK: - Attachments Row
+    private var attachmentsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(attachments) { attachment in
+                    AttachmentChip(
+                        image: attachment.image,
+                        name: attachment.filename,
+                        onRemove: { removeAttachment(withId: attachment.id) },
+                        onTap: {
+                            if let idx = attachments.firstIndex(where: { $0.id == attachment.id }) {
+                                selectedImageIndex = idx
+                                showImagePreview = true
+                            }
+                        }
+                    )
+                }
+
+                ForEach(Array(documentAttachments.enumerated()), id: \.element.id) { index, doc in
+                    if let preview = doc.textPreview {
+                        PastedTextChip(
+                            preview: preview,
+                            onRemove: { removeDocumentAttachment(withId: doc.id) },
+                            onTap: {
+                                selectedDocumentIndex = index
+                                showDocumentPreview = true
+                            }
+                        )
+                    } else {
+                        DocumentChip(
+                            name: doc.filename,
+                            ext: doc.fileExtension,
+                            onRemove: { removeDocumentAttachment(withId: doc.id) },
+                            onTap: {
+                                selectedDocumentIndex = index
+                                showDocumentPreview = true
+                            }
+                        )
+                    }
+                }
+
+                if totalAttachmentCount > 1 {
+                    clearAllButton
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Clear All Button
+    private var clearAllButton: some View {
+        Button(action: removeAllAttachments) {
+            Text("Clear")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.primary.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Loading Indicator
+    private var loadingIndicator: some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .scaleEffect(0.6)
+            Text("Processing...")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+        .padding(.bottom, 8)
+    }
+
+
+    // MARK: - Actions
+    private func openFilePicker() {
+        QuickAccessWindowManager.shared.setFileUploadInProgress(true)
+
+        let panel = NSOpenPanel()
+        var types: [UTType] = [.pdf, .commaSeparatedText, .html, .plainText, .jpeg, .png, .gif, .tiff, .webP]
+        if let doc = UTType(filenameExtension: "doc") { types.append(doc) }
+        if let docx = UTType(filenameExtension: "docx") { types.append(docx) }
+        if let xls = UTType(filenameExtension: "xls") { types.append(xls) }
+        if let xlsx = UTType(filenameExtension: "xlsx") { types.append(xlsx) }
+        if let md = UTType(filenameExtension: "md") { types.append(md) }
+        panel.allowedContentTypes = types
+        panel.allowsMultipleSelection = true
+
+        panel.begin { response in
+            QuickAccessWindowManager.shared.setFileUploadInProgress(false)
+            if response == .OK {
+                handleFileImport(panel.urls)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
+                    window.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
+    }
+
+    private func handleFileImport(_ urls: [URL]) {
+        // Bedrock API limits: max 20 images, max 5 documents per request
+        let maxImages = 20
+        let maxDocuments = 5
+
+        for url in urls {
+            let ext = url.pathExtension.lowercased()
+
+            if ["jpg", "jpeg", "png", "gif", "tiff", "webp"].contains(ext) {
+                guard sharedMediaDataSource.images.count < maxImages else { continue }
+                if let image = NSImage(contentsOf: url) {
+                    sharedMediaDataSource.addImage(image, fileExtension: ext, filename: url.lastPathComponent)
+                }
+            } else if ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"].contains(ext) {
+                guard sharedMediaDataSource.documents.count < maxDocuments else { continue }
+                if let fileData = try? Data(contentsOf: url) {
+                    let sanitizedName = sanitizeDocumentName(url.lastPathComponent)
+                    sharedMediaDataSource.addDocument(fileData, fileExtension: ext, filename: sanitizedName)
+                }
+            }
+        }
+        syncAttachments()
+    }
+
+    private func handleImagePaste(_ image: NSImage) {
+        guard sharedMediaDataSource.images.count < 20 else { return }
+        Task {
+            isPasting = true
+            let (compressedImage, filename, ext) = await processImageInParallel(image)
+            sharedMediaDataSource.addImage(compressedImage, fileExtension: ext, filename: filename)
+            syncAttachments()
+            isPasting = false
+        }
     }
     
+    private func handleLargeTextPaste(_ text: String, _ filename: String) {
+        // Max 5 documents per request
+        guard sharedMediaDataSource.documents.count < 5 else { return }
+        
+        let sanitizedName = sanitizeDocumentName(filename)
+        logger.info("Adding large text as document: \(sanitizedName), size: \(text.count) bytes")
+        sharedMediaDataSource.addPastedText(text, filename: sanitizedName)
+        syncAttachments()
+    }
+
+    private func processImageInParallel(_ image: NSImage) async -> (NSImage, String, String) {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let compressedImage: NSImage
+                let ext: String
+
+                if let data = image.compressedData(maxFileSize: 1024 * 1024, maxDimension: 1024, format: NSBitmapImageRep.FileType.jpeg),
+                   let processed = NSImage(data: data) {
+                    compressedImage = processed
+                    ext = "jpeg"
+                } else {
+                    compressedImage = image
+                    ext = "png"
+                }
+
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyyMMdd_HHmmss"
+                let filename = "pasted_image_\(formatter.string(from: Date())).\(ext)"
+                continuation.resume(returning: (compressedImage, filename, ext))
+            }
+        }
+    }
+
+    private func sendMessage() {
+        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+              !sharedMediaDataSource.images.isEmpty ||
+              !sharedMediaDataSource.documents.isEmpty else { return }
+
+        let userMessage = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !AppCoordinator.shared.isProcessingQuickAccess else {
+            onClose()
+            return
+        }
+
+        AppCoordinator.shared.isProcessingQuickAccess = true
+        onClose()
+
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            if let mainWindow = NSApp.windows.first(where: { $0.title.isEmpty || $0.title.contains("Amazon Bedrock") }) {
+                mainWindow.makeKeyAndOrderFront(nil)
+            }
+
+            if AppCoordinator.shared.quickAccessMessage == nil {
+                AppCoordinator.shared.quickAccessMessage = userMessage
+                if !self.sharedMediaDataSource.images.isEmpty || !self.sharedMediaDataSource.documents.isEmpty {
+                    AppCoordinator.shared.quickAccessAttachments = self.sharedMediaDataSource
+                }
+                AppCoordinator.shared.shouldCreateNewChat = true
+            }
+        }
+    }
+
+
+    // MARK: - Helpers
     private func setupFocus() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            // Set focus to text view
             if let window = NSApp.keyWindow,
                let scrollView = findScrollView(in: window.contentView),
                let textView = scrollView.documentView as? NSTextView {
@@ -185,555 +391,213 @@ struct QuickAccessView: View {
             }
         }
     }
-    
+
     private func findScrollView(in view: NSView?) -> NSScrollView? {
         guard let view = view else { return nil }
-        
-        if let scrollView = view as? NSScrollView {
-            return scrollView
-        }
-        
+        if let scrollView = view as? NSScrollView { return scrollView }
         for subview in view.subviews {
-            if let found = findScrollView(in: subview) {
-                return found
-            }
+            if let found = findScrollView(in: subview) { return found }
         }
-        
         return nil
     }
-    
+
     private func setupEscapeKeyHandler() {
-        // Set up ESC key event monitor
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // ESC key
-                DispatchQueue.main.async {
-                    self.onClose()
-                }
-                return nil // Consume event
-            }
-            return event // Pass through other keys
-        }
-    }
-    
-    private func handleFileImport(_ urls: [URL]) {
-        let maxToAdd = min(10 - (sharedMediaDataSource.images.count + sharedMediaDataSource.documents.count), urls.count)
-        let urlsToProcess = urls.prefix(maxToAdd)
-        
-        for url in urlsToProcess {
-            let fileExtension = url.pathExtension.lowercased()
-            
-            // Handle image files
-            if ["jpg", "jpeg", "png", "gif", "tiff", "webp"].contains(fileExtension) {
-                if let image = NSImage(contentsOf: url) {
-                    logger.info("Adding image: \(url.lastPathComponent)")
-                    sharedMediaDataSource.images.append(image)
-                    sharedMediaDataSource.fileExtensions.append(fileExtension)
-                    sharedMediaDataSource.filenames.append(url.lastPathComponent)
-                    sharedMediaDataSource.mediaTypes.append(.image)
-                }
-            }
-            // Handle document files
-            else if ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"].contains(fileExtension) {
-                do {
-                    let fileData = try Data(contentsOf: url)
-                    let sanitizedName = sanitizeDocumentName(url.lastPathComponent)
-                    
-                    logger.info("Adding document: \(sanitizedName), size: \(fileData.count) bytes")
-                    
-                    sharedMediaDataSource.documents.append(fileData)
-                    
-                    // Document extensions and filenames need to be added at the correct index
-                    let docIndex = sharedMediaDataSource.images.count + sharedMediaDataSource.documents.count - 1
-                    
-                    // Expand arrays if needed
-                    while sharedMediaDataSource.fileExtensions.count <= docIndex {
-                        sharedMediaDataSource.fileExtensions.append("")
-                    }
-                    
-                    while sharedMediaDataSource.filenames.count <= docIndex {
-                        sharedMediaDataSource.filenames.append("")
-                    }
-                    
-                    while sharedMediaDataSource.mediaTypes.count <= docIndex {
-                        sharedMediaDataSource.mediaTypes.append(.document)
-                    }
-                    
-                    // Set values at the correct index
-                    sharedMediaDataSource.fileExtensions[docIndex] = fileExtension
-                    sharedMediaDataSource.filenames[docIndex] = sanitizedName
-                    sharedMediaDataSource.mediaTypes[docIndex] = .document
-                } catch {
-                    logger.info("Error loading document: \(error.localizedDescription)")
-                }
-            }
-        }
-        
-        // Update attachment list after processing files
-        syncAttachments()
-    }
-    
-    private func handleImagePaste(_ image: NSImage) {
-        if sharedMediaDataSource.images.count < 10 {
-            Task {
-                isPasting = true
-                let (compressedImage, filename, fileExtension) = await processImageInParallel(image)
-                sharedMediaDataSource.images.append(compressedImage)
-                sharedMediaDataSource.fileExtensions.append(fileExtension)
-                sharedMediaDataSource.filenames.append(filename)
-                sharedMediaDataSource.mediaTypes.append(.image)
-                isPasting = false
-            }
-        }
-    }
-    
-    private func processImageInParallel(_ image: NSImage) async -> (NSImage, String, String) {
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let compressedImage: NSImage
-                let fileExtension: String
-                
-                if let compressedData = image.compressedData(maxFileSize: 1024 * 1024, maxDimension: 1024, format: NSBitmapImageRep.FileType.jpeg),
-                   let processedImage = NSImage(data: compressedData) {
-                    compressedImage = processedImage
-                    fileExtension = "jpeg"
-                } else {
-                    compressedImage = image
-                    fileExtension = "png"
+                // If a sheet/modal is open, let it handle ESC first
+                if self.showImagePreview || self.showDocumentPreview {
+                    return event // Let the sheet handle ESC
                 }
                 
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
-                let filename = "pasted_image_\(dateFormatter.string(from: Date())).\(fileExtension)"
+                // Check if any modal/sheet is open
+                if let keyWindow = NSApp.keyWindow {
+                    // Check if current key window is a sheet (has a parent)
+                    if keyWindow.sheetParent != nil {
+                        return event // Let the sheet handle ESC
+                    }
+                    // Check if any window has sheets
+                    if keyWindow.sheets.count > 0 {
+                        return event // Let the sheet handle ESC
+                    }
+                }
                 
-                continuation.resume(returning: (compressedImage, filename, fileExtension))
+                DispatchQueue.main.async { self.onClose() }
+                return nil
             }
+            return event
         }
     }
-    
+
     private func sanitizeDocumentName(_ name: String) -> String {
-        // First, remove the file extension if present
-        let nameWithoutExtension: String
+        let nameWithoutExt: String
         if let lastDotIndex = name.lastIndex(of: ".") {
-            nameWithoutExtension = String(name[..<lastDotIndex])
+            nameWithoutExt = String(name[..<lastDotIndex])
         } else {
-            nameWithoutExtension = name
+            nameWithoutExt = name
         }
-        
+
         var result = ""
         var lastCharWasSpace = false
-        
-        // Process each character
-        for scalar in nameWithoutExtension.unicodeScalars {
-            // Allow only English alphanumeric characters (a-z, A-Z, 0-9)
-            if (scalar.value >= 65 && scalar.value <= 90) ||    // A-Z
-               (scalar.value >= 97 && scalar.value <= 122) ||   // a-z
-               (scalar.value >= 48 && scalar.value <= 57) {     // 0-9
+
+        for scalar in nameWithoutExt.unicodeScalars {
+            if (scalar.value >= 65 && scalar.value <= 90) ||
+               (scalar.value >= 97 && scalar.value <= 122) ||
+               (scalar.value >= 48 && scalar.value <= 57) {
                 result.append(Character(scalar))
                 lastCharWasSpace = false
-            }
-            // Allow single spaces (no consecutive spaces)
-            else if CharacterSet.whitespaces.contains(scalar) {
+            } else if CharacterSet.whitespaces.contains(scalar) {
                 if !lastCharWasSpace {
                     result.append(" ")
                     lastCharWasSpace = true
                 }
-            }
-            // Allow specific permitted symbols
-            else if scalar == "-" || scalar == "(" || scalar == ")" || scalar == "[" || scalar == "]" {
+            } else if scalar == "-" || scalar == "(" || scalar == ")" || scalar == "[" || scalar == "]" {
                 result.append(Character(scalar))
                 lastCharWasSpace = false
-            }
-            // For any other character, replace with a space if we don't already have one
-            else if !lastCharWasSpace {
+            } else if !lastCharWasSpace {
                 result.append(" ")
                 lastCharWasSpace = true
             }
         }
-        
-        // Trim any leading/trailing spaces
+
         let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // If the result is empty, provide a default name
         if trimmed.isEmpty {
-            // Use current timestamp to create a unique default name
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
-            return "Document-\(dateFormatter.string(from: Date()))"
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd-HHmmss"
+            return "Document-\(formatter.string(from: Date()))"
         }
-        
         return trimmed
     }
-    
+
     private func syncAttachments() {
-        // Clear current attachments first
         attachments.removeAll()
         documentAttachments.removeAll()
-        
-        // Sync image attachments
+
+        // Sync images (using separate image arrays)
         for i in 0..<sharedMediaDataSource.images.count {
-            let fileExt = i < sharedMediaDataSource.fileExtensions.count ?
-                sharedMediaDataSource.fileExtensions[i] : "jpg"
-                
-            let filename = i < sharedMediaDataSource.filenames.count ?
-                sharedMediaDataSource.filenames[i] : "image\(i+1).\(fileExt)"
-                
-            attachments.append(ImageAttachment(
-                image: sharedMediaDataSource.images[i],
-                fileExtension: fileExt,
-                filename: filename
-            ))
+            let ext = i < sharedMediaDataSource.imageExtensions.count ? sharedMediaDataSource.imageExtensions[i] : "jpg"
+            let name = i < sharedMediaDataSource.imageFilenames.count ? sharedMediaDataSource.imageFilenames[i] : "image\(i+1).\(ext)"
+            attachments.append(ImageAttachment(image: sharedMediaDataSource.images[i], fileExtension: ext, filename: name))
         }
-        
-        // Sync document attachments
+
+        // Sync documents (using separate document arrays)
         for i in 0..<sharedMediaDataSource.documents.count {
-            // Calculate correct index for accessing extensions and filenames
-            let docIndex = sharedMediaDataSource.images.count + i
-            
-            let fileExt = docIndex < sharedMediaDataSource.fileExtensions.count ?
-                sharedMediaDataSource.fileExtensions[docIndex] : "pdf"
-                
-            let filename = docIndex < sharedMediaDataSource.filenames.count ?
-                sharedMediaDataSource.filenames[docIndex] : "document\(i+1).\(fileExt)"
-                
-            documentAttachments.append(DocumentAttachment(
-                data: sharedMediaDataSource.documents[i],
-                fileExtension: fileExt,
-                filename: filename
-            ))
+            let ext = i < sharedMediaDataSource.documentExtensions.count ? sharedMediaDataSource.documentExtensions[i] : "pdf"
+            let name = i < sharedMediaDataSource.documentFilenames.count ? sharedMediaDataSource.documentFilenames[i] : "document\(i+1).\(ext)"
+            let preview = i < sharedMediaDataSource.textPreviews.count ? sharedMediaDataSource.textPreviews[i] : nil
+            documentAttachments.append(DocumentAttachment(data: sharedMediaDataSource.documents[i], fileExtension: ext, filename: name, textPreview: preview))
         }
     }
-    
+
     func removeAttachment(withId id: UUID) {
         if let index = attachments.firstIndex(where: { $0.id == id }) {
             attachments.remove(at: index)
-            
-            if index < sharedMediaDataSource.images.count {
-                sharedMediaDataSource.images.remove(at: index)
-            }
-            if index < sharedMediaDataSource.fileExtensions.count {
-                sharedMediaDataSource.fileExtensions.remove(at: index)
-            }
-            if index < sharedMediaDataSource.filenames.count {
-                sharedMediaDataSource.filenames.remove(at: index)
-            }
+            sharedMediaDataSource.removeImage(at: index)
+            updateWindowHeight()
         }
     }
-    
+
     func removeDocumentAttachment(withId id: UUID) {
         if let index = documentAttachments.firstIndex(where: { $0.id == id }) {
             documentAttachments.remove(at: index)
-            
-            // Find the corresponding index in the shared data source
-            var docIndex = -1
-            var count = 0
-            
-            for (i, type) in sharedMediaDataSource.mediaTypes.enumerated() {
-                if type == .document {
-                    if count == index {
-                        docIndex = i
-                        break
-                    }
-                    count += 1
-                }
-            }
-            
-            if docIndex >= 0 {
-                sharedMediaDataSource.documents.remove(at: index)
-                sharedMediaDataSource.mediaTypes.remove(at: docIndex)
-                if docIndex < sharedMediaDataSource.fileExtensions.count {
-                    sharedMediaDataSource.fileExtensions.remove(at: docIndex)
-                }
-                if docIndex < sharedMediaDataSource.filenames.count {
-                    sharedMediaDataSource.filenames.remove(at: docIndex)
-                }
-            }
+            sharedMediaDataSource.removeDocument(at: index)
+            updateWindowHeight()
         }
     }
-    
+
     func removeAllAttachments() {
         attachments.removeAll()
         documentAttachments.removeAll()
-        sharedMediaDataSource.images.removeAll()
-        sharedMediaDataSource.documents.removeAll()
-        sharedMediaDataSource.fileExtensions.removeAll()
-        sharedMediaDataSource.filenames.removeAll()
-        sharedMediaDataSource.mediaTypes.removeAll()
+        sharedMediaDataSource.clear()
+        // Reset to default height
+        calculatedHeight = 40
+        updateWindowHeight()
     }
-    
+
     func getFileName(for index: Int) -> String {
-        if index < sharedMediaDataSource.filenames.count,
-           !sharedMediaDataSource.filenames[index].isEmpty {
-            return sharedMediaDataSource.filenames[index]
+        if index < sharedMediaDataSource.imageFilenames.count, !sharedMediaDataSource.imageFilenames[index].isEmpty {
+            return sharedMediaDataSource.imageFilenames[index]
         }
-        
-        let ext = index < sharedMediaDataSource.fileExtensions.count ?
-        sharedMediaDataSource.fileExtensions[index] : "img"
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
-        return "attachment_\(dateFormatter.string(from: Date())).\(ext)"
+        let ext = index < sharedMediaDataSource.imageExtensions.count ? sharedMediaDataSource.imageExtensions[index] : "img"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        return "attachment_\(formatter.string(from: Date())).\(ext)"
     }
-    
+
     private func updateWindowHeight() {
-        let baseHeight: CGFloat = 56 // Base window height
-        let attachmentHeight: CGFloat = (!sharedMediaDataSource.images.isEmpty || !sharedMediaDataSource.documents.isEmpty) ? 120 : 0 // Increased height for new design
-        let textHeight = max(40, min(calculatedHeight, 200)) // Text height (max 200px)
-        let totalHeight = baseHeight + attachmentHeight + (textHeight - 40) // 40 is base text height
-        
+        let baseHeight: CGFloat = 56
+        let attachmentHeight: CGFloat = hasAttachments ? 44 : 0
+        let textHeight = max(36, min(calculatedHeight, 180))
+        let extraTextHeight = max(0, textHeight - 36)  // Ensure non-negative
+        let totalHeight = baseHeight + attachmentHeight + extraTextHeight
         onHeightChange(totalHeight)
     }
-    
-    private func sendMessage() {
-        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !sharedMediaDataSource.images.isEmpty || !sharedMediaDataSource.documents.isEmpty else { return }
-        
-        let userMessage = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        logger.info("Quick access message: \(userMessage)")
-        
-        // Prevent duplicate processing
-        guard !AppCoordinator.shared.isProcessingQuickAccess else {
-            logger.info("Quick access already processing, ignoring")
-            onClose()
-            return
-        }
-        
-        // Set processing flag immediately to prevent duplicates
-        AppCoordinator.shared.isProcessingQuickAccess = true
-        
-        // Close window
-        onClose()
-        
-        // Activate main app and create new chat
-        DispatchQueue.main.async {
-            // Activate main app and bring main window to front
-            NSApp.activate(ignoringOtherApps: true)
-            
-            // Find and bring main window to front
-            if let mainWindow = NSApp.windows.first(where: { $0.title.isEmpty || $0.title.contains("Amazon Bedrock") }) {
-                mainWindow.makeKeyAndOrderFront(nil)
-            }
-            
-            // Set message and attachments only if not already set
-            if AppCoordinator.shared.quickAccessMessage == nil {
-                AppCoordinator.shared.quickAccessMessage = userMessage
-                
-                // Pass attachments if available
-                if !self.sharedMediaDataSource.images.isEmpty || !self.sharedMediaDataSource.documents.isEmpty {
-                    AppCoordinator.shared.quickAccessAttachments = self.sharedMediaDataSource
-                }
-                
-                // Trigger new chat creation after setting message
-                AppCoordinator.shared.shouldCreateNewChat = true
-            }
-        }
-    }
 }
 
-// MARK: - Quick Access Attachment View
-struct QuickAccessAttachmentView: View {
-    @Binding var attachments: [ImageAttachment]
-    @Binding var documentAttachments: [DocumentAttachment]
-    @ObservedObject var sharedMediaDataSource: SharedMediaDataSource
-    @Binding var selectedImageIndex: Int?
-    @Binding var showImagePreview: Bool
-    var onRemoveAttachment: (UUID) -> Void
-    var onRemoveDocumentAttachment: (UUID) -> Void
-    var onRemoveAllAttachments: () -> Void
-    
+
+// MARK: - Attachment Chip (Image)
+struct AttachmentChip: View {
+    let image: NSImage
+    let name: String
+    let onRemove: () -> Void
+    let onTap: () -> Void
+
     @Environment(\.colorScheme) private var colorScheme
-    
+
+    private var displayName: String {
+        let nameOnly = name.contains(".") ? String(name[..<name.lastIndex(of: ".")!]) : name
+        return nameOnly.count > 10 ? String(nameOnly.prefix(8)) + "…" : nameOnly
+    }
+
     var body: some View {
-        VStack(spacing: 8) {
-            // Header with count and clear all button
-            HStack {
-                let totalAttachments = attachments.count + documentAttachments.count
-                
-                HStack(spacing: 4) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                    
-                    Text("\(totalAttachments) file\(totalAttachments == 1 ? "" : "s")")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Button(action: onRemoveAllAttachments) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11, weight: .medium))
-                        Text("Clear All")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.red.opacity(0.1))
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
+        HStack(spacing: 6) {
+            Button(action: onTap) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            
-            // Attachment grid
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // Images
-                    ForEach(attachments) { attachment in
-                        QuickAccessMediaItem(
-                            type: .image(attachment.image),
-                            filename: attachment.filename,
-                            onDelete: {
-                                onRemoveAttachment(attachment.id)
-                            },
-                            onClick: {
-                                if let index = attachments.firstIndex(where: { $0.id == attachment.id }) {
-                                    selectedImageIndex = index
-                                    showImagePreview = true
-                                }
-                            }
-                        )
-                    }
-                    
-                    // Documents
-                    ForEach(documentAttachments) { document in
-                        QuickAccessMediaItem(
-                            type: .document(document.fileExtension),
-                            filename: document.filename,
-                            onDelete: {
-                                onRemoveDocumentAttachment(document.id)
-                            }
-                        )
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            .buttonStyle(.plain)
+
+            Text(displayName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.primary)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.secondary)
             }
+            .buttonStyle(.plain)
+            .frame(width: 16, height: 16)
+            .background(Circle().fill(Color.primary.opacity(0.08)))
         }
+        .padding(.leading, 4)
+        .padding(.trailing, 6)
+        .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color(white: 0.1) : Color(white: 0.98))
+            Capsule()
+                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal, 12)
     }
 }
 
-// MARK: - Quick Access Media Item
-struct QuickAccessMediaItem: View {
-    enum MediaType {
-        case image(NSImage)
-        case document(String)
-    }
-    
-    let type: MediaType
-    let filename: String
-    let onDelete: () -> Void
-    let onClick: (() -> Void)?
-    
+// MARK: - Document Chip
+struct DocumentChip: View {
+    let name: String
+    let ext: String
+    let onRemove: () -> Void
+    var onTap: (() -> Void)? = nil
+
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isHovered = false
-    
-    init(type: MediaType, filename: String, onDelete: @escaping () -> Void, onClick: (() -> Void)? = nil) {
-        self.type = type
-        self.filename = filename
-        self.onDelete = onDelete
-        self.onClick = onClick
+
+    private var displayName: String {
+        let nameOnly = name.contains(".") ? String(name[..<name.lastIndex(of: ".")!]) : name
+        return nameOnly.count > 10 ? String(nameOnly.prefix(8)) + "…" : nameOnly
     }
-    
-    var body: some View {
-        VStack(spacing: 6) {
-            // Media thumbnail
-            ZStack {
-                Group {
-                    switch type {
-                    case .image(let image):
-                        Button(action: { onClick?() }) {
-                            Image(nsImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 60, height: 60)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                    case .document(let ext):
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(documentColor(for: ext))
-                                .frame(width: 60, height: 60)
-                            
-                            VStack(spacing: 2) {
-                                Image(systemName: documentIcon(for: ext))
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(.white)
-                                
-                                Text(ext.uppercased())
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                    }
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                )
-                
-                // Delete button
-                if isHovered {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Button(action: onDelete) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(.white)
-                                    .background(
-                                        Circle()
-                                            .fill(Color.red)
-                                            .frame(width: 18, height: 18)
-                                    )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .offset(x: 6, y: -6)
-                        }
-                        Spacer()
-                    }
-                }
-            }
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isHovered = hovering
-                }
-            }
-            
-            // Filename
-            Text(truncatedFilename)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .frame(width: 60)
-        }
-        .frame(width: 70)
-    }
-    
-    private var truncatedFilename: String {
-        if filename.count > 10 {
-            return String(filename.prefix(7)) + "..."
-        }
-        return filename
-    }
-    
-    private func documentIcon(for extension: String) -> String {
-        switch `extension`.lowercased() {
+
+    private var iconName: String {
+        switch ext.lowercased() {
         case "pdf": return "doc.fill"
         case "doc", "docx": return "doc.text.fill"
         case "xls", "xlsx", "csv": return "tablecells.fill"
@@ -742,15 +606,122 @@ struct QuickAccessMediaItem: View {
         default: return "doc.fill"
         }
     }
-    
-    private func documentColor(for extension: String) -> Color {
-        switch `extension`.lowercased() {
-        case "pdf": return Color.red
-        case "doc", "docx": return Color.blue
-        case "xls", "xlsx", "csv": return Color.green
-        case "txt", "md": return Color.gray
-        case "html": return Color.orange
-        default: return Color.gray
+
+    private var iconColor: Color {
+        switch ext.lowercased() {
+        case "pdf": return .red
+        case "doc", "docx": return .blue
+        case "xls", "xlsx", "csv": return .green
+        case "txt", "md": return .gray
+        case "html": return .orange
+        default: return .gray
         }
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: { onTap?() }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(iconColor.opacity(0.85))
+                        .frame(width: 24, height: 24)
+                    Image(systemName: iconName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Text(displayName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.primary)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 16, height: 16)
+            .background(Circle().fill(Color.primary.opacity(0.08)))
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 6)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+        )
+    }
+}
+
+// MARK: - Pasted Text Chip (Claude Desktop style)
+struct PastedTextChip: View {
+    let preview: String
+    let onRemove: () -> Void
+    var onTap: (() -> Void)? = nil
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var displayPreview: String {
+        // First truncate to avoid processing large text
+        let truncated = String(preview.prefix(120))
+        // Clean up newlines without regex
+        let cleaned = truncated
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if cleaned.count > 80 {
+            return String(cleaned.prefix(77)) + "..."
+        }
+        return cleaned
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Button(action: { onTap?() }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayPreview)
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary.opacity(0.8))
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: 200, alignment: .leading)
+                    
+                    Text("PASTED")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
+                        )
+                }
+                .padding(10)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Circle().fill(Color.primary.opacity(0.08)).frame(width: 20, height: 20))
+            .padding(.top, 4)
+            .padding(.trailing, 4)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
     }
 }

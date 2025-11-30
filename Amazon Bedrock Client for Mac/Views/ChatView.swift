@@ -128,6 +128,15 @@ struct ChatView: View {
         .onAppear {
             registerKeyboardShortcuts()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mcpServerConnected)) { notification in
+            // Show toast when MCP server connects
+            if let userInfo = notification.userInfo,
+               let toolCount = userInfo["toolCount"] as? Int,
+               let serverCount = userInfo["serverCount"] as? Int {
+                let message = "🔧 MCP: \(toolCount) tool\(toolCount > 1 ? "s" : "") from \(serverCount) server\(serverCount > 1 ? "s" : "")"
+                showUsageToast(with: message)
+            }
+        }
     }
     
     // MARK: - Keyboard Shortcuts
@@ -624,9 +633,11 @@ struct ChatView: View {
             // Copy attachments to the view model's shared media data source
             viewModel.sharedMediaDataSource.images = attachments.images
             viewModel.sharedMediaDataSource.documents = attachments.documents
-            viewModel.sharedMediaDataSource.fileExtensions = attachments.fileExtensions
-            viewModel.sharedMediaDataSource.filenames = attachments.filenames
-            viewModel.sharedMediaDataSource.mediaTypes = attachments.mediaTypes
+            viewModel.sharedMediaDataSource.imageExtensions = attachments.imageExtensions
+            viewModel.sharedMediaDataSource.imageFilenames = attachments.imageFilenames
+            viewModel.sharedMediaDataSource.documentExtensions = attachments.documentExtensions
+            viewModel.sharedMediaDataSource.documentFilenames = attachments.documentFilenames
+            viewModel.sharedMediaDataSource.textPreviews = attachments.textPreviews
         }
         
         // Clear the message and attachments to prevent re-processing

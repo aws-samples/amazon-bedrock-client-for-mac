@@ -64,8 +64,15 @@ class MCPManager: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // Listen for MCP servers loaded notification
+        NotificationCenter.default.publisher(for: .mcpServersLoaded)
+            .sink { [weak self] _ in
+                self?.startServersIfEnabled()
+            }
+            .store(in: &cancellables)
+        
+        // Load MCP servers (will trigger mcpServersLoaded notification when done)
         SettingManager.shared.loadMCPServers()
-        startServersIfEnabled()
     }
     
     /**
@@ -307,6 +314,19 @@ class MCPManager: ObservableObject {
                     if let tools = tools {
                         self.availableTools[server.name] = tools
                         self.updateToolInfos()
+                        
+                        // Post notification when server connects with tools
+                        let toolCount = self.toolInfos.count
+                        let serverCount = self.connectionStatus.values.filter { $0 == .connected }.count
+                        NotificationCenter.default.post(
+                            name: .mcpServerConnected,
+                            object: nil,
+                            userInfo: [
+                                "serverName": server.name,
+                                "toolCount": toolCount,
+                                "serverCount": serverCount
+                            ]
+                        )
                     }
                 }
             } catch {

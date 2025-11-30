@@ -189,6 +189,8 @@ struct MessageBarView: View {
             isDisabled: .constant(false),
             calculatedHeight: $calculatedHeight,
             isPasting: $isPasting,
+            allowImagePasting: settingManager.allowImagePasting,
+            treatLargeTextAsFile: settingManager.treatLargeTextAsFile,
             onCommit: {
                 handleSendMessage()
             },
@@ -197,6 +199,9 @@ struct MessageBarView: View {
             },
             onPasteDocument: { url in
                 handleFileImport([url])
+            },
+            onPasteLargeText: { text, filename in
+                handleLargeTextPaste(text, filename: filename)
             }
         )
         .focused($isInputFocused)
@@ -214,7 +219,7 @@ struct MessageBarView: View {
         Button(action: {
             if isLoading {
                 cancelSending()
-            } else if !userInput.isEmpty || !sharedMediaDataSource.images.isEmpty {
+            } else if !userInput.isEmpty || !sharedMediaDataSource.images.isEmpty || !sharedMediaDataSource.documents.isEmpty {
                 handleSendMessage()
             }
         }) {
@@ -229,8 +234,8 @@ struct MessageBarView: View {
                 )
         }
         .buttonStyle(PlainButtonStyle())
-        .disabled(userInput.isEmpty && sharedMediaDataSource.images.isEmpty && !isLoading)
-        .opacity((userInput.isEmpty && sharedMediaDataSource.images.isEmpty && !isLoading) ? 0.6 : 1)
+        .disabled(userInput.isEmpty && sharedMediaDataSource.images.isEmpty && sharedMediaDataSource.documents.isEmpty && !isLoading)
+        .opacity((userInput.isEmpty && sharedMediaDataSource.images.isEmpty && sharedMediaDataSource.documents.isEmpty && !isLoading) ? 0.6 : 1)
         .onChange(of: chatManager.getIsLoading(for: chatID)) { _, newValue in
             isLoading = newValue
         }
@@ -249,6 +254,20 @@ struct MessageBarView: View {
         // Create a monitor for local key down events
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 && self.isLoading { // ESC key
+                // Check if any modal/sheet is open
+                // SwiftUI sheets open as separate windows, so check if key window is a sheet
+                // or if any window has sheets attached
+                if let keyWindow = NSApp.keyWindow {
+                    // Check if current key window is a sheet (has a parent)
+                    if keyWindow.sheetParent != nil {
+                        return event // Let the sheet handle ESC
+                    }
+                    // Check if any window has sheets
+                    if keyWindow.sheets.count > 0 {
+                        return event // Let the sheet handle ESC
+                    }
+                }
+                
                 DispatchQueue.main.async {
                     self.cancelSending()
                 }
@@ -259,52 +278,36 @@ struct MessageBarView: View {
     }
     
     private func handleFileImport(_ urls: [URL]) {
-        let maxToAdd = min(10 - (sharedMediaDataSource.images.count + sharedMediaDataSource.documents.count), urls.count)
-        let urlsToProcess = urls.prefix(maxToAdd)
+        // Bedrock API limits: max 20 images, max 5 documents per request
+        let maxImages = 20
+        let maxDocuments = 5
         
-        for url in urlsToProcess {
+        for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             
-            // Handle image files
+            // Handle image files (max 20)
             if ["jpg", "jpeg", "png", "gif", "tiff", "webp"].contains(fileExtension) {
+                guard sharedMediaDataSource.images.count < maxImages else {
+                    logger.info("Maximum images (\(maxImages)) reached, skipping: \(url.lastPathComponent)")
+                    continue
+                }
                 if let image = NSImage(contentsOf: url) {
                     logger.info("Adding image: \(url.lastPathComponent)")
-                    sharedMediaDataSource.images.append(image)
-                    sharedMediaDataSource.fileExtensions.append(fileExtension)
-                    sharedMediaDataSource.filenames.append(url.lastPathComponent)
-                    sharedMediaDataSource.mediaTypes.append(.image)
+                    sharedMediaDataSource.addImage(image, fileExtension: fileExtension, filename: url.lastPathComponent)
                 }
             }
-            // Handle document files
+            // Handle document files (max 5)
             else if ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"].contains(fileExtension) {
+                guard sharedMediaDataSource.documents.count < maxDocuments else {
+                    logger.info("Maximum documents (\(maxDocuments)) reached, skipping: \(url.lastPathComponent)")
+                    continue
+                }
                 do {
                     let fileData = try Data(contentsOf: url)
                     let sanitizedName = sanitizeDocumentName(url.lastPathComponent)
                     
                     logger.info("Adding document: \(sanitizedName), size: \(fileData.count) bytes")
-                    
-                    sharedMediaDataSource.documents.append(fileData)
-                    
-                    // Document extensions and filenames need to be added at the correct index
-                    let docIndex = sharedMediaDataSource.images.count + sharedMediaDataSource.documents.count - 1
-                    
-                    // Expand arrays if needed
-                    while sharedMediaDataSource.fileExtensions.count <= docIndex {
-                        sharedMediaDataSource.fileExtensions.append("")
-                    }
-                    
-                    while sharedMediaDataSource.filenames.count <= docIndex {
-                        sharedMediaDataSource.filenames.append("")
-                    }
-                    
-                    while sharedMediaDataSource.mediaTypes.count <= docIndex {
-                        sharedMediaDataSource.mediaTypes.append(.document)
-                    }
-                    
-                    // Set values at the correct index
-                    sharedMediaDataSource.fileExtensions[docIndex] = fileExtension
-                    sharedMediaDataSource.filenames[docIndex] = sanitizedName
-                    sharedMediaDataSource.mediaTypes[docIndex] = .document
+                    sharedMediaDataSource.addDocument(fileData, fileExtension: fileExtension, filename: sanitizedName)
                 } catch {
                     logger.info("Error loading document: \(error.localizedDescription)")
                 }
@@ -322,13 +325,30 @@ struct MessageBarView: View {
                 Task {
                     isPasting = true
                     let (compressedImage, filename, fileExtension) = await processImageInParallel(image)
-                    sharedMediaDataSource.images.append(compressedImage)
-                    sharedMediaDataSource.fileExtensions.append(fileExtension)
-                    sharedMediaDataSource.filenames.append(filename)
+                    sharedMediaDataSource.addImage(compressedImage, fileExtension: fileExtension, filename: filename)
+                    syncAttachments()
                     isPasting = false
                 }
             }
         }
+    }
+    
+    private func handleLargeTextPaste(_ text: String, filename: String) {
+        // Treat large text as a document attachment (max 5 documents)
+        guard sharedMediaDataSource.documents.count < 5 else {
+            logger.info("Maximum documents (5) reached, cannot add pasted text")
+            return
+        }
+        
+        // Sanitize the filename to comply with Bedrock API requirements
+        let sanitizedName = sanitizeDocumentName(filename)
+        
+        logger.info("Adding large text as document: \(sanitizedName), size: \(text.count) bytes")
+        
+        // Use helper method to properly add document with all arrays in sync
+        sharedMediaDataSource.addPastedText(text, filename: sanitizedName)
+        
+        syncAttachments()
     }
     
     private func handleTranscriptUpdate(_ newTranscript: String) {
@@ -448,13 +468,13 @@ struct MessageBarView: View {
         attachments.removeAll()
         documentAttachments.removeAll()
         
-        // Sync image attachments
+        // Sync image attachments (using separate image arrays)
         for i in 0..<sharedMediaDataSource.images.count {
-            let fileExt = i < sharedMediaDataSource.fileExtensions.count ?
-                sharedMediaDataSource.fileExtensions[i] : "jpg"
+            let fileExt = i < sharedMediaDataSource.imageExtensions.count ?
+                sharedMediaDataSource.imageExtensions[i] : "jpg"
                 
-            let filename = i < sharedMediaDataSource.filenames.count ?
-                sharedMediaDataSource.filenames[i] : "image\(i+1).\(fileExt)"
+            let filename = i < sharedMediaDataSource.imageFilenames.count ?
+                sharedMediaDataSource.imageFilenames[i] : "image\(i+1).\(fileExt)"
                 
             logger.info("Adding image attachment: \(filename) with ext \(fileExt)")
             
@@ -465,23 +485,24 @@ struct MessageBarView: View {
             ))
         }
         
-        // Sync document attachments
+        // Sync document attachments (using separate document arrays)
         for i in 0..<sharedMediaDataSource.documents.count {
-            // Calculate correct index for accessing extensions and filenames
-            let docIndex = sharedMediaDataSource.images.count + i
-            
-            let fileExt = docIndex < sharedMediaDataSource.fileExtensions.count ?
-                sharedMediaDataSource.fileExtensions[docIndex] : "pdf"
+            let fileExt = i < sharedMediaDataSource.documentExtensions.count ?
+                sharedMediaDataSource.documentExtensions[i] : "pdf"
                 
-            let filename = docIndex < sharedMediaDataSource.filenames.count ?
-                sharedMediaDataSource.filenames[docIndex] : "document\(i+1).\(fileExt)"
+            let filename = i < sharedMediaDataSource.documentFilenames.count ?
+                sharedMediaDataSource.documentFilenames[i] : "document\(i+1).\(fileExt)"
+            
+            let textPreview = i < sharedMediaDataSource.textPreviews.count ?
+                sharedMediaDataSource.textPreviews[i] : nil
                 
             logger.info("Adding document attachment: \(filename) with ext \(fileExt)")
             
             documentAttachments.append(DocumentAttachment(
                 data: sharedMediaDataSource.documents[i],
                 fileExtension: fileExt,
-                filename: filename
+                filename: filename,
+                textPreview: textPreview
             ))
         }
         
@@ -491,56 +512,22 @@ struct MessageBarView: View {
     func removeAttachment(withId id: UUID) {
         if let index = attachments.firstIndex(where: { $0.id == id }) {
             attachments.remove(at: index)
-            
-            if index < sharedMediaDataSource.images.count {
-                sharedMediaDataSource.images.remove(at: index)
-            }
-            if index < sharedMediaDataSource.fileExtensions.count {
-                sharedMediaDataSource.fileExtensions.remove(at: index)
-            }
-            if index < sharedMediaDataSource.filenames.count {
-                sharedMediaDataSource.filenames.remove(at: index)
-            }
+            sharedMediaDataSource.removeImage(at: index)
         }
     }
     
     func removeDocumentAttachment(withId id: UUID) {
         if let index = documentAttachments.firstIndex(where: { $0.id == id }) {
             documentAttachments.remove(at: index)
-            
-            // Find the corresponding index in the shared data source
-            var docIndex = -1
-            var count = 0
-            
-            for (i, type) in sharedMediaDataSource.mediaTypes.enumerated() {
-                if type == .document {
-                    if count == index {
-                        docIndex = i
-                        break
-                    }
-                    count += 1
-                }
-            }
-            
-            if docIndex >= 0 {
-                sharedMediaDataSource.documents.remove(at: index)
-                sharedMediaDataSource.mediaTypes.remove(at: docIndex)
-                if docIndex < sharedMediaDataSource.fileExtensions.count {
-                    sharedMediaDataSource.fileExtensions.remove(at: docIndex)
-                }
-                if docIndex < sharedMediaDataSource.filenames.count {
-                    sharedMediaDataSource.filenames.remove(at: docIndex)
-                }
-            }
+            sharedMediaDataSource.removeDocument(at: index)
         }
     }
     
     func removeAllAttachments() {
         withAnimation {
             attachments.removeAll()
-            sharedMediaDataSource.images.removeAll()
-            sharedMediaDataSource.fileExtensions.removeAll()
-            sharedMediaDataSource.filenames.removeAll()
+            documentAttachments.removeAll()
+            sharedMediaDataSource.clear()
         }
     }
     
@@ -712,6 +699,9 @@ struct AttachmentListView: View {
     var onRemoveDocumentAttachment: (UUID) -> Void
     var onRemoveAllAttachments: () -> Void
     
+    @State private var selectedDocumentIndex: Int? = nil
+    @State private var documentToPreview: DocumentAttachment? = nil  // Use for sheet(item:)
+    
     var logger = Logger(label: "AttachmentListView")
     
     var body: some View {
@@ -761,14 +751,31 @@ struct AttachmentListView: View {
                     
                     // Documents
                     ForEach(documentAttachments) { document in
-                        MediaAttachmentView(
-                            attachmentType: .document(document.fileExtension),
-                            filename: document.filename,
-                            fileExtension: document.fileExtension,
-                            onDelete: {
-                                onRemoveDocumentAttachment(document.id)
-                            }
-                        )
+                        if let preview = document.textPreview {
+                            PastedTextAttachmentView(
+                                preview: preview,
+                                onDelete: {
+                                    onRemoveDocumentAttachment(document.id)
+                                },
+                                onClick: {
+                                    // Use sheet(item:) pattern - set the document directly
+                                    documentToPreview = document
+                                }
+                            )
+                        } else {
+                            MediaAttachmentView(
+                                attachmentType: .document(document.fileExtension),
+                                filename: document.filename,
+                                fileExtension: document.fileExtension,
+                                onDelete: {
+                                    onRemoveDocumentAttachment(document.id)
+                                },
+                                onClick: {
+                                    // Use sheet(item:) pattern - set the document directly
+                                    documentToPreview = document
+                                }
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, 34)
@@ -788,6 +795,17 @@ struct AttachmentListView: View {
                     }
                 }
             }
+        }
+        .sheet(item: $documentToPreview) { doc in
+            DocumentPreviewModal(
+                documentData: doc.data,
+                filename: doc.filename,
+                fileExtension: doc.fileExtension,
+                isPresented: Binding(
+                    get: { documentToPreview != nil },
+                    set: { if !$0 { documentToPreview = nil } }
+                )
+            )
         }
     }
     
@@ -883,15 +901,18 @@ struct MediaAttachmentView: View {
                     .buttonStyle(PlainButtonStyle())
                     
                 case .document(let ext):
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.gray.opacity(0.1))
-                            .frame(width: 60, height: 60)
-                        
-                        Image(systemName: documentIcon(for: ext))
-                            .font(.system(size: 24))
-                            .foregroundColor(.primary)
+                    Button(action: { onClick?() }) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(documentColor(for: ext).opacity(0.15))
+                                .frame(width: 60, height: 60)
+                            
+                            Image(systemName: documentIcon(for: ext))
+                                .font(.system(size: 24))
+                                .foregroundColor(documentColor(for: ext))
+                        }
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .overlay(
@@ -936,5 +957,105 @@ struct MediaAttachmentView: View {
         case "html": return "globe"
         default: return "doc.fill"
         }
+    }
+    
+    // Get color based on file extension
+    private func documentColor(for extension: String) -> Color {
+        switch fileExtension.lowercased() {
+        case "pdf": return .red
+        case "doc", "docx": return .blue
+        case "xls", "xlsx", "csv": return .green
+        case "txt", "md": return .gray
+        case "html": return .orange
+        default: return .gray
+        }
+    }
+}
+
+// MARK: - Pasted Text Attachment View (Claude Desktop style)
+struct PastedTextAttachmentView: View {
+    let preview: String
+    var onDelete: () -> Void
+    var onClick: (() -> Void)? = nil
+    
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
+    
+    private var displayPreview: String {
+        // First truncate to avoid processing large text
+        let truncated = String(preview.prefix(100))
+        // Clean up newlines without regex
+        let cleaned = truncated
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if cleaned.count > 60 {
+            return String(cleaned.prefix(57)) + "..."
+        }
+        return cleaned
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Text preview area
+            Button(action: { onClick?() }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayPreview)
+                        .font(.system(size: 10))
+                        .foregroundColor(.primary.opacity(0.8))
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                        .frame(width: 80, height: 50, alignment: .topLeading)
+                }
+                .padding(6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .overlay(
+                Button(action: onDelete) {
+                    ZStack {
+                        Circle()
+                            .fill(colorScheme == .dark ?
+                                  Color(white: 0.2).opacity(0.8) :
+                                  Color.white.opacity(0.9))
+                            .frame(width: 20, height: 20)
+                            .shadow(color: Color.black.opacity(0.2), radius: 1, x: 0, y: 1)
+                        
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                    }
+                    .contentShape(Rectangle().size(width: 28, height: 28))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .opacity(isHovered ? 1 : 0),
+                alignment: .topTrailing
+            )
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isHovered = hovering
+                }
+            }
+            
+            // "PASTED" label
+            Text("PASTED")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(Color.secondary.opacity(0.4), lineWidth: 0.5)
+                )
+        }
+        .frame(width: 92, height: 80)
     }
 }

@@ -11,9 +11,27 @@ import SwiftUI
 class SharedMediaDataSource: ObservableObject {
     @Published var images: [NSImage] = []
     @Published var documents: [Data] = []
-    @Published var fileExtensions: [String] = [] // Extensions for all attachments
-    @Published var filenames: [String] = [] // Names for all attachments
-    @Published var mediaTypes: [MediaType] = [] // Type of each item
+    
+    // Separate arrays for images
+    @Published var imageExtensions: [String] = []
+    @Published var imageFilenames: [String] = []
+    
+    // Separate arrays for documents
+    @Published var documentExtensions: [String] = []
+    @Published var documentFilenames: [String] = []
+    @Published var textPreviews: [String?] = []
+    
+    // Legacy arrays for compatibility (computed from separate arrays)
+    var fileExtensions: [String] {
+        imageExtensions + documentExtensions
+    }
+    var filenames: [String] {
+        imageFilenames + documentFilenames
+    }
+    var mediaTypes: [MediaType] {
+        Array(repeating: MediaType.image, count: images.count) +
+        Array(repeating: MediaType.document, count: documents.count)
+    }
     
     var isEmpty: Bool {
         images.isEmpty && documents.isEmpty
@@ -24,61 +42,56 @@ class SharedMediaDataSource: ObservableObject {
         case document
     }
     
-    // Helper method to correctly manage indices when adding images
+    // Helper method to add image
     func addImage(_ image: NSImage, fileExtension: String, filename: String) {
         images.append(image)
-        
-        let imageIndex = images.count - 1
-        
-        // Ensure mediaTypes has enough space for the image index
-        while mediaTypes.count <= imageIndex {
-            mediaTypes.append(.image)
-        }
-        
-        // Extend fileExtensions and filenames arrays
-        while fileExtensions.count <= imageIndex {
-            fileExtensions.append("")
-        }
-        
-        while filenames.count <= imageIndex {
-            filenames.append("")
-        }
-        
-        fileExtensions[imageIndex] = fileExtension
-        filenames[imageIndex] = filename
+        imageExtensions.append(fileExtension)
+        imageFilenames.append(filename)
     }
     
-    // Helper method to correctly manage indices when adding documents
+    // Helper method to add document
     func addDocument(_ data: Data, fileExtension: String, filename: String) {
         documents.append(data)
-        
-        let totalCount = images.count + documents.count - 1
-        
-        // Add document type to mediaTypes
-        while mediaTypes.count <= totalCount {
-            mediaTypes.append(.document)
-        }
-        
-        // Extend fileExtensions and filenames arrays
-        while fileExtensions.count <= totalCount {
-            fileExtensions.append("")
-        }
-        
-        while filenames.count <= totalCount {
-            filenames.append("")
-        }
-        
-        fileExtensions[totalCount] = fileExtension
-        filenames[totalCount] = filename
+        documentExtensions.append(fileExtension)
+        documentFilenames.append(filename)
+        textPreviews.append(nil)
+    }
+    
+    // Helper method to add pasted text as document with preview
+    func addPastedText(_ text: String, filename: String) {
+        guard let textData = text.data(using: .utf8) else { return }
+        documents.append(textData)
+        documentExtensions.append("txt")
+        documentFilenames.append(filename)
+        textPreviews.append(text)
+    }
+    
+    // Remove image at index
+    func removeImage(at index: Int) {
+        guard index < images.count else { return }
+        images.remove(at: index)
+        if index < imageExtensions.count { imageExtensions.remove(at: index) }
+        if index < imageFilenames.count { imageFilenames.remove(at: index) }
+    }
+    
+    // Remove document at index
+    func removeDocument(at index: Int) {
+        guard index < documents.count else { return }
+        documents.remove(at: index)
+        if index < documentExtensions.count { documentExtensions.remove(at: index) }
+        if index < documentFilenames.count { documentFilenames.remove(at: index) }
+        if index < textPreviews.count { textPreviews.remove(at: index) }
     }
     
     // Remove all attachments
     func clear() {
         images.removeAll()
         documents.removeAll()
-        fileExtensions.removeAll()
-        filenames.removeAll()
-        mediaTypes.removeAll()
+        imageExtensions.removeAll()
+        imageFilenames.removeAll()
+        documentExtensions.removeAll()
+        documentFilenames.removeAll()
+        textPreviews.removeAll()
     }
 }
 
@@ -87,6 +100,11 @@ struct DocumentAttachment: Identifiable {
     let data: Data
     var fileExtension: String
     var filename: String
+    var textPreview: String? = nil  // Preview text for pasted text documents
+    
+    var isPastedText: Bool {
+        textPreview != nil
+    }
 }
 
 enum ImageFormat: String, Codable {
