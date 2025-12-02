@@ -4,5 +4,16 @@
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app requires microphone access for real-time transcription.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.aws.bedrock.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bedrock</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

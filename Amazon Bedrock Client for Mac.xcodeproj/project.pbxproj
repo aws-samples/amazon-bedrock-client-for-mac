@@ -61,6 +61,7 @@
 		79FDE25B2DFBF456003960BC /* InferenceConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FDE25A2DFBF456003960BC /* InferenceConfigDropdown.swift */; };
 		79FF2B332D925EDB0075249D /* MCPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FF2B322D925ED10075249D /* MCPManager.swift */; };
 		79FF2B352D925F2E0075249D /* MCPModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FF2B342D925F280075249D /* MCPModels.swift */; };
+		79FF2B372D925F320075249D /* MCPOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FF2B362D925F300075249D /* MCPOAuthManager.swift */; };
 		EDAE4CC62B3D943E99083227 /* SearchEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAE4CC52B3D943E99083226 /* SearchEngine.swift */; };
 /* End PBXBuildFile section */
 
@@ -134,6 +135,7 @@
 		79FDE25A2DFBF456003960BC /* InferenceConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InferenceConfigDropdown.swift; sourceTree = "<group>"; };
 		79FF2B322D925ED10075249D /* MCPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPManager.swift; sourceTree = "<group>"; };
 		79FF2B342D925F280075249D /* MCPModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPModels.swift; sourceTree = "<group>"; };
+		79FF2B362D925F300075249D /* MCPOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuthManager.swift; sourceTree = "<group>"; };
 		EDAE4CC52B3D943E99083226 /* SearchEngine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SearchEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -229,6 +231,7 @@
 				79BFF50F2AD342710057BF3A /* ChatManager.swift */,
 				79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */,
 				79FF2B322D925ED10075249D /* MCPManager.swift */,
+				79FF2B362D925F300075249D /* MCPOAuthManager.swift */,
 				793FE0B72DE56292004236B9 /* ModelInferenceConfig.swift */,
 				79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */,
 				7954F8462AD249A7008B03D3 /* SettingManager.swift */,
@@ -457,6 +460,7 @@
 				79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */,
 				790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */,
 				79FF2B332D925EDB0075249D /* MCPManager.swift in Sources */,
+				79FF2B372D925F320075249D /* MCPOAuthManager.swift in Sources */,
 				7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */,
 				79FD1C262C3777180009E50F /* Markdown.swift in Sources */,
 				79AF97572D9E33C400313A4C /* ImagePreview.swift in Sources */,
@@ -660,10 +664,10 @@
 				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.4.1;
+				CURRENT_PROJECT_VERSION = 1.4.2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = B47A25FR9P;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -688,7 +692,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.1;
+				MARKETING_VERSION = 1.4.2;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -714,10 +718,10 @@
 				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.4.1;
+				CURRENT_PROJECT_VERSION = 1.4.2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = B47A25FR9P;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -742,7 +746,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.1;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -19,6 +19,7 @@ struct MessageBarView: View {
     var chatID: String
     @Binding var userInput: String
     @ObservedObject private var settingManager = SettingManager.shared
+    @ObservedObject private var mcpManager = MCPManager.shared
     @ObservedObject var chatManager: ChatManager = ChatManager.shared
     @StateObject var sharedMediaDataSource: SharedMediaDataSource
     var transcribeManager: TranscribeStreamingManager
@@ -577,6 +578,7 @@ struct PasteLoadingView: View {
 struct AdvancedOptionsMenu: View {
     @Binding var userInput: String
     @ObservedObject var settingManager: SettingManager
+    @ObservedObject var mcpManager: MCPManager = MCPManager.shared
     var modelId: String
     
     // Check if current model supports reasoning/thinking
@@ -628,7 +630,7 @@ struct AdvancedOptionsMenu: View {
 
     // Check if MCP tools should be available and shown
     private var shouldShowMCPTools: Bool {
-        return settingManager.mcpEnabled && !MCPManager.shared.toolInfos.isEmpty && supportsStreamingTools
+        return mcpManager.mcpEnabled && !mcpManager.toolInfos.isEmpty && supportsStreamingTools
     }
     
     var body: some View {

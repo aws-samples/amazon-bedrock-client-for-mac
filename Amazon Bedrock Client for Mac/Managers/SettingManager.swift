@@ -12,8 +12,6 @@ import Carbon
 
 extension Notification.Name {
     static let awsCredentialsChanged = Notification.Name("awsCredentialsChanged")
-    static let mcpEnabledChanged = Notification.Name("mcpEnabledChanged")
-    static let mcpServersLoaded = Notification.Name("mcpServersLoaded")
     static let mcpServerConnected = Notification.Name("mcpServerConnected")
 }
 
@@ -21,7 +19,6 @@ extension Notification.Name {
 class SettingManager: ObservableObject {
     static let shared = SettingManager()
     private var logger = Logger(label: "SettingManager")
-    private static let staticLogger = Logger(label: "SettingManager.Static")
 
     private var fileMonitors: [String: DispatchSourceFileSystemObject] = [:]
     private let monitoringQueue = DispatchQueue(
@@ -66,14 +63,6 @@ class SettingManager: ObservableObject {
         }
     }
 
-    @Published var mcpEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(mcpEnabled, forKey: "mcpEnabled")
-            logger.info("MCP enabled changed: \(oldValue) -> \(mcpEnabled)")
-            NotificationCenter.default.post(name: .mcpEnabledChanged, object: nil)
-        }
-    }
-
     // TODO: these should be converted to AppStorage, but are used from BedrockClient with Combine, which does not support AppStorage.
     @Published var selectedRegion: AWSRegion { didSet { saveSettings() } }
     @Published var selectedProfile: String { didSet { saveSettings() } }
@@ -97,14 +86,6 @@ class SettingManager: ObservableObject {
     @Published var availableModels: [ChatModel] = []
     @AppStorage("allowImagePasting") var allowImagePasting: Bool = true
     @AppStorage("treatLargeTextAsFile") var treatLargeTextAsFile: Bool = true
-    @Published var mcpServers: [MCPServerConfig] = [] {
-        didSet {
-            // Save the complete list to UserDefaults
-            saveMCPServerList()
-            // Save only enabled servers to the config file
-            saveMCPConfigFile()
-        }
-    }
     @Published var favoriteModelIds: [String] = [] {
         didSet {
             saveFavoriteModels()
@@ -125,7 +106,6 @@ class SettingManager: ObservableObject {
         self.selectedProfile = UserDefaults.standard.string(forKey: "selectedProfile") ?? "default"
         self.endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? ""
         self.runtimeEndpoint = UserDefaults.standard.string(forKey: "runtimeEndpoint") ?? ""
-        self.mcpEnabled = UserDefaults.standard.bool(forKey: "mcpEnabled")
         
         // Set default hotkey values if not already set
         if UserDefaults.standard.object(forKey: "hotkeyModifiers") == nil {
@@ -223,29 +203,57 @@ class SettingManager: ObservableObject {
     
     private func monitorFileChanges(at url: URL) {
         stopMonitoring(for: url)
-        startMonitoring(for: url)
+        
+        // Start monitoring on background queue
+        Task.detached { [weak self] in
+            await self?.startMonitoringAsync(for: url)
+        }
     }
     
-    private func startMonitoring(for url: URL) {
+    nonisolated private func startMonitoringAsync(for url: URL) async {
         let fileDescriptor = open(url.path, O_EVTONLY)
         guard fileDescriptor >= 0 else {
-            logger.error("Failed to open file descriptor for \(url.path)")
+            await MainActor.run {
+                SettingManager.shared.logger.error("Failed to open file descriptor for \(url.path)")
+            }
             return
         }
         
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fileDescriptor, eventMask: [.write, .delete, .rename],
-            queue: monitoringQueue)
-        source.setEventHandler { [weak self] in
-            self?.handleFileChange(at: url)
+            fileDescriptor: fileDescriptor,
+            eventMask: [.write, .delete, .rename],
+            queue: DispatchQueue(label: "com.aws.bedrock.filemonitor.\(url.lastPathComponent)")
+        )
+        
+        // Capture url path as value type
+        let urlPath = url.path
+        let urlLastComponent = url.lastPathComponent
+        
+        source.setEventHandler {
+            Task { @MainActor in
+                let manager = SettingManager.shared
+                manager.logger.info("File change detected at \(urlPath)")
+                
+                if urlLastComponent == "credentials" || urlLastComponent == "config" {
+                    manager.refreshAWSProfiles()
+                    NotificationCenter.default.post(name: .awsCredentialsChanged, object: nil)
+                }
+                
+                // Re-establish monitoring for the changed file
+                manager.monitorFileChanges(at: url)
+            }
         }
+        
         source.setCancelHandler {
             close(fileDescriptor)
         }
+        
         source.resume()
         
-        fileMonitors[url.path] = source
-        logger.info("File monitoring started for \(url.path)")
+        await MainActor.run {
+            SettingManager.shared.fileMonitors[urlPath] = source
+            SettingManager.shared.logger.info("File monitoring started for \(urlPath)")
+        }
     }
     
     private func stopMonitoring(for url: URL) {
@@ -255,317 +263,113 @@ class SettingManager: ObservableObject {
         }
     }
     
-    private func handleFileChange(at url: URL) {
-        logger.info("File change detected at \(url.path)")
-        DispatchQueue.main.async { [weak self] in
-            if url.lastPathComponent == "credentials" || url.lastPathComponent == "config" {
-                self?.refreshAWSProfiles()
-                NotificationCenter.default.post(name: .awsCredentialsChanged, object: nil)
-            }
-            
-            // Re-establish monitoring for the changed file
-            self?.monitorFileChanges(at: url)
-        }
-    }
     
     private func refreshAWSProfiles() {
-        self.profiles = Self.readAWSProfiles()
-        logger.info("AWS profiles refreshed")
+        // Read profiles on background thread, then update on main
+        Task {
+            let newProfiles = await Task.detached {
+                Self.readAWSProfilesSync()
+            }.value
+            
+            // Already on MainActor since SettingManager is @MainActor
+            self.profiles = newProfiles
+            self.logger.info("AWS profiles refreshed: \(newProfiles.count) profiles")
+        }
     }
     
+    /// Reads AWS profiles from ~/.aws/credentials and ~/.aws/config
+    /// This is a simplified version that just reads profile names - AWS SDK handles the actual credential loading
     static func readAWSProfiles() -> [ProfileInfo] {
-        var profiles: [ProfileInfo] = []
-        
-        // Get the actual home directory (not sandboxed)
-        let actualHome = FileManager.default.homeDirectoryForCurrentUser.path
-        
-        // Read regular profiles from ~/.aws/credentials
-        let credentialsProfiles = readProfilesFromFile(
-            path: "\(actualHome)/.aws/credentials", type: .credentials)
-        profiles.append(contentsOf: credentialsProfiles)
-        
-        // Read profiles from ~/.aws/config including SSO and credential_process
-        let configProfiles = readProfilesFromConfig(path: "\(actualHome)/.aws/config")
-        profiles.append(contentsOf: configProfiles)
-        
-        // Return unique profiles
-        return profiles.uniqued()
+        return readAWSProfilesSync()
     }
     
-    // Read profiles from a file (used for ~/.aws/credentials)
-    static func readProfilesFromFile(path: String, type: ProfileInfo.ProfileType) -> [ProfileInfo] {
-        // Use the path as-is (already expanded in readAWSProfiles)
-        let expandedPath = path
-        staticLogger.info("Attempting to read profiles from: \(expandedPath)")
-        
-        // Attempt to read the file contents
-        guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
-            staticLogger.error("Failed to read file: \(path) (expanded: \(expandedPath))")
-            // Check if file exists
-            if FileManager.default.fileExists(atPath: expandedPath) {
-                staticLogger.error("File exists but cannot be read - permission issue?")
-            } else {
-                staticLogger.error("File does not exist at path")
-            }
-            return []
-        }
-        
-        staticLogger.info("Successfully read file, parsing profiles...")
-        let lines = contents.components(separatedBy: .newlines)
+    /// Non-isolated version for background thread access
+    nonisolated static func readAWSProfilesSync() -> [ProfileInfo] {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
         var profiles: [ProfileInfo] = []
+        let logger = Logger(label: "SettingManager.readAWSProfilesSync")
         
-        // Parse each line to find profile names
-        for line in lines {
-            if line.starts(with: "[") && line.hasSuffix("]") {
-                let profileName = String(line.dropFirst().dropLast())
-                profiles.append(ProfileInfo(name: profileName, type: type))
-                staticLogger.info("Found profile: \(profileName)")
+        // Read from ~/.aws/credentials
+        if let credentialsProfiles = parseProfilesFromFile("\(homePath)/.aws/credentials", isConfig: false) {
+            logger.debug("Loaded \(credentialsProfiles.count) profiles from credentials file")
+            for p in credentialsProfiles {
+                logger.debug("  - \(p.name): \(p.type)")
             }
+            profiles.append(contentsOf: credentialsProfiles)
         }
         
-        staticLogger.info("Parsed \(profiles.count) profiles from \(path)")
-        return profiles
+        // Read from ~/.aws/config
+        if let configProfiles = parseProfilesFromFile("\(homePath)/.aws/config", isConfig: true) {
+            logger.debug("Loaded \(configProfiles.count) profiles from config file")
+            for p in configProfiles {
+                logger.debug("  - \(p.name): \(p.type)")
+            }
+            profiles.append(contentsOf: configProfiles)
+        }
+        
+        // Merge by name, preferring SSO/credential_process types from config
+        let merged = profiles.mergedByName()
+        logger.info("Final merged profiles: \(merged.map { "\($0.name)(\($0.type))" }.joined(separator: ", "))")
+        return merged
     }
     
-    // Read all profiles from ~/.aws/config including SSO and credential_process
-    static func readProfilesFromConfig(path: String) -> [ProfileInfo] {
-        // Use the path as-is (already expanded in readAWSProfiles)
-        let expandedPath = path
-        staticLogger.info("Attempting to read config from: \(expandedPath)")
-        
-        // Attempt to read the file contents
-        guard let contents = try? String(contentsOfFile: expandedPath, encoding: .utf8) else {
-            staticLogger.error("Failed to read config file: \(path)")
-            if FileManager.default.fileExists(atPath: expandedPath) {
-                staticLogger.error("Config file exists but cannot be read - permission issue?")
-            } else {
-                staticLogger.error("Config file does not exist at path")
-            }
-            return []
+    /// Parse profile names from an AWS config/credentials file
+    nonisolated private static func parseProfilesFromFile(_ path: String, isConfig: Bool) -> [ProfileInfo]? {
+        guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return nil
         }
         
-        staticLogger.info("Successfully read config file, parsing profiles...")
-        
-        let lines = contents.components(separatedBy: .newlines)
         var profiles: [ProfileInfo] = []
         var currentProfile: String?
-        var isSSO = false
-        var hasCredentialProcess = false
+        var currentType: ProfileInfo.ProfileType = .credentials
         
-        // Function to add the current profile with appropriate type
-        func addCurrentProfile() {
-            if let profile = currentProfile {
-                if isSSO {
-                    profiles.append(ProfileInfo(name: profile, type: .sso))
-                } else if hasCredentialProcess {
-                    profiles.append(ProfileInfo(name: profile, type: .credentialProcess))
+        for line in contents.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Check for profile header
+            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+                // Save previous profile
+                if let profile = currentProfile {
+                    profiles.append(ProfileInfo(name: profile, type: currentType))
+                }
+                
+                // Parse new profile name
+                var profileName = String(trimmed.dropFirst().dropLast())
+                
+                // In config file, profiles are prefixed with "profile "
+                if isConfig && profileName.hasPrefix("profile ") {
+                    profileName = String(profileName.dropFirst(8))
+                    currentType = .credentials // Default, will be updated below
+                } else if isConfig && profileName == "default" {
+                    // default profile in config doesn't have "profile " prefix
+                    currentType = .credentials
+                } else if !isConfig {
+                    currentType = .credentials
+                } else {
+                    // Skip non-profile sections in config (like [sso-session ...])
+                    currentProfile = nil
+                    continue
+                }
+                
+                currentProfile = profileName
+                currentType = .credentials
+            }
+            // Detect profile type
+            else if currentProfile != nil {
+                if trimmed.hasPrefix("sso_") || trimmed.hasPrefix("sso_session") {
+                    currentType = .sso
+                } else if trimmed.hasPrefix("credential_process") {
+                    currentType = .credentialProcess
                 }
             }
         }
         
-        // Parse each line to find profiles
-        for line in lines {
-            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-            if trimmedLine.starts(with: "[profile ") && trimmedLine.hasSuffix("]") {
-                // If we've found a new profile, add the previous one if applicable
-                addCurrentProfile()
-                
-                // Start tracking a new profile
-                currentProfile = String(trimmedLine.dropFirst(9).dropLast())
-                isSSO = false
-                hasCredentialProcess = false
-            } else if trimmedLine.starts(with: "sso_") {
-                // If we find an SSO-related setting, mark this profile as SSO
-                isSSO = true
-            } else if trimmedLine.starts(with: "credential_process") {
-                // If we find credential_process setting, mark this profile
-                hasCredentialProcess = true
-            }
+        // Don't forget the last profile
+        if let profile = currentProfile {
+            profiles.append(ProfileInfo(name: profile, type: currentType))
         }
-        
-        // Add the last profile
-        addCurrentProfile()
         
         return profiles
-    }
-    
-    // Load both sources and reconcile differences
-    func loadMCPServers() {
-        // Step 1: Load the complete list from UserDefaults
-        let savedServers = loadSavedMCPServerList()
-        
-        // Step 2: Load the enabled servers from the config file
-        let configServers = loadMCPServersFromConfigFile()
-        
-        // Step 3: Reconcile the differences
-        var mergedServers = savedServers
-        
-        // Add any servers in the config file that aren't in our saved list
-        for configServer in configServers {
-            if !mergedServers.contains(where: { $0.name == configServer.name }) {
-                // New server found in config file - add it as enabled
-                var newServer = configServer
-                newServer.enabled = true
-                mergedServers.append(newServer)
-            } else {
-                // Update existing server if it's in the config file (should be enabled)
-                for i in 0..<mergedServers.count {
-                    if mergedServers[i].name == configServer.name {
-                        // Update details from config file but preserve enabled state
-                        var updatedServer = configServer
-                        updatedServer.enabled = true  // If it's in the config file, it should be enabled
-                        mergedServers[i] = updatedServer
-                        break
-                    }
-                }
-            }
-        }
-        
-        // Update the server list
-        self.mcpServers = mergedServers
-        
-        // Notify that MCP servers have been loaded
-        NotificationCenter.default.post(name: .mcpServersLoaded, object: nil)
-    }
-    
-    // Load server list from UserDefaults
-    private func loadSavedMCPServerList() -> [MCPServerConfig] {
-        if let data = UserDefaults.standard.data(forKey: "mcpServers"),
-           let decoded = try? JSONDecoder().decode([MCPServerConfig].self, from: data) {
-            return decoded
-        }
-        return []
-    }
-
-    // Save complete server list to UserDefaults
-    private func saveMCPServerList() {
-        if let encoded = try? JSONEncoder().encode(mcpServers) {
-            UserDefaults.standard.set(encoded, forKey: "mcpServers")
-        }
-    }
-
-    // Load servers from config file
-    private func loadMCPServersFromConfigFile() -> [MCPServerConfig] {
-        let configPath = getMCPConfigPath()
-        var loadedServers: [MCPServerConfig] = []
-        
-        if FileManager.default.fileExists(atPath: configPath) {
-            do {
-                let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
-                
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]],
-                   let servers = json["mcpServers"] as? [String: [String: Any]] {
-                    
-                    for (name, serverInfo) in servers {
-                        // Extract server details directly from dictionary
-                        if let command = serverInfo["command"] as? String,
-                           let argsArray = serverInfo["args"] as? [String] {
-                            
-                            var server = MCPServerConfig(
-                                name: name,
-                                command: command,
-                                args: argsArray,
-                                enabled: true  // Servers in config are considered enabled
-                            )
-                            
-                            // Add optional fields if present
-                            if let env = serverInfo["env"] as? [String: String] {
-                                server.env = env
-                            }
-                            
-                            if let cwd = serverInfo["cwd"] as? String {
-                                server.cwd = cwd
-                            }
-                            
-                            loadedServers.append(server)
-                        }
-                    }
-                    
-                    logger.info("Loaded \(loadedServers.count) MCP servers from config file")
-                }
-            } catch {
-                logger.error("Error reading MCP config file: \(error)")
-            }
-        }
-        
-        return loadedServers
-    }
-
-    // Define MCPServerInfo for JSON parsing
-    private struct MCPServerInfo: Codable {
-        var command: String
-        var args: [String]
-        var env: [String: String]?
-        var cwd: String?
-    }
-
-    // Helper function to get the MCP config file path
-    func getMCPConfigPath() -> String {
-        let configDir = defaultDirectory.isEmpty
-            ? FileManager.default.homeDirectoryForCurrentUser.path
-            : defaultDirectory
-        
-        return URL(fileURLWithPath: configDir)
-            .appendingPathComponent("mcp_config.json")
-            .path
-    }
-
-    // Save only enabled servers to the MCP config file
-    func saveMCPConfigFile() {
-        // Get only enabled servers
-        let enabledServers = mcpServers.filter { $0.enabled }
-        
-        // Only proceed if we have servers to save
-        guard !enabledServers.isEmpty else {
-            // If no enabled servers, create an empty config
-            try? "{ \"mcpServers\": {} }".write(
-                toFile: getMCPConfigPath(),
-                atomically: true,
-                encoding: .utf8
-            )
-            return
-        }
-        
-        // Build a dictionary representation first
-        var serversDict: [String: [String: Any]] = [:]
-        
-        for server in enabledServers {
-            var serverInfo: [String: Any] = [
-                "command": server.command,
-                "args": server.args
-            ]
-            
-            if let env = server.env, !env.isEmpty {
-                serverInfo["env"] = env
-            }
-            
-            if let cwd = server.cwd, !cwd.isEmpty {
-                serverInfo["cwd"] = cwd
-            }
-            
-            serversDict[server.name] = serverInfo
-        }
-        
-        let configDict: [String: Any] = ["mcpServers": serversDict]
-        
-        // Use JSONSerialization instead of Codable to have more control over escaping
-        if let jsonData = try? JSONSerialization.data(
-            withJSONObject: configDict,
-            options: [.prettyPrinted, .withoutEscapingSlashes]
-        ) {
-            do {
-                // Ensure directory exists
-                let configPath = getMCPConfigPath()
-                let directoryURL = URL(fileURLWithPath: configPath).deletingLastPathComponent()
-                try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-                
-                // Write the config file
-                try jsonData.write(to: URL(fileURLWithPath: configPath))
-                logger.debug("Saved MCP config file with pretty formatting")
-            } catch {
-                logger.error("Failed to save MCP config file: \(error)")
-            }
-        }
     }
     
     // MARK: - Model Inference Configuration Methods
@@ -622,12 +426,35 @@ struct ProfileInfo: Identifiable, Hashable {
         case sso
         case credentialProcess
     }
+    
+    // Hash and equality based on name only (for deduplication)
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+    }
+    
+    static func == (lhs: ProfileInfo, rhs: ProfileInfo) -> Bool {
+        return lhs.name == rhs.name
+    }
 }
 
-extension Array where Element: Hashable {
-    func uniqued() -> [Element] {
-        var seen = Set<Element>()
-        return filter { seen.insert($0).inserted }
+extension Array where Element == ProfileInfo {
+    /// Merges profiles by name, preferring config file types (SSO, credential_process) over credentials
+    func mergedByName() -> [ProfileInfo] {
+        var profileMap: [String: ProfileInfo] = [:]
+        
+        for profile in self {
+            if let existing = profileMap[profile.name] {
+                // Prefer SSO or credentialProcess over plain credentials
+                if existing.type == .credentials && profile.type != .credentials {
+                    profileMap[profile.name] = profile
+                }
+                // Keep existing if it's already SSO or credentialProcess
+            } else {
+                profileMap[profile.name] = profile
+            }
+        }
+        
+        return Array(profileMap.values).sorted { $0.name < $1.name }
     }
 }
 

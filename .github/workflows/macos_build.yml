@@ -41,8 +41,10 @@ jobs:
       with:
         xcode-version: '26.0'
 
-    # Build Xcode Project for both architectures
+    # Build Xcode Project for both architectures with code signing
     - name: Build Xcode Project
+      env:
+        DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
       run: |
         xcodebuild clean build \
           -project "Amazon Bedrock Client for Mac.xcodeproj" \
@@ -52,7 +54,83 @@ jobs:
           -derivedDataPath DerivedData \
           -skipMacroValidation \
           ONLY_ACTIVE_ARCH=NO \
-          ASSETCATALOG_COMPILER_OPTIMIZATION=time
+          ASSETCATALOG_COMPILER_OPTIMIZATION=time \
+          CODE_SIGN_STYLE=Manual \
+          CODE_SIGN_IDENTITY="Developer ID Application" \
+          DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+          ENABLE_HARDENED_RUNTIME=YES \
+          OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+
+    # Verify code signing before notarization
+    - name: Verify Code Signing
+      run: |
+        APP_PATH="$(pwd)/DerivedData/Build/Products/Release/Amazon Bedrock.app"
+        echo "=== Checking code signature ==="
+        codesign -dv --verbose=4 "$APP_PATH"
+        echo ""
+        echo "=== Verifying signature validity ==="
+        codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+        echo ""
+        echo "=== Checking entitlements ==="
+        codesign -d --entitlements :- "$APP_PATH" || true
+        echo ""
+        echo "=== Checking hardened runtime ==="
+        codesign -d --verbose "$APP_PATH" 2>&1 | grep -i runtime || echo "Hardened runtime info not found"
+
+    # Notarize the app
+    - name: Notarize App
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        set -x
+        APP_PATH="$(pwd)/DerivedData/Build/Products/Release/Amazon Bedrock.app"
+        
+        # Create a zip for notarization
+        ditto -c -k --keepParent "$APP_PATH" "Amazon_Bedrock.zip"
+        
+        # Submit for notarization
+        xcrun notarytool submit "Amazon_Bedrock.zip" \
+          --apple-id "$APPLE_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --team-id "$APPLE_TEAM_ID" \
+          --wait \
+          --output-format json > notarization_result.json 2>&1 || true
+        
+        echo "=== Notarization Result ==="
+        cat notarization_result.json
+        
+        # Extract submission ID
+        SUBMISSION_ID=$(cat notarization_result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+        STATUS=$(cat notarization_result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+        
+        echo "Submission ID: $SUBMISSION_ID"
+        echo "Status: $STATUS"
+        
+        # Always fetch the log for debugging
+        if [ -n "$SUBMISSION_ID" ]; then
+          echo ""
+          echo "=== Fetching Notarization Log ==="
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            notarization_log.json || true
+          cat notarization_log.json
+        fi
+        
+        # Check status and fail if invalid
+        if [ "$STATUS" != "Accepted" ]; then
+          echo "Notarization failed with status: $STATUS"
+          exit 1
+        fi
+        
+        # Staple the notarization ticket to the app
+        xcrun stapler staple "$APP_PATH"
+        
+        # Clean up
+        rm "Amazon_Bedrock.zip"
 
     # Package as DMG
     - name: Package as DMG
@@ -65,6 +143,21 @@ jobs:
         --hide-extension "Amazon Bedrock.app" \
         --app-drop-link 600 185 \
         'Amazon Bedrock Client for Mac.dmg' "$APP_PATH"
+
+    # Notarize the DMG
+    - name: Notarize DMG
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        xcrun notarytool submit "Amazon Bedrock Client for Mac.dmg" \
+          --apple-id "$APPLE_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --team-id "$APPLE_TEAM_ID" \
+          --wait
+        
+        xcrun stapler staple "Amazon Bedrock Client for Mac.dmg"
 
     # Upload Artifact (for both tags and main branch)
     - name: Upload Artifact

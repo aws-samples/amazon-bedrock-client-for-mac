@@ -75,6 +75,17 @@ struct MainView: View {
                 hasInitialized = true
             }
         }
+        .onChange(of: backendModel.alertMessage) { _, newMessage in
+            // Show credential/backend error alerts
+            if let message = newMessage {
+                alertInfo = AlertInfo(
+                    title: "AWS Credential Error",
+                    message: message
+                )
+                // Clear the alert message after showing
+                backendModel.alertMessage = nil
+            }
+        }
     }
     
     // MARK: - Content
@@ -135,39 +146,48 @@ struct MainView: View {
         Task {
             logger.info("Fetching models...")
             
-            async let foundationModelsResult = backend.listFoundationModels()
-            async let inferenceProfilesResult = backend.listInferenceProfiles()
-            
-            let (foundationModels, inferenceProfiles) = await (
-                foundationModelsResult,
-                inferenceProfilesResult
-            )
-            
-            let foundationChatModels = Dictionary(
-                grouping: (try? foundationModels.get())?.map(ChatModel.fromSummary) ?? []
-            ) { $0.provider }
-            
-            let inferenceChatModels = Dictionary(
-                grouping: inferenceProfiles.map { ChatModel.fromInferenceProfile($0) }
-            ) { $0.provider }
-            
-            // Merge
-            let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
-                current
-            }
-            
-            await MainActor.run {
-                self.organizedChatModels = mergedChatModels
-                self.selectDefaultModel()
-                settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
+            do {
+                async let foundationModelsResult = backend.listFoundationModels()
+                async let inferenceProfilesResult = backend.listInferenceProfiles()
                 
-                // Mark as initialized after models are loaded
-                self.hasInitialized = true
+                let (foundationModels, inferenceProfiles) = await (
+                    foundationModelsResult,
+                    inferenceProfilesResult
+                )
                 
-                // Only auto-create chat if we have existing chats (user has used the app before)
-                // or if user explicitly requests it
-                if selection == nil && !chatManager.chats.isEmpty {
-                    createNewChatIfNeeded()
+                // Check for errors in foundation models
+                let foundationModelsList = try foundationModels.get()
+                
+                let foundationChatModels = Dictionary(
+                    grouping: foundationModelsList.map(ChatModel.fromSummary)
+                ) { $0.provider }
+                
+                let inferenceChatModels = Dictionary(
+                    grouping: inferenceProfiles.map { ChatModel.fromInferenceProfile($0) }
+                ) { $0.provider }
+                
+                // Merge
+                let mergedChatModels = foundationChatModels.merging(inferenceChatModels) { current, _ in
+                    current
+                }
+                
+                await MainActor.run {
+                    self.organizedChatModels = mergedChatModels
+                    self.selectDefaultModel()
+                    settingManager.availableModels = mergedChatModels.values.flatMap { $0 }
+                    
+                    // Mark as initialized after models are loaded
+                    self.hasInitialized = true
+                    
+                    // Only auto-create chat if we have existing chats (user has used the app before)
+                    // or if user explicitly requests it
+                    if selection == nil && !chatManager.chats.isEmpty {
+                        createNewChatIfNeeded()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    handleFetchModelsError(error)
                 }
             }
         }

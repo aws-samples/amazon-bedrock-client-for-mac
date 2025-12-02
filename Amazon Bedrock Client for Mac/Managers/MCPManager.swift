@@ -14,6 +14,7 @@ import System
 /**
  * Manages Model Context Protocol (MCP) integrations.
  * Handles server connections, tool discovery, and tool execution.
+ * Uses mcp_config.json as the single source of truth for server configuration.
  */
 @MainActor
 class MCPManager: ObservableObject {
@@ -25,6 +26,29 @@ class MCPManager: ObservableObject {
     @Published private(set) var availableTools: [String: [Tool]] = [:]
     @Published private(set) var toolInfos: [MCPToolInfo] = []
     @Published private(set) var connectionStatus: [String: ConnectionStatus] = [:]
+    
+    // Server configuration - single source of truth from mcp_config.json
+    @Published var servers: [MCPServerConfig] = [] {
+        didSet {
+            saveConfigFile()
+        }
+    }
+    
+    // MCP enabled state
+    @Published var mcpEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(mcpEnabled, forKey: "mcpEnabled")
+            if mcpEnabled {
+                // Reset crash protection when user manually enables
+                resetCrashProtection()
+                markMCPRunning(true)
+                connectToAllServers()
+            } else {
+                markMCPRunning(false)
+                disconnectAllServers()
+            }
+        }
+    }
     
     // Status tracking
     private var autoStartCompleted = false
@@ -51,28 +75,252 @@ class MCPManager: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     
+    // Crash detection keys
+    private static let mcpRunningKey = "mcpWasRunning"
+    private static let mcpCrashCountKey = "mcpCrashCount"
+    private static let mcpDisabledDueToCrashKey = "mcpDisabledDueToCrash"
+    
     private init() {
-        // Listen for MCP enabled state changes
-        NotificationCenter.default.publisher(for: .mcpEnabledChanged)
-            .sink { [weak self] _ in
-                let enabled = SettingManager.shared.mcpEnabled
-                if enabled {
-                    self?.connectToAllServers()
-                } else {
-                    self?.disconnectAllServers()
+        // Check for previous crash and disable MCP if needed
+        let wasRunning = UserDefaults.standard.bool(forKey: Self.mcpRunningKey)
+        var crashCount = UserDefaults.standard.integer(forKey: Self.mcpCrashCountKey)
+        
+        if wasRunning {
+            // App crashed while MCP was running
+            crashCount += 1
+            UserDefaults.standard.set(crashCount, forKey: Self.mcpCrashCountKey)
+            logger.warning("Detected crash while MCP was running. Crash count: \(crashCount)")
+            
+            if crashCount >= 1 {
+                // Disable MCP after 1 crash
+                logger.error("MCP disabled due to crash")
+                UserDefaults.standard.set(false, forKey: "mcpEnabled")
+                UserDefaults.standard.set(true, forKey: Self.mcpDisabledDueToCrashKey)
+                UserDefaults.standard.set(false, forKey: Self.mcpRunningKey)
+            }
+        }
+        
+        // Load mcpEnabled from UserDefaults
+        self.mcpEnabled = UserDefaults.standard.bool(forKey: "mcpEnabled")
+        
+        // Load servers from config file
+        loadConfigFile()
+        
+        // Start servers if enabled
+        if mcpEnabled {
+            startServersIfEnabled()
+        }
+    }
+    
+    /// Check if MCP was disabled due to crash
+    var wasDisabledDueToCrash: Bool {
+        UserDefaults.standard.bool(forKey: Self.mcpDisabledDueToCrashKey)
+    }
+    
+    /// Reset crash count and re-enable MCP
+    func resetCrashProtection() {
+        UserDefaults.standard.set(0, forKey: Self.mcpCrashCountKey)
+        UserDefaults.standard.set(false, forKey: Self.mcpDisabledDueToCrashKey)
+        logger.info("MCP crash protection reset")
+    }
+    
+    /// Mark MCP as running (call when MCP operations start)
+    func markMCPRunning(_ running: Bool) {
+        UserDefaults.standard.set(running, forKey: Self.mcpRunningKey)
+    }
+    
+    // MARK: - Config File Management
+    
+    /**
+     * Gets the path to the MCP config file.
+     */
+    func getConfigPath() -> String {
+        let configDir = SettingManager.shared.defaultDirectory.isEmpty
+            ? FileManager.default.homeDirectoryForCurrentUser.path
+            : SettingManager.shared.defaultDirectory
+        
+        return URL(fileURLWithPath: configDir)
+            .appendingPathComponent("mcp_config.json")
+            .path
+    }
+    
+    /**
+     * Loads server configuration from mcp_config.json.
+     */
+    func loadConfigFile() {
+        let configPath = getConfigPath()
+        var loadedServers: [MCPServerConfig] = []
+        
+        if FileManager.default.fileExists(atPath: configPath) {
+            do {
+                let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
+                
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let serversJson = json["mcpServers"] as? [String: [String: Any]] {
+                    
+                    for (name, serverInfo) in serversJson {
+                        // Support both "type" (Claude Code style) and "transportType" (legacy)
+                        let transportTypeStr = serverInfo["type"] as? String
+                            ?? serverInfo["transportType"] as? String
+                            ?? "stdio"
+                        let transportType = MCPTransportType(rawValue: transportTypeStr) ?? .stdio
+                        let enabled = serverInfo["enabled"] as? Bool ?? true
+                        
+                        var server: MCPServerConfig
+                        
+                        if transportType == .http {
+                            guard let url = serverInfo["url"] as? String else {
+                                logger.warning("Skipping HTTP server '\(name)': missing URL")
+                                continue
+                            }
+                            
+                            server = MCPServerConfig(
+                                name: name,
+                                transportType: .http,
+                                url: url,
+                                headers: serverInfo["headers"] as? [String: String],
+                                enabled: enabled
+                            )
+                        } else {
+                            guard let command = serverInfo["command"] as? String,
+                                  let argsArray = serverInfo["args"] as? [String] else {
+                                logger.warning("Skipping stdio server '\(name)': missing command or args")
+                                continue
+                            }
+                            
+                            server = MCPServerConfig(
+                                name: name,
+                                transportType: .stdio,
+                                command: command,
+                                args: argsArray,
+                                env: serverInfo["env"] as? [String: String],
+                                cwd: serverInfo["cwd"] as? String,
+                                enabled: enabled
+                            )
+                        }
+                        
+                        loadedServers.append(server)
+                    }
+                    
+                    logger.info("Loaded \(loadedServers.count) MCP servers from config file")
+                }
+            } catch {
+                logger.error("Error reading MCP config file: \(error)")
+            }
+        }
+        
+        // Update without triggering didSet save
+        self.servers = loadedServers
+    }
+    
+    /**
+     * Saves server configuration to mcp_config.json.
+     */
+    func saveConfigFile() {
+        var serversDict: [String: [String: Any]] = [:]
+        
+        for server in servers {
+            var serverInfo: [String: Any] = [:]
+            
+            serverInfo["type"] = server.transportType.rawValue
+            serverInfo["enabled"] = server.enabled
+            
+            if server.transportType == .http {
+                if let url = server.url {
+                    serverInfo["url"] = url
+                }
+                if let headers = server.headers, !headers.isEmpty {
+                    serverInfo["headers"] = headers
+                }
+            } else {
+                serverInfo["command"] = server.command
+                serverInfo["args"] = server.args
+                
+                if let env = server.env, !env.isEmpty {
+                    serverInfo["env"] = env
+                }
+                if let cwd = server.cwd, !cwd.isEmpty {
+                    serverInfo["cwd"] = cwd
                 }
             }
-            .store(in: &cancellables)
+            
+            serversDict[server.name] = serverInfo
+        }
         
-        // Listen for MCP servers loaded notification
-        NotificationCenter.default.publisher(for: .mcpServersLoaded)
-            .sink { [weak self] _ in
-                self?.startServersIfEnabled()
+        let configDict: [String: Any] = ["mcpServers": serversDict]
+        
+        if let jsonData = try? JSONSerialization.data(
+            withJSONObject: configDict,
+            options: [.prettyPrinted, .withoutEscapingSlashes]
+        ) {
+            do {
+                let configPath = getConfigPath()
+                let directoryURL = URL(fileURLWithPath: configPath).deletingLastPathComponent()
+                try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+                try jsonData.write(to: URL(fileURLWithPath: configPath))
+                logger.debug("Saved MCP config file")
+            } catch {
+                logger.error("Failed to save MCP config file: \(error)")
             }
-            .store(in: &cancellables)
-        
-        // Load MCP servers (will trigger mcpServersLoaded notification when done)
-        SettingManager.shared.loadMCPServers()
+        }
+    }
+    
+    /**
+     * Adds a new server configuration.
+     */
+    func addServer(_ server: MCPServerConfig) {
+        if !servers.contains(where: { $0.name == server.name }) {
+            servers.append(server)
+            if server.enabled && mcpEnabled {
+                connectToServer(server)
+            }
+        }
+    }
+    
+    /**
+     * Updates an existing server configuration.
+     */
+    func updateServer(_ server: MCPServerConfig) {
+        if let index = servers.firstIndex(where: { $0.name == server.name }) {
+            let wasEnabled = servers[index].enabled
+            servers[index] = server
+            
+            // Handle connection state changes
+            if server.enabled && !wasEnabled && mcpEnabled {
+                connectToServer(server)
+            } else if !server.enabled && wasEnabled {
+                Task {
+                    await disconnectServer(server.name)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Removes a server configuration.
+     */
+    func removeServer(named name: String) {
+        Task {
+            await disconnectServer(name)
+        }
+        servers.removeAll { $0.name == name }
+    }
+    
+    /**
+     * Toggles a server's enabled state.
+     */
+    func toggleServer(named name: String, enabled: Bool) {
+        if let index = servers.firstIndex(where: { $0.name == name }) {
+            servers[index].enabled = enabled
+            
+            if enabled && mcpEnabled {
+                connectToServer(servers[index])
+            } else if !enabled {
+                Task {
+                    await disconnectServer(name)
+                }
+            }
+        }
     }
     
     /**
@@ -83,7 +331,7 @@ class MCPManager: ObservableObject {
         if autoStartCompleted { return }
         
         autoStartCompleted = true
-        if SettingManager.shared.mcpEnabled {
+        if mcpEnabled {
             connectToAllServers()
         }
     }
@@ -92,9 +340,9 @@ class MCPManager: ObservableObject {
      * Connects to all enabled MCP servers.
      */
     func connectToAllServers() {
-        guard SettingManager.shared.mcpEnabled else { return }
+        guard mcpEnabled else { return }
         
-        for server in SettingManager.shared.mcpServers.filter({ $0.enabled }) {
+        for server in servers.filter({ $0.enabled }) {
             if activeClients[server.name] == nil && !connecting.contains(server.name) {
                 connectToServer(server)
             }
@@ -193,13 +441,13 @@ class MCPManager: ObservableObject {
     }
     
     /**
-     * Connects to a specific MCP server using shell environment.
-     * Handles process creation, client initialization, and tool discovery.
+     * Connects to a specific MCP server.
+     * Supports both stdio (local process) and HTTP (remote server) transports.
      *
      * @param server The server configuration to connect to
      */
     func connectToServer(_ server: MCPServerConfig) {
-        guard SettingManager.shared.mcpEnabled else { return }
+        guard mcpEnabled else { return }
         if connecting.contains(server.name) || activeClients[server.name] != nil { return }
         
         connecting.insert(server.name)
@@ -207,10 +455,170 @@ class MCPManager: ObservableObject {
         
         Task {
             do {
-                let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-                let args = server.args.map { $0.replacingOccurrences(of: "$HOME", with: homeDir) }
-                let command = server.command.replacingOccurrences(of: "$HOME", with: homeDir)
-                let workingDirectory = server.cwd?.replacingOccurrences(of: "$HOME", with: homeDir)
+                switch server.transportType {
+                case .http:
+                    try await connectViaHTTP(server)
+                case .stdio:
+                    try await connectViaStdio(server)
+                }
+            } catch {
+                logger.error("Failed to connect to server '\(server.name)': \(error.localizedDescription)")
+                
+                await MainActor.run {
+                    self.connectionStatus[server.name] = .failed(error: error.localizedDescription)
+                    self.connecting.remove(server.name)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Connects to an MCP server via HTTP transport (Streamable HTTP).
+     * Supports OAuth 2.0 authentication for servers that require it.
+     */
+    private func connectViaHTTP(_ server: MCPServerConfig) async throws {
+        guard let urlString = server.url, let endpoint = URL(string: urlString) else {
+            throw NSError(domain: "MCPManager", code: 1,
+                         userInfo: [NSLocalizedDescriptionKey: "Invalid URL for HTTP transport"])
+        }
+        
+        logger.info("Connecting to MCP server via HTTP: \(endpoint)")
+        
+        // Try initial connection, handle OAuth if needed
+        var serverConfig = server
+        var lastError: Error?
+        
+        for attempt in 1...2 {
+            do {
+                let client = Client(name: "bedrock-client", version: "1.0.0")
+                let transport = createHTTPTransport(endpoint: endpoint, headers: serverConfig.headers)
+                
+                let result = try await withTimeout(seconds: 15) {
+                    try await client.connect(transport: transport)
+                }
+                
+                // Connection successful
+                if result.capabilities.tools != nil {
+                    logger.info("HTTP Server \(server.name) supports tools")
+                }
+                
+                // Fetch available tools and complete connection
+                try await completeHTTPConnection(client: client, server: server)
+                return
+                
+            } catch let error as MCPError {
+                // Check if this is an authentication error
+                if case .internalError(let message) = error,
+                   let msg = message,
+                   (msg.contains("Authentication required") || msg.contains("401") || msg.contains("invalid_token")) {
+                    
+                    if attempt == 1 {
+                        logger.info("Server requires OAuth authentication, starting auth flow...")
+                        
+                        // TODO: Fix OAuth flow - ASWebAuthenticationSession crashes with MainActor isolation issues
+                        // The OAuth implementation needs to be rewritten to properly handle Swift concurrency
+                        // See: https://github.com/AzureAD/microsoft-authentication-library-for-objc/issues/588
+                        // do {
+                        //     serverConfig = try await MCPOAuthManager.shared.authenticate(for: serverConfig)
+                        //     logger.info("OAuth authentication successful, retrying connection...")
+                        //     continue
+                        // } catch let oauthError {
+                        //     logger.error("OAuth authentication failed: \(oauthError.localizedDescription)")
+                        //     throw oauthError
+                        // }
+                        
+                        // For now, throw an error indicating OAuth is not yet supported
+                        throw NSError(domain: "MCPManager", code: 401,
+                                     userInfo: [NSLocalizedDescriptionKey: "OAuth authentication required but not yet supported. Please configure server with pre-authenticated headers."])
+                    }
+                }
+                lastError = error
+                break
+            } catch {
+                lastError = error
+                break
+            }
+        }
+        
+        if let error = lastError {
+            throw error
+        }
+    }
+    
+    /**
+     * Creates an HTTP transport with optional headers.
+     */
+    private func createHTTPTransport(endpoint: URL, headers: [String: String]?) -> HTTPClientTransport {
+        if let headers = headers, !headers.isEmpty {
+            let headersCopy = headers
+            return HTTPClientTransport(
+                endpoint: endpoint,
+                requestModifier: { @Sendable request in
+                    var modifiedRequest = request
+                    for (key, value) in headersCopy {
+                        modifiedRequest.addValue(value, forHTTPHeaderField: key)
+                    }
+                    return modifiedRequest
+                },
+                logger: logger
+            )
+        } else {
+            return HTTPClientTransport(
+                endpoint: endpoint,
+                logger: logger
+            )
+        }
+    }
+    
+    /**
+     * Completes HTTP connection by fetching tools and updating state.
+     */
+    private func completeHTTPConnection(client: Client, server: MCPServerConfig) async throws {
+        // Fetch available tools
+        let tools: [Tool]?
+        do {
+            let (toolList, _) = try await client.listTools()
+            tools = toolList
+            logger.info("Successfully loaded \(tools?.count ?? 0) tools from HTTP server \(server.name)")
+        } catch {
+            tools = nil
+            logger.warning("Failed to get tools from HTTP server \(server.name): \(error.localizedDescription)")
+        }
+        
+        await MainActor.run {
+            self.activeClients[server.name] = client
+            self.connectionStatus[server.name] = .connected
+            self.connecting.remove(server.name)
+            
+            if let tools = tools {
+                self.availableTools[server.name] = tools
+                self.updateToolInfos()
+                
+                let toolCount = self.toolInfos.count
+                let serverCount = self.connectionStatus.values.filter { $0 == .connected }.count
+                NotificationCenter.default.post(
+                    name: .mcpServerConnected,
+                    object: nil,
+                    userInfo: [
+                        "serverName": server.name,
+                        "toolCount": toolCount,
+                        "serverCount": serverCount
+                    ]
+                )
+            }
+        }
+    }
+    
+
+    
+    /**
+     * Connects to an MCP server via stdio transport (local subprocess).
+     */
+    private func connectViaStdio(_ server: MCPServerConfig) async throws {
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        let args = server.args.map { $0.replacingOccurrences(of: "$HOME", with: homeDir) }
+        let command = server.command.replacingOccurrences(of: "$HOME", with: homeDir)
+        let workingDirectory = server.cwd?.replacingOccurrences(of: "$HOME", with: homeDir)
                 
                 // Get user's shell
                 let shell = getUserShell()
@@ -329,21 +737,6 @@ class MCPManager: ObservableObject {
                         )
                     }
                 }
-            } catch {
-                // Handle errors safely
-                logger.error("Failed to connect to server '\(server.name)': \(error.localizedDescription)")
-                
-                await MainActor.run {
-                    self.connectionStatus[server.name] = .failed(error: error.localizedDescription)
-                    self.connecting.remove(server.name)
-                    
-                    // Auto-disable the server on connection failure
-                    if let index = SettingManager.shared.mcpServers.firstIndex(where: { $0.name == server.name }) {
-                        SettingManager.shared.mcpServers[index].enabled = false
-                    }
-                }
-            }
-        }
     }
 
     /**

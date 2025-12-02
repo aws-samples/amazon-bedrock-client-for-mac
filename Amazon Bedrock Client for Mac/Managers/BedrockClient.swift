@@ -1556,6 +1556,33 @@ enum BedrockError: Error {
             return
         }
         
+        // Handle SSO/OIDC errors by extracting from error description
+        let errorString = String(describing: error)
+        let errorType = String(describing: type(of: error))
+        
+        // Check for InvalidGrantException (SSO token expired/invalid)
+        if errorType.contains("InvalidGrantException") || errorString.contains("InvalidGrantException") {
+            // Extract error_description from the error
+            if let range = errorString.range(of: "error_description: Optional(\""),
+               let endRange = errorString.range(of: "\")", range: range.upperBound..<errorString.endIndex) {
+                let description = String(errorString[range.upperBound..<endRange.lowerBound])
+                self = .expiredToken("SSO session expired: \(description). Please run 'aws sso login' to refresh your credentials.")
+                return
+            }
+            self = .expiredToken("SSO session expired. Please run 'aws sso login --profile <your-profile>' to refresh your credentials.")
+            return
+        }
+        
+        // Check for other SSO errors
+        if errorType.contains("SSO") || errorString.contains("SSO") || errorString.contains("sso") {
+            if errorString.contains("expired") || errorString.contains("invalid") {
+                self = .expiredToken("SSO credentials expired. Please run 'aws sso login' to refresh.")
+                return
+            }
+            self = .credentialsError("SSO authentication error. Please check your SSO configuration.")
+            return
+        }
+        
         // Generic error handling
         let errorDescription = error.localizedDescription.lowercased()
         if errorDescription.contains("credential") || errorDescription.contains("identity") {

@@ -839,7 +839,7 @@ class ChatViewModel: ObservableObject {
         // Check if any MCP server is actually connected (subprocess running)
         let hasConnectedServer = mcpManager.connectionStatus.values.contains(.connected)
         
-        if settingManager.mcpEnabled &&
+        if mcpManager.mcpEnabled &&
             !mcpManager.toolInfos.isEmpty &&
             hasConnectedServer &&
             backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
@@ -848,9 +848,9 @@ class ChatViewModel: ObservableObject {
             logger.info("MCP enabled with \(toolCount) tools from \(connectedCount) connected server(s) for model \(chatModel.id).")
             toolConfig = convertMCPToolsToBedrockFormat(mcpManager.toolInfos)
             // MCP connection notification is sent from MCPManager when server connects
-        } else if settingManager.mcpEnabled && !mcpManager.toolInfos.isEmpty && !hasConnectedServer {
+        } else if mcpManager.mcpEnabled && !mcpManager.toolInfos.isEmpty && !hasConnectedServer {
             logger.info("MCP enabled but no servers connected yet.")
-        } else if settingManager.mcpEnabled && hasConnectedServer && !backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
+        } else if mcpManager.mcpEnabled && hasConnectedServer && !backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
             logger.info("MCP enabled, but model \(chatModel.id) does not support streaming tool use. Tools disabled.")
         }
         
