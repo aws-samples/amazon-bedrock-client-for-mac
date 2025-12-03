@@ -1,16 +1,18 @@
 # Troubleshooting
 
 ## Table of Contents
-- [AWS Credentials and Authentication](#aws-credentials-and-authentication)
-  - [Standard AWS Credentials Configuration](#standard-aws-credentials-configuration)
-  - [Enterprise Authentication Tools and Common Pitfalls](#enterprise-authentication-tools-and-common-pitfalls)
-  - [Token Expiration and Security Errors](#token-expiration-and-security-errors)
-  - [Advanced Configuration Considerations](#advanced-configuration-considerations)
-- [Application Launch and Security Issues](#application-launch-and-security-issues)
-  - [macOS Security Restrictions](#macos-security-restrictions)
-  - [Corporate/Managed Mac Without Admin Access](#corporatemanaged-mac-without-admin-access)
-  - [Application Crashes and Unexpected Quits](#application-crashes-and-unexpected-quits)
-- [Model Context Protocol (MCP) Issues](#model-context-protocol-mcp-issues)
+- [Troubleshooting](#troubleshooting)
+  - [Table of Contents](#table-of-contents)
+  - [AWS Credentials and Authentication](#aws-credentials-and-authentication)
+    - [Standard AWS Credentials Configuration](#standard-aws-credentials-configuration)
+    - [Enterprise Authentication Tools and Common Pitfalls](#enterprise-authentication-tools-and-common-pitfalls)
+    - [Token Expiration and Security Errors](#token-expiration-and-security-errors)
+    - [Advanced Configuration Considerations](#advanced-configuration-considerations)
+  - [Application Launch and Security Issues](#application-launch-and-security-issues)
+    - [macOS Security Restrictions](#macos-security-restrictions)
+    - [Corporate/Managed Mac Without Admin Access](#corporatemanaged-mac-without-admin-access)
+    - [Application Crashes and Unexpected Quits](#application-crashes-and-unexpected-quits)
+  - [Model Context Protocol (MCP) Issues](#model-context-protocol-mcp-issues)
     - [MCP Server Not Working](#mcp-server-not-working)
     - [Common MCP Configuration Issues](#common-mcp-configuration-issues)
   - [Model-Specific Issues](#model-specific-issues)
@@ -113,7 +115,13 @@ For profiles:
 
 ### macOS Security Restrictions
 
-"Can't be opened because Apple cannot check it for malicious software":
+> **Note:** Starting from version 1.4.2, the app is properly code-signed and notarized. The issues below only apply to older versions.
+
+**"Can't be opened because Apple cannot check it for malicious software":**
+
+This error occurs with older, unsigned versions of the app.
+
+<img width="600" alt="Security approval dialog" src="https://github.com/user-attachments/assets/358213a1-2237-4513-96fc-0dd7af9de5e7" />
 
 **Quick fix:**
 1. Right-click the app in Finder → Open
@@ -121,6 +129,12 @@ For profiles:
 
 **Alternative:**
 System Preferences → Security & Privacy → General → Click "Open Anyway"
+
+**Homebrew users with older versions:**
+If you installed via Homebrew before notarization was added, reinstall:
+```bash
+brew reinstall amazon-bedrock-client
+```
 
 ### Corporate/Managed Mac Without Admin Access
 

@@ -12,7 +12,7 @@ A native macOS client that brings Amazon Bedrock's AI models directly to your de
 
 ```bash
 brew tap didhd/tap
-brew install amazon-bedrock-client --no-quarantine
+brew install amazon-bedrock-client
 ```
 
 ### Or download the DMG
@@ -58,10 +58,6 @@ Native Swift 6 application optimized for macOS 14+. Liquid glass UI effects on m
 - macOS 14 or later
 - AWS account with Amazon Bedrock access
 - AWS credentials configured via SSO or access keys
-
-> **First launch:** macOS will block the application. Approve it in System Preferences > Privacy & Security by clicking "Open Anyway".
-
-<img width="600" alt="Security approval dialog" src="https://github.com/user-attachments/assets/358213a1-2237-4513-96fc-0dd7af9de5e7" />
 
 ## Usage
 
