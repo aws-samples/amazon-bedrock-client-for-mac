@@ -37,8 +37,6 @@ class SettingManager: ObservableObject {
     ).path
     @AppStorage("defaultModelId") var defaultModelId: String = ""
     @AppStorage("maxToolUseTurns") var maxToolUseTurns: Int = 10
-    @AppStorage("serverPort") var serverPort: Int = 8080
-    @AppStorage("enableLocalServer") var enableLocalServer: Bool = true
     
     // Quick Access Hotkey Settings
     @AppStorage("enableQuickAccess") var enableQuickAccess: Bool = true
@@ -96,6 +94,13 @@ class SettingManager: ObservableObject {
             saveModelInferenceConfigs()
         }
     }
+    
+    // Nova Canvas configuration
+    @Published var novaCanvasConfig: NovaCanvasConfig = NovaCanvasConfig.defaultConfig {
+        didSet {
+            saveNovaCanvasConfig()
+        }
+    }
 
     private var cancellables = Set<AnyCancellable>()
     
@@ -149,6 +154,15 @@ class SettingManager: ObservableObject {
         } else {
             self.modelInferenceConfigs = [:]
         }
+        
+        // Load Nova Canvas config
+        if let data = UserDefaults.standard.data(forKey: "novaCanvasConfig"),
+           let decoded = try? JSONDecoder().decode(NovaCanvasConfig.self, from: data) {
+            self.novaCanvasConfig = decoded
+        } else {
+            self.novaCanvasConfig = NovaCanvasConfig.defaultConfig
+        }
+        
         setupFileMonitoring()
         logger.info("Settings loaded: \(selectedRegion.rawValue), \(selectedProfile)")
     }
@@ -407,6 +421,13 @@ class SettingManager: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: "modelInferenceConfigs")
         }
         logger.debug("Saved model inference configs")
+    }
+    
+    private func saveNovaCanvasConfig() {
+        if let encoded = try? JSONEncoder().encode(novaCanvasConfig) {
+            UserDefaults.standard.set(encoded, forKey: "novaCanvasConfig")
+        }
+        logger.debug("Saved Nova Canvas config")
     }
 
     deinit {

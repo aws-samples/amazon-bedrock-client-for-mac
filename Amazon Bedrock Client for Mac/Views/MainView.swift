@@ -282,13 +282,19 @@ struct MainView: View {
             .frame(minWidth: 200, maxWidth: 420)
         }
 
-        // Right side - Inference config dropdown
+        // Right side - Inference config dropdown (or Nova Canvas config for image models)
         ToolbarItem(placement: .primaryAction) {
             if case .chat(let selectedModel) = menuSelection {
-                InferenceConfigDropdown(
-                    currentModelId: .constant(selectedModel.id),
-                    backend: backendModel.backend
-                )
+                if selectedModel.id.contains("nova-canvas") {
+                    // Show Nova Canvas specific config for image generation
+                    NovaCanvasConfigDropdown()
+                } else {
+                    // Show standard inference config for text models
+                    InferenceConfigDropdown(
+                        currentModelId: .constant(selectedModel.id),
+                        backend: backendModel.backend
+                    )
+                }
             } else {
                 Color.clear.frame(width: 0, height: 0)
             }
@@ -341,34 +347,7 @@ struct MainView: View {
             }
         }
     }
-    
-    func selectedModelImage() -> Image {
-        guard case let .chat(chat) = menuSelection else {
-            return Image("bedrock")
-        }
         
-        switch chat.id {
-        case let id where id.contains("anthropic"):
-            return Image("anthropic")
-        case let id where id.contains("meta"):
-            return Image("meta")
-        case let id where id.contains("cohere"):
-            return Image("cohere")
-        case let id where id.contains("mistral"):
-            return Image("mistral")
-        case let id where id.contains("ai21"):
-            return Image("AI21")
-        case let id where id.contains("amazon"):
-            return Image("amazon")
-        case let id where id.contains("deepseek"):
-            return Image("deepseek")
-        case let id where id.contains("stability"):
-            return Image("stability ai")
-        default:
-            return Image("bedrock")
-        }
-    }
-    
     func currentSelectedModelName() -> String {
         guard case let .chat(chat) = menuSelection else {
             return "Select Model"
@@ -535,3 +514,5 @@ extension Color {
         )
     }
 }
+
+

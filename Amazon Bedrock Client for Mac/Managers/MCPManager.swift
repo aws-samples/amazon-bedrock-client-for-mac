@@ -283,11 +283,19 @@ class MCPManager: ObservableObject {
     func updateServer(_ server: MCPServerConfig) {
         if let index = servers.firstIndex(where: { $0.name == server.name }) {
             let wasEnabled = servers[index].enabled
-            servers[index] = server
+            
+            // Create a new array to ensure didSet is triggered
+            var updatedServers = servers
+            updatedServers[index] = server
+            servers = updatedServers
             
             // Handle connection state changes
-            if server.enabled && !wasEnabled && mcpEnabled {
-                connectToServer(server)
+            if server.enabled && mcpEnabled {
+                // Reconnect to apply changes
+                Task {
+                    await disconnectServer(server.name)
+                    connectToServer(server)
+                }
             } else if !server.enabled && wasEnabled {
                 Task {
                     await disconnectServer(server.name)

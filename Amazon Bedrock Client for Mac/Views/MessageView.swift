@@ -112,61 +112,189 @@ class CustomHtmlGenerator: HtmlGenerator {
 }
 
 // MARK: - LazyImageView
+// MARK: - Image Cache for Performance
+private final class ImageCache: @unchecked Sendable {
+    static let shared = ImageCache()
+    private var cache = NSCache<NSString, NSImage>()
+    private let lock = NSLock()
+    
+    init() {
+        cache.countLimit = 100
+        cache.totalCostLimit = 200 * 1024 * 1024  // 200MB
+    }
+    
+    func image(for key: String) -> NSImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        return cache.object(forKey: key as NSString)
+    }
+    
+    func setImage(_ image: NSImage, for key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        cache.setObject(image, forKey: key as NSString)
+    }
+}
+
 struct LazyImageView: View {
     let imageData: String
     let size: CGFloat
     let onTap: () -> Void
+    var isGeneratedImage: Bool = false
+    
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @State private var loadedImage: NSImage?
+    @State private var isLoading = true
+    
+    private var displaySize: CGFloat {
+        isGeneratedImage ? max(size, 400) : size
+    }
+    
+    // Use hash of first 100 chars as cache key (full base64 is too long)
+    private var cacheKey: String {
+        let prefix = String(imageData.prefix(100))
+        return "\(prefix.hashValue)"
+    }
     
     var body: some View {
         Button(action: onTap) {
-            AsyncImage(url: URL(string: "data:image/jpeg;base64,\(imageData)")) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                        .frame(width: size, height: size/2)
-                case .success(let image):
-                    image
+            Group {
+                if let image = loadedImage {
+                    Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(height: size)
-                case .failure:
+                        .frame(maxWidth: displaySize, maxHeight: displaySize)
+                        .clipShape(RoundedRectangle(cornerRadius: isGeneratedImage ? 12 : 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: isGeneratedImage ? 12 : 10)
+                                .stroke(
+                                    colorScheme == .dark ?
+                                    Color.white.opacity(0.15) :
+                                        Color.primary.opacity(0.1),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(
+                            color: Color.black.opacity(isGeneratedImage ? 0.15 : 0.05),
+                            radius: isGeneratedImage ? 8 : 2,
+                            x: 0,
+                            y: isGeneratedImage ? 4 : 1
+                        )
+                } else if isLoading {
+                    // Loading placeholder
+                    RoundedRectangle(cornerRadius: isGeneratedImage ? 12 : 10)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                        .frame(width: displaySize * 0.8, height: displaySize * 0.6)
+                        .overlay(
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        )
+                } else {
+                    // Error state
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.red)
-                        .frame(width: size, height: size/2)
-                @unknown default:
-                    EmptyView()
+                        .frame(width: size, height: size / 2)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(
-                        colorScheme == .dark ?
-                        Color.white.opacity(0.15) :
-                            Color.primary.opacity(0.1),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            loadImageAsync()
+        }
         .contextMenu {
-            Button(action: {
-                copyImageToClipboard(imageData: imageData)
-            }) {
-                Text("Copy Image")
-                Image(systemName: "doc.on.doc")
+            Button(action: copyImageToClipboard) {
+                Label("Copy Image", systemImage: "doc.on.doc")
+            }
+            
+            Button(action: saveImageToFile) {
+                Label("Save Image...", systemImage: "square.and.arrow.down")
             }
         }
     }
     
-    private func copyImageToClipboard(imageData: String) {
-        if let data = Data(base64Encoded: imageData),
-           let image = NSImage(data: data) {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.writeObjects([image])
+    private func loadImageAsync() {
+        // Check cache first
+        if let cached = ImageCache.shared.image(for: cacheKey) {
+            loadedImage = cached
+            isLoading = false
+            return
+        }
+        
+        // Load on background thread to avoid blocking UI
+        DispatchQueue.global(qos: .userInitiated).async {
+            var image: NSImage?
+            
+            // Try loading from ImageStorageManager (handles both file refs and base64)
+            if let data = ImageStorageManager.shared.loadImage(imageData) {
+                image = NSImage(data: data)
+            } else if let data = Data(base64Encoded: imageData) {
+                // Fallback to direct base64 decode
+                image = NSImage(data: data)
+            }
+            
+            DispatchQueue.main.async {
+                if let img = image {
+                    ImageCache.shared.setImage(img, for: cacheKey)
+                    loadedImage = img
+                }
+                isLoading = false
+            }
+        }
+    }
+    
+    private func copyImageToClipboard() {
+        guard let image = loadedImage else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([image])
+    }
+    
+    private func saveImageToFile() {
+        guard let image = loadedImage else { return }
+        
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.png, .jpeg]
+        savePanel.nameFieldStringValue = "generated-image-\(Date().timeIntervalSince1970).png"
+        
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                if let tiffData = image.tiffRepresentation,
+                   let bitmap = NSBitmapImageRep(data: tiffData) {
+                    let fileExtension = url.pathExtension.lowercased()
+                    let imageData: Data?
+                    
+                    if fileExtension == "png" {
+                        imageData = bitmap.representation(using: .png, properties: [:])
+                    } else {
+                        imageData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.95])
+                    }
+                    
+                    if let data = imageData {
+                        try? data.write(to: url)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - GeneratedImageView (for AI-generated images)
+struct GeneratedImageView: View {
+    let imageBase64Strings: [String]
+    let onTapImage: (String) -> Void
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Display images in a responsive grid
+            ForEach(imageBase64Strings, id: \.self) { imageData in
+                LazyImageView(
+                    imageData: imageData,
+                    size: 512,
+                    onTap: { onTapImage(imageData) },
+                    isGeneratedImage: true
+                )
+            }
         }
     }
 }
@@ -378,12 +506,11 @@ struct MessageView: View {
     // MARK: - Assistant Content Components
     @ViewBuilder
     private var assistantMessageContent: some View {
-        // Image grid (if present)
+        // Generated images (displayed larger for AI-generated content)
         if let imageBase64Strings = message.imageBase64Strings,
            !imageBase64Strings.isEmpty {
-            ImageGridView(
-                imageBase64Strings: imageBase64Strings,
-                imageSize: imageSize
+            GeneratedImageView(
+                imageBase64Strings: imageBase64Strings
             ) { imageData in
                 viewModel.selectImage(with: imageData)
             }
@@ -1523,12 +1650,31 @@ struct ImageGridView: View {
     let imageBase64Strings: [String]
     let imageSize: CGFloat
     let onTapImage: (String) -> Void
+    var isGeneratedContent: Bool = false  // For AI-generated images
     
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(imageBase64Strings, id: \.self) { imageData in
-                LazyImageView(imageData: imageData, size: imageSize) {
-                    onTapImage(imageData)
+        if isGeneratedContent {
+            // Vertical layout for generated images (larger display)
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(imageBase64Strings, id: \.self) { imageData in
+                    LazyImageView(
+                        imageData: imageData,
+                        size: max(imageSize, 400),
+                        onTap: { onTapImage(imageData) },
+                        isGeneratedImage: true
+                    )
+                }
+            }
+        } else {
+            // Horizontal layout for user-attached images (thumbnails)
+            HStack(spacing: 10) {
+                ForEach(imageBase64Strings, id: \.self) { imageData in
+                    LazyImageView(
+                        imageData: imageData,
+                        size: imageSize,
+                        onTap: { onTapImage(imageData) },
+                        isGeneratedImage: false
+                    )
                 }
             }
         }

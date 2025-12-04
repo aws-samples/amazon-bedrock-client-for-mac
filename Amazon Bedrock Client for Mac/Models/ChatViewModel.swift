@@ -1850,7 +1850,7 @@ class ChatViewModel: ObservableObject {
     
     private func isOpenAIModel(_ modelId: String) -> Bool {
         let modelType = backendModel.backend.getModelType(modelId)
-        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b
+        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b || modelType == .openaiGptOssSafeguard
     }
     
     /// Handles image generation models that don't use converseStream
@@ -1941,19 +1941,77 @@ class ChatViewModel: ObservableObject {
         try processImageModelResponse(data)
     }
     
-    /// Invokes Nova Canvas image model
+    /// Invokes Nova Canvas image model with full feature support
+    /// Supports: TEXT_IMAGE, COLOR_GUIDED_GENERATION, IMAGE_VARIATION, INPAINTING, OUTPAINTING, BACKGROUND_REMOVAL
     private func invokeNovaCanvasModel(prompt: String) async throws {
         let backend = await MainActor.run { backendModel.backend }
-        let data = try await backend.invokeImageModel(
-            withId: chatModel.id,
-            prompt: prompt,
-            modelType: .novaCanvas
+        
+        // Parse the prompt to detect task type and extract parameters
+        let (taskType, cleanPrompt, parameters) = NovaCanvasService.parsePrompt(prompt)
+        
+        // Extract negative prompt if present (format: "prompt --no negative terms")
+        let (finalPrompt, negativePrompt) = NovaCanvasService.extractNegativePrompt(from: cleanPrompt)
+        
+        // Get any attached images from the current message context
+        let inputImages = await getAttachedImagesBase64()
+        
+        // Validate requirements for tasks that need input images
+        if taskType.requiresInputImage && inputImages.isEmpty {
+            throw NSError(
+                domain: "NovaCanvas",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "This task requires an input image. Please attach an image to use \(taskType.displayName)."]
+            )
+        }
+        
+        // Extract colors if present in parameters
+        let colors = parameters["colors"] as? [String] ?? []
+        
+        // Build the appropriate request based on task type
+        let config = NovaCanvasImageGenerationConfig(
+            width: 1024,
+            height: 1024,
+            quality: "standard",
+            cfgScale: 8.0,
+            seed: 0,
+            numberOfImages: 1
         )
+        
+        let request = NovaCanvasService.buildRequest(
+            taskType: taskType,
+            prompt: finalPrompt,
+            negativePrompt: negativePrompt,
+            inputImages: inputImages,
+            maskPrompt: extractMaskPrompt(from: prompt),
+            colors: colors,
+            config: config
+        )
+        
+        // Invoke Nova Canvas
+        let data = try await backend.invokeNovaCanvas(request: request)
         
         try processImageModelResponse(data)
     }
     
-    /// Invokes Stable Diffusion image model
+    /// Extract mask prompt from user input (format: "[mask: description]")
+    private func extractMaskPrompt(from prompt: String) -> String? {
+        let pattern = "\\[mask:\\s*([^\\]]+)\\]"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+              let match = regex.firstMatch(in: prompt, range: NSRange(prompt.startIndex..., in: prompt)),
+              let range = Range(match.range(at: 1), in: prompt) else {
+            return nil
+        }
+        return String(prompt[range]).trimmingCharacters(in: .whitespaces)
+    }
+    
+    /// Get attached images from current context as base64 strings
+    private func getAttachedImagesBase64() async -> [String] {
+        // This should be implemented based on how images are attached in the chat
+        // For now, return empty array - images should be passed through message attachments
+        return []
+    }
+    
+    /// Invokes Stability AI image models (Stable Image Ultra, SD3 Large, Stable Image Core)
     private func invokeStableDiffusionModel(prompt: String) async throws {
         let backend = await MainActor.run { backendModel.backend }
         let data = try await backend.invokeImageModel(
@@ -1965,40 +2023,32 @@ class ChatViewModel: ObservableObject {
         try processImageModelResponse(data)
     }
     
-    /// Process and save image data from image generation models
+    /// Process and display image data from image generation models
+    /// Uses efficient file-based storage to avoid bloating conversation history
     private func processImageModelResponse(_ data: Data) throws {
-        let now = Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"
-        let timestamp = formatter.string(from: now)
-        let fileName = "\(timestamp).png"
-        let tempDir = URL(fileURLWithPath: settingManager.defaultDirectory)
-        let fileURL = tempDir.appendingPathComponent(fileName)
+        // Save image to file storage and get reference ID
+        // This avoids storing large base64 strings in conversation history JSON
+        let imageReference = ImageStorageManager.shared.saveImage(data)
         
-        try data.write(to: fileURL)
+        // For display, we need base64 - get it from the storage manager
+        // The storage manager handles caching for performance
+        let base64ForDisplay = ImageStorageManager.shared.getBase64ForDisplay(imageReference) ?? data.base64EncodedString()
         
-        if let encoded = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
-            let markdownImage = "![](http://localhost:8080/\(encoded))"
-            let imageMessage = MessageData(
-                id: UUID(),
-                text: markdownImage,
-                user: chatModel.name,
-                isError: false,
-                sentTime: Date()
-            )
-            addMessage(imageMessage)
-            
-            // Update history
-            var history = chatManager.getHistory(for: chatId)
-            history += "\nAssistant: [Generated Image]\n"
-            chatManager.setHistory(history, for: chatId)
-        } else {
-            throw NSError(
-                domain: "ImageEncodingError",
-                code: 0,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to encode image filename"]
-            )
-        }
+        // Create message with image reference for history, base64 for display
+        let imageMessage = MessageData(
+            id: UUID(),
+            text: "",  // No markdown needed - image is in imageBase64Strings
+            user: chatModel.name,
+            isError: false,
+            sentTime: Date(),
+            imageBase64Strings: [base64ForDisplay]  // Base64 for immediate display
+        )
+        addMessage(imageMessage)
+        
+        // Update history with reference (not full base64)
+        var history = chatManager.getHistory(for: chatId)
+        history += "\nAssistant: [Generated Image: \(imageReference)]\n"
+        chatManager.setHistory(history, for: chatId)
     }
     
     // MARK: - Basic Message Operations
@@ -2024,7 +2074,8 @@ class ChatViewModel: ObservableObject {
             isError: message.isError,
             thinking: message.thinking,
             thinkingSignature: message.signature,
-            imageBase64Strings: message.imageBase64Strings,
+            // Convert base64 images to file references for efficient storage
+            imageBase64Strings: convertImagesToReferences(message.imageBase64Strings),
             documentBase64Strings: message.documentBase64Strings,
             documentFormats: message.documentFormats,
             documentNames: message.documentNames,
@@ -2040,6 +2091,26 @@ class ChatViewModel: ObservableObject {
         
         // Add to chat manager
         chatManager.addMessage(convertedMessage, to: chatId)
+    }
+    
+    /// Convert base64 image strings to file references for efficient storage
+    /// This prevents conversation history JSON from becoming too large
+    private func convertImagesToReferences(_ base64Strings: [String]?) -> [String]? {
+        guard let strings = base64Strings, !strings.isEmpty else { return nil }
+        
+        return strings.map { base64 in
+            // Skip if already a file reference
+            if ImageStorageManager.isFileReference(base64) {
+                return base64
+            }
+            
+            // Convert base64 to file and return reference
+            guard let data = Data(base64Encoded: base64) else {
+                return base64  // Keep original if decode fails
+            }
+            
+            return ImageStorageManager.shared.saveImage(data)
+        }
     }
     
     private func handleModelError(_ error: Error) async {

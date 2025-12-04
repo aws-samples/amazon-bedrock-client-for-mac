@@ -33,7 +33,6 @@
 		797A12BF2C2EB53800494DD9 /* ChatModel.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 797A12BD2C2EB53800494DD9 /* ChatModel.xcdatamodeld */; };
 		797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */; };
 		798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = 798A9CE52AD3AB2E00E9D039 /* Vapor */; };
-		798A9CE82AD3AB4300E9D039 /* LocalHostServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */; };
 		79A305692EB05A2200DAE32F /* MarkdownKit in Frameworks */ = {isa = PBXBuildFile; productRef = 79A305682EB05A2200DAE32F /* MarkdownKit */; };
 		79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78972C31691800BD6FB1 /* AWSSSO */; };
 		79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78992C31691800BD6FB1 /* AWSSSOOIDC */; };
@@ -51,6 +50,11 @@
 		79E0AC5D2D63EE4F0041829A /* AWSTranscribeStreaming in Frameworks */ = {isa = PBXBuildFile; productRef = 79E0AC5C2D63EE4F0041829A /* AWSTranscribeStreaming */; };
 		79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFD2ACDA88700DC6657 /* AWSBedrock */; };
 		79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */; };
+		79EC4F1D2EE1601300BF73D9 /* NovaCanvasModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F1C2EE1601300BF73D9 /* NovaCanvasModels.swift */; };
+		79EC4F1F2EE1659500BF73D9 /* ImageStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F1E2EE1659500BF73D9 /* ImageStorageManager.swift */; };
+		79EC4F212EE165E500BF73D9 /* ImageGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */; };
+		79EC4F232EE17E6500BF73D9 /* PromptTemplateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F222EE17E6500BF73D9 /* PromptTemplateManager.swift */; };
+		79EC4F252EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F242EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift */; };
 		79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 79F2C4012EB0705A003F46E6 /* Bedrock.icon */; };
 		79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */; };
 		79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */; };
@@ -112,7 +116,6 @@
 		797A12BB2C2EB4C300494DD9 /* CoreDataStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStack.swift; sourceTree = "<group>"; };
 		797A12BE2C2EB53800494DD9 /* ChatModel.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = ChatModel.xcdatamodel; sourceTree = "<group>"; };
 		797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
-		798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalHostServer.swift; sourceTree = "<group>"; };
 		79AF97542D9E332500313A4C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		79AF97562D9E33BE00313A4C /* ImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreview.swift; sourceTree = "<group>"; };
 		79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPreview.swift; sourceTree = "<group>"; };
@@ -125,6 +128,11 @@
 		79D6E6A22C99BFF300314D86 /* GithubTheme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = GithubTheme.swift; path = "Amazon Bedrock Client for Mac/Utils/GithubTheme.swift"; sourceTree = SOURCE_ROOT; };
 		79E0AC5A2D63EDDB0041829A /* TranscribeStreamingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscribeStreamingManager.swift; sourceTree = "<group>"; };
 		79E0AC5E2D63F49F0041829A /* Amazon Bedrock Client for Mac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Amazon Bedrock Client for Mac.entitlements"; sourceTree = "<group>"; };
+		79EC4F1C2EE1601300BF73D9 /* NovaCanvasModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaCanvasModels.swift; sourceTree = "<group>"; };
+		79EC4F1E2EE1659500BF73D9 /* ImageStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageStorageManager.swift; sourceTree = "<group>"; };
+		79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenerationService.swift; sourceTree = "<group>"; };
+		79EC4F222EE17E6500BF73D9 /* PromptTemplateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptTemplateManager.swift; sourceTree = "<group>"; };
+		79EC4F242EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaCanvasConfigDropdown.swift; sourceTree = "<group>"; };
 		79F2C4012EB0705A003F46E6 /* Bedrock.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Bedrock.icon; sourceTree = "<group>"; };
 		79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessWindowManager.swift; sourceTree = "<group>"; };
@@ -225,6 +233,9 @@
 		79610DBF2AD22A2F00993D09 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F222EE17E6500BF73D9 /* PromptTemplateManager.swift */,
+				79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */,
+				79EC4F1E2EE1659500BF73D9 /* ImageStorageManager.swift */,
 				79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */,
 				79D3C7822D9C799000CB020F /* AppStateManager.swift */,
 				79610DC12AD22A2F00993D09 /* BedrockClient.swift */,
@@ -250,7 +261,6 @@
 				79C7F5EC2AD282EE008FBB35 /* EnvironmentExtensions.swift */,
 				79610DC82AD22A2F00993D09 /* FirstResponderTextField.swift */,
 				79D6E6A22C99BFF300314D86 /* GithubTheme.swift */,
-				798A9CE72AD3AB4300E9D039 /* LocalHostServer.swift */,
 				79FD1C252C3777180009E50F /* Markdown.swift */,
 				79AF97542D9E332500313A4C /* NSImage.swift */,
 				EDAE4CC52B3D943E99083226 /* SearchEngine.swift */,
@@ -261,6 +271,7 @@
 		79610DC92AD22A2F00993D09 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F1C2EE1601300BF73D9 /* NovaCanvasModels.swift */,
 				7954F8422AD247CC008B03D3 /* AWSRegion.swift */,
 				79610DCA2AD22A2F00993D09 /* ChatModel.swift */,
 				797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */,
@@ -281,6 +292,7 @@
 		79610DCF2AD22A2F00993D09 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F242EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift */,
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
 				79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */,
 				79F53C8A2E7B0DBA00F129F4 /* HotkeyRecorderView.swift */,
@@ -457,6 +469,7 @@
 				79D6E6A32C99BFF300314D86 /* GithubTheme.swift in Sources */,
 				79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */,
 				79AF97552D9E332A00313A4C /* NSImage.swift in Sources */,
+				79EC4F1F2EE1659500BF73D9 /* ImageStorageManager.swift in Sources */,
 				79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */,
 				790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */,
 				79FF2B332D925EDB0075249D /* MCPManager.swift in Sources */,
@@ -475,10 +488,11 @@
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
 				79F53C892E7B0B3800F129F4 /* QuickAccessView.swift in Sources */,
 				79610DED2AD230A200993D09 /* ChatView.swift in Sources */,
-				798A9CE82AD3AB4300E9D039 /* LocalHostServer.swift in Sources */,
 				79D3C7832D9C799700CB020F /* AppStateManager.swift in Sources */,
+				79EC4F212EE165E500BF73D9 /* ImageGenerationService.swift in Sources */,
 				79E0AC5B2D63EDDC0041829A /* TranscribeStreamingManager.swift in Sources */,
 				79610DD82AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift in Sources */,
+				79EC4F252EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift in Sources */,
 				79610DDA2AD22A2F00993D09 /* BedrockClient.swift in Sources */,
 				79C4F0202C3048A300C488C2 /* AppCoordinator.swift in Sources */,
 				79610DEB2AD22A2F00993D09 /* MessageView.swift in Sources */,
@@ -490,12 +504,14 @@
 				EDAE4CC62B3D943E99083227 /* SearchEngine.swift in Sources */,
 				79C7F5ED2AD282EE008FBB35 /* EnvironmentExtensions.swift in Sources */,
 				797A12B82C2DB33100494DD9 /* SettingsWindowManager.swift in Sources */,
+				79EC4F232EE17E6500BF73D9 /* PromptTemplateManager.swift in Sources */,
 				79F53C8B2E7B0DBA00F129F4 /* HotkeyRecorderView.swift in Sources */,
 				79610DE52AD22A2F00993D09 /* MessageBarView.swift in Sources */,
 				79BFF5102AD342710057BF3A /* ChatManager.swift in Sources */,
 				79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */,
 				797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */,
 				797A12BF2C2EB53800494DD9 /* ChatModel.xcdatamodeld in Sources */,
+				79EC4F1D2EE1601300BF73D9 /* NovaCanvasModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -663,11 +679,11 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.4.2;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1.4.3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
-				DEVELOPMENT_TEAM = B47A25FR9P;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -692,7 +708,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.2;
+				MARKETING_VERSION = 1.4.3;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock Debug";
@@ -717,11 +733,11 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.4.2;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1.4.3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
-				DEVELOPMENT_TEAM = B47A25FR9P;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -746,7 +762,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.2;
+				MARKETING_VERSION = 1.4.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";

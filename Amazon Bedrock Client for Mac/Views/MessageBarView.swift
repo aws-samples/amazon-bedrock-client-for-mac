@@ -579,13 +579,20 @@ struct AdvancedOptionsMenu: View {
     @Binding var userInput: String
     @ObservedObject var settingManager: SettingManager
     @ObservedObject var mcpManager: MCPManager = MCPManager.shared
+    @ObservedObject var templateManager: PromptTemplateManager = PromptTemplateManager.shared
     var modelId: String
     
     // Check if current model supports reasoning/thinking
     private var supportsThinking: Bool {
         let id = modelId.lowercased()
-        // Claude 3.7, Claude 4 series, and DeepSeek R1 support thinking
-        return id.contains("claude-3-7") || id.contains("claude-sonnet-4") || id.contains("claude-haiku-4") || id.contains("claude-opus-4") || id.contains("deepseek") && id.contains("r1")
+        // Claude 3.7, Claude 4 series, DeepSeek R1, OpenAI GPT-OSS, and Nova 2 Lite support thinking
+        return id.contains("claude-3-7") || 
+               id.contains("claude-sonnet-4") || 
+               id.contains("claude-haiku-4") || 
+               id.contains("claude-opus-4") || 
+               (id.contains("deepseek") && id.contains("r1")) ||
+               (id.contains("openai") && id.contains("gpt-oss")) ||
+               (id.contains("nova-2") && id.contains("lite"))
     }
     
     // Check if model has always-on reasoning that can't be toggled
@@ -609,13 +616,12 @@ struct AdvancedOptionsMenu: View {
             id.contains("claude-sonnet-4") ||
             id.contains("claude-opus-4") ||
             
-            // Amazon Nova models
-            (id.contains("amazon") && (
-                id.contains("nova-pro") ||
-                id.contains("nova-lite") ||
-                id.contains("nova-micro") ||
-                id.contains("nova-premier")
-            )) ||
+            // Amazon Nova models (including Nova 2)
+            (id.contains("nova-pro") ||
+             id.contains("nova-lite") ||
+             id.contains("nova-micro") ||
+             id.contains("nova-premier") ||
+             id.contains("nova-2")) ||
             
             // Cohere Command-R models
             (id.contains("cohere") && id.contains("command-r")) ||
@@ -624,7 +630,13 @@ struct AdvancedOptionsMenu: View {
             (id.contains("ai21") && id.contains("jamba") && !id.contains("instruct")) ||
             
             // OpenAI GPT-OSS models
-            (id.contains("openai") && id.contains("gpt-oss"))
+            (id.contains("openai") && id.contains("gpt-oss")) ||
+            
+            // Kimi K2 models
+            (id.contains("moonshot") && id.contains("kimi-k2")) ||
+            
+            // Pixtral Large
+            id.contains("pixtral-large")
         )
     }
 
@@ -655,6 +667,24 @@ struct AdvancedOptionsMenu: View {
             Toggle("Allow Image Pasting", isOn: $settingManager.allowImagePasting)
                 .help("Enable or disable image pasting functionality")
             
+            Divider()
+            
+            // System Prompt selection (flat list)
+            Menu("System Prompt") {
+                ForEach(templateManager.templates) { template in
+                    Button {
+                        templateManager.selectTemplate(template)
+                    } label: {
+                        HStack {
+                            Text(template.name)
+                            if templateManager.selectedTemplateId == template.id {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+            
             // MCP tools section - only show if model supports streaming tool use
             if shouldShowMCPTools {
                 Divider()
@@ -682,6 +712,7 @@ struct AdvancedOptionsMenu: View {
         .menuIndicator(.hidden)
         .frame(width: 32, height: 32)
     }
+    
 }
 
 struct ImageAttachment: Identifiable {

@@ -15,7 +15,6 @@ import Logging
 class AppDelegate: NSObject, NSApplicationDelegate {
     // UI components
     var settingsWindow: NSWindow?
-    var localhostServer: LocalhostServer?
     
     // Use a lazy property for UpdateManager to ensure it's only initialized when needed
     @MainActor
@@ -55,9 +54,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Disable automatic window tabbing
         NSWindow.allowsAutomaticWindowTabbing = false
-
-        // Start the localhost server for local communication
-        startLocalhostServer()
         
         // Initialize hotkey manager for quick access
         Task { @MainActor in
@@ -128,39 +124,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             if let manager = self.updateManager {
                 manager.cleanup()
-            }
-        }
-    }
-
-    private func startLocalhostServer() {
-        Task { @MainActor in
-            let settingsManager = SettingManager.shared
-            
-            guard settingsManager.enableLocalServer else {
-                logger.info("Local server is disabled in settings")
-                return
-            }
-            
-            let serverPort = settingsManager.serverPort
-            logger.info("Starting localhost server on port \(serverPort)")
-            
-            let defaultDirectory = settingsManager.defaultDirectory
-            
-            Task.detached { [weak self] in
-                do {
-                    let server = try await LocalhostServer(serverPort: serverPort, defaultDirectory: defaultDirectory)
-                    try server.start()
-                    await MainActor.run { [weak self] in
-                        guard let self = self else { return }
-                        self.localhostServer = server
-                        self.logger.info("Localhost server started successfully on port \(serverPort)")
-                    }
-                } catch {
-                    await MainActor.run { [weak self] in
-                        self?.logger.error("Could not start localhost server: \(error)")
-                    }
-                    print("Could not start localhost server: \(error)")
-                }
             }
         }
     }

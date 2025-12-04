@@ -230,10 +230,11 @@ class Backend: Equatable, @unchecked Sendable {
             logger.warning("Failed to initialize with profile '\(profile)': \(error.localizedDescription)")
             logger.info("Attempting to use DefaultAWSCredentialIdentityResolverChain")
             
-            if let chain = try? DefaultAWSCredentialIdentityResolverChain() {
+            do {
+                let chain = try DefaultAWSCredentialIdentityResolverChain()
                 self.awsCredentialIdentityResolver = chain
                 logger.info("Successfully initialized with DefaultAWSCredentialIdentityResolverChain")
-            } else {
+            } catch {
                 // If even the default chain fails, we have no choice but to throw
                 logger.error("Failed to initialize with DefaultAWSCredentialIdentityResolverChain")
                 throw error
@@ -301,7 +302,7 @@ class Backend: Equatable, @unchecked Sendable {
     func isReasoningSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -312,7 +313,7 @@ class Backend: Equatable, @unchecked Sendable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .openaiGptOss120b, .openaiGptOss20b:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -321,7 +322,16 @@ class Backend: Equatable, @unchecked Sendable {
 
     /// Check if a model has always-on reasoning (can't be disabled)
     func hasAlwaysOnReasoning(_ modelId: String) -> Bool {
-        return getModelType(modelId) == .deepseekr1
+        let modelType = getModelType(modelId)
+        switch modelType {
+        case .deepseekr1:
+            return true
+        // GPT OSS models also have always-on reasoning with configurable effort (low/medium/high)
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
+            return true
+        default:
+            return false
+        }
     }
     
     /// Check if this is Claude 4.5 or later model (which only supports temperature OR top_p, not both)
@@ -352,12 +362,12 @@ class Backend: Equatable, @unchecked Sendable {
     func isEmbeddingModel(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .titanEmbed, .cohereEmbed:
+        case .titanEmbed, .cohereEmbed, .cohereEmbedV4:
             return true
         default:
             // Fallback to string check for edge cases
             let id = modelId.lowercased()
-            return id.contains("embed") || id.contains("titan-e1t")
+            return id.contains("embed") || id.contains("titan-e1t") || id.contains("marengo-embed")
         }
     }
 
@@ -368,11 +378,13 @@ class Backend: Equatable, @unchecked Sendable {
             // Models that support document chat
         case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45:
             return true
-        case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33:
+        case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
-        case .mistral, .mistralLarge, .mistralLarge2407, .mixtral:
+        case .mistral, .mistralLarge, .mistralLarge2407, .mistralLarge3, .mixtral, .pixtralLarge:
             return true
-        case .novaPremier, .novaPro, .novaLite:
+        case .ministral3b, .ministral8b, .ministral14b, .magistralSmall:
+            return true
+        case .novaPremier, .novaPro, .novaLite, .nova2Lite:
             return true
         case .titan:
             // Titan Text Premier doesn't support document chat
@@ -387,15 +399,29 @@ class Backend: Equatable, @unchecked Sendable {
             return true
         case .jambaInstruct:
             return false
-        case .deepseekr1:
+        case .deepseekr1, .deepseekv3:
             return true
-        case .openaiGptOss120b, .openaiGptOss20b:
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
+            return true
+        case .qwen3Large, .qwen3Dense, .qwen3CoderLarge, .qwen3CoderSmall, .qwen3VL, .qwen3Next:
+            return true
+        case .palmyraX4, .palmyraX5:
+            return true
+        case .pegasus:
+            return true
+        case .kimiK2Thinking:
+            return true
+        case .nvidiaNemotronNano9b, .nvidiaNemotronNano12bVL:
+            return true
+        case .minimaxM2:
+            return true
+        case .gemma3_4b, .gemma3_12b, .gemma3_27b:
             return true
             
         // Models that don't support document chat
-        case .mistralSmall, .novaMicro, .titanEmbed, .titanImage, .cohereEmbed,
+        case .mistralSmall, .novaMicro, .titanEmbed, .titanImage, .cohereEmbed, .cohereEmbedV4,
                 .stableDiffusion, .stableImage, .novaCanvas, .rerank, .j2, .cohereRerank,
-                .luma, .unknown:
+                .luma, .nova2Sonic, .voxtralSmall, .voxtralMini, .unknown:
             return false
             
         default:
@@ -410,17 +436,33 @@ class Backend: Equatable, @unchecked Sendable {
         // Models that support system prompts
         case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45:
             return true
-        case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33:
+        case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
-        case .mistralLarge, .mistralLarge2407, .mistralSmall:
+        case .mistralLarge, .mistralLarge2407, .mistralLarge3, .mistralSmall, .pixtralLarge:
             return true
-        case .novaPremier, .novaPro, .novaLite, .novaMicro:
+        case .ministral3b, .ministral8b, .ministral14b, .magistralSmall, .voxtralSmall, .voxtralMini:
+            return true
+        case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
         case .jambaInstruct, .jambaLarge, .jambaMini:
             return true
-        case .deepseekr1:
+        case .deepseekr1, .deepseekv3:
             return true
-        case .openaiGptOss120b, .openaiGptOss20b:
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
+            return true
+        case .qwen3Large, .qwen3Dense, .qwen3CoderLarge, .qwen3CoderSmall, .qwen3VL, .qwen3Next:
+            return true
+        case .palmyraX4, .palmyraX5:
+            return true
+        case .pegasus:
+            return true
+        case .kimiK2Thinking:
+            return true
+        case .nvidiaNemotronNano9b, .nvidiaNemotronNano12bVL:
+            return true
+        case .minimaxM2:
+            return true
+        case .gemma3_4b, .gemma3_12b, .gemma3_27b:
             return true
             
         // Models with specific exceptions
@@ -430,8 +472,8 @@ class Backend: Equatable, @unchecked Sendable {
             
         // Models that don't support system prompts
         case .titan, .titanEmbed, .titanImage, .cohereCommand, .cohereCommandLight,
-             .cohereCommandR, .cohereCommandRPlus, .cohereEmbed, .cohereRerank,
-             .stableDiffusion, .stableImage, .novaCanvas, .rerank, .j2, .luma, .unknown:
+             .cohereCommandR, .cohereCommandRPlus, .cohereEmbed, .cohereEmbedV4, .cohereRerank,
+             .stableDiffusion, .stableImage, .novaCanvas, .rerank, .j2, .luma, .nova2Sonic, .unknown:
             return false
         }
     }
@@ -441,7 +483,28 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .novaPro, .llama32Large:
+        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .novaPro, .llama32Large, .nova2Lite:
+            return true
+        // Llama 4 models support vision
+        case .llama4Maverick, .llama4Scout:
+            return true
+        // Pixtral Large supports vision
+        case .pixtralLarge:
+            return true
+        // Cohere Embed v4 supports image input
+        case .cohereEmbedV4:
+            return true
+        // NVIDIA Nemotron 12B VL supports vision
+        case .nvidiaNemotronNano12bVL:
+            return true
+        // Gemma 3 models support vision
+        case .gemma3_4b, .gemma3_12b, .gemma3_27b:
+            return true
+        // Qwen3 VL supports vision
+        case .qwen3VL:
+            return true
+        // Magistral Small supports vision
+        case .magistralSmall:
             return true
             
         // Models with exceptions
@@ -466,17 +529,27 @@ class Backend: Equatable, @unchecked Sendable {
         // Models that support tool use
         case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45:
             return true
-        case .novaPremier, .novaPro, .novaLite, .novaMicro:
+        case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
         case .cohereCommandR, .cohereCommandRPlus:
             return true
-        case .mistralLarge, .mistralLarge2407:
+        case .mistralLarge, .mistralLarge2407, .mistralLarge3, .pixtralLarge:
             return true
-        case .llama31, .llama32Large, .llama33:
+        case .llama31, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
         case .jambaLarge, .jambaMini:
             return true
-        case .openaiGptOss120b, .openaiGptOss20b:
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
+            return true
+        case .qwen3Large, .qwen3Dense, .qwen3CoderLarge, .qwen3CoderSmall, .qwen3VL, .qwen3Next:
+            return true
+        case .palmyraX4, .palmyraX5:
+            return true
+        case .kimiK2Thinking:
+            return true
+        case .minimaxM2:
+            return true
+        case .ministral3b, .ministral8b, .ministral14b:
             return true
             
         // Models that don't support tool use
@@ -492,11 +565,18 @@ class Backend: Equatable, @unchecked Sendable {
         // Models that support streaming tool use
         case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45:
             return true
-        case .novaPremier, .novaPro, .novaLite, .novaMicro:
+        case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
         case .cohereCommandR, .cohereCommandRPlus:
             return true
-        case .openaiGptOss120b, .openaiGptOss20b:
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
+            return true
+        // Note: Llama 4 models don't support tool use in streaming mode
+        // case .llama4Maverick, .llama4Scout:
+        //     return true
+        case .pixtralLarge:
+            return true
+        case .kimiK2Thinking:
             return true
             
         // Models that don't support streaming tool use
@@ -620,6 +700,8 @@ class Backend: Equatable, @unchecked Sendable {
                 return .titan
             } else if modelNameAndVersion.contains("nova-canvas") {
                 return .novaCanvas
+            } else if modelNameAndVersion.contains("nova-2") && modelNameAndVersion.contains("lite") {
+                return .nova2Lite
             } else if modelNameAndVersion.contains("nova") && modelNameAndVersion.contains("premier") {
                 return .novaPremier
             } else if modelNameAndVersion.contains("nova") && modelNameAndVersion.contains("pro") {
@@ -641,6 +723,8 @@ class Backend: Equatable, @unchecked Sendable {
                 return .cohereCommandLight
             } else if modelNameAndVersion.contains("command") {
                 return .cohereCommand
+            } else if modelNameAndVersion.contains("embed-v4") {
+                return .cohereEmbedV4
             } else if modelNameAndVersion.contains("embed") {
                 return .cohereEmbed
             } else if modelNameAndVersion.contains("rerank") {
@@ -648,7 +732,11 @@ class Backend: Equatable, @unchecked Sendable {
             }
             
         case "meta":
-            if modelNameAndVersion.contains("llama3-3") {
+            if modelNameAndVersion.contains("llama4-maverick") {
+                return .llama4Maverick
+            } else if modelNameAndVersion.contains("llama4-scout") {
+                return .llama4Scout
+            } else if modelNameAndVersion.contains("llama3-3") {
                 return .llama33
             } else if modelNameAndVersion.contains("llama3-2") {
                 // 크기별 분류
@@ -666,8 +754,24 @@ class Backend: Equatable, @unchecked Sendable {
             }
             
         case "mistral":
-            if modelNameAndVersion.contains("mistral-large-2407") {
+            if modelNameAndVersion.contains("pixtral-large") {
+                return .pixtralLarge
+            } else if modelNameAndVersion.contains("voxtral-small") {
+                return .voxtralSmall
+            } else if modelNameAndVersion.contains("voxtral-mini") {
+                return .voxtralMini
+            } else if modelNameAndVersion.contains("ministral-14b") || modelNameAndVersion.contains("ministral14b") {
+                return .ministral14b
+            } else if modelNameAndVersion.contains("ministral-8b") || modelNameAndVersion.contains("ministral8b") || modelNameAndVersion.contains("ministral-3-8b") {
+                return .ministral8b
+            } else if modelNameAndVersion.contains("ministral-3b") || modelNameAndVersion.contains("ministral3b") {
+                return .ministral3b
+            } else if modelNameAndVersion.contains("magistral-small") {
+                return .magistralSmall
+            } else if modelNameAndVersion.contains("mistral-large-2407") {
                 return .mistralLarge2407
+            } else if modelNameAndVersion.contains("mistral-large-3") || modelNameAndVersion.contains("mistral-large3") {
+                return .mistralLarge3
             } else if modelNameAndVersion.contains("mistral-large") {
                 return .mistralLarge
             } else if modelNameAndVersion.contains("mistral-small") {
@@ -681,6 +785,8 @@ class Backend: Equatable, @unchecked Sendable {
         case "deepseek":
             if modelNameAndVersion.contains("r1") {
                 return .deepseekr1
+            } else if modelNameAndVersion.contains("v3") {
+                return .deepseekv3
             }
             
         case "stability":
@@ -694,10 +800,65 @@ class Backend: Equatable, @unchecked Sendable {
             return .luma
             
         case "openai":
-            if modelNameAndVersion.contains("gpt-oss-120b") {
+            if modelNameAndVersion.contains("gpt-oss-safeguard") {
+                return .openaiGptOssSafeguard
+            } else if modelNameAndVersion.contains("gpt-oss-120b") {
                 return .openaiGptOss120b
             } else if modelNameAndVersion.contains("gpt-oss-20b") {
                 return .openaiGptOss20b
+            }
+            
+        case "qwen":
+            if modelNameAndVersion.contains("qwen3-vl") {
+                return .qwen3VL
+            } else if modelNameAndVersion.contains("qwen3-next") {
+                return .qwen3Next
+            } else if modelNameAndVersion.contains("qwen3-235b") || modelNameAndVersion.contains("qwen3-coder-480b") {
+                return .qwen3CoderLarge
+            } else if modelNameAndVersion.contains("qwen3-coder-30b") {
+                return .qwen3CoderSmall
+            } else if modelNameAndVersion.contains("qwen3-32b") {
+                return .qwen3Dense
+            } else {
+                return .qwen3Large
+            }
+            
+        case "writer":
+            if modelNameAndVersion.contains("palmyra-x5") {
+                return .palmyraX5
+            } else if modelNameAndVersion.contains("palmyra-x4") {
+                return .palmyraX4
+            }
+            
+        case "twelvelabs":
+            if modelNameAndVersion.contains("pegasus") {
+                return .pegasus
+            }
+            
+        case "moonshot":
+            if modelNameAndVersion.contains("kimi-k2") {
+                return .kimiK2Thinking
+            }
+            
+        case "nvidia":
+            if modelNameAndVersion.contains("nemotron-nano-12b") || modelNameAndVersion.contains("nemotron-nano12b") {
+                return .nvidiaNemotronNano12bVL
+            } else if modelNameAndVersion.contains("nemotron-nano-9b") || modelNameAndVersion.contains("nemotron-nano9b") {
+                return .nvidiaNemotronNano9b
+            }
+            
+        case "minimax":
+            if modelNameAndVersion.contains("m2") {
+                return .minimaxM2
+            }
+            
+        case "google":
+            if modelNameAndVersion.contains("gemma-3-27b") || modelNameAndVersion.contains("gemma3-27b") {
+                return .gemma3_27b
+            } else if modelNameAndVersion.contains("gemma-3-12b") || modelNameAndVersion.contains("gemma3-12b") {
+                return .gemma3_12b
+            } else if modelNameAndVersion.contains("gemma-3-4b") || modelNameAndVersion.contains("gemma3-4b") {
+                return .gemma3_4b
             }
 
         default:
@@ -803,12 +964,116 @@ class Backend: Equatable, @unchecked Sendable {
                 temperature: 0.7,
                 topp: 0.9
             )
+        case .nova2Lite:
+            // Nova 2 Lite supports extended thinking with 1M token context
+            if isThinkingEnabled {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 8192,
+                    temperature: 1.0
+                )
+            } else {
+                return BedrockRuntimeClientTypes.InferenceConfiguration(
+                    maxTokens: 8192,
+                    temperature: 0.7,
+                    topp: 0.9
+                )
+            }
         case .deepseekr1:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 8192,
                 temperature: 1
             )
-        case .openaiGptOss120b, .openaiGptOss20b:
+        case .deepseekv3:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .llama4Maverick, .llama4Scout:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .pixtralLarge:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .qwen3Large, .qwen3Dense, .qwen3CoderLarge, .qwen3CoderSmall:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .palmyraX4, .palmyraX5:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .pegasus:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .kimiK2Thinking:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 16384,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .nvidiaNemotronNano9b, .nvidiaNemotronNano12bVL:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .minimaxM2:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .gemma3_4b, .gemma3_12b, .gemma3_27b:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .mistralLarge3:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .voxtralSmall, .voxtralMini:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 4096,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .ministral3b, .ministral8b, .ministral14b:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .magistralSmall:
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 8192,
+                temperature: 0.7,
+                topp: 0.9
+            )
+        case .qwen3VL, .qwen3Next:
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 8192,
                 temperature: 0.7,
@@ -876,7 +1141,15 @@ class Backend: Equatable, @unchecked Sendable {
         // This applies to all Anthropic models from 4.5 onwards
         let isClaude45PlusModel = isClaude45OrLater(modelType)
         
-        if modelConfig.overrideDefault {
+        // Check if this is Nova 2 Lite with high reasoning effort (requires no temperature/maxTokens)
+        let isNova2WithHighEffort = modelType == .nova2Lite && isThinkingEnabled && 
+            (modelConfig.overrideDefault ? modelConfig.reasoningEffort : "low") == "high"
+        
+        if isNova2WithHighEffort {
+            // Nova 2 Lite with high reasoning effort requires temperature and maxTokens to be unset
+            config = BedrockRuntimeClientTypes.InferenceConfiguration()
+            logger.info("Using empty inference config for Nova 2 Lite with high reasoning effort")
+        } else if modelConfig.overrideDefault {
             // Custom config - but override temperature and topP if reasoning is enabled
             if shouldOverrideForReasoning {
                 config = BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -947,12 +1220,21 @@ class Backend: Equatable, @unchecked Sendable {
                 let modelType = getModelType(modelId)
                 let reasoningConfig: [String: Any]
                 
-                // OpenAI GPT-OSS models use different reasoning configuration format
-                if modelType == .openaiGptOss120b || modelType == .openaiGptOss20b {
+                // OpenAI GPT-OSS and Kimi K2 Thinking models use reasoning_effort format (high/low/medium/minimal)
+                if modelType == .openaiGptOss120b || modelType == .openaiGptOss20b || modelType == .openaiGptOssSafeguard || modelType == .kimiK2Thinking {
                     // Use user-configured reasoning effort if override is enabled, otherwise use default
                     let effortLevel = modelConfig.overrideDefault ? modelConfig.reasoningEffort : "medium"
                     reasoningConfig = [
                         "reasoning_effort": effortLevel
+                    ]
+                } else if modelType == .nova2Lite {
+                    // Nova 2 Lite uses reasoningConfig with maxReasoningEffort (low/medium/high)
+                    let effortLevel = modelConfig.overrideDefault ? modelConfig.reasoningEffort : "low"
+                    reasoningConfig = [
+                        "reasoningConfig": [
+                            "type": "enabled",
+                            "maxReasoningEffort": effortLevel
+                        ]
                     ]
                 } else {
                     // Claude and other models use the budget-based format
@@ -1017,121 +1299,32 @@ class Backend: Equatable, @unchecked Sendable {
     
     // MARK: - Image Generation Models
     
-    /// Invoke image generation models (which don't use converseStream)
+    /// Lazy-initialized image generation service
+    private lazy var imageGenerationService: ImageGenerationService = {
+        ImageGenerationService(bedrockRuntimeClient: self.bedrockRuntimeClient)
+    }()
+    
+    /// Invoke image generation models (delegates to ImageGenerationService)
     func invokeImageModel(
         withId modelId: String,
         prompt: String,
         modelType: ModelType
     ) async throws -> Data {
-        switch modelType {
-        case .titanImage:
-            // TitanImage specific parameters
-            let params = TitanImageModelParameters(inputText: prompt)
-            let encodedParams = try JSONEncoder().encode(params)
-            
-            let request = InvokeModelInput(
-                body: encodedParams,
-                contentType: "application/json",
-                modelId: modelId
-            )
-            
-            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-            guard let data = response.body else {
-                throw BedrockRuntimeError.invalidResponse(nil)
-            }
-            
-            // Process TitanImage response
-            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
-            if let images = json?["images"] as? [String], let base64Image = images.first,
-               let imageData = Data(base64Encoded: base64Image) {
-                return imageData
-            } else {
-                throw BedrockRuntimeError.invalidResponse(data)
-            }
-            
-        case .novaCanvas:
-            // NovaCanvas specific parameters
-            let params = NovaCanvasModelParameters(text: prompt)
-            let encodedParams = try JSONEncoder().encode(params)
-            
-            let request = InvokeModelInput(
-                body: encodedParams,
-                contentType: "application/json",
-                modelId: modelId
-            )
-            
-            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-            guard let data = response.body else {
-                throw BedrockRuntimeError.invalidResponse(nil)
-            }
-            
-            // Process NovaCanvas response
-            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
-            if let images = json?["images"] as? [String], let base64Image = images.first,
-               let imageData = Data(base64Encoded: base64Image) {
-                return imageData
-            } else {
-                throw BedrockRuntimeError.invalidResponse(data)
-            }
-            
-        case .stableDiffusion:
-            // Stable Diffusion parameters
-            let isSD3 = modelId.contains("sd3")
-            let isCore = modelId.contains("stable-image-core")
-            let isUltra = modelId.contains("stable-image-ultra") || modelId.contains("sd3-ultra")
-            
-            let promptData: [String: Any]
-            
-            if isSD3 || isCore || isUltra {
-                // SD3, Core, Ultra formatting
-                promptData = ["prompt": prompt]
-            } else {
-                // Standard Stable Diffusion formatting
-                promptData = [
-                    "text_prompts": [["text": prompt]],
-                    "cfg_scale": 10,
-                    "seed": 0,
-                    "steps": 50,
-                    "samples": 1,
-                    "style_preset": "photographic",
-                ]
-            }
-            
-            let jsonData = try JSONSerialization.data(withJSONObject: promptData)
-            
-            let request = InvokeModelInput(
-                body: jsonData,
-                contentType: "application/json",
-                modelId: modelId
-            )
-            
-            let response = try await self.bedrockRuntimeClient.invokeModel(input: request)
-            guard let data = response.body else {
-                throw BedrockRuntimeError.invalidResponse(nil)
-            }
-            
-            // Try to extract the image from the response
-            let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
-            
-            if let images = json?["images"] as? [String], let base64Image = images.first,
-               let imageData = Data(base64Encoded: base64Image) {
-                return imageData
-            } else if let artifacts = json?["artifacts"] as? [[String: Any]],
-                      let firstArtifact = artifacts.first,
-                      let base64Image = firstArtifact["base64"] as? String,
-                      let imageData = Data(base64Encoded: base64Image) {
-                return imageData
-            } else {
-                throw BedrockRuntimeError.invalidResponse(data)
-            }
-            
-        default:
-            throw NSError(
-                domain: "BedrockClient",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Unsupported image model type"]
-            )
-        }
+        return try await imageGenerationService.invokeImageModel(
+            withId: modelId,
+            prompt: prompt,
+            modelType: modelType
+        )
+    }
+    
+    /// Invoke Nova Canvas with a unified request structure
+    func invokeNovaCanvas(request: NovaCanvasRequest) async throws -> Data {
+        return try await imageGenerationService.invokeNovaCanvas(request: request)
+    }
+    
+    /// Invoke Nova Canvas with all images returned
+    func invokeNovaCanvasMultiple(request: NovaCanvasRequest) async throws -> [Data] {
+        return try await imageGenerationService.invokeNovaCanvasMultiple(request: request)
     }
     
     // MARK: - Embedding Models
@@ -1297,21 +1490,40 @@ enum ModelType {
     // Anthropic models
     case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45
     // Meta models
-    case llama2, llama3, llama31, llama32Small, llama32Large, llama33
+    case llama2, llama3, llama31, llama32Small, llama32Large, llama33, llama4Maverick, llama4Scout
     // Mistral models
-    case mistral, mistral7b, mistralLarge, mistralLarge2407, mistralSmall, mixtral
+    case mistral, mistral7b, mistralLarge, mistralLarge2407, mistralLarge3, mistralSmall, mixtral, pixtralLarge
+    case voxtralSmall, voxtralMini, ministral3b, ministral8b, ministral14b, magistralSmall
     // Amazon models
     case titan, titanImage, titanEmbed, novaPremier, novaPro, novaLite, novaMicro, novaCanvas, rerank
+    // Amazon Nova 2 models
+    case nova2Lite, nova2Sonic
     // AI21 models
     case j2, jambaInstruct, jambaLarge, jambaMini
     // Cohere models
-    case cohereCommand, cohereCommandLight, cohereCommandR, cohereCommandRPlus, cohereEmbed, cohereRerank
+    case cohereCommand, cohereCommandLight, cohereCommandR, cohereCommandRPlus, cohereEmbed, cohereEmbedV4, cohereRerank
     // Stability models
     case stableDiffusion, stableImage
     // OpenAI models
-    case openaiGptOss120b, openaiGptOss20b
+    case openaiGptOss120b, openaiGptOss20b, openaiGptOssSafeguard
+    // DeepSeek models
+    case deepseekr1, deepseekv3
+    // Qwen models
+    case qwen3Large, qwen3Dense, qwen3CoderLarge, qwen3CoderSmall, qwen3VL, qwen3Next
+    // Writer models
+    case palmyraX4, palmyraX5
+    // TwelveLabs models
+    case pegasus
+    // Moonshot models
+    case kimiK2Thinking
+    // NVIDIA models
+    case nvidiaNemotronNano9b, nvidiaNemotronNano12bVL
+    // MiniMax models
+    case minimaxM2
+    // Google models
+    case gemma3_4b, gemma3_12b, gemma3_27b
     // Other models
-    case deepseekr1, luma, unknown
+    case luma, unknown
 }
 
 // MARK: - Simplified Parameter Structures
@@ -1379,48 +1591,8 @@ struct TitanImageModelParameters: ModelParameters {
     }
 }
 
-struct NovaCanvasModelParameters: ModelParameters {
-    var taskType: String
-    var textToImageParams: TextToImageParams
-    var imageGenerationConfig: ImageGenerationConfig
-    
-    struct TextToImageParams: Codable {
-        var text: String
-        var negativeText: String?
-    }
-    
-    struct ImageGenerationConfig: Codable {
-        var width: Int
-        var height: Int
-        var quality: String
-        var cfgScale: Float
-        var seed: Int
-        var numberOfImages: Int
-    }
-    
-    init(
-        taskType: String = "TEXT_IMAGE",
-        text: String,
-        negativeText: String? = nil,
-        width: Int = 1024,
-        height: Int = 1024,
-        quality: String = "premium",
-        cfgScale: Float = 8.0,
-        seed: Int = 0,
-        numberOfImages: Int = 1
-    ) {
-        self.taskType = taskType
-        self.textToImageParams = TextToImageParams(text: text, negativeText: negativeText)
-        self.imageGenerationConfig = ImageGenerationConfig(
-            width: width,
-            height: height,
-            quality: quality,
-            cfgScale: cfgScale,
-            seed: seed,
-            numberOfImages: numberOfImages
-        )
-    }
-}
+// NOTE: NovaCanvasModelParameters has been replaced by the unified NovaCanvasRequest
+// in NovaCanvasModels.swift which supports all Nova Canvas task types
 
 // Parameters for embedding models
 public struct CohereEmbedModelParameters: ModelParameters {

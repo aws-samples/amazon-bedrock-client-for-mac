@@ -23,7 +23,7 @@ struct InferenceConfigDropdown: View {
     
     private var isGptOssModel: Bool {
         let modelType = backend.getModelType(currentModelId)
-        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b
+        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b || modelType == .openaiGptOssSafeguard
     }
     
     var body: some View {
@@ -136,12 +136,29 @@ struct InferenceConfigPopoverContent: View {
     // Check if this is a GPT-OSS model
     private var isGptOssModel: Bool {
         let modelType = backend.getModelType(modelId)
-        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b
+        return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b || modelType == .openaiGptOssSafeguard
     }
     
-    // Check if thinking budget should be enabled (Claude models only, not GPT-OSS)
+    // Check if this is a Kimi K2 Thinking model (uses reasoning_effort like GPT-OSS)
+    private var isKimiK2Model: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .kimiK2Thinking
+    }
+    
+    // Check if this is a Nova 2 model (uses reasoningEffort instead of thinkingBudget)
+    private var isNova2Model: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .nova2Lite
+    }
+    
+    // Check if this model uses reasoning effort (GPT-OSS, Kimi K2, and Nova 2 models)
+    private var usesReasoningEffort: Bool {
+        return isGptOssModel || isNova2Model || isKimiK2Model
+    }
+    
+    // Check if thinking budget should be enabled (Claude models only, not GPT-OSS or Nova 2)
     private var isThinkingBudgetEnabled: Bool {
-        return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId) && !isGptOssModel
+        return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId) && !usesReasoningEffort
     }
     
     var body: some View {
@@ -256,8 +273,8 @@ struct InferenceConfigPopoverContent: View {
                     thinkingBudgetControl
                 }
                 
-                // Reasoning Effort (GPT-OSS 모델에만)
-                if isGptOssModel && isReasoningSupported && settingManager.enableModelThinking {
+                // Reasoning Effort (GPT-OSS and Nova 2 models)
+                if usesReasoningEffort && isReasoningSupported && settingManager.enableModelThinking {
                     reasoningEffortControl
                 }
                 

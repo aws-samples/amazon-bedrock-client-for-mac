@@ -159,6 +159,21 @@ struct ModelInferenceRange {
                 defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
+        case .nova2Lite:
+            // Nova 2 Lite supports extended thinking with 1M token context
+            // Uses reasoningConfig with maxReasoningEffort (low/medium/high)
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...1.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...4096, // Not used, uses reasoningEffort instead
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "low"  // Nova 2 Lite uses low/medium/high
+            )
+            
         case .llama31, .llama32Large, .llama33:
             return ModelInferenceRange(
                 maxTokensRange: 1...32768,
@@ -211,7 +226,7 @@ struct ModelInferenceRange {
                 defaultReasoningEffort: "medium"  // GPT-OSS가 아니므로 실제로는 사용되지 않음
             )
             
-        case .openaiGptOss120b, .openaiGptOss20b:
+        case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
             return ModelInferenceRange(
                 maxTokensRange: 1...8192,
                 temperatureRange: 0.0...2.0,
@@ -222,6 +237,85 @@ struct ModelInferenceRange {
                 defaultTopP: 0.9,
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "medium"  // GPT-OSS 모델에만 실제로 적용됨
+            )
+            
+        case .kimiK2Thinking:
+            // Kimi K2 Thinking - 256K context window
+            return ModelInferenceRange(
+                maxTokensRange: 1...16384,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...8192,
+                defaultMaxTokens: 16384,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"
+            )
+            
+        case .nvidiaNemotronNano9b, .nvidiaNemotronNano12bVL:
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"
+            )
+            
+        case .minimaxM2:
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"
+            )
+            
+        case .gemma3_4b, .gemma3_12b, .gemma3_27b:
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"
+            )
+            
+        case .mistralLarge3, .ministral3b, .ministral8b, .ministral14b, .magistralSmall:
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...1.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"
+            )
+            
+        case .qwen3VL, .qwen3Next:
+            return ModelInferenceRange(
+                maxTokensRange: 1...8192,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 8192,
+                defaultTemperature: 0.7,
+                defaultTopP: 0.9,
+                defaultThinkingBudget: 1024,
+                defaultReasoningEffort: "medium"
             )
             
         default:
@@ -278,7 +372,9 @@ struct ModelInferenceRange {
             }
             
         case "amazon":
-            if modelNameAndVersion.contains("nova-premier") {
+            if modelNameAndVersion.contains("nova-2") && modelNameAndVersion.contains("lite") {
+                return .nova2Lite
+            } else if modelNameAndVersion.contains("nova-premier") {
                 return .novaPremier
             } else if modelNameAndVersion.contains("nova-pro") {
                 return .novaPro
@@ -308,8 +404,18 @@ struct ModelInferenceRange {
         case "mistral":
             if modelNameAndVersion.contains("mistral-large-2407") {
                 return .mistralLarge2407
+            } else if modelNameAndVersion.contains("mistral-large-3") || modelNameAndVersion.contains("mistral-large3") {
+                return .mistralLarge3
             } else if modelNameAndVersion.contains("mistral-large") {
                 return .mistralLarge
+            } else if modelNameAndVersion.contains("ministral-14b") || modelNameAndVersion.contains("ministral14b") {
+                return .ministral14b
+            } else if modelNameAndVersion.contains("ministral-8b") || modelNameAndVersion.contains("ministral8b") || modelNameAndVersion.contains("ministral-3-8b") {
+                return .ministral8b
+            } else if modelNameAndVersion.contains("ministral-3b") || modelNameAndVersion.contains("ministral3b") {
+                return .ministral3b
+            } else if modelNameAndVersion.contains("magistral-small") {
+                return .magistralSmall
             }
             
         case "deepseek":
@@ -318,10 +424,45 @@ struct ModelInferenceRange {
             }
             
         case "openai":
-            if modelNameAndVersion.contains("gpt-oss-120b") {
+            if modelNameAndVersion.contains("gpt-oss-safeguard") {
+                return .openaiGptOssSafeguard
+            } else if modelNameAndVersion.contains("gpt-oss-120b") {
                 return .openaiGptOss120b
             } else if modelNameAndVersion.contains("gpt-oss-20b") {
                 return .openaiGptOss20b
+            }
+            
+        case "moonshot":
+            if modelNameAndVersion.contains("kimi-k2") {
+                return .kimiK2Thinking
+            }
+            
+        case "nvidia":
+            if modelNameAndVersion.contains("nemotron-nano-12b") || modelNameAndVersion.contains("nemotron-nano12b") {
+                return .nvidiaNemotronNano12bVL
+            } else if modelNameAndVersion.contains("nemotron-nano-9b") || modelNameAndVersion.contains("nemotron-nano9b") {
+                return .nvidiaNemotronNano9b
+            }
+            
+        case "minimax":
+            if modelNameAndVersion.contains("m2") {
+                return .minimaxM2
+            }
+            
+        case "google":
+            if modelNameAndVersion.contains("gemma-3-27b") || modelNameAndVersion.contains("gemma3-27b") {
+                return .gemma3_27b
+            } else if modelNameAndVersion.contains("gemma-3-12b") || modelNameAndVersion.contains("gemma3-12b") {
+                return .gemma3_12b
+            } else if modelNameAndVersion.contains("gemma-3-4b") || modelNameAndVersion.contains("gemma3-4b") {
+                return .gemma3_4b
+            }
+            
+        case "qwen":
+            if modelNameAndVersion.contains("qwen3-vl") {
+                return .qwen3VL
+            } else if modelNameAndVersion.contains("qwen3-next") {
+                return .qwen3Next
             }
             
         default:

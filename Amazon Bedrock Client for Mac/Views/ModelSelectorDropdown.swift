@@ -380,6 +380,22 @@ struct ModelImageHelper {
             return Image("stability ai")
         case let id where id.contains("openai"):
             return Image("openai")
+        case let id where id.contains("qwen"):
+            return Image("qwen")
+        case let id where id.contains("writer"):
+            return Image("writer")
+        case let id where id.contains("twelvelabs"):
+            return Image("twelvelabs")
+        case let id where id.contains("moonshot"):
+            return Image("moonshot")
+        case let id where id.contains("luma"):
+            return Image("bedrock")  // TODO: Add luma icon
+        case let id where id.contains("nvidia"):
+            return Image("nvidia")
+        case let id where id.contains("gemma"), let id where id.contains("google"):
+            return Image("gemma")
+        case let id where id.contains("minimax"):
+            return Image("minimax")
         default:
             return Image("bedrock")
         }
