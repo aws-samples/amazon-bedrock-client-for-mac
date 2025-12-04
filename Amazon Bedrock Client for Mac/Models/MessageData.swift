@@ -166,6 +166,8 @@ struct MessageData: Identifiable, Equatable, Codable {
     var pastedTexts: [PastedTextInfo]?  // Pasted text attachments (sent as text block, not document)
     var toolUse: ToolInfo?  // Information about tool usage in this message
     var toolResult: String?  // Result from tool execution
+    var videoUrl: URL?  // Local URL for generated video playback
+    var videoS3Uri: String?  // S3 URI for video (for reference)
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -183,6 +185,8 @@ struct MessageData: Identifiable, Equatable, Codable {
         case pastedTexts = "pasted_texts"
         case toolUse = "tool_use"
         case toolResult = "tool_result"
+        case videoUrl = "video_url"
+        case videoS3Uri = "video_s3_uri"
     }
     
     static func == (lhs: MessageData, rhs: MessageData) -> Bool {
@@ -197,7 +201,9 @@ struct MessageData: Identifiable, Equatable, Codable {
                lhs.documentBase64Strings == rhs.documentBase64Strings &&
                lhs.documentFormats == rhs.documentFormats &&
                lhs.documentNames == rhs.documentNames &&
-               lhs.pastedTexts == rhs.pastedTexts
+               lhs.pastedTexts == rhs.pastedTexts &&
+               lhs.videoUrl == rhs.videoUrl &&
+               lhs.videoS3Uri == rhs.videoS3Uri
     }
 }
 

@@ -294,8 +294,15 @@ class Backend: Equatable, @unchecked Sendable {
         let id = modelId.lowercased()
         return id.contains("titan-image") ||
         id.contains("nova-canvas") ||
+        id.contains("nova-reel") ||
         id.contains("stable-") ||
         id.contains("sd3-")
+    }
+    
+    /// Check if a model is a video generation model
+    func isVideoGenerationModel(_ modelId: String) -> Bool {
+        let id = modelId.lowercased()
+        return id.contains("nova-reel")
     }
 
     /// Check if a model supports advanced reasoning capabilities

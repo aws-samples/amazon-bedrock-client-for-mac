@@ -61,6 +61,10 @@
 		79EC4F2D2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */; };
 		79EC4F2F2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */; };
 		79EC4F312EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F302EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift */; };
+		79EC4F332EE2032F00BF73D9 /* NovaReelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F322EE2032F00BF73D9 /* NovaReelModels.swift */; };
+		79EC4F352EE2033A00BF73D9 /* NovaReelConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F342EE2033A00BF73D9 /* NovaReelConfigDropdown.swift */; };
+		79EC4F372EE2034100BF73D9 /* VideoGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F362EE2034100BF73D9 /* VideoGenerationService.swift */; };
+		79EC4F392EE2079A00BF73D9 /* AWSS3 in Frameworks */ = {isa = PBXBuildFile; productRef = 79EC4F382EE2079A00BF73D9 /* AWSS3 */; };
 		79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 79F2C4012EB0705A003F46E6 /* Bedrock.icon */; };
 		79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */; };
 		79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */; };
@@ -145,6 +149,9 @@
 		79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitanImageConfigDropdown.swift; sourceTree = "<group>"; };
 		79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedImageConfigComponents.swift; sourceTree = "<group>"; };
 		79EC4F302EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StabilityAIServicesDropdown.swift; sourceTree = "<group>"; };
+		79EC4F322EE2032F00BF73D9 /* NovaReelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaReelModels.swift; sourceTree = "<group>"; };
+		79EC4F342EE2033A00BF73D9 /* NovaReelConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaReelConfigDropdown.swift; sourceTree = "<group>"; };
+		79EC4F362EE2034100BF73D9 /* VideoGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGenerationService.swift; sourceTree = "<group>"; };
 		79F2C4012EB0705A003F46E6 /* Bedrock.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Bedrock.icon; sourceTree = "<group>"; };
 		79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessWindowManager.swift; sourceTree = "<group>"; };
@@ -167,6 +174,7 @@
 				792D8E652DDFE55E00BB1C01 /* MCP in Frameworks */,
 				79E0AC5D2D63EE4F0041829A /* AWSTranscribeStreaming in Frameworks */,
 				79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */,
+				79EC4F392EE2079A00BF73D9 /* AWSS3 in Frameworks */,
 				79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */,
 				798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */,
 				79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */,
@@ -245,6 +253,7 @@
 		79610DBF2AD22A2F00993D09 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F362EE2034100BF73D9 /* VideoGenerationService.swift */,
 				79EC4F222EE17E6500BF73D9 /* PromptTemplateManager.swift */,
 				79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */,
 				79EC4F1E2EE1659500BF73D9 /* ImageStorageManager.swift */,
@@ -283,6 +292,7 @@
 		79610DC92AD22A2F00993D09 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F322EE2032F00BF73D9 /* NovaReelModels.swift */,
 				79EC4F262EE1996000BF73D9 /* StabilityAIModels.swift */,
 				79EC4F272EE1996000BF73D9 /* TitanImageModels.swift */,
 				79EC4F1C2EE1601300BF73D9 /* NovaCanvasModels.swift */,
@@ -306,6 +316,7 @@
 		79610DCF2AD22A2F00993D09 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F342EE2033A00BF73D9 /* NovaReelConfigDropdown.swift */,
 				79EC4F302EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift */,
 				79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */,
 				79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */,
@@ -359,6 +370,7 @@
 				79E0AC5C2D63EE4F0041829A /* AWSTranscribeStreaming */,
 				792D8E642DDFE55E00BB1C01 /* MCP */,
 				79A305682EB05A2200DAE32F /* MarkdownKit */,
+				79EC4F382EE2079A00BF73D9 /* AWSS3 */,
 			);
 			productName = "Amazon Bedrock Client for Mac";
 			productReference = 7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */;
@@ -496,18 +508,21 @@
 				79FF2B372D925F320075249D /* MCPOAuthManager.swift in Sources */,
 				7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */,
 				79FD1C262C3777180009E50F /* Markdown.swift in Sources */,
+				79EC4F352EE2033A00BF73D9 /* NovaReelConfigDropdown.swift in Sources */,
 				79AF97572D9E33C400313A4C /* ImagePreview.swift in Sources */,
 				79610DE12AD22A2F00993D09 /* ChatModel.swift in Sources */,
 				797A12BC2C2EB4C300494DD9 /* CoreDataStack.swift in Sources */,
 				79FF2B352D925F2E0075249D /* MCPModels.swift in Sources */,
 				7953C5AB2C345B8700663438 /* SSOManager.swift in Sources */,
 				79FDE2592DFBF410003960BC /* ModelSelectorDropdown.swift in Sources */,
+				79EC4F332EE2032F00BF73D9 /* NovaReelModels.swift in Sources */,
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,
 				79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */,
 				79EC4F2C2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift in Sources */,
 				79EC4F2D2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift in Sources */,
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
+				79EC4F372EE2034100BF73D9 /* VideoGenerationService.swift in Sources */,
 				79F53C892E7B0B3800F129F4 /* QuickAccessView.swift in Sources */,
 				79610DED2AD230A200993D09 /* ChatView.swift in Sources */,
 				79D3C7832D9C799700CB020F /* AppStateManager.swift in Sources */,
@@ -1004,6 +1019,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSBedrockRuntime;
+		};
+		79EC4F382EE2079A00BF73D9 /* AWSS3 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = AWSS3;
 		};
 /* End XCSwiftPackageProductDependency section */
 

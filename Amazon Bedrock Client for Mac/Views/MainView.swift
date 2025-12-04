@@ -282,10 +282,13 @@ struct MainView: View {
             .frame(minWidth: 200, maxWidth: 420)
         }
 
-        // Right side - Inference config dropdown (or image model config for image models)
+        // Right side - Inference config dropdown (or image/video model config)
         ToolbarItem(placement: .primaryAction) {
             if case .chat(let selectedModel) = menuSelection {
-                if selectedModel.id.contains("nova-canvas") {
+                if selectedModel.id.contains("nova-reel") {
+                    // Show Nova Reel video generation config
+                    NovaReelConfigDropdown()
+                } else if selectedModel.id.contains("nova-canvas") {
                     // Show Nova Canvas specific config for image generation
                     NovaCanvasConfigDropdown()
                 } else if selectedModel.id.contains("titan-image") {

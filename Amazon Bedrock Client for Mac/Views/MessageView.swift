@@ -310,6 +310,92 @@ struct GeneratedImageView: View {
     }
 }
 
+// MARK: - GeneratedVideoView (for AI-generated videos)
+import AVKit
+
+struct GeneratedVideoView: View {
+    let videoUrl: URL
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @State private var player: AVPlayer?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Video player
+            if let player = player {
+                VideoPlayer(player: player)
+                    .frame(width: 640, height: 360)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                colorScheme == .dark ?
+                                Color.white.opacity(0.15) :
+                                    Color.primary.opacity(0.1),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+            } else {
+                // Loading placeholder
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                    .frame(width: 640, height: 360)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            ProgressView()
+                            Text("Loading video...")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                    )
+            }
+            
+            // Video controls
+            HStack(spacing: 12) {
+                Button(action: { openInFinder() }) {
+                    Label("Show in Finder", systemImage: "folder")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                
+                Button(action: { saveVideoToFile() }) {
+                    Label("Save Video...", systemImage: "square.and.arrow.down")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+            }
+            .foregroundColor(.secondary)
+        }
+        .onAppear {
+            loadVideo()
+        }
+        .onDisappear {
+            player?.pause()
+        }
+    }
+    
+    private func loadVideo() {
+        guard FileManager.default.fileExists(atPath: videoUrl.path) else { return }
+        player = AVPlayer(url: videoUrl)
+    }
+    
+    private func openInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([videoUrl])
+    }
+    
+    private func saveVideoToFile() {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.mpeg4Movie]
+        savePanel.nameFieldStringValue = "generated-video-\(Date().timeIntervalSince1970).mp4"
+        
+        savePanel.begin { response in
+            if response == .OK, let destinationUrl = savePanel.url {
+                try? FileManager.default.copyItem(at: videoUrl, to: destinationUrl)
+            }
+        }
+    }
+}
+
 // MARK: - ExpandableMarkdownItem
 struct ExpandableMarkdownItem: View {
     @State private var isExpanded = false
@@ -517,6 +603,12 @@ struct MessageView: View {
     // MARK: - Assistant Content Components
     @ViewBuilder
     private var assistantMessageContent: some View {
+        // Generated video (displayed with video player)
+        if let videoUrl = message.videoUrl {
+            GeneratedVideoView(videoUrl: videoUrl)
+                .padding(.bottom, 8)
+        }
+        
         // Generated images (displayed larger for AI-generated content)
         if let imageBase64Strings = message.imageBase64Strings,
            !imageBase64Strings.isEmpty {
@@ -542,12 +634,17 @@ struct MessageView: View {
                 .padding(.vertical, 2)
             }
             
-            // Main message content
-            LazyMarkdownView(
-                text: message.text, 
-                fontSize: fontSize + adjustedFontSize,
-                searchRanges: searchResult?.ranges ?? []
-            )
+            // Main message content (skip if empty - e.g., video-only messages)
+            if !message.text.isEmpty {
+                LazyMarkdownView(
+                    text: message.text,
+                    fontSize: fontSize + adjustedFontSize,
+                    searchRanges: searchResult?.ranges ?? []
+                )
+            }
+            
+            // Image preview modal
+            EmptyView()
                 .sheet(isPresented: $viewModel.isShowingImageModal) {
                     if let data = viewModel.selectedImageData,
                        let imageToShow = NSImage(base64Encoded: data) {

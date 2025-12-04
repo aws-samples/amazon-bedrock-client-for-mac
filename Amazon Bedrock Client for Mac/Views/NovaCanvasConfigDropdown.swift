@@ -91,7 +91,7 @@ struct NovaCanvasConfigDropdown: View {
         }
         .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
             NovaCanvasConfigPopoverContent(isShowingPopover: $isShowingPopover)
-                .frame(width: 340, height: 420)
+                .frame(width: 340, height: 500)
         }
     }
 }
@@ -202,6 +202,24 @@ struct NovaCanvasConfigPopoverContent: View {
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                         .onChange(of: selectedStyle) { _, _ in saveConfig() }
+                        
+                        Divider().padding(.vertical, 8)
+                        
+                        // Negative Prompt
+                        NovaCanvasSectionHeader(title: "Negative Prompt")
+                        
+                        TextField("What to exclude from the image...", text: $negativePrompt)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 12))
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 4)
+                            .onChange(of: negativePrompt) { _, _ in saveConfig() }
+                        
+                        Text("Describe what you don't want in the image")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 8)
                         
                         Divider().padding(.vertical, 8)
                     }

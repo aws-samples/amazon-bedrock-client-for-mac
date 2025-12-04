@@ -1363,6 +1363,16 @@ class ChatViewModel: ObservableObject {
             newText: newText
         )
     }
+    
+    private func updateMessageVideoUrl(messageId: UUID, videoUrl: URL, s3Uri: String) {
+        if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
+            var updatedMessage = self.messages[index]
+            updatedMessage.videoUrl = videoUrl
+            updatedMessage.videoS3Uri = s3Uri
+            self.messages[index] = updatedMessage
+            logger.info("Updated message \(messageId) with video URL: \(videoUrl.path)")
+        }
+    }
 
     private func updateMessageThinking(messageId: UUID, newThinking: String, signature: String? = nil) {
         // Update UI
@@ -1560,6 +1570,8 @@ class ChatViewModel: ObservableObject {
                 documentFormats: messageData.documentFormats,
                 documentNames: messageData.documentNames,
                 pastedTexts: messageData.pastedTexts,
+                videoUrl: messageData.videoUrl,
+                videoS3Uri: messageData.videoS3Uri,
                 toolUse: toolUse
             )
             
@@ -1860,7 +1872,9 @@ class ChatViewModel: ObservableObject {
     private func handleImageGenerationModel(_ userMessage: MessageData, attachedImages: [String] = []) async throws {
         let modelId = chatModel.id
         
-        if modelId.contains("titan-image") {
+        if modelId.contains("nova-reel") {
+            try await invokeNovaReelModel(prompt: userMessage.text, inputImages: attachedImages)
+        } else if modelId.contains("titan-image") {
             try await invokeTitanImageModel(prompt: userMessage.text)
         } else if modelId.contains("nova-canvas") {
             try await invokeNovaCanvasModel(prompt: userMessage.text, inputImages: attachedImages)
@@ -1871,6 +1885,252 @@ class ChatViewModel: ObservableObject {
                 NSLocalizedDescriptionKey: "Unsupported image generation model: \(modelId)"
             ])
         }
+    }
+    
+    /// Invokes Nova Reel video generation model (async - saves to S3)
+    private func invokeNovaReelModel(prompt: String, inputImages: [String] = []) async throws {
+        let backend = await MainActor.run { backendModel.backend }
+        let savedConfig = settingManager.novaReelConfig
+        
+        // Set loading state for sidebar indicator
+        await MainActor.run {
+            chatManager.setIsLoading(true, for: chatId)
+        }
+        
+        // Validate S3 bucket
+        guard !savedConfig.s3OutputBucket.isEmpty else {
+            throw NSError(
+                domain: "NovaReel",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "S3 output bucket is required. Please configure it in the Nova Reel settings."]
+            )
+        }
+        
+        let validation = NovaReelService.validateS3Uri(savedConfig.s3OutputBucket)
+        guard validation.isValid else {
+            throw NSError(
+                domain: "NovaReel",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: validation.message ?? "Invalid S3 URI"]
+            )
+        }
+        
+        let taskType = NovaReelTaskType(rawValue: savedConfig.taskType) ?? .textToVideo
+        let videoService = VideoGenerationService(
+            bedrockRuntimeClient: backend.bedrockRuntimeClient,
+            credentialResolver: backend.awsCredentialIdentityResolver,
+            region: backend.region
+        )
+        
+        // Generate unique S3 output path
+        let s3OutputPath = NovaReelService.generateS3OutputPath(bucket: savedConfig.s3OutputBucket)
+        
+        let invocationArn: String
+        let durationSeconds: Int
+        
+        switch taskType {
+        case .textToVideo:
+            durationSeconds = 6
+            invocationArn = try await videoService.startTextToVideo(
+                prompt: prompt,
+                firstFrameImage: inputImages.first,
+                imageFormat: "png",
+                seed: savedConfig.seed,
+                s3OutputUri: s3OutputPath
+            )
+            
+        case .multiShotAutomated:
+            durationSeconds = savedConfig.durationSeconds
+            invocationArn = try await videoService.startMultiShotAutomated(
+                prompt: prompt,
+                durationSeconds: durationSeconds,
+                seed: savedConfig.seed,
+                s3OutputUri: s3OutputPath
+            )
+            
+        case .multiShotManual:
+            let shots = savedConfig.shots.isEmpty ? [prompt] : savedConfig.shots
+            durationSeconds = shots.count * 6
+            invocationArn = try await videoService.startMultiShotManual(
+                shots: shots,
+                seed: savedConfig.seed,
+                s3OutputUri: s3OutputPath
+            )
+        }
+        
+        // Create initial response message
+        let estimatedTime = NovaReelService.estimatedTime(durationSeconds: durationSeconds)
+        // Nova Reel creates: {s3OutputPath}{invocationId}/output.mp4 (s3OutputPath has trailing slash)
+        let invocationId = NovaReelService.extractInvocationId(from: invocationArn) ?? "unknown"
+        let videoUri = "\(s3OutputPath)\(invocationId)/output.mp4"
+        let messageId = UUID()
+        let initialText = """
+        **Video Generation Started**
+        
+        **Task:** \(taskType.displayName)
+        **Duration:** \(durationSeconds) seconds
+        **Estimated Time:** \(estimatedTime)
+        **Output:** `\(videoUri)`
+        
+        **Job ARN:**
+        `\(invocationArn)`
+        
+        Status: Generating video... Please wait.
+        """
+        
+        let assistantMessage = MessageData(
+            id: messageId,
+            text: initialText,
+            user: chatModel.name,
+            isError: false,
+            sentTime: Date()
+        )
+        addMessage(assistantMessage)
+        
+        // Start polling for completion
+        Task {
+            await pollVideoGenerationStatus(
+                videoService: videoService,
+                invocationArn: invocationArn,
+                s3OutputPath: s3OutputPath,
+                messageId: messageId,
+                taskType: taskType,
+                durationSeconds: durationSeconds
+            )
+        }
+    }
+    
+    /// Poll video generation status and update message when complete
+    private func pollVideoGenerationStatus(
+        videoService: VideoGenerationService,
+        invocationArn: String,
+        s3OutputPath: String,
+        messageId: UUID,
+        taskType: NovaReelTaskType,
+        durationSeconds: Int
+    ) async {
+        let maxAttempts = 200  // ~17 minutes max (5s intervals)
+        var attempts = 0
+        
+        while attempts < maxAttempts {
+            attempts += 1
+            
+            do {
+                let jobInfo = try await videoService.getJobStatus(invocationArn: invocationArn)
+                
+                // Nova Reel creates: {s3OutputPath}{invocationId}/output.mp4 (s3OutputPath has trailing slash)
+                let invocationId = NovaReelService.extractInvocationId(from: invocationArn) ?? "unknown"
+                let videoUri = "\(s3OutputPath)\(invocationId)/output.mp4"
+                
+                switch jobInfo.jobStatus {
+                case .completed:
+                    // Try to download video from S3
+                    var localVideoUrl: URL?
+                    do {
+                        localVideoUrl = try await videoService.downloadVideoFromS3(s3Uri: videoUri)
+                    } catch {
+                        logger.warning("Failed to download video: \(error.localizedDescription)")
+                    }
+                    
+                    // If video downloaded successfully, clear text (video player will show)
+                    let completedText: String
+                    if localVideoUrl != nil {
+                        completedText = ""
+                    } else {
+                        completedText = """
+                        **Video Generation Complete**
+                        
+                        **Task:** \(taskType.displayName)
+                        **Duration:** \(durationSeconds) seconds
+                        **Output:** `\(videoUri)`
+                        
+                        Status: Complete - Video is ready in S3.
+                        """
+                    }
+                    
+                    await MainActor.run {
+                        // Set video URL first, then update text
+                        if let videoUrl = localVideoUrl {
+                            updateMessageVideoUrl(messageId: messageId, videoUrl: videoUrl, s3Uri: videoUri)
+                        }
+                        updateMessageText(messageId: messageId, newText: completedText)
+                        chatManager.setIsLoading(false, for: chatId)
+                    }
+                    await saveFromUIMessages()
+                    return
+                    
+                case .failed:
+                    let failedText = """
+                    **Video Generation Failed**
+                    
+                    **Task:** \(taskType.displayName)
+                    **Output:** `\(videoUri)`
+                    
+                    **Job ARN:**
+                    `\(invocationArn)`
+                    
+                    Status: Failed - \(jobInfo.failureMessage ?? "Unknown error")
+                    """
+                    
+                    await MainActor.run {
+                        updateMessageText(messageId: messageId, newText: failedText)
+                        chatManager.setIsLoading(false, for: chatId)
+                    }
+                    await saveFromUIMessages()
+                    return
+                    
+                case .inProgress:
+                    // Update progress message periodically
+                    if attempts % 6 == 0 {  // Every 30 seconds
+                        let elapsed = attempts * 5
+                        let progressText = """
+                        **Video Generation In Progress**
+                        
+                        **Task:** \(taskType.displayName)
+                        **Duration:** \(durationSeconds) seconds
+                        **Output:** `\(videoUri)`
+                        
+                        **Job ARN:**
+                        `\(invocationArn)`
+                        
+                        Status: Generating... (\(elapsed)s elapsed)
+                        """
+                        
+                        await MainActor.run {
+                            updateMessageText(messageId: messageId, newText: progressText)
+                        }
+                    }
+                }
+            } catch {
+                // Log error but continue polling
+                print("Error polling video status: \(error.localizedDescription)")
+            }
+            
+            // Wait 5 seconds before next poll
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+        }
+        
+        // Timeout
+        let invocationId = NovaReelService.extractInvocationId(from: invocationArn) ?? "unknown"
+        let videoUri = "\(s3OutputPath)\(invocationId)/output.mp4"
+        let timeoutText = """
+        **Video Generation Timeout**
+        
+        **Task:** \(taskType.displayName)
+        **Duration:** \(durationSeconds) seconds
+        **Output:** `\(videoUri)`
+        
+        **Job ARN:**
+        `\(invocationArn)`
+        
+        Status: Timeout - Check the AWS Console for current status.
+        """
+        
+        await MainActor.run {
+            updateMessageText(messageId: messageId, newText: timeoutText)
+            chatManager.setIsLoading(false, for: chatId)
+        }
+        await saveFromUIMessages()
     }
     
     /// Handles embedding models by directly parsing JSON responses

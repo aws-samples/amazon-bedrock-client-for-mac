@@ -122,6 +122,13 @@ class SettingManager: ObservableObject {
             saveStabilityAIServicesConfig()
         }
     }
+    
+    // Nova Reel video generation configuration
+    @Published var novaReelConfig: NovaReelConfig = NovaReelConfig.defaultConfig {
+        didSet {
+            saveNovaReelConfig()
+        }
+    }
 
     private var cancellables = Set<AnyCancellable>()
     
@@ -206,6 +213,14 @@ class SettingManager: ObservableObject {
             self.stabilityAIServicesConfig = decoded
         } else {
             self.stabilityAIServicesConfig = StabilityAIServicesConfig.defaultConfig
+        }
+        
+        // Load Nova Reel config
+        if let data = UserDefaults.standard.data(forKey: "novaReelConfig"),
+           let decoded = try? JSONDecoder().decode(NovaReelConfig.self, from: data) {
+            self.novaReelConfig = decoded
+        } else {
+            self.novaReelConfig = NovaReelConfig.defaultConfig
         }
         
         setupFileMonitoring()
@@ -494,6 +509,13 @@ class SettingManager: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: "stabilityAIServicesConfig")
         }
         logger.debug("Saved Stability AI Services config")
+    }
+    
+    private func saveNovaReelConfig() {
+        if let encoded = try? JSONEncoder().encode(novaReelConfig) {
+            UserDefaults.standard.set(encoded, forKey: "novaReelConfig")
+        }
+        logger.debug("Saved Nova Reel config")
     }
 
     deinit {
