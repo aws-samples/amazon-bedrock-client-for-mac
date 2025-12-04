@@ -57,6 +57,7 @@ struct ImageTaskTypeRow: View {
     let isSelected: Bool
     let requiresImage: Bool
     let accentColor: Color
+    var isDisabled: Bool = false
     let onSelect: () -> Void
     
     @State private var isHovering = false
@@ -66,33 +67,40 @@ struct ImageTaskTypeRow: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(isSelected ? accentColor : .secondary)
+                .foregroundColor(isDisabled ? .gray.opacity(0.5) : (isSelected ? accentColor : .secondary))
                 .frame(width: 32, height: 32)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(isSelected ? accentColor.opacity(0.15) : Color.gray.opacity(0.1))
+                        .fill(isDisabled ? Color.gray.opacity(0.05) : (isSelected ? accentColor.opacity(0.15) : Color.gray.opacity(0.1)))
                 )
             
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(name)
                         .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(isDisabled ? .gray.opacity(0.6) : .primary)
                     
-                    if isSelected {
+                    if isSelected && !isDisabled {
                         Image(systemName: "checkmark")
                             .foregroundColor(accentColor)
                             .font(.system(size: 10, weight: .bold))
+                    }
+                    
+                    if isDisabled {
+                        Image(systemName: "lock.fill")
+                            .foregroundColor(.gray.opacity(0.5))
+                            .font(.system(size: 9))
                     }
                 }
                 
                 Text(description)
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(isDisabled ? .gray.opacity(0.5) : .secondary)
             }
             
             Spacer()
             
-            if requiresImage {
+            if requiresImage && !isDisabled {
                 Image(systemName: "photo.badge.plus")
                     .font(.system(size: 11))
                     .foregroundColor(accentColor.opacity(0.7))
@@ -102,16 +110,24 @@ struct ImageTaskTypeRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ?
-                      accentColor.opacity(colorScheme == .dark ? 0.15 : 0.08) :
-                        (isHovering ? Color.gray.opacity(0.08) : Color.clear))
+                .fill(isDisabled ? Color.clear :
+                      (isSelected ?
+                       accentColor.opacity(colorScheme == .dark ? 0.15 : 0.08) :
+                        (isHovering ? Color.gray.opacity(0.08) : Color.clear)))
         )
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
-            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+            if !isDisabled {
+                withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
+                if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+            }
         }
-        .onTapGesture(perform: onSelect)
+        .onTapGesture {
+            if !isDisabled {
+                onSelect()
+            }
+        }
+        .opacity(isDisabled ? 0.7 : 1.0)
     }
 }
 

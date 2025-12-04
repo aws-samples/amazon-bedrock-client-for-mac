@@ -1865,7 +1865,7 @@ class ChatViewModel: ObservableObject {
         } else if modelId.contains("nova-canvas") {
             try await invokeNovaCanvasModel(prompt: userMessage.text, inputImages: attachedImages)
         } else if modelId.contains("stable") || modelId.contains("sd3") {
-            try await invokeStableDiffusionModel(prompt: userMessage.text)
+            try await invokeStableDiffusionModel(prompt: userMessage.text, inputImages: attachedImages)
         } else {
             throw NSError(domain: "ChatViewModel", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "Unsupported image generation model: \(modelId)"
@@ -2050,12 +2050,104 @@ class ChatViewModel: ObservableObject {
     }
     
     /// Invokes Stability AI image models (Stable Image Ultra, SD3 Large, Stable Image Core)
-    private func invokeStableDiffusionModel(prompt: String) async throws {
+    /// Also handles Stability AI Image Services (Upscale, Edit, Control)
+    /// Note: Only SD3 Large supports image-to-image mode. Ultra and Core are text-to-image only.
+    private func invokeStableDiffusionModel(prompt: String, inputImages: [String] = []) async throws {
         let backend = await MainActor.run { backendModel.backend }
-        let data = try await backend.invokeImageModel(
-            withId: chatModel.id,
+        let modelId = chatModel.id
+        
+        // Check if this is a Stability AI Image Service
+        if let service = StabilityAIImageService.allCases.first(where: { modelId.contains($0.modelId) || $0.modelId == modelId }) {
+            try await invokeStabilityAIImageService(service: service, prompt: prompt, inputImages: inputImages)
+            return
+        }
+        
+        // Get saved config to check task type
+        let savedConfig = settingManager.stabilityAIConfig
+        let taskType = StabilityAITaskType(rawValue: savedConfig.taskType) ?? .textToImage
+        
+        // Check if model supports image-to-image
+        // Only SD3 Large (sd3-5-large) supports image-to-image mode
+        // Stable Image Ultra and Core do NOT support image-to-image
+        let supportsImageToImage = modelId.contains("sd3-5-large") || modelId.contains("sd3-large")
+        
+        // Determine if we should use image-to-image mode
+        let useImageToImage = taskType == .imageToImage && !inputImages.isEmpty && supportsImageToImage
+        
+        // Warn user if they selected image-to-image but model doesn't support it
+        if taskType == .imageToImage && !inputImages.isEmpty && !supportsImageToImage {
+            // Fall back to text-to-image with a warning in the response
+            let modelName = modelId.contains("ultra") ? "Stable Image Ultra" :
+                           modelId.contains("core") ? "Stable Image Core" : "this model"
+            throw NSError(
+                domain: "StabilityAI",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "\(modelName) does not support image-to-image mode. Please use SD3 Large for image-to-image, or switch to Text to Image mode."]
+            )
+        }
+        
+        if useImageToImage {
+            // Validate that we have an input image for image-to-image
+            guard let inputImage = inputImages.first else {
+                throw NSError(
+                    domain: "StabilityAI",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Image-to-image mode requires an input image. Please attach an image."]
+                )
+            }
+            
+            // Use ImageGenerationService for image-to-image
+            let imageService = ImageGenerationService(bedrockRuntimeClient: backend.bedrockRuntimeClient)
+            let data = try await imageService.invokeStabilityAIImageToImage(
+                modelId: modelId,
+                prompt: prompt,
+                inputImage: inputImage
+            )
+            try processImageModelResponse(data)
+        } else {
+            // Text-to-image mode
+            let data = try await backend.invokeImageModel(
+                withId: modelId,
+                prompt: prompt,
+                modelType: .stableDiffusion
+            )
+            try processImageModelResponse(data)
+        }
+    }
+    
+    /// Invokes Stability AI Image Services (Upscale, Edit, Control)
+    private func invokeStabilityAIImageService(service: StabilityAIImageService, prompt: String, inputImages: [String]) async throws {
+        let backend = await MainActor.run { backendModel.backend }
+        
+        // Validate input image requirement
+        if service.requiresImage && inputImages.isEmpty {
+            throw NSError(
+                domain: "StabilityAI",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "\(service.displayName) requires an input image. Please attach an image."]
+            )
+        }
+        
+        // For style transfer, we need two images
+        var styleImage: String? = nil
+        if service == .styleTransfer {
+            if inputImages.count < 2 {
+                throw NSError(
+                    domain: "StabilityAI",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Style Transfer requires two images: init_image (first) and style_image (second). Please attach both images."]
+                )
+            }
+            styleImage = inputImages[1]
+        }
+        
+        let imageService = ImageGenerationService(bedrockRuntimeClient: backend.bedrockRuntimeClient)
+        let data = try await imageService.invokeStabilityAIService(
+            service: service,
             prompt: prompt,
-            modelType: .stableDiffusion
+            inputImage: inputImages.first ?? "",
+            maskImage: nil,  // TODO: Support mask image input
+            styleImage: styleImage
         )
         
         try processImageModelResponse(data)
@@ -2064,22 +2156,20 @@ class ChatViewModel: ObservableObject {
     /// Process and display image data from image generation models
     /// Uses efficient file-based storage to avoid bloating conversation history
     private func processImageModelResponse(_ data: Data) throws {
-        // Save image to file storage and get reference ID
+        // Save image to file storage and get reference ID (img_xxx format)
         // This avoids storing large base64 strings in conversation history JSON
         let imageReference = ImageStorageManager.shared.saveImage(data)
         
-        // For display, we need base64 - get it from the storage manager
-        // The storage manager handles caching for performance
-        let base64ForDisplay = ImageStorageManager.shared.getBase64ForDisplay(imageReference) ?? data.base64EncodedString()
-        
-        // Create message with image reference for history, base64 for display
+        // Use the file reference directly in imageBase64Strings
+        // The NSImage extension and LazyImageView handle loading from file references
+        // This prevents double-saving in convertImagesToReferences (it skips img_ prefixed strings)
         let imageMessage = MessageData(
             id: UUID(),
             text: "",  // No markdown needed - image is in imageBase64Strings
             user: chatModel.name,
             isError: false,
             sentTime: Date(),
-            imageBase64Strings: [base64ForDisplay]  // Base64 for immediate display
+            imageBase64Strings: [imageReference]  // Use file reference directly
         )
         addMessage(imageMessage)
         

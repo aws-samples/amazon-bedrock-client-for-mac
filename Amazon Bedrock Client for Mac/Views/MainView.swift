@@ -291,9 +291,17 @@ struct MainView: View {
                 } else if selectedModel.id.contains("titan-image") {
                     // Show Titan Image Generator config
                     TitanImageConfigDropdown()
+                } else if selectedModel.id.contains("us.stability.stable-image") ||
+                            selectedModel.id.contains("us.stability.stable-style") ||
+                            selectedModel.id.contains("us.stability.stable-creative") ||
+                            selectedModel.id.contains("us.stability.stable-conservative") ||
+                            selectedModel.id.contains("us.stability.stable-fast") ||
+                            selectedModel.id.contains("us.stability.stable-outpaint") {
+                    // Show Stability AI Image Services config (service determined by model ID)
+                    StabilityAIServicesDropdown(modelId: selectedModel.id)
                 } else if selectedModel.id.contains("stability") || selectedModel.id.contains("sd3") {
-                    // Show Stability AI config
-                    StabilityAIConfigDropdown()
+                    // Show Stability AI config for SD3/Ultra/Core
+                    StabilityAIConfigDropdown(modelId: selectedModel.id)
                 } else {
                     // Show standard inference config for text models
                     InferenceConfigDropdown(

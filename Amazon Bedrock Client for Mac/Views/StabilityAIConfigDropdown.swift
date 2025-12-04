@@ -9,6 +9,8 @@ import SwiftUI
 
 // MARK: - Stability AI Config Dropdown
 struct StabilityAIConfigDropdown: View {
+    let modelId: String  // To check image-to-image support
+    
     @ObservedObject private var settingManager = SettingManager.shared
     @State private var isShowingPopover = false
     @State private var isHovering = false
@@ -16,6 +18,11 @@ struct StabilityAIConfigDropdown: View {
     
     private var selectedTaskType: StabilityAITaskType {
         StabilityAITaskType(rawValue: settingManager.stabilityAIConfig.taskType) ?? .textToImage
+    }
+    
+    /// Only SD3 Large supports image-to-image mode
+    var supportsImageToImage: Bool {
+        modelId.contains("sd3-5-large") || modelId.contains("sd3-large")
     }
     
     var body: some View {
@@ -50,8 +57,11 @@ struct StabilityAIConfigDropdown: View {
             if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
         .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
-            StabilityAIConfigPopoverContent(isShowingPopover: $isShowingPopover)
-                .frame(width: 320, height: 400)
+            StabilityAIConfigPopoverContent(
+                isShowingPopover: $isShowingPopover,
+                supportsImageToImage: supportsImageToImage
+            )
+            .frame(width: 320, height: 400)
         }
     }
 }
@@ -60,6 +70,7 @@ struct StabilityAIConfigDropdown: View {
 struct StabilityAIConfigPopoverContent: View {
     @ObservedObject private var settingManager = SettingManager.shared
     @Binding var isShowingPopover: Bool
+    let supportsImageToImage: Bool
     @Environment(\.colorScheme) private var colorScheme
     
     @State private var selectedTaskType: StabilityAITaskType = .textToImage
@@ -95,17 +106,36 @@ struct StabilityAIConfigPopoverContent: View {
                     ImageConfigSectionHeader(title: "Task Type")
                     
                     ForEach(StabilityAITaskType.allCases) { taskType in
+                        let isDisabled = taskType == .imageToImage && !supportsImageToImage
+                        
                         ImageTaskTypeRow(
                             icon: taskType.icon,
                             name: taskType.displayName,
-                            description: taskType.taskDescription,
+                            description: isDisabled ? "Only SD3 Large supports this" : taskType.taskDescription,
                             isSelected: selectedTaskType == taskType,
                             requiresImage: taskType.requiresInputImage,
-                            accentColor: .purple
+                            accentColor: .purple,
+                            isDisabled: isDisabled
                         ) {
-                            selectedTaskType = taskType
-                            saveConfig()
+                            if !isDisabled {
+                                selectedTaskType = taskType
+                                saveConfig()
+                            }
                         }
+                    }
+                    
+                    // Warning if image-to-image not supported
+                    if !supportsImageToImage {
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 11))
+                            Text("Use SD3 Large for image-to-image")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                     }
                     
                     Divider().padding(.vertical, 8)

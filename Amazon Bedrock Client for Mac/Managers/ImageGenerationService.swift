@@ -278,6 +278,160 @@ class ImageGenerationService {
         
         return imageData
     }
+    
+    // MARK: - Stability AI Image Services
+    
+    /// Invoke Stability AI Image Service
+    func invokeStabilityAIService(
+        service: StabilityAIImageService,
+        prompt: String,
+        inputImage: String,
+        maskImage: String? = nil,
+        styleImage: String? = nil  // For style transfer
+    ) async throws -> Data {
+        let config = await MainActor.run { SettingManager.shared.stabilityAIServicesConfig }
+        
+        let requestData: [String: Any]
+        
+        switch service {
+        case .creativeUpscale, .conservativeUpscale:
+            requestData = StabilityAIServicesRequestBuilder.buildUpscaleRequest(
+                image: inputImage,
+                prompt: prompt,
+                creativity: config.creativity,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed,
+                stylePreset: config.stylePreset.isEmpty ? nil : config.stylePreset
+            )
+            
+        case .fastUpscale:
+            requestData = StabilityAIServicesRequestBuilder.buildFastUpscaleRequest(image: inputImage)
+            
+        case .inpaint:
+            requestData = StabilityAIServicesRequestBuilder.buildInpaintRequest(
+                image: inputImage,
+                prompt: prompt,
+                mask: maskImage,
+                growMask: config.growMask,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed,
+                stylePreset: config.stylePreset.isEmpty ? nil : config.stylePreset
+            )
+            
+        case .outpaint:
+            requestData = StabilityAIServicesRequestBuilder.buildOutpaintRequest(
+                image: inputImage,
+                left: config.outpaintLeft,
+                right: config.outpaintRight,
+                up: config.outpaintUp,
+                down: config.outpaintDown,
+                prompt: prompt.isEmpty ? nil : prompt,
+                creativity: config.creativity,
+                seed: config.seed
+            )
+            
+        case .searchReplace:
+            requestData = StabilityAIServicesRequestBuilder.buildSearchReplaceRequest(
+                image: inputImage,
+                prompt: prompt,
+                searchPrompt: config.searchPrompt,
+                growMask: config.growMask,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed,
+                stylePreset: config.stylePreset.isEmpty ? nil : config.stylePreset
+            )
+            
+        case .searchRecolor:
+            requestData = StabilityAIServicesRequestBuilder.buildSearchRecolorRequest(
+                image: inputImage,
+                prompt: prompt,
+                selectPrompt: config.searchPrompt,
+                growMask: config.growMask,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed,
+                stylePreset: config.stylePreset.isEmpty ? nil : config.stylePreset
+            )
+            
+        case .erase:
+            requestData = StabilityAIServicesRequestBuilder.buildEraseRequest(
+                image: inputImage,
+                mask: maskImage,
+                growMask: config.growMask,
+                seed: config.seed
+            )
+            
+        case .removeBackground:
+            requestData = StabilityAIServicesRequestBuilder.buildRemoveBackgroundRequest(image: inputImage)
+            
+        case .controlSketch, .controlStructure:
+            requestData = StabilityAIServicesRequestBuilder.buildControlRequest(
+                image: inputImage,
+                prompt: prompt,
+                controlStrength: config.controlStrength,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed,
+                stylePreset: config.stylePreset.isEmpty ? nil : config.stylePreset
+            )
+            
+        case .styleGuide:
+            requestData = StabilityAIServicesRequestBuilder.buildStyleGuideRequest(
+                image: inputImage,
+                prompt: prompt,
+                fidelity: config.fidelity,
+                aspectRatio: config.aspectRatio,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed
+            )
+            
+        case .styleTransfer:
+            guard let styleImg = styleImage else {
+                throw ImageGenerationError.modelError("Style Transfer requires both init_image and style_image")
+            }
+            requestData = StabilityAIServicesRequestBuilder.buildStyleTransferRequest(
+                initImage: inputImage,
+                styleImage: styleImg,
+                prompt: prompt.isEmpty ? nil : prompt,
+                styleStrength: config.styleStrength,
+                compositionFidelity: config.compositionFidelity,
+                changeStrength: config.changeStrength,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                seed: config.seed
+            )
+        }
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: requestData)
+        
+        let request = InvokeModelInput(
+            body: jsonData,
+            contentType: "application/json",
+            modelId: service.modelId
+        )
+        
+        let response = try await bedrockRuntimeClient.invokeModel(input: request)
+        guard let data = response.body else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        // Parse response
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        // Check for content filter
+        if let finishReasons = json["finish_reasons"] as? [String?],
+           let reason = finishReasons.first, let filterReason = reason {
+            throw ImageGenerationError.contentFiltered(filterReason)
+        }
+        
+        // Extract image
+        guard let images = json["images"] as? [String],
+              let base64Image = images.first,
+              let imageData = Data(base64Encoded: base64Image) else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        return imageData
+    }
 }
 
 // MARK: - Image Generation Errors

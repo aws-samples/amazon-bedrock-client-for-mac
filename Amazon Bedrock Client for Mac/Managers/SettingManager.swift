@@ -115,6 +115,13 @@ class SettingManager: ObservableObject {
             saveStabilityAIConfig()
         }
     }
+    
+    // Stability AI Image Services configuration
+    @Published var stabilityAIServicesConfig: StabilityAIServicesConfig = StabilityAIServicesConfig.defaultConfig {
+        didSet {
+            saveStabilityAIServicesConfig()
+        }
+    }
 
     private var cancellables = Set<AnyCancellable>()
     
@@ -191,6 +198,14 @@ class SettingManager: ObservableObject {
             self.stabilityAIConfig = decoded
         } else {
             self.stabilityAIConfig = StabilityAIConfig.defaultConfig
+        }
+        
+        // Load Stability AI Services config
+        if let data = UserDefaults.standard.data(forKey: "stabilityAIServicesConfig"),
+           let decoded = try? JSONDecoder().decode(StabilityAIServicesConfig.self, from: data) {
+            self.stabilityAIServicesConfig = decoded
+        } else {
+            self.stabilityAIServicesConfig = StabilityAIServicesConfig.defaultConfig
         }
         
         setupFileMonitoring()
@@ -472,6 +487,13 @@ class SettingManager: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: "stabilityAIConfig")
         }
         logger.debug("Saved Stability AI config")
+    }
+    
+    private func saveStabilityAIServicesConfig() {
+        if let encoded = try? JSONEncoder().encode(stabilityAIServicesConfig) {
+            UserDefaults.standard.set(encoded, forKey: "stabilityAIServicesConfig")
+        }
+        logger.debug("Saved Stability AI Services config")
     }
 
     deinit {

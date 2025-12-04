@@ -60,6 +60,7 @@
 		79EC4F2C2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */; };
 		79EC4F2D2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */; };
 		79EC4F2F2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */; };
+		79EC4F312EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F302EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift */; };
 		79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 79F2C4012EB0705A003F46E6 /* Bedrock.icon */; };
 		79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */; };
 		79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */; };
@@ -143,6 +144,7 @@
 		79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StabilityAIConfigDropdown.swift; sourceTree = "<group>"; };
 		79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitanImageConfigDropdown.swift; sourceTree = "<group>"; };
 		79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedImageConfigComponents.swift; sourceTree = "<group>"; };
+		79EC4F302EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StabilityAIServicesDropdown.swift; sourceTree = "<group>"; };
 		79F2C4012EB0705A003F46E6 /* Bedrock.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Bedrock.icon; sourceTree = "<group>"; };
 		79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessWindowManager.swift; sourceTree = "<group>"; };
@@ -304,6 +306,7 @@
 		79610DCF2AD22A2F00993D09 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F302EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift */,
 				79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */,
 				79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */,
 				79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */,
@@ -531,6 +534,7 @@
 				79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */,
 				797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */,
 				797A12BF2C2EB53800494DD9 /* ChatModel.xcdatamodeld in Sources */,
+				79EC4F312EE1F1A300BF73D9 /* StabilityAIServicesDropdown.swift in Sources */,
 				79EC4F1D2EE1601300BF73D9 /* NovaCanvasModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
