@@ -150,10 +150,15 @@ struct LazyImageView: View {
         isGeneratedImage ? max(size, 400) : size
     }
     
-    // Use hash of first 100 chars as cache key (full base64 is too long)
+    // Use hash of image data as cache key
+    // For file references (img_xxx), use the reference directly
+    // For base64, use hash of full string to ensure uniqueness
     private var cacheKey: String {
-        let prefix = String(imageData.prefix(100))
-        return "\(prefix.hashValue)"
+        if imageData.hasPrefix("img_") {
+            return imageData  // File reference is already unique
+        }
+        // Use hash of full base64 string for uniqueness
+        return "\(imageData.hashValue)"
     }
     
     var body: some View {
@@ -220,21 +225,27 @@ struct LazyImageView: View {
             return
         }
         
-        // Load on background thread to avoid blocking UI
-        DispatchQueue.global(qos: .userInitiated).async {
+        // Load image - handle both file references and base64
+        let imageDataCopy = imageData
+        let cacheKeyCopy = cacheKey
+        
+        Task {
             var image: NSImage?
             
-            // Try loading from ImageStorageManager (handles both file refs and base64)
-            if let data = ImageStorageManager.shared.loadImage(imageData) {
-                image = NSImage(data: data)
-            } else if let data = Data(base64Encoded: imageData) {
-                // Fallback to direct base64 decode
+            // Check if it's a file reference (img_xxx format)
+            if imageDataCopy.hasPrefix("img_") {
+                // Load from file on main actor
+                if let data = await MainActor.run(body: { ImageStorageManager.shared.loadImage(imageDataCopy) }) {
+                    image = NSImage(data: data)
+                }
+            } else if let data = Data(base64Encoded: imageDataCopy) {
+                // Direct base64 decode
                 image = NSImage(data: data)
             }
             
-            DispatchQueue.main.async {
+            await MainActor.run {
                 if let img = image {
-                    ImageCache.shared.setImage(img, for: cacheKey)
+                    ImageCache.shared.setImage(img, for: cacheKeyCopy)
                     loadedImage = img
                 }
                 isLoading = false
@@ -1636,11 +1647,29 @@ class MessageViewModel: ObservableObject {
 // MARK: - NSImage Extension
 
 extension NSImage {
+    /// Initialize from base64 string or image file reference (img_xxx)
+    /// Note: For file references, this loads synchronously from disk
     convenience init?(base64Encoded: String) {
-        guard let imageData = Data(base64Encoded: base64Encoded) else {
-            return nil
+        // Check if it's a file reference (img_xxx format)
+        if base64Encoded.hasPrefix("img_") {
+            // Read defaultDirectory from UserDefaults (same key as @AppStorage in SettingManager)
+            // This avoids MainActor issues while staying in sync with SettingManager
+            let defaultDir = UserDefaults.standard.string(forKey: "defaultDirector")
+                ?? FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Amazon Bedrock Client").path
+            let baseDir = URL(fileURLWithPath: defaultDir)
+            let filePath = baseDir.appendingPathComponent("generated_images/\(base64Encoded).png")
+            guard let imageData = try? Data(contentsOf: filePath) else {
+                return nil
+            }
+            self.init(data: imageData)
+        } else {
+            // Direct base64 decode
+            guard let imageData = Data(base64Encoded: base64Encoded) else {
+                return nil
+            }
+            self.init(data: imageData)
         }
-        self.init(data: imageData)
     }
 }
 

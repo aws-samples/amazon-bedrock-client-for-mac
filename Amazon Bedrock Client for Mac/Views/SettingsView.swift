@@ -15,14 +15,13 @@ struct SettingsView: View {
     private var logger = Logger(label: "SettingsView")
     
     enum SettingsTab: String, CaseIterable, Identifiable {
-        case general, templates, developer
+        case general, developer
         
         var id: String { self.rawValue }
         
         var title: String {
             switch self {
             case .general: return "General"
-            case .templates: return "Templates"
             case .developer: return "Developer"
             }
         }
@@ -30,7 +29,6 @@ struct SettingsView: View {
         var imageName: String {
             switch self {
             case .general: return "gearshape"
-            case .templates: return "text.bubble"
             case .developer: return "terminal"
             }
         }
@@ -76,8 +74,6 @@ struct SettingsView: View {
                 switch selectedTab {
                 case .general:
                     GeneralSettingsView(organizedChatModels: organizedChatModels)
-                case .templates:
-                    PromptTemplateSettingsView()
                 case .developer:
                     DeveloperSettingsView()
                 }
@@ -1379,34 +1375,60 @@ struct FontSizeControl: View {
 
 struct SystemPromptSection: View {
     @StateObject private var templateManager = PromptTemplateManager.shared
-    @ObservedObject private var settingsManager = SettingManager.shared
     @State private var showingAddSheet = false
-    @State private var editingTemplate: SystemPromptTemplate?
+    @State private var showingRenameSheet = false
+    @State private var showingDeleteAlert = false
+    @State private var newName = ""
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("System Prompt")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                
-                Spacer()
-                
-                // Template selector
-                Picker("", selection: Binding(
-                    get: { templateManager.selectedTemplateId ?? UUID() },
-                    set: { newId in
-                        if let template = templateManager.templates.first(where: { $0.id == newId }) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Menu-style template selector with management options
+            LabeledContent("System Prompt") {
+                Menu {
+                    // Template list
+                    ForEach(templateManager.templates) { template in
+                        Button {
                             templateManager.selectTemplate(template)
+                        } label: {
+                            HStack {
+                                Text(template.name)
+                                if templateManager.selectedTemplateId == template.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                     }
-                )) {
-                    ForEach(templateManager.templates) { template in
-                        Text(template.name).tag(template.id)
+                    
+                    Divider()
+                    
+                    // Management options
+                    Button {
+                        newName = ""
+                        showingAddSheet = true
+                    } label: {
+                        Label("Add New Preset...", systemImage: "plus")
                     }
+                    
+                    if templateManager.selectedTemplate != nil {
+                        Button {
+                            newName = templateManager.selectedTemplate?.name ?? ""
+                            showingRenameSheet = true
+                        } label: {
+                            Label("Rename...", systemImage: "pencil")
+                        }
+                        
+                        if templateManager.templates.count > 1 {
+                            Button(role: .destructive) {
+                                showingDeleteAlert = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                } label: {
+                    Text(templateManager.selectedTemplate?.name ?? "Default")
+                        .font(.system(size: 13))
                 }
-                .pickerStyle(.menu)
-                .frame(width: 150)
             }
             
             // Editable content for selected template
@@ -1424,252 +1446,60 @@ struct SystemPromptSection: View {
             )
             .frame(height: 100)
         }
-    }
-}
-
-// MARK: - Prompt Template Settings View (Templates Tab)
-
-struct PromptTemplateSettingsView: View {
-    @StateObject private var templateManager = PromptTemplateManager.shared
-    @State private var showingAddSheet: Bool = false
-    @State private var editingTemplate: SystemPromptTemplate?
-    @State private var showingImportAlert: Bool = false
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                Text("System Prompt Templates")
-                    .font(.headline)
-                
-                Spacer()
-                
-                Button {
-                    showingImportAlert = true
-                } label: {
-                    Label("Import Examples", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                
-                Button {
-                    showingAddSheet = true
-                } label: {
-                    Label("Add", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-            
-            Divider()
-            
-            // Template list
-            if templateManager.templates.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "text.bubble")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    Text("No templates yet")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Button("Add Your First Template") {
-                        showingAddSheet = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    ForEach(templateManager.templates) { template in
-                        SystemPromptTemplateRow(
-                            template: template,
-                            isSelected: templateManager.selectedTemplateId == template.id,
-                            onSelect: {
-                                templateManager.selectTemplate(template)
-                            },
-                            onEdit: {
-                                editingTemplate = template
-                            },
-                            onDelete: {
-                                templateManager.deleteTemplate(template)
-                            }
-                        )
-                    }
-                    .onDelete { offsets in
-                        templateManager.deleteTemplate(at: offsets)
-                    }
-                }
-                .listStyle(.inset)
-            }
-            
-            Divider()
-            
-            // Footer
-            HStack {
-                Spacer()
-                
-                Text("\(templateManager.templates.count) templates")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $showingAddSheet) {
-            SystemPromptFormView(isPresented: $showingAddSheet)
-        }
-        .sheet(item: $editingTemplate) { template in
-            SystemPromptFormView(
-                isPresented: Binding(
-                    get: { editingTemplate != nil },
-                    set: { if !$0 { editingTemplate = nil } }
-                ),
-                editingTemplate: template
+            PromptNameSheet(
+                isPresented: $showingAddSheet,
+                title: "New System Prompt",
+                name: $newName,
+                buttonTitle: "Create",
+                onSave: {
+                    templateManager.addTemplate(name: newName, content: "")
+                }
             )
         }
-        .alert("Import Example Templates?", isPresented: $showingImportAlert) {
+        .sheet(isPresented: $showingRenameSheet) {
+            PromptNameSheet(
+                isPresented: $showingRenameSheet,
+                title: "Rename Preset",
+                name: $newName,
+                buttonTitle: "Save",
+                onSave: {
+                    if var template = templateManager.selectedTemplate {
+                        template.name = newName
+                        templateManager.updateTemplate(template)
+                    }
+                }
+            )
+        }
+        .alert("Delete Preset?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Import") {
-                templateManager.importExampleTemplates()
+            Button("Delete", role: .destructive) {
+                if let template = templateManager.selectedTemplate {
+                    templateManager.deleteTemplate(template)
+                }
             }
         } message: {
-            Text("This will add example system prompt templates to your list.")
+            Text("Are you sure you want to delete \"\(templateManager.selectedTemplate?.name ?? "")\"?")
         }
     }
 }
 
-// MARK: - System Prompt Template Row
-struct SystemPromptTemplateRow: View {
-    let template: SystemPromptTemplate
-    let isSelected: Bool
-    let onSelect: () -> Void
-    let onEdit: () -> Void
-    let onDelete: () -> Void
-    
-    @State private var isHovering = false
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Selection indicator
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .foregroundColor(isSelected ? .blue : .secondary)
-                .font(.system(size: 18))
-            
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(template.name)
-                    .font(.headline)
-                    .foregroundColor(isSelected ? .primary : .secondary)
-                
-                Text(template.content.isEmpty ? "(Empty)" : template.content)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-            
-            Spacer()
-            
-            // Actions
-            if isHovering {
-                HStack(spacing: 8) {
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .foregroundColor(.blue)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .transition(.opacity)
-            }
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
-        }
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovering = hovering
-            }
-        }
-    }
-}
-
-// MARK: - System Prompt Form View
-struct SystemPromptFormView: View {
+// MARK: - Prompt Name Sheet (for Add/Rename)
+struct PromptNameSheet: View {
     @Binding var isPresented: Bool
-    var editingTemplate: SystemPromptTemplate?
-    
-    @StateObject private var templateManager = PromptTemplateManager.shared
-    
-    @State private var name: String = ""
-    @State private var content: String = ""
+    let title: String
+    @Binding var name: String
+    let buttonTitle: String
+    let onSave: () -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text(editingTemplate == nil ? "New System Prompt" : "Edit System Prompt")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                Spacer()
-                Button {
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
-                        .imageScale(.large)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
+        VStack(spacing: 16) {
+            Text(title)
+                .font(.headline)
             
-            Divider()
+            TextField("Name", text: $name)
+                .textFieldStyle(.roundedBorder)
             
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Name
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Name")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        TextField("e.g., Code Expert", text: $name)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    
-                    // Content
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("System Prompt")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        TextEditor(text: $content)
-                            .font(.body)
-                            .frame(minHeight: 200)
-                            .padding(8)
-                            .background(Color(nsColor: .textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-                        Text("This prompt will be sent to the model at the start of every conversation.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding()
-            }
-            
-            Divider()
-            
-            // Footer
             HStack {
                 Button("Cancel") {
                     isPresented = false
@@ -1678,33 +1508,16 @@ struct SystemPromptFormView: View {
                 
                 Spacer()
                 
-                Button(editingTemplate == nil ? "Add" : "Save") {
-                    saveTemplate()
+                Button(buttonTitle) {
+                    onSave()
+                    isPresented = false
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(name.isEmpty)
                 .keyboardShortcut(.defaultAction)
             }
-            .padding()
         }
-        .frame(width: 450, height: 400)
-        .onAppear {
-            if let template = editingTemplate {
-                name = template.name
-                content = template.content
-            }
-        }
-    }
-    
-    private func saveTemplate() {
-        if let existing = editingTemplate {
-            var updated = existing
-            updated.name = name
-            updated.content = content
-            templateManager.updateTemplate(updated)
-        } else {
-            templateManager.addTemplate(name: name, content: content)
-        }
-        isPresented = false
+        .padding()
+        .frame(width: 280)
     }
 }

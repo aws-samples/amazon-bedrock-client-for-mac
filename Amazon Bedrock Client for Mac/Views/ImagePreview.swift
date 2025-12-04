@@ -48,13 +48,18 @@ struct ImagePreviewModal: View {
             // Main content
             VStack(spacing: 0) {
                 headerBar
+                    .zIndex(1)  // Keep toolbar above image
+                
                 imageContent
+                    .zIndex(0)  // Image behind toolbar
                 
                 if isMaskingMode {
                     maskingToolbar
+                        .zIndex(1)
                 }
                 
                 footerBar
+                    .zIndex(1)  // Keep footer above image
             }
             .background(containerBackground)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
@@ -185,37 +190,36 @@ struct ImagePreviewModal: View {
     // MARK: - Image Content
     @ViewBuilder
     private var imageContent: some View {
-        ZStack {
-            // Background with checkerboard for transparency
-            Color(colorScheme == .dark ? NSColor.textBackgroundColor : .white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            
-            CheckerboardPattern(colorScheme: colorScheme)
-                .opacity(0.1)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            
-            if isMaskingMode {
-                MaskingCanvasView(
-                    image: image,
-                    maskPaths: $maskPaths,
-                    currentPath: $currentPath,
-                    brushSize: brushSize,
-                    maskType: maskType,
-                    scale: scale,
-                    offset: offset
-                )
-            } else {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(dragGesture)
-                    .gesture(magnificationGesture)
-                    .onTapGesture(count: 2) { toggleZoom() }
+        GeometryReader { geometry in
+            ZStack {
+                // Checkerboard fills entire area
+                CheckerboardPattern(colorScheme: colorScheme)
+                    .opacity(colorScheme == .dark ? 0.15 : 0.08)
+                
+                if isMaskingMode {
+                    MaskingCanvasView(
+                        image: image,
+                        maskPaths: $maskPaths,
+                        currentPath: $currentPath,
+                        brushSize: brushSize,
+                        maskType: maskType,
+                        scale: scale,
+                        offset: offset
+                    )
+                } else {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(dragGesture)
+                        .gesture(magnificationGesture)
+                        .onTapGesture(count: 2) { toggleZoom() }
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .padding(10)
+        .clipped()
     }
     
     // MARK: - Masking Toolbar

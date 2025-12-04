@@ -434,12 +434,15 @@ class ChatViewModel: ObservableObject {
         let userMessage = createUserMessage()
         addMessage(userMessage)
         
+        // For image generation models, get images BEFORE clearing
+        let attachedImages = await getAttachedImagesBase64()
+        
         userInput = ""
         sharedMediaDataSource.clear()
         
         do {
             if backendModel.backend.isImageGenerationModel(chatModel.id) {
-                try await handleImageGenerationModel(userMessage)
+                try await handleImageGenerationModel(userMessage, attachedImages: attachedImages)
             } else if backendModel.backend.isEmbeddingModel(chatModel.id) {
                 try await handleEmbeddingModel(userMessage)
             } else {
@@ -1854,13 +1857,13 @@ class ChatViewModel: ObservableObject {
     }
     
     /// Handles image generation models that don't use converseStream
-    private func handleImageGenerationModel(_ userMessage: MessageData) async throws {
+    private func handleImageGenerationModel(_ userMessage: MessageData, attachedImages: [String] = []) async throws {
         let modelId = chatModel.id
         
         if modelId.contains("titan-image") {
             try await invokeTitanImageModel(prompt: userMessage.text)
         } else if modelId.contains("nova-canvas") {
-            try await invokeNovaCanvasModel(prompt: userMessage.text)
+            try await invokeNovaCanvasModel(prompt: userMessage.text, inputImages: attachedImages)
         } else if modelId.contains("stable") || modelId.contains("sd3") {
             try await invokeStableDiffusionModel(prompt: userMessage.text)
         } else {
@@ -1943,17 +1946,24 @@ class ChatViewModel: ObservableObject {
     
     /// Invokes Nova Canvas image model with full feature support
     /// Supports: TEXT_IMAGE, COLOR_GUIDED_GENERATION, IMAGE_VARIATION, INPAINTING, OUTPAINTING, BACKGROUND_REMOVAL
-    private func invokeNovaCanvasModel(prompt: String) async throws {
+    private func invokeNovaCanvasModel(prompt: String, inputImages: [String] = []) async throws {
         let backend = await MainActor.run { backendModel.backend }
         
-        // Parse the prompt to detect task type and extract parameters
-        let (taskType, cleanPrompt, parameters) = NovaCanvasService.parsePrompt(prompt)
+        // Get saved config from settings
+        let savedConfig = settingManager.novaCanvasConfig
+        let configuredTaskType = NovaCanvasTaskType(rawValue: savedConfig.taskType) ?? .textToImage
+        
+        // Parse the prompt to detect task type override and extract parameters
+        let (parsedTaskType, cleanPrompt, parameters) = NovaCanvasService.parsePrompt(prompt)
+        
+        // Use parsed task type if prompt contains explicit commands, otherwise use configured
+        let taskType = parsedTaskType != .textToImage ? parsedTaskType : configuredTaskType
         
         // Extract negative prompt if present (format: "prompt --no negative terms")
         let (finalPrompt, negativePrompt) = NovaCanvasService.extractNegativePrompt(from: cleanPrompt)
         
-        // Get any attached images from the current message context
-        let inputImages = await getAttachedImagesBase64()
+        // Use saved negative prompt if user didn't specify one
+        let effectiveNegativePrompt = negativePrompt ?? (savedConfig.negativePrompt.isEmpty ? nil : savedConfig.negativePrompt)
         
         // Validate requirements for tasks that need input images
         if taskType.requiresInputImage && inputImages.isEmpty {
@@ -1967,25 +1977,43 @@ class ChatViewModel: ObservableObject {
         // Extract colors if present in parameters
         let colors = parameters["colors"] as? [String] ?? []
         
-        // Build the appropriate request based on task type
+        // Get mask prompt from user input or saved config
+        let userMaskPrompt = extractMaskPrompt(from: prompt)
+        let effectiveMaskPrompt = userMaskPrompt ?? (savedConfig.maskPrompt.isEmpty ? nil : savedConfig.maskPrompt)
+        
+        // Build config from saved settings
         let config = NovaCanvasImageGenerationConfig(
-            width: 1024,
-            height: 1024,
-            quality: "standard",
-            cfgScale: 8.0,
-            seed: 0,
-            numberOfImages: 1
+            width: savedConfig.width,
+            height: savedConfig.height,
+            quality: savedConfig.quality,
+            cfgScale: savedConfig.cfgScale,
+            seed: savedConfig.seed,  // 0 = random, otherwise fixed seed
+            numberOfImages: savedConfig.numberOfImages
         )
         
-        let request = NovaCanvasService.buildRequest(
-            taskType: taskType,
-            prompt: finalPrompt,
-            negativePrompt: negativePrompt,
-            inputImages: inputImages,
-            maskPrompt: extractMaskPrompt(from: prompt),
-            colors: colors,
-            config: config
-        )
+        // Build request based on task type
+        var request: NovaCanvasRequest
+        if taskType == .textToImage {
+            // Use style for text-to-image
+            let style = NovaCanvasStyle(rawValue: savedConfig.style)
+            request = .textToImage(
+                prompt: finalPrompt,
+                negativePrompt: effectiveNegativePrompt,
+                style: style,
+                conditionImage: inputImages.first,
+                config: config
+            )
+        } else {
+            request = NovaCanvasService.buildRequest(
+                taskType: taskType,
+                prompt: finalPrompt,
+                negativePrompt: effectiveNegativePrompt,
+                inputImages: inputImages,
+                maskPrompt: effectiveMaskPrompt,
+                colors: colors,
+                config: config
+            )
+        }
         
         // Invoke Nova Canvas
         let data = try await backend.invokeNovaCanvas(request: request)
@@ -2006,9 +2034,19 @@ class ChatViewModel: ObservableObject {
     
     /// Get attached images from current context as base64 strings
     private func getAttachedImagesBase64() async -> [String] {
-        // This should be implemented based on how images are attached in the chat
-        // For now, return empty array - images should be passed through message attachments
-        return []
+        var base64Images: [String] = []
+        
+        for (index, image) in sharedMediaDataSource.images.enumerated() {
+            let fileExtension = index < sharedMediaDataSource.imageExtensions.count ?
+                sharedMediaDataSource.imageExtensions[index] : "jpg"
+            
+            let result = base64EncodeImage(image, withExtension: fileExtension)
+            if let base64 = result.base64String {
+                base64Images.append(base64)
+            }
+        }
+        
+        return base64Images
     }
     
     /// Invokes Stability AI image models (Stable Image Ultra, SD3 Large, Stable Image Core)

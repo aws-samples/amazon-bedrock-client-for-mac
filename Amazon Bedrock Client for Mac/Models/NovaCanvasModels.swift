@@ -108,9 +108,37 @@ struct NovaCanvasImageGenerationConfig: Codable {
 
 // MARK: - Text to Image Parameters
 
+/// Available visual styles for text-to-image generation
+enum NovaCanvasStyle: String, Codable, CaseIterable {
+    case none = ""
+    case animated3D = "3D_ANIMATED_FAMILY_FILM"
+    case designSketch = "DESIGN_SKETCH"
+    case flatVector = "FLAT_VECTOR_ILLUSTRATION"
+    case graphicNovel = "GRAPHIC_NOVEL_ILLUSTRATION"
+    case maximalism = "MAXIMALISM"
+    case midcenturyRetro = "MIDCENTURY_RETRO"
+    case photorealism = "PHOTOREALISM"
+    case softDigitalPainting = "SOFT_DIGITAL_PAINTING"
+    
+    var displayName: String {
+        switch self {
+        case .none: return "None (Custom)"
+        case .animated3D: return "3D Animated"
+        case .designSketch: return "Design Sketch"
+        case .flatVector: return "Flat Vector"
+        case .graphicNovel: return "Graphic Novel"
+        case .maximalism: return "Maximalism"
+        case .midcenturyRetro: return "Midcentury Retro"
+        case .photorealism: return "Photorealism"
+        case .softDigitalPainting: return "Soft Digital Painting"
+        }
+    }
+}
+
 struct NovaCanvasTextToImageParams: Codable {
     var text: String
     var negativeText: String?
+    var style: String?           // Visual style preset
     var conditionImage: String?  // Base64 encoded image for conditioning
     var controlMode: String?     // CANNY_EDGE or SEGMENTATION
     var controlStrength: Float?  // 0.0 to 1.0
@@ -118,6 +146,7 @@ struct NovaCanvasTextToImageParams: Codable {
     init(
         text: String,
         negativeText: String? = nil,
+        style: NovaCanvasStyle? = nil,
         conditionImage: String? = nil,
         controlMode: NovaCanvasControlMode? = nil,
         controlStrength: Float? = nil
@@ -125,6 +154,10 @@ struct NovaCanvasTextToImageParams: Codable {
         // Nova Canvas has 1024 character limit for prompts
         self.text = String(text.prefix(1024))
         self.negativeText = negativeText
+        // Only set style if not .none
+        if let s = style, s != .none {
+            self.style = s.rawValue
+        }
         self.conditionImage = conditionImage
         self.controlMode = controlMode?.rawValue
         if let strength = controlStrength {
@@ -263,6 +296,7 @@ struct NovaCanvasRequest: Codable {
     static func textToImage(
         prompt: String,
         negativePrompt: String? = nil,
+        style: NovaCanvasStyle? = nil,
         conditionImage: String? = nil,
         controlMode: NovaCanvasControlMode? = nil,
         controlStrength: Float? = nil,
@@ -273,6 +307,7 @@ struct NovaCanvasRequest: Codable {
             textToImageParams: NovaCanvasTextToImageParams(
                 text: prompt,
                 negativeText: negativePrompt,
+                style: style,
                 conditionImage: conditionImage,
                 controlMode: controlMode,
                 controlStrength: controlStrength
@@ -389,6 +424,9 @@ struct NovaCanvasConfig: Codable, Equatable {
     var negativePrompt: String
     var similarityStrength: Float
     var outpaintingMode: String
+    var style: String  // Visual style preset
+    var maskPrompt: String  // Natural language mask description for inpainting/outpainting
+    var seed: Int  // 0 = random, otherwise fixed seed for reproducibility
     
     static var defaultConfig: NovaCanvasConfig {
         NovaCanvasConfig(
@@ -400,7 +438,10 @@ struct NovaCanvasConfig: Codable, Equatable {
             numberOfImages: 1,
             negativePrompt: "",
             similarityStrength: 0.7,
-            outpaintingMode: NovaCanvasOutpaintingMode.defaultMode.rawValue
+            outpaintingMode: NovaCanvasOutpaintingMode.defaultMode.rawValue,
+            style: "",
+            maskPrompt: "",
+            seed: 0
         )
     }
     

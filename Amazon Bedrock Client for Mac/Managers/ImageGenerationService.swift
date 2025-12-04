@@ -51,16 +51,50 @@ class ImageGenerationService {
     // MARK: - Titan Image
     
     private func invokeTitanImage(modelId: String, prompt: String) async throws -> Data {
-        let params = TitanImageModelParameters(inputText: prompt)
-        let encodedParams = try JSONEncoder().encode(params)
+        // Use saved config from SettingManager
+        let config = await MainActor.run { SettingManager.shared.titanImageConfig }
+        let genConfig = config.toImageGenerationConfig()
         
-        let request = InvokeModelInput(
+        let request = TitanImageRequest.textToImage(
+            prompt: prompt,
+            negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+            config: genConfig
+        )
+        
+        let encodedParams = try JSONEncoder().encode(request)
+        
+        let invokeRequest = InvokeModelInput(
             body: encodedParams,
             contentType: "application/json",
             modelId: modelId
         )
         
-        let response = try await bedrockRuntimeClient.invokeModel(input: request)
+        let response = try await bedrockRuntimeClient.invokeModel(input: invokeRequest)
+        guard let data = response.body else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let images = json["images"] as? [String],
+              let base64Image = images.first,
+              let imageData = Data(base64Encoded: base64Image) else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        return imageData
+    }
+    
+    /// Invoke Titan Image with full request (for advanced tasks)
+    func invokeTitanImage(modelId: String, request: TitanImageRequest) async throws -> Data {
+        let encodedParams = try JSONEncoder().encode(request)
+        
+        let invokeRequest = InvokeModelInput(
+            body: encodedParams,
+            contentType: "application/json",
+            modelId: modelId
+        )
+        
+        let response = try await bedrockRuntimeClient.invokeModel(input: invokeRequest)
         guard let data = response.body else {
             throw ImageGenerationError.invalidResponse
         }
@@ -138,6 +172,9 @@ class ImageGenerationService {
     // MARK: - Stability AI
     
     private func invokeStabilityAI(modelId: String, prompt: String) async throws -> Data {
+        // Use saved config from SettingManager
+        let config = await MainActor.run { SettingManager.shared.stabilityAIConfig }
+        
         let isSD3 = modelId.contains("sd3")
         let isCore = modelId.contains("stable-image-core")
         let isUltra = modelId.contains("stable-image-ultra") || modelId.contains("sd3-ultra")
@@ -145,18 +182,23 @@ class ImageGenerationService {
         let promptData: [String: Any]
         
         if isSD3 || isCore || isUltra {
-            // SD3, Core, Ultra formatting
-            promptData = ["prompt": prompt]
+            // SD3, Core, Ultra formatting - use modern request builder
+            promptData = StabilityAIRequestBuilder.buildModernRequest(
+                prompt: prompt,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                aspectRatio: config.aspectRatio,
+                seed: config.seed
+            )
         } else {
-            // Standard Stable Diffusion formatting
-            promptData = [
-                "text_prompts": [["text": prompt]],
-                "cfg_scale": 10,
-                "seed": 0,
-                "steps": 50,
-                "samples": 1,
-                "style_preset": "photographic"
-            ]
+            // Standard Stable Diffusion formatting - use legacy request builder
+            promptData = StabilityAIRequestBuilder.buildLegacyRequest(
+                prompt: prompt,
+                negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+                cfgScale: config.cfgScale,
+                seed: config.seed,
+                steps: config.steps,
+                stylePreset: config.stylePreset.isEmpty ? nil : config.stylePreset
+            )
         }
         
         let jsonData = try JSONSerialization.data(withJSONObject: promptData)
@@ -177,6 +219,12 @@ class ImageGenerationService {
             throw ImageGenerationError.invalidResponse
         }
         
+        // Check for content filter
+        if let finishReasons = json["finish_reasons"] as? [String?],
+           let reason = finishReasons.first, let filterReason = reason {
+            throw ImageGenerationError.contentFiltered(filterReason)
+        }
+        
         // New format (SD3, Ultra, Core)
         if let images = json["images"] as? [String],
            let base64Image = images.first,
@@ -193,6 +241,42 @@ class ImageGenerationService {
         }
         
         throw ImageGenerationError.invalidResponse
+    }
+    
+    /// Invoke Stability AI with image-to-image
+    func invokeStabilityAIImageToImage(modelId: String, prompt: String, inputImage: String) async throws -> Data {
+        let config = await MainActor.run { SettingManager.shared.stabilityAIConfig }
+        
+        let promptData = StabilityAIRequestBuilder.buildModernRequest(
+            prompt: prompt,
+            negativePrompt: config.negativePrompt.isEmpty ? nil : config.negativePrompt,
+            aspectRatio: config.aspectRatio,
+            seed: config.seed,
+            image: inputImage,
+            strength: config.strength
+        )
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: promptData)
+        
+        let request = InvokeModelInput(
+            body: jsonData,
+            contentType: "application/json",
+            modelId: modelId
+        )
+        
+        let response = try await bedrockRuntimeClient.invokeModel(input: request)
+        guard let data = response.body else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let images = json["images"] as? [String],
+              let base64Image = images.first,
+              let imageData = Data(base64Encoded: base64Image) else {
+            throw ImageGenerationError.invalidResponse
+        }
+        
+        return imageData
     }
 }
 

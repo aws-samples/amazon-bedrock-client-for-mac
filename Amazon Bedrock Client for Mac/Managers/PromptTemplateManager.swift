@@ -101,6 +101,8 @@ class PromptTemplateManager: ObservableObject {
     func addTemplate(name: String, content: String) {
         let template = SystemPromptTemplate(name: name, content: content)
         addTemplate(template)
+        // Auto-select the newly created template
+        selectTemplate(template)
     }
     
     func updateTemplate(_ template: SystemPromptTemplate) {

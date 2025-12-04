@@ -282,12 +282,18 @@ struct MainView: View {
             .frame(minWidth: 200, maxWidth: 420)
         }
 
-        // Right side - Inference config dropdown (or Nova Canvas config for image models)
+        // Right side - Inference config dropdown (or image model config for image models)
         ToolbarItem(placement: .primaryAction) {
             if case .chat(let selectedModel) = menuSelection {
                 if selectedModel.id.contains("nova-canvas") {
                     // Show Nova Canvas specific config for image generation
                     NovaCanvasConfigDropdown()
+                } else if selectedModel.id.contains("titan-image") {
+                    // Show Titan Image Generator config
+                    TitanImageConfigDropdown()
+                } else if selectedModel.id.contains("stability") || selectedModel.id.contains("sd3") {
+                    // Show Stability AI config
+                    StabilityAIConfigDropdown()
                 } else {
                     // Show standard inference config for text models
                     InferenceConfigDropdown(

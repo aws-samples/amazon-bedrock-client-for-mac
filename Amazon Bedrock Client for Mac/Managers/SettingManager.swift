@@ -101,6 +101,20 @@ class SettingManager: ObservableObject {
             saveNovaCanvasConfig()
         }
     }
+    
+    // Titan Image configuration
+    @Published var titanImageConfig: TitanImageConfig = TitanImageConfig.defaultConfig {
+        didSet {
+            saveTitanImageConfig()
+        }
+    }
+    
+    // Stability AI configuration
+    @Published var stabilityAIConfig: StabilityAIConfig = StabilityAIConfig.defaultConfig {
+        didSet {
+            saveStabilityAIConfig()
+        }
+    }
 
     private var cancellables = Set<AnyCancellable>()
     
@@ -161,6 +175,22 @@ class SettingManager: ObservableObject {
             self.novaCanvasConfig = decoded
         } else {
             self.novaCanvasConfig = NovaCanvasConfig.defaultConfig
+        }
+        
+        // Load Titan Image config
+        if let data = UserDefaults.standard.data(forKey: "titanImageConfig"),
+           let decoded = try? JSONDecoder().decode(TitanImageConfig.self, from: data) {
+            self.titanImageConfig = decoded
+        } else {
+            self.titanImageConfig = TitanImageConfig.defaultConfig
+        }
+        
+        // Load Stability AI config
+        if let data = UserDefaults.standard.data(forKey: "stabilityAIConfig"),
+           let decoded = try? JSONDecoder().decode(StabilityAIConfig.self, from: data) {
+            self.stabilityAIConfig = decoded
+        } else {
+            self.stabilityAIConfig = StabilityAIConfig.defaultConfig
         }
         
         setupFileMonitoring()
@@ -428,6 +458,20 @@ class SettingManager: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: "novaCanvasConfig")
         }
         logger.debug("Saved Nova Canvas config")
+    }
+    
+    private func saveTitanImageConfig() {
+        if let encoded = try? JSONEncoder().encode(titanImageConfig) {
+            UserDefaults.standard.set(encoded, forKey: "titanImageConfig")
+        }
+        logger.debug("Saved Titan Image config")
+    }
+    
+    private func saveStabilityAIConfig() {
+        if let encoded = try? JSONEncoder().encode(stabilityAIConfig) {
+            UserDefaults.standard.set(encoded, forKey: "stabilityAIConfig")
+        }
+        logger.debug("Saved Stability AI config")
     }
 
     deinit {

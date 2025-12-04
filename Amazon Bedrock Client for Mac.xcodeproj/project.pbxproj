@@ -55,6 +55,11 @@
 		79EC4F212EE165E500BF73D9 /* ImageGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */; };
 		79EC4F232EE17E6500BF73D9 /* PromptTemplateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F222EE17E6500BF73D9 /* PromptTemplateManager.swift */; };
 		79EC4F252EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F242EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift */; };
+		79EC4F282EE1996000BF73D9 /* StabilityAIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F262EE1996000BF73D9 /* StabilityAIModels.swift */; };
+		79EC4F292EE1996000BF73D9 /* TitanImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F272EE1996000BF73D9 /* TitanImageModels.swift */; };
+		79EC4F2C2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */; };
+		79EC4F2D2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */; };
+		79EC4F2F2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */; };
 		79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 79F2C4012EB0705A003F46E6 /* Bedrock.icon */; };
 		79F53C852E7B08AF00F129F4 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */; };
 		79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */; };
@@ -133,6 +138,11 @@
 		79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenerationService.swift; sourceTree = "<group>"; };
 		79EC4F222EE17E6500BF73D9 /* PromptTemplateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptTemplateManager.swift; sourceTree = "<group>"; };
 		79EC4F242EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaCanvasConfigDropdown.swift; sourceTree = "<group>"; };
+		79EC4F262EE1996000BF73D9 /* StabilityAIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StabilityAIModels.swift; sourceTree = "<group>"; };
+		79EC4F272EE1996000BF73D9 /* TitanImageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitanImageModels.swift; sourceTree = "<group>"; };
+		79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StabilityAIConfigDropdown.swift; sourceTree = "<group>"; };
+		79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitanImageConfigDropdown.swift; sourceTree = "<group>"; };
+		79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedImageConfigComponents.swift; sourceTree = "<group>"; };
 		79F2C4012EB0705A003F46E6 /* Bedrock.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Bedrock.icon; sourceTree = "<group>"; };
 		79F53C842E7B08AA00F129F4 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		79F53C862E7B08BB00F129F4 /* QuickAccessWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessWindowManager.swift; sourceTree = "<group>"; };
@@ -271,6 +281,8 @@
 		79610DC92AD22A2F00993D09 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F262EE1996000BF73D9 /* StabilityAIModels.swift */,
+				79EC4F272EE1996000BF73D9 /* TitanImageModels.swift */,
 				79EC4F1C2EE1601300BF73D9 /* NovaCanvasModels.swift */,
 				7954F8422AD247CC008B03D3 /* AWSRegion.swift */,
 				79610DCA2AD22A2F00993D09 /* ChatModel.swift */,
@@ -292,6 +304,9 @@
 		79610DCF2AD22A2F00993D09 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				79EC4F2E2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift */,
+				79EC4F2A2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift */,
+				79EC4F2B2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift */,
 				79EC4F242EE17E7400BF73D9 /* NovaCanvasConfigDropdown.swift */,
 				79610DEC2AD230A200993D09 /* ChatView.swift */,
 				79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */,
@@ -471,6 +486,8 @@
 				79AF97552D9E332A00313A4C /* NSImage.swift in Sources */,
 				79EC4F1F2EE1659500BF73D9 /* ImageStorageManager.swift in Sources */,
 				79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */,
+				79EC4F282EE1996000BF73D9 /* StabilityAIModels.swift in Sources */,
+				79EC4F292EE1996000BF73D9 /* TitanImageModels.swift in Sources */,
 				790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */,
 				79FF2B332D925EDB0075249D /* MCPManager.swift in Sources */,
 				79FF2B372D925F320075249D /* MCPOAuthManager.swift in Sources */,
@@ -485,6 +502,8 @@
 				79610DD72AD22A2F00993D09 /* SidebarSelection.swift in Sources */,
 				7954F8472AD249A7008B03D3 /* SettingManager.swift in Sources */,
 				79F53C872E7B08BE00F129F4 /* QuickAccessWindowManager.swift in Sources */,
+				79EC4F2C2EE1998A00BF73D9 /* StabilityAIConfigDropdown.swift in Sources */,
+				79EC4F2D2EE1998A00BF73D9 /* TitanImageConfigDropdown.swift in Sources */,
 				7954F8432AD247CC008B03D3 /* AWSRegion.swift in Sources */,
 				79F53C892E7B0B3800F129F4 /* QuickAccessView.swift in Sources */,
 				79610DED2AD230A200993D09 /* ChatView.swift in Sources */,
@@ -500,6 +519,7 @@
 				79FDE25B2DFBF456003960BC /* InferenceConfigDropdown.swift in Sources */,
 				79C4F01E2C30362100C488C2 /* AppDelegate.swift in Sources */,
 				793FE0B82DE56292004236B9 /* ModelInferenceConfig.swift in Sources */,
+				79EC4F2F2EE19B8B00BF73D9 /* SharedImageConfigComponents.swift in Sources */,
 				79610DE02AD22A2F00993D09 /* FirstResponderTextField.swift in Sources */,
 				EDAE4CC62B3D943E99083227 /* SearchEngine.swift in Sources */,
 				79C7F5ED2AD282EE008FBB35 /* EnvironmentExtensions.swift in Sources */,
