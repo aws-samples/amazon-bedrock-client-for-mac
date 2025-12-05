@@ -643,19 +643,6 @@ struct MessageView: View {
                 )
             }
             
-            // Image preview modal
-            EmptyView()
-                .sheet(isPresented: $viewModel.isShowingImageModal) {
-                    if let data = viewModel.selectedImageData,
-                       let imageToShow = NSImage(base64Encoded: data) {
-                        ImagePreviewModal(
-                            image: imageToShow,
-                            filename: "image-\(Date().timeIntervalSince1970).png",
-                            isPresented: $viewModel.isShowingImageModal
-                        )
-                    }
-                }
-            
             // Tool use information display
             if let toolUse = message.toolUse {
                 ExpandableMarkdownItem(
@@ -676,6 +663,16 @@ struct MessageView: View {
                     searchRanges: searchResult?.ranges ?? []
                 )
                 .padding(.vertical, 2)
+            }
+        }
+        .sheet(isPresented: $viewModel.isShowingImageModal) {
+            if let data = viewModel.selectedImageData,
+               let imageToShow = NSImage(base64Encoded: data) {
+                ImagePreviewModal(
+                    image: imageToShow,
+                    filename: "image-\(Date().timeIntervalSince1970).png",
+                    isPresented: $viewModel.isShowingImageModal
+                )
             }
         }
     }
