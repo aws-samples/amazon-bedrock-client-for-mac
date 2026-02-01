@@ -87,6 +87,61 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
     }
 }
 
+// MARK: - Tool name namespacing (Bedrock requires unique names across MCP servers)
+
+/// Delimiter between server namespace and tool name in Bedrock tool names.
+private let toolNamespaceDelimiter = "__"
+
+/// Sanitizes a server name to a Bedrock-safe namespace: lowercase, non-alphanumeric → underscore, collapsed.
+/// Multiple different server names can map to the same value (e.g. "my-server" and "my_server"); use
+/// assignUniqueNamespaces(serverNames:) to get a collision-free mapping.
+func sanitizeServerNameToNamespace(_ serverName: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+    let folded = serverName.lowercased()
+        .unicodeScalars
+        .map { allowed.contains($0) ? String($0) : "_" }
+        .joined()
+    return folded
+        .split(separator: "_", omittingEmptySubsequences: true)
+        .joined(separator: "_")
+}
+
+/// Assigns a unique Bedrock-safe namespace to each server name. Collisions (e.g. "my-server" and "my_server")
+/// are resolved by appending _2, _3, etc. so tool calls route to the correct server. Deterministic for a given set.
+func assignUniqueNamespaces(serverNames: [String]) -> [String: String] {
+    var used = Set<String>()
+    var result: [String: String] = [:]
+    for serverName in serverNames.sorted() {
+        var base = sanitizeServerNameToNamespace(serverName)
+        if base.isEmpty { base = "server" }
+        var candidate = base
+        var suffix = 1
+        while used.contains(candidate) {
+            suffix += 1
+            candidate = "\(base)_\(suffix)"
+        }
+        used.insert(candidate)
+        result[serverName] = candidate
+    }
+    return result
+}
+
+/// Returns the tool name sent to Bedrock using an already-assigned unique namespace.
+func namespacedToolName(namespace: String, toolName: String) -> String {
+    namespace.isEmpty ? toolName : "\(namespace)\(toolNamespaceDelimiter)\(toolName)"
+}
+
+/// Parses a Bedrock tool name back to (serverName, originalToolName) using the unique namespace → server map.
+/// Returns nil if not namespaced or namespace unknown. Use assignUniqueNamespaces to build the reverse map.
+func parseNamespacedToolName(_ name: String, namespaceToServer: [String: String]) -> (serverName: String, toolName: String)? {
+    guard let idx = name.range(of: toolNamespaceDelimiter) else { return nil }
+    let prefix = String(name[..<idx.lowerBound])
+    let suffix = String(name[idx.upperBound...])
+    guard !prefix.isEmpty, !suffix.isEmpty else { return nil }
+    guard let serverName = namespaceToServer[prefix] else { return nil }
+    return (serverName, suffix)
+}
+
 /**
  * Represents a tool available from an MCP server.
  * Used primarily for UI display and server tool management.
@@ -97,19 +152,26 @@ struct MCPToolInfo: Identifiable, Hashable {
     var toolName: String
     var description: String
     var tool: Tool
-    
-    init(serverName: String, tool: Tool) {
+    /// Unique namespace for this server (from assignUniqueNamespaces); used for Bedrock tool names only.
+    var uniqueNamespace: String
+
+    /// Name sent to Bedrock (namespaced so duplicate tool names across servers are unique and collision-free).
+    var bedrockToolName: String { namespacedToolName(namespace: uniqueNamespace, toolName: toolName) }
+
+    init(serverName: String, tool: Tool, uniqueNamespace: String) {
         self.serverName = serverName
         self.toolName = tool.name
         self.description = (tool.description?.isEmpty ?? true) ? "No description available" : (tool.description ?? "No description available")
         self.tool = tool
+        self.uniqueNamespace = uniqueNamespace
     }
     
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+        hasher.combine(uniqueNamespace)
     }
-    
+
     static func == (lhs: MCPToolInfo, rhs: MCPToolInfo) -> Bool {
-        return lhs.id == rhs.id
+        return lhs.id == rhs.id && lhs.uniqueNamespace == rhs.uniqueNamespace
     }
 }

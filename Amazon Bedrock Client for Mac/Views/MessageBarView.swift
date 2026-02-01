@@ -696,7 +696,7 @@ struct AdvancedOptionsMenu: View {
                     } label: {
                         Label(tool.toolName, systemImage: "bolt.fill")
                     }
-                    .help(tool.description)
+                    .help("\(tool.description)\nServer: \(tool.serverName)")
                 }
             }
             
