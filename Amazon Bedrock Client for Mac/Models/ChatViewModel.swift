@@ -635,7 +635,7 @@ class ChatViewModel: ObservableObject {
                 let toolSpec = AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolSpecification(
                     description: toolInfo.tool.description,
                     inputSchema: .json(jsonDocument),
-                    name: toolInfo.toolName
+                    name: toolInfo.bedrockToolName
                 )
                 
                 return AWSBedrockRuntime.BedrockRuntimeClientTypes.Tool.toolspec(toolSpec)
