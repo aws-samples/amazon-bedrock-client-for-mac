@@ -88,9 +88,21 @@ Expected output format:
 
 ### Token Expiration and Security Errors
 
+This means your aws credentials may have expired.
+
 Errors like "Token has expired" or "security token invalid":
 
 Quick fix:
+
+run:
+
+```bash
+aws login
+```
+To deliver new temporary credentials to your environment.
+
+Alternatively, you may specify credentials directly by running:
+
 ```bash
 aws configure set default.aws_access_key_id <YOUR_ACCESS_KEY>
 aws configure set default.aws_secret_access_key <YOUR_SECRET_KEY>
