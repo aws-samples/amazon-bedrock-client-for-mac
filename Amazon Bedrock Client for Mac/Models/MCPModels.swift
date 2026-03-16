@@ -127,8 +127,43 @@ func assignUniqueNamespaces(serverNames: [String]) -> [String: String] {
 }
 
 /// Returns the tool name sent to Bedrock using an already-assigned unique namespace.
+/// AWS Bedrock enforces a 64-character limit for tool names (pattern: [a-zA-Z0-9_-]+).
+/// If the combined length exceeds this limit, intelligently truncates both parts proportionally.
 func namespacedToolName(namespace: String, toolName: String) -> String {
-    namespace.isEmpty ? toolName : "\(namespace)\(toolNamespaceDelimiter)\(toolName)"
+    guard !namespace.isEmpty else { return toolName }
+
+    let maxLength = 64  // AWS Bedrock API limit for tool names
+    let delimiterLength = toolNamespaceDelimiter.count  // 2 characters ("__")
+    let maxContentLength = maxLength - delimiterLength  // 62 characters available
+
+    // If no truncation needed, return as-is
+    let combined = "\(namespace)\(toolNamespaceDelimiter)\(toolName)"
+    if combined.count <= maxLength {
+        return combined
+    }
+
+    // Need to truncate - allocate proportionally with minimum guarantees
+    let totalOriginalLength = namespace.count + toolName.count
+    let minPartLength = 8  // Minimum chars to preserve meaning
+
+    // Calculate proportional allocation based on original lengths
+    var namespaceAlloc = Int(Double(namespace.count) / Double(totalOriginalLength) * Double(maxContentLength))
+    var toolNameAlloc = maxContentLength - namespaceAlloc
+
+    // Ensure both parts get at least the minimum length
+    if namespaceAlloc < minPartLength {
+        namespaceAlloc = min(minPartLength, maxContentLength - minPartLength)
+        toolNameAlloc = maxContentLength - namespaceAlloc
+    } else if toolNameAlloc < minPartLength {
+        toolNameAlloc = min(minPartLength, maxContentLength - minPartLength)
+        namespaceAlloc = maxContentLength - toolNameAlloc
+    }
+
+    // Truncate and combine
+    let truncatedNamespace = String(namespace.prefix(namespaceAlloc))
+    let truncatedToolName = String(toolName.prefix(toolNameAlloc))
+
+    return "\(truncatedNamespace)\(toolNamespaceDelimiter)\(truncatedToolName)"
 }
 
 /// Parses a Bedrock tool name back to (serverName, originalToolName) using the unique namespace → server map.
