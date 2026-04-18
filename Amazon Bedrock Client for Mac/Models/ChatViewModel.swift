@@ -786,19 +786,8 @@ class ChatViewModel: ObservableObject {
         
         // Add images if present
         if let imageBase64Strings = userMessage.imageBase64Strings, !imageBase64Strings.isEmpty {
-            for (index, base64String) in imageBase64Strings.enumerated() {
-                let fileExtension = index < sharedMediaDataSource.fileExtensions.count ?
-                sharedMediaDataSource.fileExtensions[index].lowercased() : "jpeg"
-                
-                let format: ImageFormat
-                switch fileExtension {
-                case "jpg", "jpeg": format = .jpeg
-                case "png": format = .png
-                case "gif": format = .gif
-                case "webp": format = .webp
-                default: format = .jpeg
-                }
-                
+            for base64String in imageBase64Strings {
+                let format = ImageFormat.detectFromBase64(base64String)
                 messageContents.append(.image(MessageContent.ImageContent(
                     format: format,
                     base64Data: base64String
@@ -1488,8 +1477,9 @@ class ChatViewModel: ObservableObject {
             // Add images SECOND (before text) to support prompt caching
             if let imageBase64Strings = message.imageBase64Strings {
                 for base64String in imageBase64Strings {
+                    let format = ImageFormat.detectFromBase64(base64String)
                     contents.append(.image(MessageContent.ImageContent(
-                        format: .jpeg,
+                        format: format,
                         base64Data: base64String
                     )))
                 }
@@ -1628,8 +1618,9 @@ class ChatViewModel: ObservableObject {
             // Add images SECOND (before text) to support prompt caching
             if let imageBase64Strings = message.imageBase64Strings {
                 for base64String in imageBase64Strings {
+                    let format = ImageFormat.detectFromBase64(base64String)
                     contents.append(.image(MessageContent.ImageContent(
-                        format: .jpeg,
+                        format: format,
                         base64Data: base64String
                     )))
                 }
@@ -2710,19 +2701,8 @@ class ChatViewModel: ObservableObject {
         
         // Add images if present
         if let imageBase64Strings = userMessage.imageBase64Strings, !imageBase64Strings.isEmpty {
-            for (index, base64String) in imageBase64Strings.enumerated() {
-                let fileExtension = index < sharedMediaDataSource.fileExtensions.count ?
-                sharedMediaDataSource.fileExtensions[index].lowercased() : "jpeg"
-                
-                let format: ImageFormat
-                switch fileExtension {
-                case "jpg", "jpeg": format = .jpeg
-                case "png": format = .png
-                case "gif": format = .gif
-                case "webp": format = .webp
-                default: format = .jpeg
-                }
-                
+            for base64String in imageBase64Strings {
+                let format = ImageFormat.detectFromBase64(base64String)
                 messageContents.append(.image(MessageContent.ImageContent(
                     format: format,
                     base64Data: base64String

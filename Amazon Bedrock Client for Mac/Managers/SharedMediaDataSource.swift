@@ -112,4 +112,26 @@ enum ImageFormat: String, Codable {
     case png
     case gif
     case webp
+
+    /// Detect format from raw image data by inspecting magic bytes
+    static func detectFromData(_ data: Data) -> ImageFormat {
+        guard data.count >= 4 else { return .jpeg }
+        let bytes = [UInt8](data.prefix(4))
+        if bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
+            return .png
+        } else if bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 {
+            return .gif
+        } else if bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 {
+            return .webp
+        }
+        return .jpeg
+    }
+
+    /// Detect format from a base64-encoded string
+    static func detectFromBase64(_ base64String: String) -> ImageFormat {
+        guard let data = Data(base64Encoded: String(base64String.prefix(16)), options: .ignoreUnknownCharacters) else {
+            return .jpeg
+        }
+        return detectFromData(data)
+    }
 }
