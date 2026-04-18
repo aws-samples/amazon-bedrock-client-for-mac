@@ -455,12 +455,14 @@ class SettingManager: ObservableObject {
         } else {
             // Return default config based on model range
             let range = ModelInferenceRange.getRangeForModel(modelId)
+            // Preserve saved reasoning effort even when override is off (for adaptive thinking models)
+            let savedEffort = modelInferenceConfigs[modelId]?.reasoningEffort
             return ModelInferenceConfig(
                 maxTokens: range.defaultMaxTokens,
                 temperature: range.defaultTemperature,
                 topP: range.defaultTopP,
                 thinkingBudget: range.defaultThinkingBudget,
-                reasoningEffort: range.defaultReasoningEffort,
+                reasoningEffort: savedEffort ?? range.defaultReasoningEffort,
                 overrideDefault: false
             )
         }

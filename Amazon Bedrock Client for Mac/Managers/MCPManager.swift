@@ -1014,47 +1014,26 @@ class MCPManager: ObservableObject {
                         "text": text
                     ])
                     
-                case .image(let data, let mimeType, let metadata):
+                case .image(let data, let mimeType, let annotations, _):
                     var imageResult: [String: Any] = [
                         "type": "image",
                         "mimeType": mimeType,
                         "size": data.count
                     ]
-                    
-                    // Add metadata if available
-                    if let metadata = metadata {
-                        imageResult["metadata"] = metadata
-                        
-                        // Safely extract width and height
-                        var width = 0
-                        var height = 0
-                        
-                        // Safely extract width - metadata values are strings
-                        if let widthValue = metadata["width"], let widthInt = Int(widthValue) {
-                            width = widthInt
-                        }
-                        
-                        // Safely extract height - metadata values are strings
-                        if let heightValue = metadata["height"], let heightInt = Int(heightValue) {
-                            height = heightInt
-                        }
-                        
-                        if width > 0 && height > 0 {
-                            imageResult["description"] = "Generated \(width)x\(height) image"
-                        } else {
-                            imageResult["description"] = "Generated image"
-                        }
-                    } else {
-                        imageResult["description"] = "Generated image"
-                    }
-                    
+
+                    imageResult["description"] = "Generated image"
+
                     // Convert image data to base64 for transport
                     let base64String = try data.base64EncodedString()
                     imageResult["data"] = base64String
-                    
+
+                    if let annotations = annotations {
+                        imageResult["annotations"] = "\(annotations)"
+                    }
+
                     resultContent.append(imageResult)
                     
-                case .audio(let data, let mimeType):
+                case .audio(let data, let mimeType, _, _):
                     let base64String = try data.base64EncodedString()
                     resultContent.append([
                         "type": "audio",
@@ -1070,15 +1049,21 @@ class MCPManager: ObservableObject {
                         "uri": uri,
                         "mimeType": mimeType
                     ]
-                    
+
                     if let text = text {
                         resourceResult["text"] = text
                         resourceResult["description"] = "Resource from \(uri)"
                     } else {
                         resourceResult["description"] = "Resource reference: \(uri)"
                     }
-                    
+
                     resultContent.append(resourceResult)
+
+                @unknown default:
+                    resultContent.append([
+                        "type": "text",
+                        "text": "Unsupported content type"
+                    ])
                 }
             } catch {
                 logger.error("Error processing content item: \(error)")

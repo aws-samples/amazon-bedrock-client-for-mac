@@ -87,8 +87,8 @@ struct InferenceConfigPopoverContent: View {
     @State private var tempTemperature = ""
     @State private var tempTopP = ""
     @State private var tempThinkingBudget = ""
-    @State private var selectedReasoningEffort = "medium"
-    
+    @State private var selectedReasoningEffort = ""
+
     private var config: ModelInferenceConfig {
         settingManager.getInferenceConfig(for: modelId)
     }
@@ -116,7 +116,7 @@ struct InferenceConfigPopoverContent: View {
     private var isClaude45PlusModel: Bool {
         let modelType = backend.getModelType(modelId)
         // All Claude 4.5+ models have this limitation
-        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45
+        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47
     }
     
     // Check if Top P should be disabled (when thinking is enabled OR for Claude 4.5+ models)
@@ -150,13 +150,25 @@ struct InferenceConfigPopoverContent: View {
         let modelType = backend.getModelType(modelId)
         return modelType == .nova2Lite
     }
-    
-    // Check if this model uses reasoning effort (GPT-OSS, Kimi K2, and Nova 2 models)
-    private var usesReasoningEffort: Bool {
-        return isGptOssModel || isNova2Model || isKimiK2Model
+
+    // Check if this is Claude Opus 4.6 (uses adaptive thinking with effort, supports max but not xhigh)
+    private var isClaudeOpus46Model: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .claudeOpus46
     }
-    
-    // Check if thinking budget should be enabled (Claude models only, not GPT-OSS or Nova 2)
+
+    // Check if this is Claude Opus 4.7 (uses adaptive thinking with effort, supports xhigh and max)
+    private var isClaudeOpus47Model: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .claudeOpus47
+    }
+
+    // Check if this model uses reasoning effort (GPT-OSS, Kimi K2, Nova 2, Opus 4.6, and Opus 4.7 models)
+    private var usesReasoningEffort: Bool {
+        return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model
+    }
+
+    // Check if thinking budget should be enabled (Claude models only, not models using effort-based reasoning)
     private var isThinkingBudgetEnabled: Bool {
         return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId) && !usesReasoningEffort
     }
@@ -186,7 +198,7 @@ struct InferenceConfigPopoverContent: View {
                         defaultValuesSection
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    
+
                     // Bottom spacing
                     Spacer()
                         .frame(height: 20)
@@ -273,7 +285,7 @@ struct InferenceConfigPopoverContent: View {
                     thinkingBudgetControl
                 }
                 
-                // Reasoning Effort (GPT-OSS and Nova 2 models)
+                // Reasoning Effort (GPT-OSS, Nova 2, Kimi K2, Opus 4.6, Opus 4.7)
                 if usesReasoningEffort && isReasoningSupported && settingManager.enableModelThinking {
                     reasoningEffortControl
                 }
@@ -314,6 +326,9 @@ struct InferenceConfigPopoverContent: View {
                     // thinking budget 정보 추가
                     if isThinkingBudgetEnabled {
                         Text("Thinking Budget: \(actualDefaultConfig.thinkingBudget) tokens")
+                    }
+                    if (isClaudeOpus46Model || isClaudeOpus47Model) && isReasoningSupported && settingManager.enableModelThinking {
+                        Text("Thinking: Adaptive (Effort: \(range.defaultReasoningEffort))")
                     }
                     Text("Streaming: \(actualDefaultConfig.enableStreaming ? "Enabled" : "Disabled")")
                 }
@@ -797,34 +812,44 @@ struct InferenceConfigPopoverContent: View {
                 Label("Reasoning Effort", systemImage: "brain.head.profile")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.primary)
-                
+
                 Spacer()
-                
+
                 Text(selectedReasoningEffort.capitalized)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.orange)
             }
-            
-            // Reasoning effort picker
+
+            // Reasoning effort picker — Opus 4.6 adds max; Opus 4.7 adds xhigh and max
             Picker("Reasoning Effort", selection: $selectedReasoningEffort) {
                 Text("Low").tag("low")
                 Text("Medium").tag("medium")
                 Text("High").tag("high")
+                if isClaudeOpus47Model {
+                    Text("XHigh").tag("xhigh")
+                }
+                if isClaudeOpus46Model || isClaudeOpus47Model {
+                    Text("Max").tag("max")
+                }
             }
             .pickerStyle(SegmentedPickerStyle())
             .onChange(of: selectedReasoningEffort) { _, newValue in
                 updateReasoningEffort(newValue)
             }
             .onAppear {
-                selectedReasoningEffort = config.reasoningEffort
+                let current = config.reasoningEffort
+                selectedReasoningEffort = current.isEmpty ? range.defaultReasoningEffort : current
             }
         }
     }
     
     private func updateReasoningEffort(_ effort: String) {
-        var newConfig = config
+        // For Opus 4.6/4.7, save effort independently without forcing override on
+        var newConfig = settingManager.getInferenceConfig(for: modelId)
         newConfig.reasoningEffort = effort
-        newConfig.overrideDefault = true
+        if !isClaudeOpus46Model && !isClaudeOpus47Model {
+            newConfig.overrideDefault = true
+        }
         settingManager.setInferenceConfig(newConfig, for: modelId)
     }
 }

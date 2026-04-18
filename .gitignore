@@ -64,3 +64,5 @@ Podfile.lock
 # Generated files
 DerivedData/
 
+# OMC
+.omc/

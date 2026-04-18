@@ -199,8 +199,9 @@ class ChatViewModel: ObservableObject {
     
     // Thinking summary generation state
     private var lastThinkingSummaryLength: Int = 0
-    private let thinkingSummaryThreshold: Int = 200  // Generate summary every 200 chars
-    private var thinkingCompleted: Bool = false  // Stop summary generation when thinking is done
+    private var thinkingSummaryCallCount: Int = 0
+    private var thinkingSummaryTask: Task<Void, Never>?
+    private var thinkingCompleted: Bool = false
     
     // Usage handler for displaying token usage information
     var usageHandler: ((String) -> Void)?
@@ -907,6 +908,9 @@ class ChatViewModel: ObservableObject {
         
         // Reset thinking summary state for new message
         lastThinkingSummaryLength = 0
+        thinkingSummaryCallCount = 0
+        thinkingSummaryTask?.cancel()
+        thinkingSummaryTask = nil
         thinkingCompleted = false
         
         // Reset tool tracker
@@ -1323,31 +1327,34 @@ class ChatViewModel: ObservableObject {
             }
             
             self.objectWillChange.send()
-            
-            // Trigger real-time summary generation if enough new content
+
+            // Progressive threshold: first summary at 500 chars, then every 2000 chars
             let thinkingLength = currentThinking.count
-            if thinkingLength - self.lastThinkingSummaryLength >= self.thinkingSummaryThreshold {
+            let threshold = self.thinkingSummaryCallCount == 0 ? 500 : 2000
+            if thinkingLength - self.lastThinkingSummaryLength >= threshold {
                 self.lastThinkingSummaryLength = thinkingLength
                 self.triggerThinkingSummary(for: messageId, thinking: currentThinking)
             }
         }
     }
-    
-    /// Trigger thinking summary generation immediately (runs in parallel)
+
+    /// Trigger thinking summary generation with debounce (cancels previous in-flight request)
     private func triggerThinkingSummary(for messageId: UUID, thinking: String) {
-        // Skip only if thinking is completed (allow parallel execution)
         guard !thinkingCompleted else { return }
-        
-        // Start new task immediately (parallel, no cancellation of previous)
-        Task { [weak self] in
-            guard self?.thinkingCompleted != true else { return }
-            await self?.generateThinkingSummary(for: messageId, thinking: thinking)
+
+        thinkingSummaryTask?.cancel()
+        thinkingSummaryTask = Task { [weak self] in
+            guard let self = self, !self.thinkingCompleted else { return }
+            self.thinkingSummaryCallCount += 1
+            await self.generateThinkingSummary(for: messageId, thinking: thinking)
         }
     }
     
     /// Stop thinking summary generation (called when text starts streaming)
     private func stopThinkingSummaryGeneration() {
         thinkingCompleted = true
+        thinkingSummaryTask?.cancel()
+        thinkingSummaryTask = nil
     }
     
     private func updateMessageText(messageId: UUID, newText: String) {
@@ -2612,15 +2619,21 @@ class ChatViewModel: ObservableObject {
     
     /// Generate a brief summary of the thinking process using a lightweight model
     private func generateThinkingSummary(for messageId: UUID, thinking: String) async {
-        // Skip if thinking is already completed
-        guard !thinkingCompleted else { return }
-        
-        // Truncate thinking if too long (keep first 1500 chars for faster summary)
-        let truncatedThinking = thinking.count > 1500 ? String(thinking.prefix(1500)) + "..." : thinking
-        
+        guard !thinkingCompleted, !Task.isCancelled else { return }
+
+        // Use tail-focused truncation: keep beginning for context + recent content for current direction
+        let truncatedThinking: String
+        if thinking.count > 2000 {
+            let head = String(thinking.prefix(500))
+            let tail = String(thinking.suffix(1500))
+            truncatedThinking = head + "\n...\n" + tail
+        } else {
+            truncatedThinking = thinking
+        }
+
         let summaryPrompt = """
-        Summarize this AI thinking in max 10 words. Be concise:
-        
+        What is this AI currently working through? Describe in one short sentence (under 15 words). Focus on the latest reasoning step, not the full history. No quotes or prefixes.
+
         <thinking>
         \(truncatedThinking)
         </thinking>
@@ -2655,18 +2668,19 @@ class ChatViewModel: ObservableObject {
                 messages: [awsMessage],
                 systemContent: systemContentBlocks,
                 inferenceConfig: BedrockRuntimeClientTypes.InferenceConfiguration(
-                    maxTokens: 50,
-                    temperature: 0.3
+                    maxTokens: 80,
+                    temperature: 0.2
                 ),
                 usageHandler: { @Sendable _ in }
             ) {
+                guard !Task.isCancelled, !thinkingCompleted else { break }
                 if let textChunk = extractTextFromChunk(chunk) {
                     summary += textChunk
                 }
             }
-            
-            // Update message with thinking summary (only if thinking not completed)
-            if !summary.isEmpty && !thinkingCompleted {
+
+            // Update message with thinking summary (only if not cancelled/completed)
+            if !summary.isEmpty && !thinkingCompleted && !Task.isCancelled {
                 let cleanedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
                 await MainActor.run { [weak self] in
                     guard let self = self, !self.thinkingCompleted else { return }
