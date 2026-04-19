@@ -219,6 +219,11 @@ struct MCPToolInfo: Identifiable, Hashable {
         disambiguatedBedrockToolName ?? namespacedToolName(namespace: uniqueNamespace, toolName: toolName)
     }
 
+    /// Display name for UI (includes server context since tools are shown in a flat list).
+    var displayName: String {
+        "\(serverName): \(toolName)"
+    }
+
     init(serverName: String, tool: Tool, uniqueNamespace: String) {
         self.serverName = serverName
         self.toolName = tool.name

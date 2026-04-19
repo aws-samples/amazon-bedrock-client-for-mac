@@ -747,11 +747,19 @@ class ChatManager: ObservableObject {
             return history.messages.map { message in
                 let user = message.role == .user ? "User" : getChatModel(for: chatId)?.name ?? "Assistant"
                 
-                // Convert tool usage
+                // Convert tool usage - de-namespace the tool name for display
                 let toolUse: ToolInfo? = message.toolUse.map { usage in
+                    // Extract original tool name by removing namespace prefix (format: "namespace__toolname")
+                    let displayName: String
+                    if let separatorRange = usage.toolName.range(of: "__") {
+                        displayName = String(usage.toolName[separatorRange.upperBound...])
+                    } else {
+                        displayName = usage.toolName
+                    }
+
                     return ToolInfo(
                         id: usage.toolId,
-                        name: usage.toolName,
+                        name: displayName,
                         input: usage.inputs
                     )
                 }
