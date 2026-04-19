@@ -793,8 +793,64 @@ class MCPManager: ObservableObject {
                 infos.append(MCPToolInfo(serverName: serverName, tool: tool, uniqueNamespace: ns))
             }
         }
+
+        // Detect and resolve post-truncation collisions in bedrockToolName
+        infos = resolveBedrockToolNameCollisions(infos)
+
         self.toolInfos = infos
         logger.info("Updated tool info list with \(infos.count) tools from \(availableTools.keys.count) servers")
+    }
+
+    /**
+     * Detects and resolves collisions in bedrockToolName after truncation.
+     * When two tools truncate to the same Bedrock name, appends disambiguation suffixes (_2, _3, etc.)
+     * while staying within the 64-character limit.
+     *
+     * @param infos The list of tool infos to check for collisions
+     * @return Updated list with collision-free bedrockToolNames
+     */
+    private func resolveBedrockToolNameCollisions(_ infos: [MCPToolInfo]) -> [MCPToolInfo] {
+        var bedrockNameCounts: [String: Int] = [:]
+        var bedrockNameUsage: [String: Int] = [:]
+
+        // First pass: count collisions
+        for info in infos {
+            bedrockNameCounts[info.bedrockToolName, default: 0] += 1
+        }
+
+        // Second pass: disambiguate collisions
+        var result: [MCPToolInfo] = []
+        for info in infos {
+            let originalBedrockName = info.bedrockToolName
+
+            if bedrockNameCounts[originalBedrockName] == 1 {
+                // No collision, use as-is
+                result.append(info)
+            } else {
+                // Collision detected - append suffix
+                let occurrence = bedrockNameUsage[originalBedrockName, default: 0] + 1
+                bedrockNameUsage[originalBedrockName] = occurrence
+
+                if occurrence == 1 {
+                    // First occurrence keeps original name
+                    result.append(info)
+                } else {
+                    // Subsequent occurrences get _2, _3, etc.
+                    let suffix = "_\(occurrence)"
+                    let maxLength = 64
+                    let truncatedBase = String(originalBedrockName.prefix(maxLength - suffix.count))
+                    let disambiguatedName = truncatedBase + suffix
+
+                    var updatedInfo = info
+                    updatedInfo.disambiguatedBedrockToolName = disambiguatedName
+                    result.append(updatedInfo)
+
+                    logger.warning("Bedrock tool name collision: '\(originalBedrockName)' → '\(disambiguatedName)' for \(info.serverName).\(info.toolName)")
+                }
+            }
+        }
+
+        return result
     }
     
     /**

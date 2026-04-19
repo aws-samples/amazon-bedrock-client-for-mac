@@ -211,9 +211,13 @@ struct MCPToolInfo: Identifiable, Hashable {
     var tool: Tool
     /// Unique namespace for this server (from assignUniqueNamespaces); used for Bedrock tool names only.
     var uniqueNamespace: String
+    /// Optional disambiguation suffix applied if bedrockToolName collides after truncation.
+    var disambiguatedBedrockToolName: String? = nil
 
     /// Name sent to Bedrock (namespaced so duplicate tool names across servers are unique and collision-free).
-    var bedrockToolName: String { namespacedToolName(namespace: uniqueNamespace, toolName: toolName) }
+    var bedrockToolName: String {
+        disambiguatedBedrockToolName ?? namespacedToolName(namespace: uniqueNamespace, toolName: toolName)
+    }
 
     init(serverName: String, tool: Tool, uniqueNamespace: String) {
         self.serverName = serverName
