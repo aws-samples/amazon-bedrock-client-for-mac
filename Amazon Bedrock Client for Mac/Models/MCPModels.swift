@@ -96,6 +96,10 @@ private let toolNamespaceDelimiter = "__"
 /// Multiple different server names can map to the same value (e.g. "my-server" and "my_server"); use
 /// assignUniqueNamespaces(serverNames:) to get a collision-free mapping.
 /// Bedrock requires tool names to match ^[a-zA-Z][a-zA-Z0-9_-]* so namespaces starting with digits are prefixed with "s_".
+///
+/// INVARIANT: Output never contains "__" (double underscore). This is critical because parseNamespacedToolName()
+/// splits on the first "__" occurrence to separate namespace from tool name. The split(separator: "_", omittingEmptySubsequences: true)
+/// call ensures consecutive underscores are collapsed to a single underscore.
 func sanitizeServerNameToNamespace(_ serverName: String) -> String {
     let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
     let folded = serverName.lowercased()
@@ -109,6 +113,12 @@ func sanitizeServerNameToNamespace(_ serverName: String) -> String {
     // Bedrock requires tool names to start with a letter, not a digit
     if let firstChar = result.first, firstChar.isNumber {
         result = "s_" + result
+    }
+
+    // Defensive check: if "__" somehow appears, fix it and log a warning
+    if result.contains(toolNamespaceDelimiter) {
+        print("Warning: Sanitized namespace '\(result)' contains delimiter '\(toolNamespaceDelimiter)' - fixing to prevent parseNamespacedToolName() breakage")
+        result = result.replacingOccurrences(of: toolNamespaceDelimiter, with: "_")
     }
 
     return result
