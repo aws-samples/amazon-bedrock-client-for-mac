@@ -153,6 +153,11 @@ func namespacedToolName(namespace: String, toolName: String) -> String {
     let maxLength = 64  // AWS Bedrock API limit for tool names
     let delimiterLength = toolNamespaceDelimiter.count  // 2 characters ("__")
     let maxContentLength = maxLength - delimiterLength  // 62 characters available
+    let minPartLength = 8  // Minimum chars to preserve meaning
+
+    // Precondition: ensure the constants allow valid truncation
+    precondition(maxLength >= 2 * minPartLength + delimiterLength,
+                 "maxLength (\(maxLength)) must be >= 2*minPartLength (\(minPartLength)) + delimiterLength (\(delimiterLength))")
 
     // If no truncation needed, return as-is
     let combined = "\(namespace)\(toolNamespaceDelimiter)\(toolName)"
@@ -162,7 +167,6 @@ func namespacedToolName(namespace: String, toolName: String) -> String {
 
     // Need to truncate - allocate proportionally with minimum guarantees
     let totalOriginalLength = namespace.count + toolName.count
-    let minPartLength = 8  // Minimum chars to preserve meaning
 
     // Calculate proportional allocation based on original lengths
     var namespaceAlloc = Int(Double(namespace.count) / Double(totalOriginalLength) * Double(maxContentLength))
