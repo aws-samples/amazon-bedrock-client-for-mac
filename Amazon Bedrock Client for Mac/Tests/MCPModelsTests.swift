@@ -226,6 +226,80 @@ final class MCPModelsTests: XCTestCase {
         XCTAssertEqual(sanitizeServerNameToNamespace("server___test"), "server_test")
     }
 
+    // MARK: - Edge Case Tests (from PR review feedback)
+
+    func testSanitizeServerName_EmptyString() {
+        let result = sanitizeServerNameToNamespace("")
+        XCTAssertEqual(result, "", "Empty string should return empty string")
+    }
+
+    func testSanitizeServerName_StartsWithDigit() {
+        // Critical: Bedrock requires tool names to start with a letter, not a digit
+        XCTAssertEqual(sanitizeServerNameToNamespace("123service"), "s_123service")
+        XCTAssertEqual(sanitizeServerNameToNamespace("1server"), "s_1server")
+        XCTAssertEqual(sanitizeServerNameToNamespace("99_bottles"), "s_99_bottles")
+    }
+
+    func testSanitizeServerName_AllDigits() {
+        XCTAssertEqual(sanitizeServerNameToNamespace("12345"), "s_12345")
+    }
+
+    func testSanitizeServerName_Unicode() {
+        // Unicode characters should be replaced with underscores
+        XCTAssertEqual(sanitizeServerNameToNamespace("server🚀"), "server_")
+        XCTAssertEqual(sanitizeServerNameToNamespace("日本語"), "___")
+        XCTAssertEqual(sanitizeServerNameToNamespace("café"), "caf_")
+    }
+
+    func testSanitizeServerName_VeryLongName() {
+        let longName = String(repeating: "a", count: 200)
+        let result = sanitizeServerNameToNamespace(longName)
+        XCTAssertEqual(result.count, 200, "Should preserve full length (truncation happens in namespacedToolName)")
+        XCTAssertEqual(result, longName, "Should be unchanged since it's all alphanumeric")
+    }
+
+    func testSanitizeServerName_NoDoubleUnderscore() {
+        // Critical invariant: output must never contain "__" (the delimiter)
+        let testCases = [
+            "my--server",
+            "server___name",
+            "test____service",
+            "a@@@b",
+        ]
+
+        for testCase in testCases {
+            let result = sanitizeServerNameToNamespace(testCase)
+            XCTAssertFalse(result.contains("__"), "Sanitized namespace '\(result)' must not contain '__' delimiter")
+        }
+    }
+
+    func testAssignUniqueNamespaces_EmptyServerName() {
+        let servers = ["", "server1"]
+        let result = assignUniqueNamespaces(serverNames: servers)
+
+        XCTAssertEqual(result[""], "server", "Empty server name should default to 'server'")
+        XCTAssertEqual(result["server1"], "server1")
+    }
+
+    func testAssignUniqueNamespaces_DigitStartingServers() {
+        let servers = ["123service", "456service"]
+        let result = assignUniqueNamespaces(serverNames: servers)
+
+        // Both should get s_ prefix and remain unique
+        XCTAssertEqual(result["123service"], "s_123service")
+        XCTAssertEqual(result["456service"], "s_456service")
+        XCTAssertNotEqual(result["123service"], result["456service"])
+    }
+
+    func testAssignUniqueNamespaces_DigitStartingCollision() {
+        // Edge case: "123server" and "s_123server" both sanitize to "s_123server"
+        let servers = ["123server", "s_123server"]
+        let result = assignUniqueNamespaces(serverNames: servers)
+
+        let namespaces = Set(result.values)
+        XCTAssertEqual(namespaces.count, 2, "Should resolve collision with suffix")
+    }
+
     // MARK: - Unique Namespace Assignment Tests
 
     func testAssignUniqueNamespaces_NoCollisions() {
