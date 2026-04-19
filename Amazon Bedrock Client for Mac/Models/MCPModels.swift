@@ -95,15 +95,23 @@ private let toolNamespaceDelimiter = "__"
 /// Sanitizes a server name to a Bedrock-safe namespace: lowercase, non-alphanumeric → underscore, collapsed.
 /// Multiple different server names can map to the same value (e.g. "my-server" and "my_server"); use
 /// assignUniqueNamespaces(serverNames:) to get a collision-free mapping.
+/// Bedrock requires tool names to match ^[a-zA-Z][a-zA-Z0-9_-]* so namespaces starting with digits are prefixed with "s_".
 func sanitizeServerNameToNamespace(_ serverName: String) -> String {
     let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
     let folded = serverName.lowercased()
         .unicodeScalars
         .map { allowed.contains($0) ? String($0) : "_" }
         .joined()
-    return folded
+    var result = folded
         .split(separator: "_", omittingEmptySubsequences: true)
         .joined(separator: "_")
+
+    // Bedrock requires tool names to start with a letter, not a digit
+    if let firstChar = result.first, firstChar.isNumber {
+        result = "s_" + result
+    }
+
+    return result
 }
 
 /// Assigns a unique Bedrock-safe namespace to each server name. Collisions (e.g. "my-server" and "my_server")
