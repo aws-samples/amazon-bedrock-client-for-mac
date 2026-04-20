@@ -87,6 +87,118 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
     }
 }
 
+// MARK: - Tool name namespacing (Bedrock requires unique names across MCP servers)
+
+/// Delimiter between server namespace and tool name in Bedrock tool names.
+private let toolNamespaceDelimiter = "__"
+
+/// Sanitizes a server name to a Bedrock-safe namespace: lowercase, non-alphanumeric → underscore, collapsed.
+/// Multiple different server names can map to the same value (e.g. "my-server" and "my_server"); use
+/// assignUniqueNamespaces(serverNames:) to get a collision-free mapping.
+/// Bedrock requires tool names to match ^[a-zA-Z][a-zA-Z0-9_-]* so namespaces starting with digits are prefixed with "s_".
+///
+/// INVARIANT: Output never contains "__" (double underscore). This is critical because parseNamespacedToolName()
+/// splits on the first "__" occurrence to separate namespace from tool name. The split(separator: "_", omittingEmptySubsequences: true)
+/// call ensures consecutive underscores are collapsed to a single underscore.
+func sanitizeServerNameToNamespace(_ serverName: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+    let folded = serverName.lowercased()
+        .unicodeScalars
+        .map { allowed.contains($0) ? String($0) : "_" }
+        .joined()
+    var result = folded
+        .split(separator: "_", omittingEmptySubsequences: true)
+        .joined(separator: "_")
+
+    // Bedrock requires tool names to start with a letter, not a digit
+    if let firstChar = result.first, firstChar.isNumber {
+        result = "s_" + result
+    }
+
+    // Defensive check: if "__" somehow appears, fix it and log a warning
+    if result.contains(toolNamespaceDelimiter) {
+        print("Warning: Sanitized namespace '\(result)' contains delimiter '\(toolNamespaceDelimiter)' - fixing to prevent parseNamespacedToolName() breakage")
+        result = result.replacingOccurrences(of: toolNamespaceDelimiter, with: "_")
+    }
+
+    return result
+}
+
+/// Assigns a unique Bedrock-safe namespace to each server name. Collisions (e.g. "my-server" and "my_server")
+/// are resolved by appending _2, _3, etc. so tool calls route to the correct server. Deterministic for a given set.
+func assignUniqueNamespaces(serverNames: [String]) -> [String: String] {
+    var used = Set<String>()
+    var result: [String: String] = [:]
+    for serverName in serverNames.sorted() {
+        var base = sanitizeServerNameToNamespace(serverName)
+        if base.isEmpty { base = "server" }
+        var candidate = base
+        var suffix = 1
+        while used.contains(candidate) {
+            suffix += 1
+            candidate = "\(base)_\(suffix)"
+        }
+        used.insert(candidate)
+        result[serverName] = candidate
+    }
+    return result
+}
+
+/// Returns the tool name sent to Bedrock using an already-assigned unique namespace.
+/// AWS Bedrock enforces a 64-character limit for tool names (pattern: [a-zA-Z0-9_-]+).
+/// If the combined length exceeds this limit, intelligently truncates both parts proportionally.
+func namespacedToolName(namespace: String, toolName: String) -> String {
+    guard !namespace.isEmpty else { return toolName }
+
+    let maxLength = 64  // AWS Bedrock API limit for tool names
+    let delimiterLength = toolNamespaceDelimiter.count  // 2 characters ("__")
+    let maxContentLength = maxLength - delimiterLength  // 62 characters available
+    let minPartLength = 8  // Minimum chars to preserve meaning
+
+    // Precondition: ensure the constants allow valid truncation
+    precondition(maxLength >= 2 * minPartLength + delimiterLength,
+                 "maxLength (\(maxLength)) must be >= 2*minPartLength (\(minPartLength)) + delimiterLength (\(delimiterLength))")
+
+    // If no truncation needed, return as-is
+    let combined = "\(namespace)\(toolNamespaceDelimiter)\(toolName)"
+    if combined.count <= maxLength {
+        return combined
+    }
+
+    // Need to truncate - allocate proportionally with minimum guarantees
+    let totalOriginalLength = namespace.count + toolName.count
+
+    // Calculate proportional allocation based on original lengths
+    var namespaceAlloc = Int(Double(namespace.count) / Double(totalOriginalLength) * Double(maxContentLength))
+    var toolNameAlloc = maxContentLength - namespaceAlloc
+
+    // Ensure both parts get at least the minimum length
+    if namespaceAlloc < minPartLength {
+        namespaceAlloc = min(minPartLength, maxContentLength - minPartLength)
+        toolNameAlloc = maxContentLength - namespaceAlloc
+    } else if toolNameAlloc < minPartLength {
+        toolNameAlloc = min(minPartLength, maxContentLength - minPartLength)
+        namespaceAlloc = maxContentLength - toolNameAlloc
+    }
+
+    // Truncate and combine
+    let truncatedNamespace = String(namespace.prefix(namespaceAlloc))
+    let truncatedToolName = String(toolName.prefix(toolNameAlloc))
+
+    return "\(truncatedNamespace)\(toolNamespaceDelimiter)\(truncatedToolName)"
+}
+
+/// Parses a Bedrock tool name back to (serverName, originalToolName) using the unique namespace → server map.
+/// Returns nil if not namespaced or namespace unknown. Use assignUniqueNamespaces to build the reverse map.
+func parseNamespacedToolName(_ name: String, namespaceToServer: [String: String]) -> (serverName: String, toolName: String)? {
+    guard let idx = name.range(of: toolNamespaceDelimiter) else { return nil }
+    let prefix = String(name[..<idx.lowerBound])
+    let suffix = String(name[idx.upperBound...])
+    guard !prefix.isEmpty, !suffix.isEmpty else { return nil }
+    guard let serverName = namespaceToServer[prefix] else { return nil }
+    return (serverName, suffix)
+}
+
 /**
  * Represents a tool available from an MCP server.
  * Used primarily for UI display and server tool management.
@@ -97,19 +209,38 @@ struct MCPToolInfo: Identifiable, Hashable {
     var toolName: String
     var description: String
     var tool: Tool
-    
-    init(serverName: String, tool: Tool) {
+    /// Unique namespace for this server (from assignUniqueNamespaces); used for Bedrock tool names only.
+    var uniqueNamespace: String
+    /// Optional disambiguation suffix applied if bedrockToolName collides after truncation.
+    var disambiguatedBedrockToolName: String? = nil
+
+    /// Name sent to Bedrock (namespaced so duplicate tool names across servers are unique and collision-free).
+    var bedrockToolName: String {
+        disambiguatedBedrockToolName ?? namespacedToolName(namespace: uniqueNamespace, toolName: toolName)
+    }
+
+    /// Display name for UI (includes server context since tools are shown in a flat list).
+    var displayName: String {
+        let cleanServerName = serverName
+            .replacingOccurrences(of: "-mcp", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "_mcp", with: "", options: .caseInsensitive)
+        return "\(cleanServerName): \(toolName)"
+    }
+
+    init(serverName: String, tool: Tool, uniqueNamespace: String) {
         self.serverName = serverName
         self.toolName = tool.name
         self.description = (tool.description?.isEmpty ?? true) ? "No description available" : (tool.description ?? "No description available")
         self.tool = tool
+        self.uniqueNamespace = uniqueNamespace
     }
     
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+        hasher.combine(uniqueNamespace)
     }
-    
+
     static func == (lhs: MCPToolInfo, rhs: MCPToolInfo) -> Bool {
-        return lhs.id == rhs.id
+        return lhs.id == rhs.id && lhs.uniqueNamespace == rhs.uniqueNamespace
     }
 }
