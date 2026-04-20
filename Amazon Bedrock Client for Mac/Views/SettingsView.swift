@@ -1211,9 +1211,17 @@ struct ServerFormView: View {
         errorMessage = nil
     }
     
+    private func cleanServerName(_ name: String) -> String {
+        return name
+            .replacingOccurrences(of: "-mcp", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "_mcp", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     private func saveServer() {
         guard validateInputs() else { return }
-        
+
+        let cleanedName = cleanServerName(name)
         let serverConfig: MCPServerConfig
         
         switch transportType {
@@ -1227,7 +1235,7 @@ struct ServerFormView: View {
             }
             
             serverConfig = MCPServerConfig(
-                name: name,
+                name: cleanedName,
                 transportType: .stdio,
                 command: command,
                 args: argArray,
@@ -1244,7 +1252,7 @@ struct ServerFormView: View {
             }
             
             serverConfig = MCPServerConfig(
-                name: name,
+                name: cleanedName,
                 transportType: .http,
                 url: url,
                 headers: headersDict,
@@ -1260,7 +1268,7 @@ struct ServerFormView: View {
             isPresented = false
         } else {
             // Add new server
-            if !mcpManager.servers.contains(where: { $0.name == name }) {
+            if !mcpManager.servers.contains(where: { $0.name == cleanedName }) {
                 mcpManager.addServer(serverConfig)
                 isPresented = false
             } else {

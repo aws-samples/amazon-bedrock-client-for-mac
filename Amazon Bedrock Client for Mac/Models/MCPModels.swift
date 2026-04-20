@@ -221,7 +221,10 @@ struct MCPToolInfo: Identifiable, Hashable {
 
     /// Display name for UI (includes server context since tools are shown in a flat list).
     var displayName: String {
-        "\(serverName): \(toolName)"
+        let cleanServerName = serverName
+            .replacingOccurrences(of: "-mcp", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "_mcp", with: "", options: .caseInsensitive)
+        return "\(cleanServerName): \(toolName)"
     }
 
     init(serverName: String, tool: Tool, uniqueNamespace: String) {
