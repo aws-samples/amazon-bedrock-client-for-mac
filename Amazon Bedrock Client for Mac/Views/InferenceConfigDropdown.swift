@@ -116,7 +116,7 @@ struct InferenceConfigPopoverContent: View {
     private var isClaude45PlusModel: Bool {
         let modelType = backend.getModelType(modelId)
         // All Claude 4.5+ models have this limitation
-        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47
+        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47 || modelType == .claudeOpus48
     }
     
     // Check if Top P should be disabled (when thinking is enabled OR for Claude 4.5+ models)
@@ -157,13 +157,13 @@ struct InferenceConfigPopoverContent: View {
         return modelType == .claudeOpus46
     }
 
-    // Check if this is Claude Opus 4.7 (uses adaptive thinking with effort, supports xhigh and max)
+    // Check if this is Claude Opus 4.7 or 4.8 (uses adaptive thinking with effort, supports xhigh and max)
     private var isClaudeOpus47Model: Bool {
         let modelType = backend.getModelType(modelId)
-        return modelType == .claudeOpus47
+        return modelType == .claudeOpus47 || modelType == .claudeOpus48
     }
 
-    // Check if this model uses reasoning effort (GPT-OSS, Kimi K2, Nova 2, Opus 4.6, and Opus 4.7 models)
+    // Check if this model uses reasoning effort (GPT-OSS, Kimi K2, Nova 2, Opus 4.6, Opus 4.7, and Opus 4.8 models)
     private var usesReasoningEffort: Bool {
         return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model
     }

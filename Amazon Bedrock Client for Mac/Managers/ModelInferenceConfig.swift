@@ -81,7 +81,7 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "medium"
             )
-        case .claudeOpus46, .claudeOpus47:
+        case .claudeOpus46, .claudeOpus47, .claudeOpus48:
             return ModelInferenceRange(
                 maxTokensRange: 1...64000,
                 temperatureRange: 0.0...1.0,
@@ -363,6 +363,8 @@ struct ModelInferenceRange {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
                 return .claudeHaiku45
+            } else if modelNameAndVersion.contains("claude-opus-4-8") {
+                return .claudeOpus48
             } else if modelNameAndVersion.contains("claude-opus-4-7") {
                 return .claudeOpus47
             } else if modelNameAndVersion.contains("claude-opus-4-6") {
