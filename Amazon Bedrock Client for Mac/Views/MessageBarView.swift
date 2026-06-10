@@ -694,9 +694,9 @@ struct AdvancedOptionsMenu: View {
                 ForEach(MCPManager.shared.toolInfos) { tool in
                     Button {
                     } label: {
-                        Label(tool.toolName, systemImage: "bolt.fill")
+                        Label(tool.displayName, systemImage: "bolt.fill")
                     }
-                    .help(tool.description)
+                    .help("\(tool.description)\nServer: \(tool.serverName)")
                 }
             }
             

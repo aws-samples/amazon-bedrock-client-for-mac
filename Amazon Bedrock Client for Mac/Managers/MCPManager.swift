@@ -53,6 +53,9 @@ class MCPManager: ObservableObject {
     // Status tracking
     private var autoStartCompleted = false
     private var connecting: Set<String> = []
+
+    /// Unique namespace per server (serverName -> namespace) for collision-free Bedrock tool names.
+    private var serverUniqueNamespace: [String: String] = [:]
     
     /**
      * Represents the connection status of a server.
@@ -778,16 +781,76 @@ class MCPManager: ObservableObject {
     
     /**
      * Updates the consolidated list of available tools from all connected servers.
+     * Assigns unique namespaces per server so names like "my-server" and "my_server" do not collide.
      */
     private func updateToolInfos() {
+        let serverNames = Array(availableTools.keys)
+        serverUniqueNamespace = assignUniqueNamespaces(serverNames: serverNames)
         var infos: [MCPToolInfo] = []
         for (serverName, tools) in availableTools {
+            let ns = serverUniqueNamespace[serverName] ?? sanitizeServerNameToNamespace(serverName)
             for tool in tools {
-                infos.append(MCPToolInfo(serverName: serverName, tool: tool))
+                infos.append(MCPToolInfo(serverName: serverName, tool: tool, uniqueNamespace: ns))
             }
         }
+
+        // Detect and resolve post-truncation collisions in bedrockToolName
+        infos = resolveBedrockToolNameCollisions(infos)
+
         self.toolInfos = infos
         logger.info("Updated tool info list with \(infos.count) tools from \(availableTools.keys.count) servers")
+    }
+
+    /**
+     * Detects and resolves collisions in bedrockToolName after truncation.
+     * When two tools truncate to the same Bedrock name, appends disambiguation suffixes (_2, _3, etc.)
+     * while staying within the 64-character limit.
+     *
+     * @param infos The list of tool infos to check for collisions
+     * @return Updated list with collision-free bedrockToolNames
+     */
+    private func resolveBedrockToolNameCollisions(_ infos: [MCPToolInfo]) -> [MCPToolInfo] {
+        var bedrockNameCounts: [String: Int] = [:]
+        var bedrockNameUsage: [String: Int] = [:]
+
+        // First pass: count collisions
+        for info in infos {
+            bedrockNameCounts[info.bedrockToolName, default: 0] += 1
+        }
+
+        // Second pass: disambiguate collisions
+        var result: [MCPToolInfo] = []
+        for info in infos {
+            let originalBedrockName = info.bedrockToolName
+
+            if bedrockNameCounts[originalBedrockName] == 1 {
+                // No collision, use as-is
+                result.append(info)
+            } else {
+                // Collision detected - append suffix
+                let occurrence = bedrockNameUsage[originalBedrockName, default: 0] + 1
+                bedrockNameUsage[originalBedrockName] = occurrence
+
+                if occurrence == 1 {
+                    // First occurrence keeps original name
+                    result.append(info)
+                } else {
+                    // Subsequent occurrences get _2, _3, etc.
+                    let suffix = "_\(occurrence)"
+                    let maxLength = 64
+                    let truncatedBase = String(originalBedrockName.prefix(maxLength - suffix.count))
+                    let disambiguatedName = truncatedBase + suffix
+
+                    var updatedInfo = info
+                    updatedInfo.disambiguatedBedrockToolName = disambiguatedName
+                    result.append(updatedInfo)
+
+                    logger.warning("Bedrock tool name collision: '\(originalBedrockName)' → '\(disambiguatedName)' for \(info.serverName).\(info.toolName)")
+                }
+            }
+        }
+
+        return result
     }
     
     /**
@@ -1101,24 +1164,29 @@ class MCPManager: ObservableObject {
             
             logger.info("Executing tool '\(name)' with input: \(input)")
             
-            // Find server with the tool
-            var serverWithTool: (name: String, client: Client)? = nil
-            
-            for (serverName, client) in activeClients {
-                if let tools = availableTools[serverName],
-                   tools.contains(where: { $0.name == name }) {
-                    serverWithTool = (serverName, client)
-                    break
+            // Resolve namespaced Bedrock name (e.g. "github__list_issues") to server + original tool name
+            let namespaceToServer: [String: String] = Dictionary(uniqueKeysWithValues: serverUniqueNamespace.map { ($1, $0) })
+            var serverWithTool: (name: String, client: Client, toolName: String)? = nil
+            if let parsed = parseNamespacedToolName(name, namespaceToServer: namespaceToServer),
+               let client = activeClients[parsed.serverName] {
+                serverWithTool = (parsed.serverName, client, parsed.toolName)
+            } else {
+                // Backwards compat: treat name as raw tool name, use first server that has it
+                for (serverName, client) in activeClients {
+                    if availableTools[serverName]?.contains(where: { $0.name == name }) ?? false {
+                        serverWithTool = (serverName, client, name)
+                        break
+                    }
                 }
             }
             
-            if let (serverName, client) = serverWithTool {
-                logger.debug("Executing tool '\(name)' on server '\(serverName)'")
+            if let (serverName, client, toolNameToCall) = serverWithTool {
+                logger.debug("Executing tool '\(toolNameToCall)' on server '\(serverName)'")
                 
                 // Convert input to proper format for tool call with multi-modal support
                 let arguments = try convertToMultiModalArguments(input)
                 
-                let (content, isError) = try await client.callTool(name: name, arguments: arguments)
+                let (content, isError) = try await client.callTool(name: toolNameToCall, arguments: arguments)
                 
                 let extractedContent = extractMultiModalContent(content)
                 
