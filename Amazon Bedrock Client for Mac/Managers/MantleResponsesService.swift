@@ -53,7 +53,7 @@ final class MantleResponsesService: Sendable {
                     guard !self.apiKey.isEmpty else {
                         throw NSError(
                             domain: "MantleResponsesService", code: 401,
-                            userInfo: [NSLocalizedDescriptionKey: "Bedrock API key is not configured. Set it in Settings → General → Bedrock API Key to use OpenAI models on Bedrock."]
+                            userInfo: [NSLocalizedDescriptionKey: "Bedrock API key is not configured. Set it in Settings → Developer → Advanced → Bedrock API Key to use OpenAI models on Bedrock."]
                         )
                     }
                     guard let url = self.responsesURL else {

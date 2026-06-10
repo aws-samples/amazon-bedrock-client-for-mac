@@ -462,8 +462,10 @@ struct DeveloperSettingsView: View {
                     SecureField("Required for OpenAI models (bedrock-mantle)", text: $tempBedrockApiKey)
                         .textFieldStyle(.roundedBorder)
                         .onAppear { tempBedrockApiKey = settingsManager.bedrockApiKey }
-                        .onSubmit {
-                            settingsManager.bedrockApiKey = tempBedrockApiKey
+                        .onChange(of: tempBedrockApiKey) { _, newValue in
+                            // Persist as the user types — .onSubmit alone loses the key
+                            // when the user clicks away without pressing Enter
+                            settingsManager.bedrockApiKey = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                         }
                 }
 
