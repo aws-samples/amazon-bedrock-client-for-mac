@@ -1535,13 +1535,15 @@ class Backend: Equatable, @unchecked Sendable {
 
             if var modelSummaries = response.modelSummaries {
                 // OpenAI frontier models are served only via bedrock-mantle and are not
-                // returned by the bedrock control plane — append them so they're selectable
+                // returned by the bedrock control plane — append them so they're selectable.
+                // No CRIS at launch, so only offer them in regions that actually serve them:
+                // GPT-5.5 in us-east-2 (Ohio); GPT-5.4 in us-east-2 and us-west-2 (Oregon).
                 let existingIds = Set(modelSummaries.compactMap { $0.modelId })
-                let mantleModels: [(id: String, name: String)] = [
-                    ("openai.gpt-5.5", "GPT-5.5"),
-                    ("openai.gpt-5.4", "GPT-5.4")
+                let mantleModels: [(id: String, name: String, regions: Set<String>)] = [
+                    ("openai.gpt-5.5", "GPT-5.5", ["us-east-2"]),
+                    ("openai.gpt-5.4", "GPT-5.4", ["us-east-2", "us-west-2"])
                 ]
-                for model in mantleModels where !existingIds.contains(model.id) {
+                for model in mantleModels where model.regions.contains(self.region) && !existingIds.contains(model.id) {
                     modelSummaries.append(
                         BedrockClientTypes.FoundationModelSummary(
                             inputModalities: [.text],
