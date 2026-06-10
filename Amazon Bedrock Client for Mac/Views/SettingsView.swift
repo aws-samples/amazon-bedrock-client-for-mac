@@ -305,6 +305,7 @@ struct DeveloperSettingsView: View {
     @State private var showingAddServerSheet = false
     @State private var tempEndpoint: String = ""
     @State private var tempRuntimeEndpoint: String = ""
+    @State private var tempBedrockApiKey: String = ""
     
     var body: some View {
         Form {
@@ -456,7 +457,16 @@ struct DeveloperSettingsView: View {
                             settingsManager.runtimeEndpoint = tempRuntimeEndpoint
                         }
                 }
-                
+
+                LabeledContent("Bedrock API Key") {
+                    SecureField("Required for OpenAI models (bedrock-mantle)", text: $tempBedrockApiKey)
+                        .textFieldStyle(.roundedBorder)
+                        .onAppear { tempBedrockApiKey = settingsManager.bedrockApiKey }
+                        .onSubmit {
+                            settingsManager.bedrockApiKey = tempBedrockApiKey
+                        }
+                }
+
                 Toggle("Enable Logging", isOn: $settingsManager.enableDebugLog)
             }
         }

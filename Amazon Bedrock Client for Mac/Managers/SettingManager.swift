@@ -37,6 +37,8 @@ class SettingManager: ObservableObject {
     ).path
     @AppStorage("defaultModelId") var defaultModelId: String = ""
     @AppStorage("maxToolUseTurns") var maxToolUseTurns: Int = 10
+    // Bedrock API key (Bearer token) for the bedrock-mantle Responses API (OpenAI GPT-5.5/5.4)
+    @AppStorage("bedrockApiKey") var bedrockApiKey: String = ""
     
     // Quick Access Hotkey Settings
     @AppStorage("enableQuickAccess") var enableQuickAccess: Bool = true

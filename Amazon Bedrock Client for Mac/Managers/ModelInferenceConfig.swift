@@ -93,6 +93,32 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "high"
             )
+        case .claudeFable5:
+            // Fable 5: 128K max output; sampling params are not configurable (temperature must be 1.0/unset)
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...1.0,  // Not used — sampling params are omitted for Fable 5
+                topPRange: 0.01...1.0,        // Not used
+                thinkingBudgetRange: 1024...8192,  // Not used, adaptive thinking with effort
+                defaultMaxTokens: 16000,
+                defaultTemperature: 1.0,
+                defaultTopP: 0.99,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "high"
+            )
+        case .openaiGpt55, .openaiGpt54:
+            // OpenAI frontier models via bedrock-mantle Responses API
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,  // Not used, uses reasoningEffort instead
+                defaultMaxTokens: 8192,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"
+            )
         case .claudeSonnet4, .claudeOpus4, .claudeOpus41:
             return ModelInferenceRange(
                 maxTokensRange: 1...64000,
@@ -346,6 +372,12 @@ struct ModelInferenceRange {
     }
     
     private static func getModelTypeFromId(_ modelId: String) -> ModelType {
+        // OpenAI frontier IDs contain dots in the version (openai.gpt-5.5) which breaks
+        // the dot-separated parsing below — match on the full ID first
+        let lowerFullId = modelId.lowercased()
+        if lowerFullId.contains("gpt-5.5") { return .openaiGpt55 }
+        if lowerFullId.contains("gpt-5.4") { return .openaiGpt54 }
+
         // Backend의 getModelType 로직을 여기에 복사하거나 참조
         let modelIdWithoutVersion = modelId.split(separator: ":").first ?? ""
         let parts = String(modelIdWithoutVersion).split(separator: ".")
@@ -363,6 +395,8 @@ struct ModelInferenceRange {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
                 return .claudeHaiku45
+            } else if modelNameAndVersion.contains("claude-fable-5") {
+                return .claudeFable5
             } else if modelNameAndVersion.contains("claude-opus-4-8") {
                 return .claudeOpus48
             } else if modelNameAndVersion.contains("claude-opus-4-7") {

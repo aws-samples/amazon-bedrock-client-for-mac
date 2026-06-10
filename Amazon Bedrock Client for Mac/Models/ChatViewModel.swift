@@ -446,11 +446,14 @@ class ChatViewModel: ObservableObject {
                 try await handleImageGenerationModel(userMessage, attachedImages: attachedImages)
             } else if backendModel.backend.isEmbeddingModel(chatModel.id) {
                 try await handleEmbeddingModel(userMessage)
+            } else if backendModel.backend.isMantleResponsesModel(chatModel.id) {
+                // OpenAI frontier models (GPT-5.5/5.4) are served only via the bedrock-mantle Responses API
+                try await handleMantleResponsesModel(userMessage)
             } else {
                 // Check if streaming is enabled for this model
                 let modelConfig = settingManager.getInferenceConfig(for: chatModel.id)
                 let shouldUseStreaming = modelConfig.overrideDefault ? modelConfig.enableStreaming : true
-                
+
                 if shouldUseStreaming {
                     try await handleTextLLMWithConverseStream(userMessage)
                 } else {
@@ -1866,6 +1869,79 @@ class ChatViewModel: ObservableObject {
         return modelType == .openaiGptOss120b || modelType == .openaiGptOss20b || modelType == .openaiGptOssSafeguard
     }
     
+    // MARK: - Mantle Responses API (OpenAI GPT-5.5/5.4)
+
+    /// Handles OpenAI frontier models served via the bedrock-mantle Responses API.
+    /// Text-only at launch: tool use and attachments are not wired through this path.
+    private func handleMantleResponsesModel(_ userMessage: MessageData) async throws {
+        // Persist the new user message, then rebuild history for the API
+        await saveFromUIMessages()
+        let conversationHistory = await getConversationHistory()
+
+        var input: [[String: Any]] = []
+
+        // System prompt maps to the "developer" role in the Responses API
+        let systemPrompt = settingManager.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !systemPrompt.isEmpty {
+            input.append(["role": "developer", "content": systemPrompt])
+        }
+
+        for message in conversationHistory {
+            // Flatten text content; images/documents/tool blocks are not supported on this path
+            let text = message.content.compactMap { content -> String? in
+                if case .text(let textContent) = content { return textContent }
+                return nil
+            }.joined(separator: "\n\n")
+
+            guard !text.isEmpty else { continue }
+            input.append([
+                "role": message.role == .user ? "user" : "assistant",
+                "content": text
+            ])
+        }
+
+        let messageId = UUID()
+        currentStreamingMessageId = messageId
+        var isFirstChunk = true
+        var streamedText = ""
+
+        let backend = await MainActor.run { backendModel.backend }
+
+        let stream = await backend.mantleResponsesStream(
+            modelId: chatModel.id,
+            input: input,
+            usageHandler: { @Sendable [weak self] usage in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.usageHandler?(self.formatUsageString(usage))
+                }
+            }
+        )
+
+        for try await textChunk in stream {
+            streamedText += textChunk
+            appendTextToMessage(textChunk, messageId: messageId, shouldCreateNewMessage: isFirstChunk)
+            isFirstChunk = false
+        }
+
+        let assistantText = streamedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isFirstChunk {
+            // Stream ended without emitting any delta
+            addMessage(MessageData(
+                id: messageId,
+                text: assistantText.isEmpty ? "(No response)" : assistantText,
+                user: chatModel.name,
+                isError: false,
+                sentTime: Date()
+            ))
+        } else {
+            updateMessageText(messageId: messageId, newText: assistantText)
+        }
+
+        await saveFromUIMessages()
+        currentStreamingMessageId = nil
+    }
+
     /// Handles image generation models that don't use converseStream
     private func handleImageGenerationModel(_ userMessage: MessageData, attachedImages: [String] = []) async throws {
         let modelId = chatModel.id

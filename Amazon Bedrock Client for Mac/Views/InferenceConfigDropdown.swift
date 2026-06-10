@@ -116,7 +116,7 @@ struct InferenceConfigPopoverContent: View {
     private var isClaude45PlusModel: Bool {
         let modelType = backend.getModelType(modelId)
         // All Claude 4.5+ models have this limitation
-        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47 || modelType == .claudeOpus48
+        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47 || modelType == .claudeOpus48 || modelType == .claudeFable5
     }
     
     // Check if Top P should be disabled (when thinking is enabled OR for Claude 4.5+ models)
@@ -163,9 +163,21 @@ struct InferenceConfigPopoverContent: View {
         return modelType == .claudeOpus47 || modelType == .claudeOpus48
     }
 
-    // Check if this model uses reasoning effort (GPT-OSS, Kimi K2, Nova 2, Opus 4.6, Opus 4.7, and Opus 4.8 models)
+    // Check if this is Claude Fable 5 (adaptive thinking always on; only effort is configurable)
+    private var isClaudeFable5Model: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .claudeFable5
+    }
+
+    // Check if this is an OpenAI frontier model on bedrock-mantle (GPT-5.5/5.4, uses reasoning effort)
+    private var isOpenAIFrontierModel: Bool {
+        let modelType = backend.getModelType(modelId)
+        return modelType == .openaiGpt55 || modelType == .openaiGpt54
+    }
+
+    // Check if this model uses reasoning effort (GPT-OSS, GPT-5.x, Kimi K2, Nova 2, Opus 4.6-4.8, Fable 5)
     private var usesReasoningEffort: Bool {
-        return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model
+        return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeFable5Model || isOpenAIFrontierModel
     }
 
     // Check if thinking budget should be enabled (Claude models only, not models using effort-based reasoning)
@@ -285,8 +297,9 @@ struct InferenceConfigPopoverContent: View {
                     thinkingBudgetControl
                 }
                 
-                // Reasoning Effort (GPT-OSS, Nova 2, Kimi K2, Opus 4.6, Opus 4.7)
-                if usesReasoningEffort && isReasoningSupported && settingManager.enableModelThinking {
+                // Reasoning Effort (GPT-OSS, GPT-5.x, Nova 2, Kimi K2, Opus 4.6-4.8, Fable 5)
+                // Always-on / mantle models keep effort configurable regardless of the thinking toggle
+                if usesReasoningEffort && (isClaudeFable5Model || isOpenAIFrontierModel || (isReasoningSupported && settingManager.enableModelThinking)) {
                     reasoningEffortControl
                 }
                 
@@ -329,6 +342,9 @@ struct InferenceConfigPopoverContent: View {
                     }
                     if (isClaudeOpus46Model || isClaudeOpus47Model) && isReasoningSupported && settingManager.enableModelThinking {
                         Text("Thinking: Adaptive (Effort: \(range.defaultReasoningEffort))")
+                    }
+                    if isClaudeFable5Model {
+                        Text("Thinking: Adaptive, Always On (Effort: \(range.defaultReasoningEffort))")
                     }
                     Text("Streaming: \(actualDefaultConfig.enableStreaming ? "Enabled" : "Disabled")")
                 }
@@ -820,15 +836,15 @@ struct InferenceConfigPopoverContent: View {
                     .foregroundColor(.orange)
             }
 
-            // Reasoning effort picker — Opus 4.6 adds max; Opus 4.7 adds xhigh and max
+            // Reasoning effort picker — Opus 4.6 adds max; Opus 4.7+/Fable 5 add xhigh and max
             Picker("Reasoning Effort", selection: $selectedReasoningEffort) {
                 Text("Low").tag("low")
                 Text("Medium").tag("medium")
                 Text("High").tag("high")
-                if isClaudeOpus47Model {
+                if isClaudeOpus47Model || isClaudeFable5Model {
                     Text("XHigh").tag("xhigh")
                 }
-                if isClaudeOpus46Model || isClaudeOpus47Model {
+                if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeFable5Model {
                     Text("Max").tag("max")
                 }
             }
@@ -844,10 +860,11 @@ struct InferenceConfigPopoverContent: View {
     }
     
     private func updateReasoningEffort(_ effort: String) {
-        // For Opus 4.6/4.7, save effort independently without forcing override on
+        // For adaptive-thinking Claude models and OpenAI frontier models,
+        // save effort independently without forcing override on
         var newConfig = settingManager.getInferenceConfig(for: modelId)
         newConfig.reasoningEffort = effort
-        if !isClaudeOpus46Model && !isClaudeOpus47Model {
+        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeFable5Model && !isOpenAIFrontierModel {
             newConfig.overrideDefault = true
         }
         settingManager.setInferenceConfig(newConfig, for: modelId)
