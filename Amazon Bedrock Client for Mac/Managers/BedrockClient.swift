@@ -1416,7 +1416,12 @@ class Backend: Equatable, @unchecked Sendable {
         let maxTokens = modelConfig.overrideDefault ? modelConfig.maxTokens : 8192
         let effort = modelConfig.reasoningEffort.isEmpty ? "medium" : modelConfig.reasoningEffort
 
-        let service = MantleResponsesService(region: region, apiKey: apiKey)
+        // Bearer token takes precedence when set; otherwise SigV4 with the app's credential chain
+        let service = MantleResponsesService(
+            region: region,
+            apiKey: apiKey,
+            credentialResolver: awsCredentialIdentityResolver
+        )
         logger.info("Mantle Responses API stream request for model: \(modelId) (effort: \(effort))")
         return service.streamResponse(
             modelId: modelId,

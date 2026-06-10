@@ -459,7 +459,7 @@ struct DeveloperSettingsView: View {
                 }
 
                 LabeledContent("Bedrock API Key") {
-                    SecureField("Required for OpenAI models (bedrock-mantle)", text: $tempBedrockApiKey)
+                    SecureField("Optional — AWS credentials are used when empty", text: $tempBedrockApiKey)
                         .textFieldStyle(.roundedBorder)
                         .onAppear { tempBedrockApiKey = settingsManager.bedrockApiKey }
                         .onChange(of: tempBedrockApiKey) { _, newValue in
