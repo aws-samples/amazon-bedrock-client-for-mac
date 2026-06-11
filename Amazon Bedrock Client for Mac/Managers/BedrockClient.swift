@@ -1537,11 +1537,12 @@ class Backend: Equatable, @unchecked Sendable {
                 // OpenAI frontier models are served only via bedrock-mantle and are not
                 // returned by the bedrock control plane — append them so they're selectable.
                 // No CRIS at launch, so only offer them in regions that actually serve them:
-                // GPT-5.5 in us-east-2 (Ohio); GPT-5.4 in us-east-2 and us-west-2 (Oregon).
+                // GPT-5.5 in us-east-2 (Ohio) and us-east-1 (N. Virginia);
+                // GPT-5.4 in us-east-2, us-west-2 (Oregon), and us-east-1 (N. Virginia).
                 let existingIds = Set(modelSummaries.compactMap { $0.modelId })
                 let mantleModels: [(id: String, name: String, regions: Set<String>)] = [
-                    ("openai.gpt-5.5", "GPT-5.5", ["us-east-2"]),
-                    ("openai.gpt-5.4", "GPT-5.4", ["us-east-2", "us-west-2"])
+                    ("openai.gpt-5.5", "GPT-5.5", ["us-east-2", "us-east-1"]),
+                    ("openai.gpt-5.4", "GPT-5.4", ["us-east-2", "us-west-2", "us-east-1"])
                 ]
                 for model in mantleModels where model.regions.contains(self.region) && !existingIds.contains(model.id) {
                     modelSummaries.append(
