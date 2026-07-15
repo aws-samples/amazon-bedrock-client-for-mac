@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		13A132012F10000100A13200 /* InferenceConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13A132022F10000200A13200 /* InferenceConfigTests.swift */; };
 		790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790804232B99F0DA00930011 /* SharedMediaDataSource.swift */; };
 		792D8E652DDFE55E00BB1C01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 792D8E642DDFE55E00BB1C01 /* MCP */; };
 		7937953D2B46CAF1000C94A5 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7937953C2B46CAF1000C94A5 /* UpdateManager.swift */; };
@@ -98,6 +99,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		13A132022F10000200A13200 /* InferenceConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InferenceConfigTests.swift; sourceTree = "<group>"; };
 		7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Amazon Bedrock Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA52ACD87A200C4D500 /* Amazon Bedrock Client for MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEAF2ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -213,6 +215,14 @@
 			);
 			sourceTree = "<group>";
 		};
+		13A132032F10000300A13200 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				13A132022F10000200A13200 /* InferenceConfigTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
 		7907BE952ACD87A100C4D500 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -233,6 +243,7 @@
 				79610DBF2AD22A2F00993D09 /* Managers */,
 				79610DC92AD22A2F00993D09 /* Models */,
 				79610DCD2AD22A2F00993D09 /* Preview Content */,
+				13A132032F10000300A13200 /* Tests */,
 				79610DC32AD22A2F00993D09 /* Utils */,
 				79610DCF2AD22A2F00993D09 /* Views */,
 			);
@@ -562,6 +573,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				13A132012F10000100A13200 /* InferenceConfigTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -723,7 +735,7 @@
 				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1.4.8;
+				CURRENT_PROJECT_VERSION = 1.4.9;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
@@ -751,9 +763,10 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.8;
+				MARKETING_VERSION = 1.4.9;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
+				PRODUCT_MODULE_NAME = Amazon_Bedrock_Client_for_Mac;
 				PRODUCT_NAME = "Amazon Bedrock Debug";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
@@ -777,7 +790,7 @@
 				ASSETCATALOG_OTHER_FLAGS = "";
 				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1.4.8;
+				CURRENT_PROJECT_VERSION = 1.4.9;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
@@ -805,8 +818,9 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.8;
+				MARKETING_VERSION = 1.4.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
+				PRODUCT_MODULE_NAME = Amazon_Bedrock_Client_for_Mac;
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
@@ -830,7 +844,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MACOSX_DEPLOYMENT_TARGET = 13.6;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-MacTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -839,7 +853,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Amazon Bedrock Client for Mac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Amazon Bedrock Client for Mac";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Amazon Bedrock Debug.app/Contents/MacOS/Amazon Bedrock Debug";
 			};
 			name = Debug;
 		};
@@ -852,7 +866,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MACOSX_DEPLOYMENT_TARGET = 13.6;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-MacTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -861,7 +875,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Amazon Bedrock Client for Mac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Amazon Bedrock Client for Mac";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Amazon Bedrock.app/Contents/MacOS/Amazon Bedrock";
 			};
 			name = Release;
 		};

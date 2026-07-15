@@ -11,20 +11,82 @@ struct ModelInferenceConfig: Codable {
     var maxTokens: Int
     var temperature: Float
     var topP: Float
+    var includeMaxTokens: Bool
+    var includeTemperature: Bool
+    var includeTopP: Bool
     var thinkingBudget: Int
     var reasoningEffort: String
     var overrideDefault: Bool
     var enableStreaming: Bool
     
-    init(maxTokens: Int = 4096, temperature: Float = 0.7, topP: Float = 0.9, thinkingBudget: Int = 2048, reasoningEffort: String = "medium", overrideDefault: Bool = false, enableStreaming: Bool = true) {
+    init(
+        maxTokens: Int = 4096,
+        temperature: Float = 0.7,
+        topP: Float = 0.9,
+        includeMaxTokens: Bool = true,
+        includeTemperature: Bool = true,
+        includeTopP: Bool = true,
+        thinkingBudget: Int = 2048,
+        reasoningEffort: String = "medium",
+        overrideDefault: Bool = false,
+        enableStreaming: Bool = true
+    ) {
         self.maxTokens = maxTokens
         self.temperature = temperature
         self.topP = topP
+        self.includeMaxTokens = includeMaxTokens
+        self.includeTemperature = includeTemperature
+        self.includeTopP = includeTopP
         self.thinkingBudget = thinkingBudget
         self.reasoningEffort = reasoningEffort
         self.overrideDefault = overrideDefault
         self.enableStreaming = enableStreaming
     }
+
+    var requestMaxTokens: Int? {
+        includeMaxTokens ? maxTokens : nil
+    }
+
+    var requestTemperature: Float? {
+        includeTemperature ? temperature : nil
+    }
+
+    var requestTopP: Float? {
+        includeTopP ? topP : nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case maxTokens
+        case temperature
+        case topP
+        case includeMaxTokens
+        case includeTemperature
+        case includeTopP
+        case thinkingBudget
+        case reasoningEffort
+        case overrideDefault
+        case enableStreaming
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 4096
+        temperature = try container.decodeIfPresent(Float.self, forKey: .temperature) ?? 0.7
+        topP = try container.decodeIfPresent(Float.self, forKey: .topP) ?? 0.9
+        includeMaxTokens = try container.decodeIfPresent(Bool.self, forKey: .includeMaxTokens) ?? true
+        includeTemperature = try container.decodeIfPresent(Bool.self, forKey: .includeTemperature) ?? true
+        includeTopP = try container.decodeIfPresent(Bool.self, forKey: .includeTopP) ?? true
+        thinkingBudget = try container.decodeIfPresent(Int.self, forKey: .thinkingBudget) ?? 2048
+        reasoningEffort = try container.decodeIfPresent(String.self, forKey: .reasoningEffort) ?? "medium"
+        overrideDefault = try container.decodeIfPresent(Bool.self, forKey: .overrideDefault) ?? false
+        enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
+    }
+}
+
+struct ModelInferenceParameterDefaults {
+    let includeMaxTokens: Bool
+    let includeTemperature: Bool
+    let includeTopP: Bool
 }
 
 struct ModelInferenceRange {
@@ -42,6 +104,18 @@ struct ModelInferenceRange {
         let modelType = getModelTypeFromId(modelId)
         
         switch modelType {
+        case .claudeSonnet5:
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 1.0...1.0,
+                topPRange: 1.0...1.0,
+                thinkingBudgetRange: 1024...8192,
+                defaultMaxTokens: 4096,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "high"
+            )
         case .claudeSonnet45:
             // Claude Sonnet 4.5 doesn't support top_p with temperature
             return ModelInferenceRange(
@@ -370,6 +444,30 @@ struct ModelInferenceRange {
             )
         }
     }
+
+    static func getParameterDefaultsForModel(_ modelId: String) -> ModelInferenceParameterDefaults {
+        switch getModelTypeFromId(modelId) {
+        case .claudeSonnet5, .claudeFable5:
+            return ModelInferenceParameterDefaults(
+                includeMaxTokens: true,
+                includeTemperature: false,
+                includeTopP: false
+            )
+        case .claudeSonnet45, .claudeHaiku45, .claudeOpus45,
+             .claudeOpus46, .claudeOpus47, .claudeOpus48:
+            return ModelInferenceParameterDefaults(
+                includeMaxTokens: true,
+                includeTemperature: true,
+                includeTopP: false
+            )
+        default:
+            return ModelInferenceParameterDefaults(
+                includeMaxTokens: true,
+                includeTemperature: true,
+                includeTopP: true
+            )
+        }
+    }
     
     private static func getModelTypeFromId(_ modelId: String) -> ModelType {
         // OpenAI frontier IDs contain dots in the version (openai.gpt-5.5) which breaks
@@ -391,7 +489,9 @@ struct ModelInferenceRange {
         
         switch provider {
         case "anthropic":
-            if modelNameAndVersion.contains("claude-sonnet-4-5") {
+            if modelNameAndVersion.contains("claude-sonnet-5") {
+                return .claudeSonnet5
+            } else if modelNameAndVersion.contains("claude-sonnet-4-5") {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
                 return .claudeHaiku45

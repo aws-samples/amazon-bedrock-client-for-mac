@@ -42,27 +42,29 @@ class HotkeyManager: ObservableObject {
         )
     }
     
-    @objc private func settingsChanged() {
-        DispatchQueue.main.async {
-            let newModifiers = self.settingManager.hotkeyModifiers
-            let newKeyCode = self.settingManager.hotkeyKeyCode
-            let enabled = self.settingManager.enableQuickAccess
+    @objc nonisolated private func settingsChanged() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let newModifiers = settingManager.hotkeyModifiers
+            let newKeyCode = settingManager.hotkeyKeyCode
+            let enabled = settingManager.enableQuickAccess
             
             // 핫키 설정이 변경되었거나 활성화 상태가 변경된 경우
-            if newModifiers != self.hotkeyModifiers || newKeyCode != self.hotkeyKeyCode || 
-               (enabled && self.hotKeyRef == nil) || (!enabled && self.hotKeyRef != nil) {
+            if newModifiers != hotkeyModifiers || newKeyCode != hotkeyKeyCode ||
+               (enabled && hotKeyRef == nil) || (!enabled && hotKeyRef != nil) {
                 
-                self.hotkeyModifiers = newModifiers
-                self.hotkeyKeyCode = newKeyCode
+                hotkeyModifiers = newModifiers
+                hotkeyKeyCode = newKeyCode
                 
                 // 기존 핫키 해제
-                self.unregisterHotkey()
-                self.removeEventHandler()
+                unregisterHotkey()
+                removeEventHandler()
                 
                 // 활성화된 경우에만 새로 등록
                 if enabled {
-                    self.setupEventHandler()
-                    self.registerHotkey()
+                    setupEventHandler()
+                    registerHotkey()
                 }
             }
         }

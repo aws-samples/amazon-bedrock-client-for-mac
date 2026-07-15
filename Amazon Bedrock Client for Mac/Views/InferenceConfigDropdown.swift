@@ -118,18 +118,28 @@ struct InferenceConfigPopoverContent: View {
         // All Claude 4.5+ models have this limitation
         return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47 || modelType == .claudeOpus48 || modelType == .claudeFable5
     }
+
+    private var isClaudeSonnet5Model: Bool {
+        backend.getModelType(modelId) == .claudeSonnet5
+    }
+
+    private var omitsSamplingParameters: Bool {
+        isClaudeSonnet5Model || isClaudeFable5Model
+    }
     
-    // Check if Top P should be disabled (when thinking is enabled OR for Claude 4.5+ models)
+    // Check if Top P should be disabled by the model or reasoning mode.
     private var isTopPDisabled: Bool {
-        // Claude 4.5+ models don't support both temperature and top_p
-        if isClaude45PlusModel {
+        if omitsSamplingParameters {
             return true
         }
         return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId)
     }
     
-    // Check if temperature should be disabled (when thinking is enabled)
+    // The value is fixed while reasoning is enabled and omitted for models without sampling controls.
     private var isTemperatureDisabled: Bool {
+        if omitsSamplingParameters {
+            return true
+        }
         return isReasoningSupported && settingManager.enableModelThinking && !backend.hasAlwaysOnReasoning(modelId)
     }
     
@@ -175,9 +185,9 @@ struct InferenceConfigPopoverContent: View {
         return modelType == .openaiGpt55 || modelType == .openaiGpt54
     }
 
-    // Check if this model uses reasoning effort (GPT-OSS, GPT-5.x, Kimi K2, Nova 2, Opus 4.6-4.8, Fable 5)
+    // Check if this model uses reasoning effort.
     private var usesReasoningEffort: Bool {
-        return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeFable5Model || isOpenAIFrontierModel
+        return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIFrontierModel
     }
 
     // Check if thinking budget should be enabled (Claude models only, not models using effort-based reasoning)
@@ -329,12 +339,20 @@ struct InferenceConfigPopoverContent: View {
                     .foregroundColor(.secondary)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Max Tokens: \(actualDefaultConfig.maxTokens)")
-                    Text("Temperature: \(String(format: "%.2f", actualDefaultConfig.temperature))")
+                    if let maxTokens = actualDefaultConfig.maxTokens {
+                        Text("Max Tokens: \(maxTokens)")
+                    } else {
+                        Text("Max Tokens: Omitted")
+                    }
+                    if let temperature = actualDefaultConfig.temperature {
+                        Text("Temperature: \(String(format: "%.2f", temperature))")
+                    } else {
+                        Text("Temperature: Omitted")
+                    }
                     if let topP = actualDefaultConfig.topP {
                         Text("Top P: \(String(format: "%.2f", topP))")
                     } else {
-                        Text("Top P: Disabled (Reasoning Mode)")
+                        Text("Top P: Omitted")
                     }
                     // thinking budget 정보 추가
                     if isThinkingBudgetEnabled {
@@ -346,6 +364,13 @@ struct InferenceConfigPopoverContent: View {
                     if isClaudeFable5Model {
                         Text("Thinking: Adaptive, Always On (Effort: \(range.defaultReasoningEffort))")
                     }
+                    if isClaudeSonnet5Model {
+                        if settingManager.enableModelThinking {
+                            Text("Thinking: Adaptive (Effort: \(range.defaultReasoningEffort))")
+                        } else {
+                            Text("Thinking: Disabled")
+                        }
+                    }
                     Text("Streaming: \(actualDefaultConfig.enableStreaming ? "Enabled" : "Disabled")")
                 }
                 .font(.system(size: 11))
@@ -356,13 +381,13 @@ struct InferenceConfigPopoverContent: View {
     }
     
     // actualDefaultConfig
-    private var actualDefaultConfig: (maxTokens: Int, temperature: Float, topP: Float?, thinkingBudget: Int, enableStreaming: Bool) {
+    private var actualDefaultConfig: (maxTokens: Int?, temperature: Float?, topP: Float?, thinkingBudget: Int, enableStreaming: Bool) {
         let modelType = backend.getModelType(modelId)
         let defaultConfig = backend.getDefaultInferenceConfig(for: modelType)
         
         return (
-            maxTokens: defaultConfig.maxTokens ?? range.defaultMaxTokens,
-            temperature: Float(defaultConfig.temperature ?? 0.7),
+            maxTokens: defaultConfig.maxTokens,
+            temperature: defaultConfig.temperature.map { Float($0) },
             topP: defaultConfig.topp.map { Float($0) },
             thinkingBudget: range.defaultThinkingBudget,
             enableStreaming: true // 기본값은 스트리밍 활성화
@@ -382,7 +407,11 @@ struct InferenceConfigPopoverContent: View {
                 
                 // Editable value display
                 Group {
-                    if isEditingMaxTokens {
+                    if !config.includeMaxTokens {
+                        Text("Omitted")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    } else if isEditingMaxTokens {
                         TextField("", text: $tempMaxTokens)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.blue)
@@ -417,11 +446,20 @@ struct InferenceConfigPopoverContent: View {
                             }
                     }
                 }
+
+                Toggle("", isOn: Binding(
+                    get: { config.includeMaxTokens },
+                    set: { updateMaxTokensInclusion($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .scaleEffect(0.7)
             }
             
             Text("Range: \(range.maxTokensRange.lowerBound) - \(range.maxTokensRange.upperBound)")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
+                .opacity(config.includeMaxTokens ? 1 : 0.5)
             
             CustomSlider(
                 value: Binding(
@@ -434,6 +472,8 @@ struct InferenceConfigPopoverContent: View {
                 step: range.maxTokensRange.upperBound > 8192 ? 512 : 256,
                 color: .blue
             )
+            .disabled(!config.includeMaxTokens)
+            .opacity(config.includeMaxTokens ? 1 : 0.35)
         }
     }
     
@@ -442,12 +482,16 @@ struct InferenceConfigPopoverContent: View {
             HStack {
                 Label("Temperature", systemImage: "thermometer.medium")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isTemperatureDisabled ? .secondary : .primary)
+                    .foregroundColor(isTemperatureDisabled || !config.includeTemperature ? .secondary : .primary)
                 
                 Spacer()
                 
                 Group {
-                    if isEditingTemperature && !isTemperatureDisabled {
+                    if omitsSamplingParameters || !config.includeTemperature {
+                        Text("Omitted")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    } else if isEditingTemperature && !isTemperatureDisabled {
                         TextField("", text: $tempTemperature)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.orange)
@@ -484,10 +528,23 @@ struct InferenceConfigPopoverContent: View {
                             }
                     }
                 }
+
+                Toggle("", isOn: Binding(
+                    get: { !omitsSamplingParameters && config.includeTemperature },
+                    set: { updateTemperatureInclusion($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(SwitchToggleStyle(tint: .orange))
+                .scaleEffect(0.7)
+                .disabled(omitsSamplingParameters)
             }
             
             if isTemperatureDisabled {
-                Text("Temperature is automatically set to 1.0 when Extended Reasoning is enabled")
+                Text(omitsSamplingParameters
+                    ? "Sampling parameters are omitted for this model"
+                    : config.includeTemperature
+                        ? "Temperature is set to 1.0 when Extended Reasoning is enabled"
+                        : "Temperature is omitted")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                 
@@ -514,6 +571,10 @@ struct InferenceConfigPopoverContent: View {
                         .frame(width: 35, alignment: .leading)
                 }
                 .frame(height: 20)
+            } else if !config.includeTemperature {
+                Text("Temperature is omitted")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
             } else {
                 Text("Range: \(String(format: "%.1f", range.temperatureRange.lowerBound)) - \(String(format: "%.1f", range.temperatureRange.upperBound))")
                     .font(.system(size: 10))
@@ -546,12 +607,16 @@ struct InferenceConfigPopoverContent: View {
             HStack {
                 Label("Top P", systemImage: "chart.line.uptrend.xyaxis")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundColor(config.includeTopP ? .primary : .secondary)
                 
                 Spacer()
                 
                 Group {
-                    if isEditingTopP {
+                    if !config.includeTopP {
+                        Text("Omitted")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    } else if isEditingTopP {
                         TextField("", text: $tempTopP)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.green)
@@ -586,11 +651,20 @@ struct InferenceConfigPopoverContent: View {
                             }
                     }
                 }
+
+                Toggle("", isOn: Binding(
+                    get: { config.includeTopP },
+                    set: { updateTopPInclusion($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(SwitchToggleStyle(tint: .green))
+                .scaleEffect(0.7)
             }
             
             Text("Range: \(String(format: "%.2f", range.topPRange.lowerBound)) - \(String(format: "%.2f", range.topPRange.upperBound))")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
+                .opacity(config.includeTopP ? 1 : 0.5)
             
             CustomSlider(
                 value: Binding(
@@ -603,6 +677,8 @@ struct InferenceConfigPopoverContent: View {
                 step: 0.01,
                 color: .green
             )
+            .disabled(!config.includeTopP)
+            .opacity(config.includeTopP ? 1 : 0.35)
         }
     }
     
@@ -616,7 +692,7 @@ struct InferenceConfigPopoverContent: View {
                 
                 Spacer()
                 
-                Text("Disabled")
+                Text("Omitted")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
@@ -625,9 +701,9 @@ struct InferenceConfigPopoverContent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             
-            Text(isClaude45PlusModel 
-                ? "Claude 4.5+ models only support temperature or top_p, not both. Temperature is used by default."
-                : "Top P is automatically disabled when Extended Reasoning is enabled")
+            Text(omitsSamplingParameters
+                ? "Sampling parameters are omitted for this model"
+                : "Top P is omitted when Extended Reasoning is enabled")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
             
@@ -756,6 +832,30 @@ struct InferenceConfigPopoverContent: View {
     }
     
     // MARK: - Helper Methods
+
+    private func updateMaxTokensInclusion(_ isIncluded: Bool) {
+        var newConfig = config
+        newConfig.includeMaxTokens = isIncluded
+        settingManager.setInferenceConfig(newConfig, for: modelId)
+    }
+
+    private func updateTemperatureInclusion(_ isIncluded: Bool) {
+        var newConfig = config
+        newConfig.includeTemperature = isIncluded
+        if isIncluded && isClaude45PlusModel {
+            newConfig.includeTopP = false
+        }
+        settingManager.setInferenceConfig(newConfig, for: modelId)
+    }
+
+    private func updateTopPInclusion(_ isIncluded: Bool) {
+        var newConfig = config
+        newConfig.includeTopP = isIncluded
+        if isIncluded && isClaude45PlusModel {
+            newConfig.includeTemperature = false
+        }
+        settingManager.setInferenceConfig(newConfig, for: modelId)
+    }
     
     private func updateMaxTokens(_ value: Int) {
         var newConfig = config
@@ -836,15 +936,15 @@ struct InferenceConfigPopoverContent: View {
                     .foregroundColor(.orange)
             }
 
-            // Reasoning effort picker — Opus 4.6 adds max; Opus 4.7+/Fable 5 add xhigh and max
+            // Adaptive models expose their supported effort levels.
             Picker("Reasoning Effort", selection: $selectedReasoningEffort) {
                 Text("Low").tag("low")
                 Text("Medium").tag("medium")
                 Text("High").tag("high")
-                if isClaudeOpus47Model || isClaudeFable5Model {
+                if isClaudeOpus47Model || isClaudeSonnet5Model || isClaudeFable5Model {
                     Text("XHigh").tag("xhigh")
                 }
-                if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeFable5Model {
+                if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeSonnet5Model || isClaudeFable5Model {
                     Text("Max").tag("max")
                 }
             }
@@ -864,7 +964,7 @@ struct InferenceConfigPopoverContent: View {
         // save effort independently without forcing override on
         var newConfig = settingManager.getInferenceConfig(for: modelId)
         newConfig.reasoningEffort = effort
-        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeFable5Model && !isOpenAIFrontierModel {
+        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeSonnet5Model && !isClaudeFable5Model && !isOpenAIFrontierModel {
             newConfig.overrideDefault = true
         }
         settingManager.setInferenceConfig(newConfig, for: modelId)
@@ -963,4 +1063,3 @@ struct CustomSlider: View {
         }
     }
 }
-

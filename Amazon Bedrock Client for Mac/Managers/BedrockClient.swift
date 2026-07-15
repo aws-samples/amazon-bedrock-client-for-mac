@@ -309,7 +309,7 @@ class Backend: Equatable, @unchecked Sendable {
     func isReasoningSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -320,7 +320,7 @@ class Backend: Equatable, @unchecked Sendable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -371,7 +371,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Anthropic models that support prompt caching
-        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
             return true
         // Models that don't support prompt caching (including Nova models due to image caching issues)
         default:
@@ -397,7 +397,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
             // Models that support document chat
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
@@ -455,7 +455,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support system prompts
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
             return true
         case .openaiGpt55, .openaiGpt54:
             return true
@@ -506,7 +506,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
+        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
             return true
         // Llama 4 models support vision
         case .llama4Maverick, .llama4Scout:
@@ -550,7 +550,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -586,7 +586,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support streaming tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -685,7 +685,9 @@ class Backend: Equatable, @unchecked Sendable {
         // Classify by provider first
         switch provider {
         case "anthropic":
-            if modelNameAndVersion.contains("claude-sonnet-4-5") {
+            if modelNameAndVersion.contains("claude-sonnet-5") {
+                return .claudeSonnet5
+            } else if modelNameAndVersion.contains("claude-sonnet-4-5") {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
                 return .claudeHaiku45
@@ -909,6 +911,11 @@ class Backend: Equatable, @unchecked Sendable {
     
     func getDefaultInferenceConfig(for modelType: ModelType, isThinkingEnabled: Bool = false) -> BedrockRuntimeClientTypes.InferenceConfiguration {
         switch modelType {
+        case .claudeSonnet5:
+            // Sonnet 5 rejects non-default sampling values and defaults to adaptive thinking.
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 4096
+            )
         case .claudeSonnet45:
             // Claude Sonnet 4.5 only supports temperature OR top_p, not both
             // We prefer temperature as per the issue requirements
@@ -1204,35 +1211,43 @@ class Backend: Equatable, @unchecked Sendable {
             // Nova 2 Lite with high reasoning effort requires temperature and maxTokens to be unset
             config = BedrockRuntimeClientTypes.InferenceConfiguration()
             logger.info("Using empty inference config for Nova 2 Lite with high reasoning effort")
+        } else if modelType == .claudeSonnet5 {
+            // Sonnet 5 defaults to adaptive thinking and rejects non-default sampling parameters.
+            config = BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: modelConfig.overrideDefault ? modelConfig.requestMaxTokens : 4096
+            )
+            logger.info("Using Sonnet 5 inference config (sampling params omitted)")
         } else if modelType == .claudeFable5 {
             // Fable 5 rejects temperature != 1.0 and top_p < 0.99; top_k unsupported — send maxTokens only
             config = BedrockRuntimeClientTypes.InferenceConfiguration(
-                maxTokens: modelConfig.overrideDefault ? modelConfig.maxTokens : 16000
+                maxTokens: modelConfig.overrideDefault ? modelConfig.requestMaxTokens : 16000
             )
             logger.info("Using Fable 5 inference config (maxTokens only, sampling params omitted)")
         } else if modelConfig.overrideDefault {
             // Custom config - but override temperature and topP if reasoning is enabled
             if shouldOverrideForReasoning {
                 config = BedrockRuntimeClientTypes.InferenceConfiguration(
-                    maxTokens: modelConfig.maxTokens,
-                    temperature: 1.0,  // Force temperature to 1.0 for reasoning
+                    maxTokens: modelConfig.requestMaxTokens,
+                    temperature: modelConfig.includeTemperature ? 1.0 : nil,
                     topp: nil          // Disable topP for reasoning
                 )
-                logger.info("Using custom inference config for \(modelId) with reasoning override: maxTokens=\(modelConfig.maxTokens), temperature=1.0 (forced), topP=disabled")
+                logger.info("Using custom inference config for \(modelId) with reasoning override")
             } else if isClaude45PlusModel {
-                // Claude 4.5+ models only support temperature, not top_p
+                // Claude 4.5+ models support temperature or top_p, but not both.
+                let temperature = modelConfig.requestTemperature
                 config = BedrockRuntimeClientTypes.InferenceConfiguration(
-                    maxTokens: modelConfig.maxTokens,
-                    temperature: modelConfig.temperature
+                    maxTokens: modelConfig.requestMaxTokens,
+                    temperature: temperature,
+                    topp: temperature == nil ? modelConfig.requestTopP : nil
                 )
-                logger.info("Using custom inference config for Claude 4.5+ model \(modelId): maxTokens=\(modelConfig.maxTokens), temperature=\(modelConfig.temperature), topP=disabled (model limitation)")
+                logger.info("Using custom inference config for Claude 4.5+ model \(modelId)")
             } else {
                 config = BedrockRuntimeClientTypes.InferenceConfiguration(
-                    maxTokens: modelConfig.maxTokens,
-                    temperature: modelConfig.temperature,
-                    topp: modelConfig.topP
+                    maxTokens: modelConfig.requestMaxTokens,
+                    temperature: modelConfig.requestTemperature,
+                    topp: modelConfig.requestTopP
                 )
-                logger.info("Using custom inference config for \(modelId): maxTokens=\(modelConfig.maxTokens), temperature=\(modelConfig.temperature), topP=\(modelConfig.topP)")
+                logger.info("Using custom inference config for \(modelId)")
             }
         } else {
             // Default config - but modify for reasoning if needed
@@ -1275,10 +1290,35 @@ class Backend: Equatable, @unchecked Sendable {
             request.toolConfig = tools
         }
         
-        // Add reasoning configuration if needed
-        if isReasoningModel && isThinkingEnabled {
+        // Sonnet 5 defaults to adaptive thinking, so disabling it must be explicit.
+        if modelType == .claudeSonnet5 {
             do {
-                let modelType = getModelType(modelId)
+                let reasoningConfig: [String: Any]
+                if isThinkingEnabled {
+                    let effortLevel = modelConfig.reasoningEffort.isEmpty ? "high" : modelConfig.reasoningEffort
+                    reasoningConfig = [
+                        "reasoning_config": [
+                            "type": "adaptive",
+                            "display": "summarized"
+                        ],
+                        "output_config": [
+                            "effort": effortLevel
+                        ]
+                    ]
+                } else {
+                    reasoningConfig = [
+                        "reasoning_config": [
+                            "type": "disabled"
+                        ]
+                    ]
+                }
+                request.additionalModelRequestFields = try Document.make(from: reasoningConfig)
+                logger.info("Added Sonnet 5 reasoning configuration")
+            } catch {
+                logger.error("Failed to create Sonnet 5 reasoning config document: \(error)")
+            }
+        } else if isReasoningModel && isThinkingEnabled {
+            do {
                 let reasoningConfig: [String: Any]
                 
                 // OpenAI GPT-OSS and Kimi K2 Thinking models use reasoning_effort format (high/low/medium/minimal)
@@ -1645,7 +1685,7 @@ struct UsageInfo {
 
 enum ModelType {
     // Anthropic models
-    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeFable5
+    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeSonnet5, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeFable5
     // Meta models
     case llama2, llama3, llama31, llama32Small, llama32Large, llama33, llama4Maverick, llama4Scout
     // Mistral models
