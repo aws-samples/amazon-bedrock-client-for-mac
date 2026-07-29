@@ -167,6 +167,20 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "high"
             )
+        case .claudeOpus5:
+            // Opus 5: 128K max output; sampling params are rejected outright (400).
+            // Thinking is on by default, so the default maxTokens leaves room for it.
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...1.0,  // Not used — sampling params are omitted for Opus 5
+                topPRange: 0.01...1.0,        // Not used
+                thinkingBudgetRange: 1024...8192,  // Not used, adaptive thinking with effort
+                defaultMaxTokens: 32000,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "xhigh"
+            )
         case .claudeFable5:
             // Fable 5: 128K max output; sampling params are not configurable (temperature must be 1.0/unset)
             return ModelInferenceRange(
@@ -192,6 +206,45 @@ struct ModelInferenceRange {
                 defaultTopP: 1.0,
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "medium"
+            )
+        case .openaiGpt56Sol:
+            // GPT-5.6 Sol: flagship reasoning tier — 272K context, supports max reasoning effort
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...2.0,  // Not used — Responses API path sends effort only
+                topPRange: 0.01...1.0,        // Not used
+                thinkingBudgetRange: 1024...2048,  // Not used, uses reasoningEffort instead
+                defaultMaxTokens: 32000,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "high"
+            )
+        case .openaiGpt56Terra:
+            // GPT-5.6 Terra: balanced tier for everyday production work — 272K context
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 16000,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"
+            )
+        case .openaiGpt56Luna:
+            // GPT-5.6 Luna: fast, low-cost tier for high-volume/latency-sensitive work
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...2.0,
+                topPRange: 0.01...1.0,
+                thinkingBudgetRange: 1024...2048,
+                defaultMaxTokens: 8192,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "low"
             )
         case .claudeSonnet4, .claudeOpus4, .claudeOpus41:
             return ModelInferenceRange(
@@ -447,7 +500,15 @@ struct ModelInferenceRange {
 
     static func getParameterDefaultsForModel(_ modelId: String) -> ModelInferenceParameterDefaults {
         switch getModelTypeFromId(modelId) {
-        case .claudeSonnet5, .claudeFable5:
+        case .claudeSonnet5, .claudeOpus5, .claudeFable5:
+            return ModelInferenceParameterDefaults(
+                includeMaxTokens: true,
+                includeTemperature: false,
+                includeTopP: false
+            )
+        // OpenAI frontier models go through the bedrock-mantle Responses API, which only
+        // takes max_output_tokens + reasoning effort — sampling params are never sent.
+        case .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .openaiGpt55, .openaiGpt54:
             return ModelInferenceParameterDefaults(
                 includeMaxTokens: true,
                 includeTemperature: false,
@@ -473,6 +534,9 @@ struct ModelInferenceRange {
         // OpenAI frontier IDs contain dots in the version (openai.gpt-5.5) which breaks
         // the dot-separated parsing below — match on the full ID first
         let lowerFullId = modelId.lowercased()
+        if lowerFullId.contains("gpt-5.6-sol") { return .openaiGpt56Sol }
+        if lowerFullId.contains("gpt-5.6-terra") { return .openaiGpt56Terra }
+        if lowerFullId.contains("gpt-5.6-luna") { return .openaiGpt56Luna }
         if lowerFullId.contains("gpt-5.5") { return .openaiGpt55 }
         if lowerFullId.contains("gpt-5.4") { return .openaiGpt54 }
 
@@ -497,6 +561,8 @@ struct ModelInferenceRange {
                 return .claudeHaiku45
             } else if modelNameAndVersion.contains("claude-fable-5") {
                 return .claudeFable5
+            } else if modelNameAndVersion.contains("claude-opus-5") {
+                return .claudeOpus5
             } else if modelNameAndVersion.contains("claude-opus-4-8") {
                 return .claudeOpus48
             } else if modelNameAndVersion.contains("claude-opus-4-7") {

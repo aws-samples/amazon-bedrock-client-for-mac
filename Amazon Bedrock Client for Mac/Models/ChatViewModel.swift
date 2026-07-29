@@ -2577,9 +2577,21 @@ class ChatViewModel: ObservableObject {
     
     private func handleModelError(_ error: Error) async {
         logger.error("Error invoking the model: \(error)")
+
+        // Errors we raise ourselves (e.g. a Mantle model that isn't served in this region)
+        // already carry a user-facing message — show it instead of dumping the NSError.
+        let nsError = error as NSError
+        let text: String
+        if nsError.domain == "MantleResponsesService",
+           let message = nsError.userInfo[NSLocalizedDescriptionKey] as? String {
+            text = message
+        } else {
+            text = "Error invoking the model: \(error)"
+        }
+
         let errorMessage = MessageData(
             id: UUID(),
-            text: "Error invoking the model: \(error)",
+            text: text,
             user: "System",
             isError: true,
             sentTime: Date()

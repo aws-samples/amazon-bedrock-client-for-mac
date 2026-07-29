@@ -123,11 +123,14 @@ final class MantleResponsesService: Sendable {
                         case "response.completed":
                             if let resp = event["response"] as? [String: Any],
                                let usage = resp["usage"] as? [String: Any] {
+                                // GPT-5.6 supports prompt caching and reports it under
+                                // input_tokens_details (cached_tokens is already part of input_tokens).
+                                let details = usage["input_tokens_details"] as? [String: Any]
                                 let usageInfo = UsageInfo(
                                     inputTokens: usage["input_tokens"] as? Int,
                                     outputTokens: usage["output_tokens"] as? Int,
-                                    cacheCreationInputTokens: nil,
-                                    cacheReadInputTokens: nil
+                                    cacheCreationInputTokens: details?["cache_write_tokens"] as? Int,
+                                    cacheReadInputTokens: details?["cached_tokens"] as? Int
                                 )
                                 usageHandler?(usageInfo)
                             }

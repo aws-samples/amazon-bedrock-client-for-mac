@@ -309,7 +309,7 @@ class Backend: Equatable, @unchecked Sendable {
     func isReasoningSupported(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -320,7 +320,7 @@ class Backend: Equatable, @unchecked Sendable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -343,23 +343,81 @@ class Backend: Equatable, @unchecked Sendable {
             return false
         }
     }
-    
+
     /// Check if this is Claude 4.5 or later model (which only supports temperature OR top_p, not both)
     /// This applies to all Anthropic models from version 4.5 onwards
     func isClaude45OrLater(_ modelType: ModelType) -> Bool {
         switch modelType {
-        case .claudeSonnet45, .claudeHaiku45, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claudeSonnet45, .claudeHaiku45, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         default:
             return false
         }
     }
 
+    /// Check if a model rejects sampling parameters (temperature / top_p / top_k) outright.
+    /// Claude Opus 5, Sonnet 5, and Fable 5 return 400 when any of them is sent.
+    func omitsSamplingParameters(_ modelType: ModelType) -> Bool {
+        switch modelType {
+        case .claudeSonnet5, .claudeOpus5, .claudeFable5:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Claude Opus 5 accepts `reasoning_config: {"type": "disabled"}` only at effort `high` or
+    /// lower — pairing it with `xhigh`/`max` returns a 400. Clamp the effort in that case.
+    func effortForDisabledThinking(_ effort: String) -> String {
+        switch effort {
+        case "xhigh", "max":
+            return "high"
+        default:
+            return effort
+        }
+    }
+
+    // MARK: - Bedrock Mantle Model Availability
+
+    /// OpenAI frontier models served only via the bedrock-mantle Responses API. They are not
+    /// returned by the bedrock control plane, so the app has to know about them itself.
+    ///
+    /// There is no cross-region inference (CRIS) for these at launch, so each entry lists the
+    /// regions that actually serve it — offering a model in any other region just produces a
+    /// confusing failure at request time.
+    static let mantleModels: [(id: String, name: String, regions: Set<String>)] = [
+        // GPT-5.6 Sol: flagship reasoning tier — N. Virginia and Ohio only
+        ("openai.gpt-5.6-sol", "GPT-5.6 Sol", ["us-east-1", "us-east-2"]),
+        // GPT-5.6 Terra / Luna: also served from Oregon
+        ("openai.gpt-5.6-terra", "GPT-5.6 Terra", ["us-east-1", "us-east-2", "us-west-2"]),
+        ("openai.gpt-5.6-luna", "GPT-5.6 Luna", ["us-east-1", "us-east-2", "us-west-2"]),
+        // Previous generation
+        ("openai.gpt-5.5", "GPT-5.5", ["us-east-1", "us-east-2"]),
+        ("openai.gpt-5.4", "GPT-5.4", ["us-east-1", "us-east-2", "us-west-2"])
+    ]
+
+    /// Regions that serve the given Mantle model, or nil if it isn't a known Mantle model.
+    static func mantleRegions(for modelId: String) -> Set<String>? {
+        // Match on the longest ID first so `gpt-5.6-sol` doesn't get shadowed by a shorter entry
+        let lowerId = modelId.lowercased()
+        return mantleModels
+            .filter { lowerId.contains($0.id.lowercased()) }
+            .max(by: { $0.id.count < $1.id.count })?
+            .regions
+    }
+
+    /// Whether the given Mantle model is served in this backend's region.
+    /// Non-Mantle models are unaffected and always return true.
+    func isMantleModelAvailableInRegion(_ modelId: String) -> Bool {
+        guard let regions = Backend.mantleRegions(for: modelId) else { return true }
+        return regions.contains(region)
+    }
+
     /// Check if a model is an OpenAI frontier model served via the bedrock-mantle Responses API
     /// (not available through bedrock-runtime InvokeModel/Converse)
     func isMantleResponsesModel(_ modelId: String) -> Bool {
         switch getModelType(modelId) {
-        case .openaiGpt55, .openaiGpt54:
+        case .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna:
             return true
         default:
             return false
@@ -371,7 +429,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Anthropic models that support prompt caching
-        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         // Models that don't support prompt caching (including Nova models due to image caching issues)
         default:
@@ -397,7 +455,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
             // Models that support document chat
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
@@ -455,9 +513,9 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support system prompts
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
-        case .openaiGpt55, .openaiGpt54:
+        case .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
@@ -506,7 +564,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
+        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
             return true
         // Llama 4 models support vision
         case .llama4Maverick, .llama4Scout:
@@ -550,7 +608,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -586,7 +644,7 @@ class Backend: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support streaming tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -655,9 +713,12 @@ class Backend: Equatable, @unchecked Sendable {
 
     /// Helper function to determine the model type based on modelId
     func getModelType(_ modelId: String) -> ModelType {
-        // OpenAI frontier model IDs contain dots in the version (openai.gpt-5.5),
+        // OpenAI frontier model IDs contain dots in the version (openai.gpt-5.6-sol),
         // which breaks the dot-separated provider parsing below — match on the full ID first
         let lowerFullId = modelId.lowercased()
+        if lowerFullId.contains("gpt-5.6-sol") { return .openaiGpt56Sol }
+        if lowerFullId.contains("gpt-5.6-terra") { return .openaiGpt56Terra }
+        if lowerFullId.contains("gpt-5.6-luna") { return .openaiGpt56Luna }
         if lowerFullId.contains("gpt-5.5") { return .openaiGpt55 }
         if lowerFullId.contains("gpt-5.4") { return .openaiGpt54 }
 
@@ -693,6 +754,8 @@ class Backend: Equatable, @unchecked Sendable {
                 return .claudeHaiku45
             } else if modelNameAndVersion.contains("claude-fable-5") {
                 return .claudeFable5
+            } else if modelNameAndVersion.contains("claude-opus-5") {
+                return .claudeOpus5
             } else if modelNameAndVersion.contains("claude-opus-4-8") {
                 return .claudeOpus48
             } else if modelNameAndVersion.contains("claude-opus-4-7") {
@@ -949,6 +1012,12 @@ class Backend: Equatable, @unchecked Sendable {
                     temperature: 0.9
                 )
             }
+        case .claudeOpus5:
+            // Opus 5 rejects temperature/top_p/top_k outright and thinks by default,
+            // so maxTokens must leave room for thinking plus the response text.
+            return BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: 32000
+            )
         case .claudeFable5:
             // Fable 5: adaptive thinking is always on; temperature must be 1.0 or unset,
             // top_p must be >= 0.99 or unset, top_k unsupported — omit all sampling params
@@ -1217,6 +1286,13 @@ class Backend: Equatable, @unchecked Sendable {
                 maxTokens: modelConfig.overrideDefault ? modelConfig.requestMaxTokens : 4096
             )
             logger.info("Using Sonnet 5 inference config (sampling params omitted)")
+        } else if modelType == .claudeOpus5 {
+            // Opus 5 rejects temperature/top_p/top_k with a 400 and thinks by default,
+            // so send maxTokens only and keep enough headroom for thinking + response.
+            config = BedrockRuntimeClientTypes.InferenceConfiguration(
+                maxTokens: modelConfig.overrideDefault ? modelConfig.requestMaxTokens : 32000
+            )
+            logger.info("Using Opus 5 inference config (maxTokens only, sampling params omitted)")
         } else if modelType == .claudeFable5 {
             // Fable 5 rejects temperature != 1.0 and top_p < 0.99; top_k unsupported — send maxTokens only
             config = BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -1316,6 +1392,37 @@ class Backend: Equatable, @unchecked Sendable {
                 logger.info("Added Sonnet 5 reasoning configuration")
             } catch {
                 logger.error("Failed to create Sonnet 5 reasoning config document: \(error)")
+            }
+        } else if modelType == .claudeOpus5 {
+            // Opus 5 thinks by default, so disabling it must be explicit. Disabled thinking is
+            // only accepted at effort `high` or lower — xhigh/max return a 400, so clamp it.
+            do {
+                let effortLevel = modelConfig.reasoningEffort.isEmpty ? "high" : modelConfig.reasoningEffort
+                let reasoningConfig: [String: Any]
+                if isThinkingEnabled {
+                    reasoningConfig = [
+                        "reasoning_config": [
+                            "type": "adaptive",
+                            "display": "summarized"
+                        ],
+                        "output_config": [
+                            "effort": effortLevel
+                        ]
+                    ]
+                } else {
+                    reasoningConfig = [
+                        "reasoning_config": [
+                            "type": "disabled"
+                        ],
+                        "output_config": [
+                            "effort": effortForDisabledThinking(effortLevel)
+                        ]
+                    ]
+                }
+                request.additionalModelRequestFields = try Document.make(from: reasoningConfig)
+                logger.info("Added Opus 5 reasoning configuration (thinking: \(isThinkingEnabled ? "adaptive" : "disabled"), effort: \(isThinkingEnabled ? effortLevel : effortForDisabledThinking(effortLevel)))")
+            } catch {
+                logger.error("Failed to create Opus 5 reasoning config document: \(error)")
             }
         } else if isReasoningModel && isThinkingEnabled {
             do {
@@ -1444,17 +1551,35 @@ class Backend: Equatable, @unchecked Sendable {
     
     // MARK: - Bedrock Mantle (Responses API)
 
-    /// Streams an OpenAI frontier model (GPT-5.5 / GPT-5.4) response via the
-    /// bedrock-mantle Responses API. These models are not served by bedrock-runtime.
+    /// Streams an OpenAI frontier model (GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5.4) response
+    /// via the bedrock-mantle Responses API. These models are not served by bedrock-runtime.
     func mantleResponsesStream(
         modelId: String,
         input: [[String: Any]],
         usageHandler: (@Sendable (UsageInfo) -> Void)? = nil
     ) async -> AsyncThrowingStream<String, Error> {
+        // Guard the region before signing anything. A saved chat keeps pointing at its model
+        // after the user switches regions, so without this the request goes to a bedrock-mantle
+        // endpoint that doesn't serve the model and surfaces an opaque HTTP failure.
+        if let regions = Backend.mantleRegions(for: modelId), !regions.contains(region) {
+            let available = regions.sorted().joined(separator: ", ")
+            let message = "\(modelId) is not available in \(region). It is served in: \(available). Switch regions in Settings to use this model."
+            logger.error("Mantle Responses API region mismatch: \(message)")
+            return AsyncThrowingStream { continuation in
+                continuation.finish(throwing: NSError(
+                    domain: "MantleResponsesService", code: 404,
+                    userInfo: [NSLocalizedDescriptionKey: message]
+                ))
+            }
+        }
+
         let modelConfig = await MainActor.run { SettingManager.shared.getInferenceConfig(for: modelId) }
         let apiKey = await MainActor.run { SettingManager.shared.bedrockApiKey }
-        let maxTokens = modelConfig.overrideDefault ? modelConfig.maxTokens : 8192
-        let effort = modelConfig.reasoningEffort.isEmpty ? "medium" : modelConfig.reasoningEffort
+        // Fall back to the model's own defaults rather than a fixed 8192/medium, so each
+        // GPT-5.6 tier gets its own token budget and effort baseline.
+        let range = ModelInferenceRange.getRangeForModel(modelId)
+        let maxTokens = modelConfig.overrideDefault ? modelConfig.maxTokens : range.defaultMaxTokens
+        let effort = modelConfig.reasoningEffort.isEmpty ? range.defaultReasoningEffort : modelConfig.reasoningEffort
 
         // Bearer token takes precedence when set; otherwise SigV4 with the app's credential chain
         let service = MantleResponsesService(
@@ -1576,15 +1701,9 @@ class Backend: Equatable, @unchecked Sendable {
             if var modelSummaries = response.modelSummaries {
                 // OpenAI frontier models are served only via bedrock-mantle and are not
                 // returned by the bedrock control plane — append them so they're selectable.
-                // No CRIS at launch, so only offer them in regions that actually serve them:
-                // GPT-5.5 in us-east-2 (Ohio) and us-east-1 (N. Virginia);
-                // GPT-5.4 in us-east-2, us-west-2 (Oregon), and us-east-1 (N. Virginia).
                 let existingIds = Set(modelSummaries.compactMap { $0.modelId })
-                let mantleModels: [(id: String, name: String, regions: Set<String>)] = [
-                    ("openai.gpt-5.5", "GPT-5.5", ["us-east-2", "us-east-1"]),
-                    ("openai.gpt-5.4", "GPT-5.4", ["us-east-2", "us-west-2", "us-east-1"])
-                ]
-                for model in mantleModels where model.regions.contains(self.region) && !existingIds.contains(model.id) {
+                for model in Backend.mantleModels
+                where model.regions.contains(self.region) && !existingIds.contains(model.id) {
                     modelSummaries.append(
                         BedrockClientTypes.FoundationModelSummary(
                             inputModalities: [.text],
@@ -1685,7 +1804,7 @@ struct UsageInfo {
 
 enum ModelType {
     // Anthropic models
-    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeSonnet5, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeFable5
+    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeSonnet5, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeOpus5, claudeFable5
     // Meta models
     case llama2, llama3, llama31, llama32Small, llama32Large, llama33, llama4Maverick, llama4Scout
     // Mistral models
@@ -1705,6 +1824,8 @@ enum ModelType {
     case openaiGptOss120b, openaiGptOss20b, openaiGptOssSafeguard
     // OpenAI frontier models (bedrock-mantle Responses API only)
     case openaiGpt55, openaiGpt54
+    // OpenAI GPT-5.6 capability tiers (bedrock-mantle Responses API only)
+    case openaiGpt56Sol, openaiGpt56Terra, openaiGpt56Luna
     // DeepSeek models
     case deepseekr1, deepseekv3
     // Qwen models

@@ -585,15 +585,17 @@ struct AdvancedOptionsMenu: View {
     // Check if current model supports reasoning/thinking
     private var supportsThinking: Bool {
         let id = modelId.lowercased()
-        // Claude 3.7, Claude 4 series, Claude Fable 5, DeepSeek R1, OpenAI GPT-OSS/GPT-5.x, and Nova 2 Lite support thinking
+        // Claude 3.7, Claude 4 series, Claude Opus 5, Claude Fable 5, DeepSeek R1, OpenAI GPT-OSS/GPT-5.x, and Nova 2 Lite support thinking
         return id.contains("claude-3-7") ||
                id.contains("claude-sonnet-4") ||
                id.contains("claude-haiku-4") ||
                id.contains("claude-opus-4") ||
+               id.contains("claude-opus-5") ||
+               id.contains("claude-sonnet-5") ||
                id.contains("claude-fable-5") ||
                (id.contains("deepseek") && id.contains("r1")) ||
                (id.contains("openai") && id.contains("gpt-oss")) ||
-               id.contains("gpt-5.5") || id.contains("gpt-5.4") ||
+               id.contains("gpt-5.6") || id.contains("gpt-5.5") || id.contains("gpt-5.4") ||
                (id.contains("nova-2") && id.contains("lite"))
     }
 
@@ -603,7 +605,7 @@ struct AdvancedOptionsMenu: View {
         // DeepSeek R1, Claude Fable 5, and OpenAI GPT-5.x have always-on thinking
         return (id.contains("deepseek") && id.contains("r1")) ||
                id.contains("claude-fable-5") ||
-               id.contains("gpt-5.5") || id.contains("gpt-5.4")
+               id.contains("gpt-5.6") || id.contains("gpt-5.5") || id.contains("gpt-5.4")
     }
     
     // Check if thinking toggle should be shown
@@ -615,10 +617,12 @@ struct AdvancedOptionsMenu: View {
     private var supportsStreamingTools: Bool {
         let id = modelId.lowercased()
         return (
-            // Claude models (3 and 4 series, Fable 5)
+            // Claude models (3 and 4 series, Opus 5, Sonnet 5, Fable 5)
             (id.contains("claude-3") && !id.contains("haiku")) ||
             id.contains("claude-sonnet-4") ||
+            id.contains("claude-sonnet-5") ||
             id.contains("claude-opus-4") ||
+            id.contains("claude-opus-5") ||
             id.contains("claude-fable-5") ||
             
             // Amazon Nova models (including Nova 2)
