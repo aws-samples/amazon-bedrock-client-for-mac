@@ -25,7 +25,7 @@
 | Error recovery | UI receives a real SDK validation error from the fixture and successfully sends the next message |
 | Existing data and explicit settings | Core tests cover historical JSON/Core Data-compatible records, migration defaults, future/corrupt data, import/export, paths and atomic writes |
 | Model/task compatibility | Core routing and demo tests; app inference configuration tests for omission, reasoning, profile and model-family behavior |
-| Release integrity | Source/tag/version match, production bundle identity, Intel + Apple silicon executable, strict signature, hardened runtime, accepted notarization and stapled app/DMG |
+| Release integrity | Source/tag/version match, production bundle identity, Intel + Apple silicon executable, strict signature, hardened runtime, accepted notarization and stapled app/DMG; read-only mounting verifies the packaged app, exact executable and Applications link |
 
 ## What the loopback server tests
 

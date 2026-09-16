@@ -7,10 +7,10 @@ desktop windows out of the capture.
 ## Current capture
 
 Recorded September 16, 2026 from the optimized 2.0.0 app on macOS 26.6.2.
-The app uses the source at `734ef9a8365bcc3c74a441474c2f132a65702b94` and a
-separate demonstration identity. Subsequent documentation and CI changes do
-not alter this UI. The executable's Mach-O UUID is
-`F0AD5577-F44C-3321-93F2-C33C17C61939`.
+The app uses the source at `2ea14812fc6654a97b96ea0f6573c4cbee4dc5fb` and a
+separate demonstration identity. It includes the native rendering, clipboard,
+scene-observation and compiler-compatibility fixes. The executable's Mach-O
+UUID is `D4EE1420-D60F-3D1C-95A1-58FACDD07980`.
 
 The conversation and tool results came from a real Nova 2 Lite request with
 `Median.swift`. The recording then selects GPT-6 Astra for a later turn;

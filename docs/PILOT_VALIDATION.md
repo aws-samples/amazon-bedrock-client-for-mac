@@ -709,12 +709,23 @@ the same assertions and compiled in run `35093816527`; native rendering and
 clipboard tests then passed there. Full-app compilation then exposed the stable
 compiler's expression-complexity limit in `MainView`. Layout, lifecycle and
 presentation now have separate opaque view expressions, retaining the same
-modifiers and behavior. UI execution and release publication are tracked
-independently in the delivery ledger, not inferred from a successful compile.
+modifiers and behavior. Run `35097704466` then passed all 88 core and 37
+renderer/clipboard cases, but Swift 6.3.3 crashed during IR generation of an
+actor-isolated `Int` callback. Inference bindings now use explicit setter
+closures instead of converting method references to generic setters. UI
+execution and release publication are tracked independently in the delivery
+ledger, not inferred from a successful compile.
 
 Updated Validation identity/data were retained. All 122 app Swift sources matched
 the installed Release build; its Mach-O UUID is
-`F0AD5577-F44C-3321-93F2-C33C17C61939`. Local evidence is in
-`/tmp/bedrock-pilot-validation/release-preflight/app-integration-77/` and
-`usability-regression/after-fixes/`. README media uses a separate demonstration
-identity with the same application sources; see [capture details](SCREENSHOTS.md).
+`D4EE1420-D60F-3D1C-95A1-58FACDD07980`. The latest run includes the stable-compiler
+view split and dependency removal. Of 73 integration cases, 69 passed and the
+four explicitly optional network checks were skipped. A targeted 1,000-message
+check retained the previous typing/scroll responsiveness, shortcuts, Settings
+lifecycle and all four restored attachments.
+
+Local evidence is in
+`/tmp/bedrock-pilot-validation/release-preflight/app-integration-79/`,
+`release-preflight/final-native-smoke/` and `usability-regression/after-fixes/`.
+README media uses a separate demonstration identity with the same application
+sources; see [capture details](SCREENSHOTS.md).

@@ -27,7 +27,7 @@ jobs:
       contents: write
     env:
       APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Release/Amazon Bedrock.app
-      DMG_PATH: Amazon Bedrock Client for Mac.dmg
+      DMG_PATH: Amazon.Bedrock.Client.for.Mac.dmg
       LLVM_PROFILE_FILE: /tmp/bedrock-%p.profraw
 
     steps:
@@ -111,22 +111,40 @@ jobs:
           python3 scripts/notarize.py artifacts/Amazon_Bedrock.zip --report artifacts/notarization-app.json
           xcrun stapler staple "$APP_PATH"
           xcrun stapler validate "$APP_PATH"
+          syspolicy_check distribution "$APP_PATH"
           rm artifacts/Amazon_Bedrock.zip
       - name: Package universal DMG
         run: |
-          create-dmg --window-pos 200 120 \
+          mkdir -p "$RUNNER_TEMP/BedrockDistribution"
+          ditto "$APP_PATH" "$RUNNER_TEMP/BedrockDistribution/Amazon Bedrock.app"
+          create-dmg --volname "Amazon Bedrock" --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
             --icon "Amazon Bedrock.app" 200 190 \
             --hide-extension "Amazon Bedrock.app" \
             --app-drop-link 600 185 \
-            "$DMG_PATH" "$APP_PATH"
+            "$DMG_PATH" "$RUNNER_TEMP/BedrockDistribution"
+          codesign --force --timestamp --sign "Developer ID Application" "$DMG_PATH"
+          codesign --verify --strict --verbose=2 "$DMG_PATH"
       - name: Notarize and verify the DMG
         run: |
           python3 scripts/notarize.py "$DMG_PATH" --report artifacts/notarization-dmg.json
           xcrun stapler staple "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH"
           shasum -a 256 "$DMG_PATH" > SHA256SUMS.txt
+      - name: Verify the packaged installation
+        run: |
+          BEDROCK_DMG_VOLUME="$RUNNER_TEMP/BedrockDMG"
+          mkdir -p "$BEDROCK_DMG_VOLUME"
+          hdiutil attach -readonly -nobrowse -mountpoint "$BEDROCK_DMG_VOLUME" "$DMG_PATH"
+          trap 'hdiutil detach "$BEDROCK_DMG_VOLUME"' EXIT
+          python3 scripts/verify-release.py --app "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app"
+          codesign --verify --deep --strict --verbose=2 "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app"
+          xcrun stapler validate "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app"
+          cmp "$APP_PATH/Contents/MacOS/Amazon Bedrock" \
+            "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app/Contents/MacOS/Amazon Bedrock"
+          test "$(readlink "$BEDROCK_DMG_VOLUME/Applications")" = /Applications
       - name: Preserve build and notarization evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1
@@ -142,7 +160,7 @@ jobs:
         with:
           name: Amazon Bedrock Client for Mac
           path: |
-            Amazon Bedrock Client for Mac.dmg
+            Amazon.Bedrock.Client.for.Mac.dmg
             SHA256SUMS.txt
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -152,7 +170,7 @@ jobs:
           body_path: docs/releases/${{ env.RELEASE_VERSION }}.md
           fail_on_unmatched_files: true
           files: |
-            Amazon Bedrock Client for Mac.dmg
+            Amazon.Bedrock.Client.for.Mac.dmg
             SHA256SUMS.txt
             assets/readme/demo.mp4
           draft: false

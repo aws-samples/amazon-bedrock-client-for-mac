@@ -402,6 +402,8 @@ struct InferenceConfigPopoverContent: View {
     }
 
     // MARK: - Individual Controls
+    // Explicit setter closures avoid Swift 6.3's actor-isolated method-reference
+    // reabstraction crash when Binding specializes a value such as Int.
 
     private var maxTokensControl: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -419,7 +421,7 @@ struct InferenceConfigPopoverContent: View {
                 .accessibilityLabel("Maximum output tokens")
                 .accessibilityIdentifier("responseSettings.maxTokens")
                 Toggle("Include output limit", isOn: Binding(
-                    get: { config.includeMaxTokens }, set: updateMaxTokensInclusion
+                    get: { config.includeMaxTokens }, set: { updateMaxTokensInclusion($0) }
                 ))
                 .labelsHidden().toggleStyle(WorkbenchSwitchStyle(showsLabel: false)).frame(width: 36)
                 .accessibilityLabel("Include output limit")
@@ -443,7 +445,7 @@ struct InferenceConfigPopoverContent: View {
             "Temperature",
             value: Binding(get: { isTemperatureDisabled ? 1 : Double(config.temperature) }, set: { updateTemperature(Float($0)) }),
             bounds: Double(range.temperatureRange.lowerBound)...Double(range.temperatureRange.upperBound),
-            included: Binding(get: { config.includeTemperature }, set: updateTemperatureInclusion),
+            included: Binding(get: { config.includeTemperature }, set: { updateTemperatureInclusion($0) }),
             enabled: !isTemperatureDisabled,
             explanation: isTemperatureDisabled ? "Fixed at 1.0 while model thinking is enabled." : nil
         )
@@ -454,7 +456,7 @@ struct InferenceConfigPopoverContent: View {
             "Top P",
             value: Binding(get: { Double(config.topP) }, set: { updateTopP(Float($0)) }),
             bounds: Double(range.topPRange.lowerBound)...Double(range.topPRange.upperBound),
-            included: Binding(get: { config.includeTopP }, set: updateTopPInclusion)
+            included: Binding(get: { config.includeTopP }, set: { updateTopPInclusion($0) })
         )
     }
 
@@ -512,7 +514,7 @@ struct InferenceConfigPopoverContent: View {
                 Text("Thinking budget").font(WorkbenchStyle.label)
                 Spacer(minLength: 8)
                 TextField("Thinking budget", value: Binding(
-                    get: { config.thinkingBudget }, set: updateThinkingBudget
+                    get: { config.thinkingBudget }, set: { updateThinkingBudget($0) }
                 ), format: .number.grouping(.never))
                 .labelsHidden().textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing).frame(width: 100)
@@ -612,7 +614,7 @@ struct InferenceConfigPopoverContent: View {
 
             // Adaptive models expose their supported effort levels.
             WorkbenchSegmentedControl(title: "Reasoning effort",
-                                      selection: Binding(get: { selectedReasoningEffort }, set: updateReasoningEffort),
+                                      selection: Binding(get: { selectedReasoningEffort }, set: { updateReasoningEffort($0) }),
                                       options: effortOptions)
             .frame(maxWidth: .infinity)
 

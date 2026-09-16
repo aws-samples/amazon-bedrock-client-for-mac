@@ -137,3 +137,16 @@ The 70, 71, and 73 measurements and interaction records use corresponding
 toolbar labels and disabled Back state were checked after chat changes,
 Settings, popovers, and sidebar toggling. Native toolbar hit targets are
 40×38 points; the visible glyphs remain 14 points.
+
+The release preparation build also split `MainView`'s large SwiftUI expression
+for the stable Xcode compiler and removed an unused Vapor dependency. A targeted
+check of that exact optimized executable (`D4EE1420-D60F-3D1C-95A1-58FACDD07980`)
+used the same 1,000-message fixture, 1240×780 window and Light appearance.
+Typing measured median 10.52ms, p95 14.13ms and maximum 35.59ms. The scroll
+probe completed in 5.985s with no failures. These are consistency checks
+after the build changes, not evidence of an additional speedup.
+
+Command-B, K, F, comma, W and Back remained functional. Three images and the
+complete pasted-text attachment restored after replacement of the executable.
+Raw records are in
+`/tmp/bedrock-pilot-validation/release-preflight/final-native-smoke/`.
