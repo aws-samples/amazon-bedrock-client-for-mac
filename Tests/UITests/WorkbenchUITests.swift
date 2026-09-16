@@ -14,6 +14,7 @@ final class WorkbenchUITests: XCTestCase {
         app.launchEnvironment["BEDROCK_TEST_OFFLINE"] = "1"
         app.launchArguments = ["-checkForUpdates", "NO", "-enableQuickAccess", "NO", "-mcpEnabled", "NO",
                                "-appearance", appearance, "-selectedRegion", "us-west-2",
+                               "-selectedProfile", "default",
                                "-defaultModelId", "us.amazon.nova-2-lite-v1:0"]
         let fixture = try withRuntime ? BedrockUITestFixture(directory: directory) : nil
         runtime = fixture
@@ -561,6 +562,34 @@ final class WorkbenchUITests: XCTestCase {
     }
 
     @MainActor
+    func testFinishingAStreamDoesNotMoveThePassageBeingRead() throws {
+        let (app, directory) = try launch(withRuntime: true)
+        importThread(try longConversation(in: directory), in: app)
+        XCTAssertTrue(app.buttons["conversation.loadEarlier"].waitForExistence(timeout: 10))
+        send("[stream] Keep the previous passage readable while this finishes.", in: app)
+        _ = response("STREAM_BEGIN", in: app)
+        let window = app.windows["MainWindow"]
+        let transcript = window.scrollViews.containing(.button, identifier: "conversation.loadEarlier").firstMatch
+        let anchor = window.staticTexts["Fixture question 492"]
+        for _ in 0..<10 {
+            transcript.scroll(byDeltaX: 0, deltaY: 300)
+            if anchor.exists, anchor.frame.minY > window.frame.minY + 80,
+               anchor.frame.maxY < composer(app).frame.minY - 40 { break }
+        }
+        XCTAssertTrue(anchor.isHittable, "The test must read an older visible passage, not stay at the bottom.")
+        let before = anchor.frame.minY
+        try XCTUnwrap(runtime).releaseStream()
+        _ = response("STREAM_COMPLETE", in: app)
+        let preserved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            anchor.exists && abs(anchor.frame.minY - before) < 2
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [preserved], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons["Scroll to latest message"].exists)
+        app.buttons["Scroll to latest message"].click()
+        XCTAssertTrue(response("STREAM_COMPLETE", in: app).isHittable)
+    }
+
+    @MainActor
     func testStopPausesQueuedMessagesAndResumeKeepsPartialOutput() throws {
         let (app, directory) = try launch(withRuntime: true)
         send("[stream] This response will be stopped.", in: app)
@@ -615,8 +644,12 @@ final class WorkbenchUITests: XCTestCase {
         let call = app.descendants(matching: .any).matching(identifier: "toolCall.fixture-exec").firstMatch
         XCTAssertTrue(call.exists)
         call.click()
-        XCTAssertTrue(app.buttons["Open details"].waitForExistence(timeout: 3))
-        app.buttons["Open details"].click()
+        let open = app.buttons["Open details"]
+        XCTAssertTrue(open.waitForExistence(timeout: 3))
+        for _ in 0..<3 where !open.isHittable {
+            app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
+        }
+        open.click()
         let detail = app.textViews["Tool detail text"]
         XCTAssertTrue(detail.waitForExistence(timeout: 3))
         XCTAssertTrue((detail.value as? String)?.contains("EXEC_FROM_REAL_TOOL") == true)

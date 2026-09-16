@@ -3,6 +3,7 @@
 from collections import Counter
 import json
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -43,6 +44,14 @@ def main():
         "Amazon Bedrock Client for MacTests": set((root / "Tests/Integration").glob("*.swift")),
         "Amazon Bedrock Client for MacUITests": set((root / "Tests/UITests").glob("*.swift")),
     }
+    imported_modules = {
+        module
+        for path in expected["Amazon Bedrock Client for Mac"]
+        for module in re.findall(r"^\s*(?:@\w+\s+)?import\s+(\w+)", path.read_text(), re.M)
+    }
+    # A package product can expose a differently named module. Keep intentional
+    # aliases explicit so an unused linked framework cannot quietly return.
+    product_modules = {"SystemPackage": "System"}
     counts = {}
     for target in (item for item in objects.values() if item.get("isa") == "PBXNativeTarget"):
         name = target["name"]
@@ -66,6 +75,11 @@ def main():
             for path in sorted(set(sources) - expected[name]):
                 errors.append(f"{name}: unexpected source membership for {path.relative_to(root)}")
         counts[name] = len(sources)
+        if name == "Amazon Bedrock Client for Mac":
+            for dependency in target.get("packageProductDependencies", []):
+                product = objects[dependency]["productName"]
+                if product_modules.get(product, product) not in imported_modules:
+                    errors.append(f"Unused app package product: {product} has no import in the app sources.")
 
         configurations = objects[target["buildConfigurationList"]]["buildConfigurations"]
         for configuration in configurations:

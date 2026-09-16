@@ -1,20 +1,24 @@
 # Dependency refresh — September 16, 2026
 
 Stable releases were checked against the maintainers' release lists. The app's
-four direct Swift package requirements and the complete compatible resolution
+three retained direct Swift package requirements and their compatible resolution
 are updated. `Package.resolved` is now tracked in the Xcode workspace so CI and
-local Xcode builds use the same 37-package graph.
+local Xcode builds use the same 30-package graph.
 
 | Dependency | Previous checkout | Updated stable release | Primary source |
 | --- | --- | --- | --- |
 | AWS SDK for Swift | 1.6.97 | 1.7.84 | [AWS release](https://github.com/awslabs/aws-sdk-swift/releases/tag/1.7.84) |
 | MCP Swift SDK | 0.12.0 | 0.12.1 | [MCP release](https://github.com/modelcontextprotocol/swift-sdk/releases/tag/0.12.1) |
 | MarkdownKit | 1.3.0 | 1.4.1 | [MarkdownKit release](https://github.com/objecthub/swift-markdownkit/releases/tag/1.4.1) |
-| Vapor | 4.119.0 | 4.122.1 | [Vapor release](https://github.com/vapor/vapor/releases/tag/4.122.1) |
 | Bundled Highlight.js | 11.5.1 | 11.12.0 | [Maintainer CDN distribution](https://github.com/highlightjs/cdn-release/tree/11.12.0/build) |
 
-Vapor 5.0.0-beta.1 is excluded because it is a preview. Transitive packages are
-resolved to the newest versions compatible with this stable graph, including
+The unused Vapor product and package reference have been removed. This also
+removes AsyncKit, ConsoleKit, MultipartKit, RoutingKit, Swift Metrics and
+WebSocketKit from resolution: 37 packages become 30, with every retained version
+and revision unchanged. The source-membership validator now rejects directly
+linked package products with no app import.
+
+Transitive packages were resolved to compatible stable versions, including
 Smithy 0.251.0, AWS CRT 0.64.1, Swift Collections 1.6.0 and Swift Log 1.15.1.
 The lockfile records all versions and revisions; a transitive package's next
 incompatible major version is not silently substituted.
@@ -38,10 +42,11 @@ recorded in `Sources/Bedrock/Resources/Highlight/README.md`.
 
 ## CI
 
-The validation workflow runs on pull requests and on demand. Release builds
-depend on this workflow completing successfully.
+The validation workflow runs on main and release-branch pushes, pull requests,
+and on demand. Release tags call the same workflow before packaging. The pinned
+source graph is cached; compiled test and distribution products are built separately.
 
-- Checkout 7.0.1; Upload Artifact 7.0.1; setup-xcode 1.7.0.
+- Checkout 7.0.1; Upload Artifact 7.0.1; setup-xcode 1.7.0; Cache 6.1.0.
 - Release workflow: import-codesign-certs 7.0.0; action-gh-release 3.0.3.
 - Core filesystem, parser, migration, queue, attachment and skill tests.
 - Production native Markdown/clipboard tests.
@@ -74,29 +79,12 @@ python3 scripts/validate-markdown-rendering.py \
 Both scripts accept `--developer-dir` and `--xcode`. They fail if no XCTest
 bundle or no executed tests are found.
 
-Full app and UI suite, with an installed, licensed Xcode:
+The full optimized app and UI suite is documented in
+[Development](DEVELOPMENT.md#regression-suites). Its scheme provides isolated
+storage, offline mode and fixture paths. UI tests create fresh data per case.
+Normal launches and distribution Release builds retain the production identity
+and do not enable the fixture transport.
 
-```sh
-xcodebuild test \
-  -project "Amazon Bedrock Client for Mac.xcodeproj" \
-  -scheme "Amazon Bedrock Client for Mac" \
-  -configuration Debug \
-  -destination "platform=macOS" \
-  -derivedDataPath /tmp/BedrockTestsDerived \
-  -resultBundlePath /tmp/BedrockTests.xcresult \
-  -disableAutomaticPackageResolution \
-  -parallel-testing-enabled NO \
-  BEDROCK_APP_BUNDLE_IDENTIFIER=AWS.Amazon-Bedrock-Client-for-Mac.UITestHost \
-  CODE_SIGNING_ALLOWED=NO
-```
-
-The test action explicitly supplies isolated storage, offline mode and fixture
-paths to the hosted test process. UI tests additionally create a fresh data
-directory for each case. Normal app launch and Release builds retain the
-original bundle identifier and behavior.
-
-Executed results are recorded in `PILOT_VALIDATION.md`. GitHub CI has not been
-triggered from this uncommitted workspace. The installed Xcode currently awaits
-license acceptance; local validation uses the CLT compiler and Xcode's XCTest
-runner, plus actual app interaction. It does not establish macOS 27 runtime
-compatibility or signed Release/notarization success.
+Executed local and GitHub results belong in [PILOT_VALIDATION.md](PILOT_VALIDATION.md)
+and the [CI scenario map](CI_COVERAGE.md). Compilation, executed tests, live AWS
+access, and signed/notarized distribution are separate validation stages.

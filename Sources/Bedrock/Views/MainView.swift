@@ -39,7 +39,7 @@ struct MainView: View {
         return catalog.defaultModel
     }
 
-    var body: some View {
+    private var windowContent: some View {
         GeometryReader { window in
             HStack(spacing: 0) {
                 Group {
@@ -82,6 +82,10 @@ struct MainView: View {
             // to the window and can push the sidebar/header above the screen.
             .frame(width: window.size.width, height: window.size.height, alignment: .topLeading)
         }
+    }
+
+    private var styledContent: some View {
+        windowContent
         .background {
             WorkbenchSplitSurface(sidebarWidth: sidebarVisible ? sidebarWidth : 0)
         }
@@ -108,6 +112,10 @@ struct MainView: View {
         .tint(WorkbenchStyle.accent)
         .buttonStyle(WorkbenchButtonStyle())
         .toggleStyle(WorkbenchSwitchStyle())
+    }
+
+    private var navigationContent: some View {
+        styledContent
         .onChange(of: location) { previous, next in navigationHistory.record(from: previous, to: next) }
         .onAppear {
             WorkbenchWindows.openMain = { openWindow(id: "MainWindow") }
@@ -135,6 +143,10 @@ struct MainView: View {
         .onChange(of: store.requestedDemoID) { _, id in
             if let id, let demo = store.demos.first(where: { $0.id == id }) { store.requestedDemoID = nil; useDemo(demo) }
         }
+    }
+
+    private var coordinatedContent: some View {
+        navigationContent
         .onChange(of: coordinator.shouldCreateNewChat) { _, create in
             guard create else { return }
             coordinator.shouldCreateNewChat = false
@@ -150,6 +162,10 @@ struct MainView: View {
             if let approval, !requests.contains(where: { $0.id == approval.id }) { showApproval = false }
             if approval == nil, let first = requests.first { approval = first; showApproval = true }
         }
+    }
+
+    private var presentedContent: some View {
+        coordinatedContent
         .sheet(isPresented: $showApproval, onDismiss: {
             if let approval { approvals.resolve(approval.id, allow: false) }
             approval = nil
@@ -169,6 +185,10 @@ struct MainView: View {
         .alert("Bedrock", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
+    }
+
+    var body: some View {
+        presentedContent
         .focusedSceneValue(\.workbenchCommands, WorkbenchWindowCommands(
             canTrash: selectedChat != nil && store.destination == .chats && !store.showCommandPalette,
             trash: {

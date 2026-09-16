@@ -659,3 +659,62 @@ corrected interaction record.
 
 Evidence: `comparison-73/controls/`, `comparison-73/toolbar/`,
 `comparison-73/performance/`, and `tests-73/app-tests.log`.
+
+
+## First-keystroke, clipboard and release preparation checks
+
+A targeted first-keystroke investigation isolated the remaining empty-to-nonempty
+composer cost to whole-store notification for the sidebar draft badge. Per-thread
+observation reduced three first-character samples from 74.4–113.1ms to 28.95–35.77ms.
+Ordinary typing and scroll results, methodology and limits are recorded separately
+in [PERFORMANCE.md](PERFORMANCE.md). Actual scrolling also retained direction and
+its original position in a 720-event movement test, with no frozen interval of
+0.2 seconds or longer in the active recording section.
+
+Quick Access was opened with Command-Shift-K, dismissed with Escape, reopened,
+and used to send a real request. The main conversation received `QUICK_ACCESS_OK`.
+Tool disclosure, distinct input/output copy actions, full original output and
+Find highlighting were checked separately from the transcript.
+
+Native Command-V now advertises the file, HTML and image formats the composer
+handles. AppKit previously disabled Paste for PNG-only clipboard data before the
+custom handler could run. The native Paste-menu regression passes for file URLs,
+HTML and image-only contents, and rejects editing when the text view is read-only.
+The source-file handler also uses the same supported extension set as Attach files.
+
+Actual checks on the updated app:
+
+| Interaction | Result |
+| --- | --- |
+| Command-V with a valid `.swift` file URL | Attached in 0.256s; the existing text draft remained intact |
+| Command-V with only a 3200×1800 PNG | Attached in 0.284s |
+| Additional paste containing two PNGs and 87,406 UTF-8 bytes | Ready in 0.275s; all three images and one text attachment retained |
+| Open Edit pasted text | The complete text, including its final marker, matched exactly |
+
+A standalone test clipboard writer originally exited before macOS committed its
+file-URL data. Its earlier “paste failed” result is invalid harness evidence, not
+an application failure. The corrected check verifies a nonempty file-URL clipboard
+before using Command-V. The PNG-only Paste-menu issue is a separate, reproduced
+application defect and has its own regression.
+
+The latest optimized app integration suite executed **73 cases: 69 passed, four
+optional public-network checks skipped, zero failures**. It includes native
+Markdown/clipboard/image, inference configuration, MCP transport, viewport and
+window lifecycle checks. The local core suite executed **88 cases, zero failures**.
+The loopback protocol fixture's two tests passed both locally and on GitHub.
+
+GitHub run `35092401527` exposed a Swift region-isolation compiler issue in a
+renderer test's detached-task tuple expression. A named Sendable result preserved
+the same assertions and compiled in run `35093816527`; native rendering and
+clipboard tests then passed there. Full-app compilation then exposed the stable
+compiler's expression-complexity limit in `MainView`. Layout, lifecycle and
+presentation now have separate opaque view expressions, retaining the same
+modifiers and behavior. UI execution and release publication are tracked
+independently in the delivery ledger, not inferred from a successful compile.
+
+Updated Validation identity/data were retained. All 122 app Swift sources matched
+the installed Release build; its Mach-O UUID is
+`F0AD5577-F44C-3321-93F2-C33C17C61939`. Local evidence is in
+`/tmp/bedrock-pilot-validation/release-preflight/app-integration-77/` and
+`usability-regression/after-fixes/`. README media uses a separate demonstration
+identity with the same application sources; see [capture details](SCREENSHOTS.md).

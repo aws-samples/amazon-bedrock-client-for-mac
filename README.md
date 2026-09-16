@@ -21,7 +21,8 @@
 
 <img src="assets/preview.gif" width="1120" alt="Bedrock for Mac: native chat, model selection, tools, and settings" />
 
-<p align="center"><sub>Recorded from the running app with demonstration data. <a href="assets/preview.png">View a still image</a> · <a href="docs/SCREENSHOTS.md">Capture details</a></sub></p>
+<p align="center"><sub>Version 2.0 · A real Nova conversation, model switching, search, and tool inspection.<br />
+<a href="assets/readme/demo.mp4">Watch the 40-second tour in HD</a> · <a href="assets/preview.png">View a still image</a> · <a href="docs/SCREENSHOTS.md">Capture details</a></sub></p>
 
 ## Made for the conversation
 
@@ -52,6 +53,19 @@ The file allowlist applies to built-in file operations. Shell commands and Git r
 
 **MCP connections** support local stdio servers and HTTP servers. Manage servers and individual tools in Settings. In a conversation, expand a tool call to inspect its original input, output, timing, or error. Larger output has a separate searchable detail view.
 
+<details>
+<summary>Inspect tools and manage local skills</summary>
+<p>
+  <img src="assets/readme/tool-details.webp" width="1120" alt="The original output from a real skill-listing tool call, in a separate searchable detail view." />
+</p>
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/settings-dark.webp" />
+    <img src="assets/readme/settings-light.webp" width="850" alt="Settings with local skill import, creation, reload, and enable controls." />
+  </picture>
+</p>
+</details>
+
 **Demo library** provides prompts for conversation, reasoning, documents, vision, local tools, images, video, embeddings, and model comparison. Each demo checks task/model compatibility; attachment-dependent demos explain the required input. Video generation requires an S3 output bucket.
 
 **Automations and Activity** keep repeatable prompts and their results on this Mac. Schedules run while the app is open, new schedules start paused, and missed runs are skipped after sleep or restart. Activity shows reported token usage, timings, tool counts, and errors.
@@ -75,7 +89,7 @@ brew tap didhd/tap
 brew install amazon-bedrock-client
 ```
 
-The screenshots and source on the default branch can include changes that have not yet shipped in a release.
+The DMG contains a universal app for Apple silicon and Intel, signed with Developer ID and notarized by Apple.
 
 ### Connect
 
@@ -140,12 +154,18 @@ Sources/Bedrock/           Swift app, native views, local core, and resources
 Tests/Integration/        App, rendering, clipboard, image, and MCP regressions
 Tests/LocalWorkbenchTests/ Storage, migration, routing, tools, and queue tests
 Tests/UITests/            Native interaction scenarios
-Tests/Fixtures/           Deterministic inputs and a local MCP server
+Tests/Fixtures/           Deterministic Bedrock protocol and MCP servers
 Configuration/            App Info.plist and entitlements
 scripts/                  Source registration and validation commands
 docs/                     Development, compatibility, and validation evidence
 assets/                   Screenshots and demo media
 ```
+
+## Tested before release
+
+Every main push and pull request runs the [validation workflow](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/validate.yml). It checks storage and migrations, native rendering and clipboard behavior, real MCP subprocesses, and UI interactions in an optimized Release app. Streaming, model switching, tools, queues, and attachments run through the actual AWS SDK against a local protocol fixture.
+
+Release tags must pass the same checks before universal builds, signing, notarization, and publication. Test logs, screenshots, request payloads, and performance measurements remain available as workflow artifacts. See the [scenario map](docs/CI_COVERAGE.md) for coverage and live-test boundaries.
 
 ## Contributing
 

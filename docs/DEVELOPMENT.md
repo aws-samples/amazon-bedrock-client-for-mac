@@ -20,6 +20,7 @@ After adding or moving a Swift file, register it and validate project membership
 ```sh
 python3 scripts/register-workbench-sources.py
 python3 scripts/validate-project-layout.py
+python3 scripts/validate-documentation.py
 ```
 
 The validator checks missing/duplicate files, app/test membership, resources, configuration paths, and the production bundle identifier. Moving source directories must not change the app's identity or existing user-data locations.
@@ -63,7 +64,7 @@ xcodebuild test \
 
 The scheme supplies an isolated data directory, fixture location, and test-only offline mode. UI tests create fresh storage for each case. Tests cover real local MCP subprocesses; optional public MCP diagnostics require `BEDROCK_LIVE_NETWORK_TESTS=1`.
 
-The validation workflow runs on every push to `main` and `release/**`, on pull requests, and on demand. It retains logs, screenshots, actual loopback request payloads, timing results and an `.xcresult`. The release workflow must pass the same suite before building and notarizing the distribution. See [CI coverage](CI_COVERAGE.md) for the scenario map and the distinction between deterministic and live AWS checks.
+The validation workflow runs on every push to `main` and `release/**`, on pull requests, and on demand. It retains logs, screenshots, actual loopback request payloads, timing results and an `.xcresult`. Pinned package sources are cached by the committed dependency graph; test and distribution executables are rebuilt separately. The release workflow must pass the same suite before building and notarizing the distribution. See [CI coverage](CI_COVERAGE.md) for the scenario map and the distinction between deterministic and live AWS checks.
 
 ## Performance checks
 

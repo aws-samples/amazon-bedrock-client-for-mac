@@ -54,9 +54,12 @@
          </TestableReference>
       </Testables>
       <CommandLineArguments>
-         <CommandLineArgument argument = "-checkForUpdates NO" isEnabled = "YES"/>
-         <CommandLineArgument argument = "-enableQuickAccess NO" isEnabled = "YES"/>
-         <CommandLineArgument argument = "-mcpEnabled NO" isEnabled = "YES"/>
+         <CommandLineArgument argument = "-checkForUpdates" isEnabled = "YES"/>
+         <CommandLineArgument argument = "NO" isEnabled = "YES"/>
+         <CommandLineArgument argument = "-enableQuickAccess" isEnabled = "YES"/>
+         <CommandLineArgument argument = "NO" isEnabled = "YES"/>
+         <CommandLineArgument argument = "-mcpEnabled" isEnabled = "YES"/>
+         <CommandLineArgument argument = "NO" isEnabled = "YES"/>
       </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable key = "BEDROCK_TEST_OFFLINE" value = "1" isEnabled = "YES"/>

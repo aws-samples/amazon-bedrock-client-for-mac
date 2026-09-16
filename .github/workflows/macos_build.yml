@@ -28,6 +28,7 @@ jobs:
     env:
       APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Release/Amazon Bedrock.app
       DMG_PATH: Amazon Bedrock Client for Mac.dmg
+      LLVM_PROFILE_FILE: ${{ runner.temp }}/bedrock-%p.profraw
 
     steps:
       - name: Check out the tested revision
@@ -37,6 +38,11 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
           xcode-version: latest-stable
+      - name: Restore pinned Swift packages
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ runner.temp }}/BedrockPackages
+          key: swift-packages-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
       - name: Check version and main ancestry
         env:
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
@@ -59,6 +65,7 @@ jobs:
             -project "Amazon Bedrock Client for Mac.xcodeproj" \
             -scheme "Amazon Bedrock Client for Mac" \
             -derivedDataPath DerivedData \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/BedrockPackages" \
             -onlyUsePackageVersionsFromResolvedFile \
             2>&1 | tee artifacts/dependencies.log
       - name: Build optimized universal app
@@ -72,6 +79,7 @@ jobs:
             -configuration Release \
             -arch x86_64 -arch arm64 \
             -derivedDataPath DerivedData \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/BedrockPackages" \
             -disableAutomaticPackageResolution \
             -skipMacroValidation \
             -skipPackagePluginValidation \
@@ -146,6 +154,7 @@ jobs:
           files: |
             Amazon Bedrock Client for Mac.dmg
             SHA256SUMS.txt
+            assets/readme/demo.mp4
           draft: false
           prerelease: false
       - name: Update Homebrew cask

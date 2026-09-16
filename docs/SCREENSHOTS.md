@@ -4,6 +4,34 @@ README media should show the running app with dedicated demonstration data.
 Keep personal conversations, account identifiers, credentials, and unrelated
 desktop windows out of the capture.
 
+## Current capture
+
+Recorded September 16, 2026 from the optimized 2.0.0 app on macOS 26.6.2.
+The app uses the source at `734ef9a8365bcc3c74a441474c2f132a65702b94` and a
+separate demonstration identity. Subsequent documentation and CI changes do
+not alter this UI. The executable's Mach-O UUID is
+`F0AD5577-F44C-3321-93F2-C33C17C61939`.
+
+The conversation and tool results came from a real Nova 2 Lite request with
+`Median.swift`. The recording then selects GPT-6 Astra for a later turn;
+model selection itself does not invoke that model. No response or tool
+result was fabricated for the capture.
+
+| Time | Interaction |
+| --- | --- |
+| 0–3s | Read the existing Swift response |
+| 3–8s | Find and select GPT-6 Astra in the composer |
+| 10–14s | Search local conversation content with Command-K |
+| 16–19s | Hide and restore the sidebar with Command-B |
+| 20–32s | Expand the real skill call and inspect its input and original output |
+| 34–40s | Return to the latest response and composer |
+
+The 40-second source recording is 2480×1560. The downloadable MP4 is
+1920×1208 at 30fps, about 1.6MB. The GIF is 1120×704 at 12fps, about 3.1MB.
+Both retain the original timing and contain no microphone audio. Full-size
+PNG and appearance-aware WebP stills provide static alternatives. The first,
+intermediate, and final frames were visually inspected after conversion.
+
 ## Reproduce the demonstration
 
 1. Build the Release app using [Development](DEVELOPMENT.md).
@@ -41,7 +69,8 @@ desktop windows out of the capture.
    request. Keep the original recording timing.
 7. Capture the same conversation in Light and Dark, plus a Settings view.
    Use the macOS Screenshot tool to capture only the app window. Record only
-   the app's screen area, without microphone audio.
+   the app's screen area, without microphone audio. A screen-area capture avoids
+   the floating recording control that can appear over a window-targeted video.
 
 ## Export media
 
@@ -61,6 +90,16 @@ ffmpeg -i /tmp/bedrock-demo.mov \
   -filter_complex \
   "[0:v]fps=12,scale=1120:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle[out]" \
   -map "[out]" -loop 0 assets/preview.gif
+```
+
+For the HD version, preserve timing and enable progressive playback:
+
+```sh
+ffmpeg -i /tmp/bedrock-demo.mov -an \
+  -vf "fps=30,scale=1920:-2:flags=lanczos" \
+  -c:v libx264 -preset slow -crf 21 -pix_fmt yuv420p \
+  -movflags +faststart assets/readme/demo.mp4
+python3 scripts/validate-documentation.py
 ```
 
 Inspect the first, intermediate, and final frames after conversion. Check

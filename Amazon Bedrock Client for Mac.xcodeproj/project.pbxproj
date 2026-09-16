@@ -112,7 +112,6 @@
 		797A12BC2C2EB4C300494DD9 /* CoreDataStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797A12BB2C2EB4C300494DD9 /* CoreDataStack.swift */; };
 		797A12BF2C2EB53800494DD9 /* ChatModel.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 797A12BD2C2EB53800494DD9 /* ChatModel.xcdatamodeld */; };
 		797A12C12C2EB9E200494DD9 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */; };
-		798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = 798A9CE52AD3AB2E00E9D039 /* Vapor */; };
 		79A305692EB05A2200DAE32F /* MarkdownKit in Frameworks */ = {isa = PBXBuildFile; productRef = 79A305682EB05A2200DAE32F /* MarkdownKit */; };
 		79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78972C31691800BD6FB1 /* AWSSSO */; };
 		79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */ = {isa = PBXBuildFile; productRef = 79AC78992C31691800BD6FB1 /* AWSSSOOIDC */; };
@@ -336,7 +335,6 @@
 				79AC789A2C31691800BD6FB1 /* AWSSSOOIDC in Frameworks */,
 				79EC4F392EE2079A00BF73D9 /* AWSS3 in Frameworks */,
 				79AC78982C31691800BD6FB1 /* AWSSSO in Frameworks */,
-				798A9CE62AD3AB2E00E9D039 /* Vapor in Frameworks */,
 				79E5A0002ACDA88700DC6657 /* AWSBedrockRuntime in Frameworks */,
 				79A305692EB05A2200DAE32F /* MarkdownKit in Frameworks */,
 				79E59FFE2ACDA88700DC6657 /* AWSBedrock in Frameworks */,
@@ -628,7 +626,6 @@
 			packageProductDependencies = (
 				79E59FFD2ACDA88700DC6657 /* AWSBedrock */,
 				79E59FFF2ACDA88700DC6657 /* AWSBedrockRuntime */,
-				798A9CE52AD3AB2E00E9D039 /* Vapor */,
 				79AC78972C31691800BD6FB1 /* AWSSSO */,
 				79AC78992C31691800BD6FB1 /* AWSSSOOIDC */,
 				79E0AC5C2D63EE4F0041829A /* AWSTranscribeStreaming */,
@@ -710,7 +707,6 @@
 			mainGroup = 7907BE8B2ACD87A000C4D500;
 			packageReferences = (
 				79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
-				798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */,
 				792D8E632DDFE55E00BB1C01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
 				79A305672EB05A2200DAE32F /* XCRemoteSwiftPackageReference "swift-markdownkit" */,
 			);
@@ -1301,14 +1297,6 @@
 				minimumVersion = 0.12.1;
 			};
 		};
-		798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/vapor/vapor.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.122.1;
-			};
-		};
 		79A305672EB05A2200DAE32F /* XCRemoteSwiftPackageReference "swift-markdownkit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/objecthub/swift-markdownkit";
@@ -1332,11 +1320,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 792D8E632DDFE55E00BB1C01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
-		};
-		798A9CE52AD3AB2E00E9D039 /* Vapor */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */;
-			productName = Vapor;
 		};
 		79A305682EB05A2200DAE32F /* MarkdownKit */ = {
 			isa = XCSwiftPackageProductDependency;

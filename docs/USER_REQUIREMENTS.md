@@ -234,7 +234,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] V08 Update bundled rendering assets and preserve their licenses/provenance.
 - [x] V09 Add meaningful core, integration, renderer, clipboard, migration, and performance regressions.
 - [x] V10 Add deterministic local MCP fixtures and real transport tests.
-- [ ] V11 Add UI tests for navigation, search dismissal, settings, model selection, queueing, and shortcuts. Eleven native UI scenarios are implemented and type-check; a dedicated UI queue scenario and hosted execution remain.
+- [ ] V11 Add UI tests for navigation, search dismissal, settings, model selection, queueing, and shortcuts. Twenty-one native UI scenarios are implemented and type-check, including real SDK streaming, queue restart, model switching, skills/exec, source files and mixed-image paste. Hosted execution is in progress; the first run exposed a Swift compiler compatibility issue in the renderer test harness.
 - [x] V12 Run the relevant local suites and document precise pass/skip/failure counts.
 - [x] V13 Configure PR CI for build/tests and gate release packaging on validation. Workflow syntax passes; hosted execution is tracked separately.
 - [x] V14 Separate offline CI fixtures from optional paid/live-provider tests.
@@ -247,24 +247,39 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] V21 Recheck the latest Validation binary after accessibility corrections and preserve the existing data, shortcuts, and responsiveness.
 - [x] R01 Reorganize source, tests, resources, and configuration into a standard public Swift repository.
 - [ ] R02 Remove unused legacy screens, duplicate resources, dead helpers, and stale project entries.
+- [x] R02a Remove the unreferenced Vapor product and its seven unused package-graph entries; reject unused directly linked products during CI source validation.
 - [ ] R03 Preserve Xcode targets, schemes, build configuration, resource membership, and app identity.
 - [x] R04 Verify every registered source/resource path and detect duplicate compilation entries.
-- [ ] R05 Refresh README to the quality and clarity of the referenced Foxl repository.
-- [ ] R06 Capture new Light/Dark screenshots from the actual finished app with dedicated demo data.
-- [ ] R07 Capture an animated main demonstration of actual interaction with a static fallback.
-- [ ] R08 Replace stale README media and document reproducible capture.
-- [ ] R09 Document verified setup, model support, shortcuts, tools, skills, MCP, privacy, and local storage.
-- [ ] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
+- [x] R05 Refresh README to the quality and clarity of the referenced Foxl repository.
+- [x] R06 Capture new Light/Dark screenshots from the actual finished app with dedicated demo data.
+- [x] R07 Capture an animated main demonstration of actual interaction with a static fallback.
+- [x] R08 Replace stale README media and document reproducible capture.
+- [x] R09 Document verified setup, model support, shortcuts, tools, skills, MCP, privacy, and local storage.
+- [x] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
 - [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
 
 ## Latest validation gate
 
 The current priority is the updated **Bedrock Validation** app, preserving its
-existing identity and data. Release 64 includes the recent UI and performance
+existing identity and data. The current optimized app includes the recent UI and performance
 fixes and has been exercised with actual input, scrolling, shortcuts, model
 switching, attachment restart, generated-image preview, and real inference.
-Its app integration suite ran 64 cases: 60 passed and four opt-in network
-cases skipped. The older-page reading-position regression found during this
-pass remains open. Evidence and exact limits are recorded in
+The latest executed app integration suite ran 72 cases: 68 passed and four
+opt-in network cases skipped. The older/newer-page reading-position regression
+is fixed and passed native teardown tests plus repeated actual paging and
+Activity → Back checks. First-character latency was measured separately and
+the per-thread draft-observation correction was verified. Evidence and exact limits are recorded in
 [PILOT_VALIDATION.md](PILOT_VALIDATION.md) and
 [PERFORMANCE_VALIDATION_MATRIX.md](PERFORMANCE_VALIDATION_MATRIX.md).
+
+
+## GitHub delivery and version 2.0.0
+
+- [x] D01 Run the regression workflow on every main push, release-branch push and pull request.
+- [x] D02 Gate release packaging and publication on the same optimized-app validation workflow.
+- [x] D03 Exercise streaming, model switching, tools and queues through the real AWS SDK against an isolated loopback protocol fixture.
+- [ ] D04 Execute the complete native/UI workflow on GitHub, fix failures and retain logs, screenshots, measurements and request evidence.
+- [x] D05 Replace README screenshots and the animated demonstration with fresh actual-app captures; publish an MP4 and static fallback.
+- [ ] D06 Validate and push the final revision to main, then confirm its workflow succeeds.
+- [ ] D07 Tag v2.0.0; build universal Intel/Apple silicon binaries, sign, notarize, staple and publish on GitHub.
+- [ ] D08 Verify the published DMG checksum, release assets, release notes and Homebrew update.

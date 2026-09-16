@@ -7,7 +7,7 @@
 | Regression | Automated coverage |
 | --- | --- |
 | First keystroke invalidates the whole scene | `WindowLifecycleTests.testTypingOnlyInvalidatesTheAffectedDraftIndicator`; long-conversation typing metric |
-| Long history, bounded paging, scroll and navigation | `NavigationPerformanceTests`, `ConversationViewportTests`; 1,000-message UI fixture, paging anchor preservation and Activity → Back |
+| Long history, bounded paging, scroll and navigation | `NavigationPerformanceTests`, `ConversationViewportTests`; 1,000-message UI fixture, paging anchors, Activity → Back, and finishing a controlled stream while reading an older passage |
 | Command-N, D, B, F, K and Settings | UI shortcut, centered search, titlebar and Settings lifecycle cases |
 | Quick Access escape and handoff | UI opens the real panel, dismisses it, submits through the composer and verifies the main conversation and SDK request |
 | Streaming and durable queues | UI verifies sequential requests, keeps an unsent draft, stops a partial response, restarts, checks no automatic replay and resumes |
@@ -17,7 +17,7 @@
 | Tool disclosure and original details | UI expands the named tool, verifies separate actions, opens the exact original output and input |
 | MCP lifecycle and mixed content | Real Python stdio servers: duplicate tool names, nested arguments, stderr pressure, cancellation, timeout, reconnect, media and resources |
 | Source file clipboard regression | UI pastes a `.swift` file URL, retains its draft, sends through the real SDK and checks exact UTF-8 bytes; native test covers multiple source types |
-| Long text, HTML and mixed images | Native clipboard tests preserve Unicode, plain text priority, sanitized HTML, image ordering, import cancellation and bounded decoding |
+| Long text, HTML and mixed images | UI first pastes a PNG-only clipboard, then long text and two images, sends them, and checks exact text plus all three images in the SDK request. Native tests cover Paste-menu validation, Unicode, plain-text priority, sanitized HTML, ordering, cancellation and bounded decoding. |
 | Welcome/chat attachment restart | UI gracefully quits and reopens with the full long-text attachment intact; native tests cover image/document draft identity |
 | Markdown and copy | Native renderer tests cover mixed blocks, lists, tables, code, full-message selection, marker exclusion, context menus and original Markdown copy |
 | Generated image crash | UI repeatedly opens a 4K image, zooms, fits, copies exact PNG bytes, closes and reopens; native tests cover decoding and preview lifecycle |

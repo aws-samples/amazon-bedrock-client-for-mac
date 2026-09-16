@@ -16,6 +16,8 @@ Both apps opened the same synthetic 1,000-message conversation in a 1240×780 wi
 | Validation 70 | Native reading-position restoration, three passes | 8.10–8.92 ms | 12.01–13.69 ms | 5.984 s each, completed |
 | Validation 71 | Source/configuration attachments, three passes | 6.46–7.55 ms | 10.65–12.47 ms | 5.983–5.986 s each, completed |
 | Validation 73 | Native toolbar accessibility, three passes | 6.62–7.65 ms | 11.76–14.29 ms | 5.984–5.987 s each, completed |
+| Validation 75 | Tool and Quick Access corrections, three passes | 8.39–9.30 ms | 11.87–12.62 ms | 5.984–5.985 s each, completed |
+| Validation 76 | Per-thread draft observation, three passes | 10.52–10.73 ms | 13.18–14.29 ms | 5.983–5.987 s each, completed |
 
 These are event-to-accessibility-text-update latencies, **not display frame times or model latency**. Each typing pass entered 61 characters and restored its own draft. The scroll probe sent 360 events at a planned 60 events/second and queried only the window attribute every six events. No full transcript accessibility snapshots were taken during timing. Values are observations on one machine, not universal performance guarantees. Validation 64 and 70 each completed three typing and three scroll passes with zero probe failures. On 70, individual maximum typing samples were 59–73ms; RSS settled near 250MiB after the paging and resize checks.
 
@@ -33,6 +35,40 @@ Profiling showed repeated SwiftUI scene, menu, and view-graph updates while typi
 `WorkbenchAppCommands` now observes focus inside the menu graph. The app scene no longer observes those command changes. The 62 comparison changed only this observation boundary and kept the same shortcuts and actions.
 
 The previous full-tree accessibility scanner was also unsuitable for performance measurements: resolving thousands of labels itself used substantial main-thread time. The replacement probe discovers the composer once and uses small, direct accessibility requests.
+
+## First-character latency and observed scrolling
+
+The first character in an empty composer remained slower than the rest of a
+line. On the same 1,000-message fixture, three first-character samples on 75
+were 74.4, 83.6 and 113.1ms. A composer that already contained a character took
+25.7–28.6ms, isolating the empty-to-nonempty draft transition.
+
+The sidebar draft badge subscribed to the whole workbench store. The first
+character changed the badge and published the entire store again. A small,
+per-thread `WorkbenchDraftIndicator` now updates only the affected row, while
+the draft still persists normally. A native regression test verifies zero
+whole-store publications during typing, correct badge transitions, and no
+notification to another thread's badge.
+
+The updated app measured 28.95, 35.77 and 34.74ms for the first character.
+Ordinary typing medians did not improve in this comparison; the table reports
+them separately. The fix addresses the larger first-character interruption.
+All three scroll probes completed with no errors, and RSS was approximately
+177–179MiB for the fresh 32-message viewport.
+
+A separate 12-second wheel test checked actual content movement, not only
+whether the app answered an accessibility query. It tracked a message's
+vertical position at 20Hz while delivering 720 wheel events at 60Hz, away from
+the scroll boundaries. There were no failed queries, stationary sample
+intervals, or movements in the wrong direction; the final position returned
+to its exact starting point. Maximum position-query latency was 1.56ms.
+
+A simultaneous 16-second screen-area recording averaged 57.15fps. A cropped
+transcript freeze scan found no frozen interval of 0.2 seconds or longer during
+the active scroll section. This is a bounded observed scenario, not a promise
+of a particular frame rate across devices or every conversation. Evidence is
+under `/tmp/bedrock-pilot-validation/usability-regression/scroll/`; the updated
+input samples are in `usability-regression/after-fixes/performance/`.
 
 ## Paging and returning to a conversation
 
