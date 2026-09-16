@@ -2,8 +2,8 @@
 
 <p align="center">
   <strong>Amazon Bedrock. At home on your Mac.</strong><br />
-  A Swift app for conversations, documents, images, and local tools.<br />
-  Your models, a direct AWS connection, and a little more room to work.
+  A native Swift app for conversations, documents, images, and local tools.<br />
+  Connect directly to AWS. Keep your conversations on your Mac.
 </p>
 
 <p align="center">
@@ -13,16 +13,28 @@
   &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
-[![macOS](https://img.shields.io/badge/macOS-14%2B-242424?style=flat-square)](#requirements)
-[![Swift](https://img.shields.io/badge/Swift-6-orange?style=flat-square)](#build)
-[![Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
-[![Validation](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml)
-[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-555?style=flat-square)](LICENSE)
+<p align="center">
+  <a href="#requirements"><img src="https://img.shields.io/badge/macOS-14%2B-242424?style=flat-square" height="20" alt="macOS 14 or later" /></a>
+  <a href="#build"><img src="https://img.shields.io/badge/Swift-6-F05138?style=flat-square" height="20" alt="Swift 6" /></a>
+  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest"><img src="https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?label=Release&amp;style=flat-square" height="20" alt="Latest release" /></a>
+  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/aws-samples/amazon-bedrock-client-for-mac/ci.yml?branch=main&amp;label=Validation&amp;style=flat-square" height="20" alt="Validation" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT--0-555?style=flat-square" height="20" alt="License: MIT-0" /></a>
+</p>
 
-<img src="docs/assets/demo.gif" width="1120" alt="Bedrock for Mac: native chat, model selection, tools, and settings" />
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/hero.png" />
+    <source type="image/webp" srcset="docs/assets/demo.webp" />
+    <img src="docs/assets/demo.gif" width="1120" alt="From an idea to an image: Nova develops a glass-cabin concept, then Stable Image Ultra generates an aurora landscape in the same conversation." />
+  </picture>
+</p>
 
-<p align="center"><sub>Version 2.0 · A real Nova conversation, model switching, search, and tool inspection.<br />
-<a href="docs/assets/demo.mp4">Watch the 40-second tour in HD</a> · <a href="docs/assets/hero.png">View a still image</a> · <a href="docs/media.md">Capture details</a></sub></p>
+<p align="center">
+  <strong>From a thought to an image.</strong><br />
+  <sub>Develop an idea with Nova, switch to Stable Image Ultra, and open the result.</sub><br />
+  <a href="docs/assets/demo.mp4">Watch the 35-second tour · Retina, 60fps</a>
+  &nbsp;·&nbsp; <a href="docs/assets/hero.png">View full-resolution screenshot</a>
+</p>
 
 ## Made for the conversation
 
@@ -35,10 +47,10 @@
 
 <details>
 <summary>Light, Dark, or your system appearance</summary>
-<p>
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-dark.webp" />
-    <img src="docs/assets/chat-light.webp" width="1120" alt="A code review in Bedrock for Mac, with a full-height sidebar and model selection in the composer." />
+    <img src="docs/assets/chat-light.webp" width="1120" alt="An image generated in Bedrock for Mac: a glass cabin beneath the northern lights, with the image model selected in the composer." />
   </picture>
 </p>
 </details>
@@ -55,10 +67,10 @@ The file allowlist applies to built-in file operations. Shell commands and Git r
 
 <details>
 <summary>Inspect tools and manage local skills</summary>
-<p>
+<p align="center">
   <img src="docs/assets/tool-details.webp" width="1120" alt="The original output from a real skill-listing tool call, in a separate searchable detail view." />
 </p>
-<p>
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/settings-dark.webp" />
     <img src="docs/assets/settings-light.webp" width="850" alt="Settings with local skill import, creation, reload, and enable controls." />

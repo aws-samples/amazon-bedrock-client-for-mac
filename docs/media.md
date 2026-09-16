@@ -6,31 +6,50 @@ desktop windows out of the capture.
 
 ## Current capture
 
-Recorded September 16, 2026 from the optimized 2.0.0 app on macOS 26.6.2.
-The app uses the source at `2ea14812fc6654a97b96ea0f6573c4cbee4dc5fb` and a
-separate demonstration identity. It includes the native rendering, clipboard,
-scene-observation and compiler-compatibility fixes. The executable's Mach-O
-UUID is `D4EE1420-D60F-3D1C-95A1-58FACDD07980`.
+Recorded September 16, 2026 from the optimized 2.0.0 Release app on macOS
+26.6.2. The separate **Bedrock Showcase** app uses demonstration data and
+contains the current image-preview, Quick Access, and connection-isolation
+corrections. It is a normal Release build with AWS connections enabled.
 
-The conversation and tool results came from a real Nova 2 Lite request with
-`Median.swift`. The recording then selects GPT-6 Astra for a later turn;
-model selection itself does not invoke that model. No response or tool
-result was fabricated for the capture.
+The conversation starts with a real Nova 2 Lite response developing a glass
+cabin beside an alpine lake under the northern lights. During the recording,
+the same conversation switches to **Stable Image Ultra 1.0**
+(`stability.stable-image-ultra-v1:1`) and sends Nova's image prompt. The result
+is generated through the app's real AWS connection, then opened and enlarged
+in the image preview. The image request took approximately **9.22 seconds** in
+this recording; its entire wait is included.
 
 | Time | Interaction |
 | --- | --- |
-| 0–3s | Read the existing Swift response |
-| 3–8s | Find and select GPT-6 Astra in the composer |
-| 10–14s | Search local conversation content with Command-K |
-| 16–19s | Hide and restore the sidebar with Command-B |
-| 20–32s | Expand the real skill call and inspect its input and original output |
-| 34–40s | Return to the latest response and composer |
+| 0–3s | Read Nova's concept and image prompt |
+| 3–6s | Find and select Stable Image Ultra in the composer |
+| 7–9s | Send the image prompt in the same conversation |
+| 9–18s | Wait for the real image generation request |
+| 18–21s | See the generated aurora landscape in the conversation |
+| 21–30s | Open the image, zoom in, and fit the complete composition |
+| 30–35s | Return to the image and composer |
 
-The 40-second source recording is 2480×1560. The downloadable MP4 is
-1920×1208 at 30fps, about 1.6MB. The GIF is 1120×704 at 12fps, about 3.1MB.
-Both retain the original timing and contain no microphone audio. Full-size
-PNG and appearance-aware WebP stills provide static alternatives. The first,
-intermediate, and final frames were visually inspected after conversion.
+The window is captured at its native Retina resolution, **2480×1560**.
+Exports add 64 pixels of space on each side, producing **2608×1688** media
+without upscaling the app. The original macOS window mask removes desktop
+pixels outside the rounded corners. A restrained shadow and neutral canvas
+give every screenshot the same framing, with a matching dark canvas for
+Dark appearance.
+
+| Asset | Resolution | Format and timing | Size |
+| --- | --- | --- | --- |
+| Main animation | 2608×1688 | Adaptive WebP, up to 20fps, 35 seconds | 11.4MB |
+| Downloadable tour | 2608×1688 | H.264 MP4, 60fps, 35 seconds | 5.0MB |
+| Legacy animation fallback | 1600×1036 | GIF, 15fps, 35 seconds | 6.5MB |
+| Main screenshots | 2608×1688 | Lossless WebP and PNG | 0.6–0.9MB |
+| Settings screenshots | 1828×1528 | Lossless WebP | 0.04–0.06MB |
+
+The main README picture prefers WebP and uses the still image when
+`prefers-reduced-motion` is enabled. Only unused trailing footage was trimmed
+from the screen recording. Playback speed and inference timing are unchanged;
+the video contains no audio. Static screenshots follow the viewer's Light or
+Dark preference. Resolutions, sizes, and checksums are recorded in
+[`assets/media.json`](assets/media.json).
 
 ## Reproduce the demonstration
 
@@ -39,6 +58,7 @@ intermediate, and final frames were visually inspected after conversion.
 
    ```sh
    BEDROCK_PREVIEW_ROOT=/tmp/bedrock-readme-capture \
+   BEDROCK_PREVIEW_NAME="Bedrock Showcase" \
    BEDROCK_PREVIEW_BUNDLE_IDENTIFIER=local.bedrock.ReadmeCapture \
      scripts/run-preview.sh \
      ".build/xcode/Build/Products/Release/Amazon Bedrock.app"
@@ -46,62 +66,71 @@ intermediate, and final frames were visually inspected after conversion.
 
 3. Configure an AWS connection in this preview. Set the window to 1240×780
    points, keep the sidebar expanded at 240 points, and choose Light appearance.
-4. Save this intentionally incomplete function as `Median.swift`, then attach
-   it through the composer's file button:
+4. Choose Nova 2 Lite and send:
 
-   ```swift
-   func median(_ numbers: [Double]) -> Double {
-       let sorted = numbers.sorted()
-       return sorted[sorted.count / 2]
-   }
-   ```
+   > Imagine a quiet glass cabin beside an alpine lake under the northern lights. Give me a short concept and a vivid image prompt, in about 60 words.
 
-5. Send:
+   Review the real answer before recording. A live model response varies. The
+   image prompt returned in this capture was:
 
-   > Use the code-review skill to review this Swift function for empty and even-length inputs. Show a concise fix and two example calls.
+   > Moonlight glints off the glassy cabin, reflecting shimmering greens and purples of the northern lights across the still lake; snow-capped peaks loom silently in the distance, while a warm amber glow spills from the cabin's hearth, inviting quiet contemplation.
 
-   A live model response varies. Review its output before using any proposed
-   code. For the short implementation shown in the current capture, the
-   follow-up asks the model to return `nil` for empty input and provide two
-   assertions.
-6. Record actual model selection, centered global search, sidebar navigation,
-   and tool inspection. Changing the selected model does not itself send a
-   request. Keep the original recording timing.
-7. Capture the same conversation in Light and Dark, plus a Settings view.
-   Use the macOS Screenshot tool to capture only the app window. Record only
-   the app's screen area, without microphone audio. A screen-area capture avoids
-   the floating recording control that can appear over a window-targeted video.
+5. Set the image response's aspect ratio to **16:9**. Start the recording with
+   Nova's concept visible. Open the model picker, search for Stable Image Ultra,
+   select it, and send the image prompt. Wait for the actual request to finish.
+   Open the generated image, zoom in, choose Fit, and return to the conversation.
+   Keep the complete request wait and original playback speed.
+6. Capture the generated image conversation in Light and Dark, and Settings →
+   Skills in both appearances. The separate tool-output screenshot documents an
+   actual earlier tool call from the same Release build; it is not part of the
+   main demonstration. Save complete window PNGs with transparent corners and
+   without the system's outer shadow (`screencapture -o`).
+7. Record the fixed app rectangle at the display's native resolution, without
+   microphone audio. Keep the window's position and size unchanged. A screen-area
+   capture avoids the floating recording control that can appear over a
+   window-targeted movie.
 
 ## Export media
 
-The PNG is a full-resolution static fallback. WebP files are used for the
-appearance-aware screenshot. The animated GIF is reduced to 12 frames per
-second and 1120 pixels wide for README loading; it is not a frame-rate benchmark.
+The export command requires Pillow, ffmpeg, and the WebP command-line tools.
+These are authoring tools; the app and CI documentation checks do not depend
+on them.
 
 ```sh
-mkdir -p docs/assets
-cp /tmp/bedrock-main-light.png docs/assets/hero.png
-cwebp -q 88 -resize 1440 0 /tmp/bedrock-main-light.png \
-  -o docs/assets/chat-light.webp
-cwebp -q 88 -resize 1440 0 /tmp/bedrock-main-dark.png \
-  -o docs/assets/chat-dark.webp
-
-ffmpeg -i /tmp/bedrock-demo.mov \
-  -filter_complex \
-  "[0:v]fps=12,scale=1120:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle[out]" \
-  -map "[out]" -loop 0 docs/assets/demo.gif
+brew install ffmpeg webp
+python3 -m venv .build/media-tools
+.build/media-tools/bin/python -m pip install Pillow==12.3.0
 ```
 
-For the HD version, preserve timing and enable progressive playback:
+Put these actual captures in one folder:
+
+```text
+main-light.png
+main-dark.png
+settings-light.png
+settings-dark.png
+tool-details.png
+demo-original.mov
+```
+
+The movie and `main-light.png` must have identical native dimensions. Then run:
 
 ```sh
-ffmpeg -i /tmp/bedrock-demo.mov -an \
-  -vf "fps=30,scale=1920:-2:flags=lanczos" \
-  -c:v libx264 -preset slow -crf 21 -pix_fmt yuv420p \
-  -movflags +faststart docs/assets/demo.mp4
+.build/media-tools/bin/python scripts/export-readme-media.py \
+  --capture /tmp/bedrock-readme-capture/capture \
+  --output docs/assets
 python3 scripts/validate-documentation.py
 ```
 
+The exporter preserves the native window geometry, removes one Retina pixel
+of edge contamination, and applies consistent padding and shadow. The MP4
+uses progressive playback. The animated WebP combines lossless and quality-94
+frames to keep text legible while reducing the weight of photographic frames.
+Static WebP screenshots remain lossless. The GIF is a compatibility fallback.
+This presentation recording is not a performance benchmark.
+
 Inspect the first, intermediate, and final frames after conversion. Check
-that menus, text, controls, and both themes remain readable, that the static
-fallback exists, and that every README media path resolves.
+text, controls, popovers, corner masks, and both appearances. The documentation
+CI check verifies local links, actual image/movie dimensions, native framing,
+checksums, and the main animation's duration. Do not publish if the capture
+includes another window or exposes personal data.

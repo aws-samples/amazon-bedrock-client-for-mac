@@ -16,6 +16,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 | Tools and paths | Tools, skill discovery, file access, writes, and command execution available by default within macOS permissions; optional restrictions in Settings. No project selection prerequisite. |
 | Controls | Prefer common custom buttons, menus, dropdowns, and segmented controls. Action icons stay monochrome. Enabled parameters and selected toggles use blue highlights. |
 | Composer | Model selection belongs in the composer. Welcome composer sits immediately below “How can I help?”. Add only a faint 1px border. |
+| Conversation history | Open the full conversation as one continuous scrollable transcript. Remove manual “Load earlier/newer messages” controls and page limits. Keep long-history rendering responsive without making the user load pages. |
 | Validation | Repeated build → actual interaction → inspection → correction cycles. Maintain an itemized ledger; do not claim an infinite unattended run or mark untested items complete. |
 | Current priority | Speed, responsiveness, and usability come first. Compare the fast older Bedrock Validation with the latest changes using identical workloads, fix measured regressions, and put the verified updates back into Bedrock Validation. Do not call a successful build the final result. |
 | Release gate | Run the entire GitHub CI pipeline locally, including actual optimized-app UI tests, before releasing. Then require the final main revision and release workflow to pass on GitHub. |
@@ -92,7 +93,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] N05 ⌘F opens only the current conversation's Find bar.
 - [x] N06 Global results include actual matching content and navigate to the relevant passage.
 - [x] N07 Global search handles old and new conversation formats.
-- [x] N08 Find searches the full history even when only a recent page is rendered.
+- [x] N08 Find searches the full history, including messages outside the current screen.
 - [x] N09 Search is cancelable and stale results never replace a newer query. (ConversationSearch tests cover cancellation/cache replacement; the palette also checks the current query before publishing.)
 - [x] N10 ⌘N matches released behavior: create a distinct chat using the current model.
 - [x] N11 ⌘D matches released behavior while keeping deletion recoverable in Trash.
@@ -136,14 +137,15 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] C29 Pause/recover the queue after cancellation or failure.
 - [x] C30 Restore the queue after relaunch without silently starting paid requests.
 - [x] C31 Preserve the current unsent draft when queued work begins.
-- [x] C32 Keep long-history loading fast with a bounded rendered viewport.
-- [ ] C33 Keep scroll anchors stable during streaming, resizing, and loading older/newer pages.
+- [ ] C32 Keep long-history loading fast while making the complete conversation immediately scrollable.
+- [ ] C33 Keep scroll anchors stable during streaming, resizing, and moving through the full conversation.
 - [ ] C34 Remove scroll flicker, jumping, and unexpected auto-scroll while reading.
 - [x] C35 Preserve prior per-thread scroll position when returning to a conversation.
 - [ ] C36 Keep message/tool details searchable and copyable without blocking the transcript.
 - [ ] C37 Make truncation, stop reason, and context reduction understandable without toolbar clutter.
 - [x] C38 Fix hangs when clicking generated images; repeatedly open, zoom, copy, save, and close large-image previews.
 - [x] C39 Accept common UTF-8 source/configuration files through Attach files, preserve their exact bytes, and send them using a supported document format. Swift attachment → skill discovery/load → actual Nova response passed on 71.
+- [ ] C40 Keep transparency checkerboards within image bounds, and avoid labeling generated JPEGs as PNGs in the preview.
 
 ## Models, inference, and demos
 
@@ -260,7 +262,8 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] R09 Document verified setup, model support, shortcuts, tools, skills, MCP, privacy, and local storage.
 - [x] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
 - [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
-- [ ] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing, center all five badges, and visually inspect the final README media.
+- [x] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing, center all five badges, and visually inspect the final README media. (September 16 exports preserve the 2480×1560 native window inside a 2608×1688 frame. The 35-second WebP/MP4, Light/Dark captures, GitHub-sanitized README layout, five centered badges, media hashes, and links were inspected; see [media.md](../media.md).)
+- [x] R13 Make the main demonstration visually engaging: develop a concept with a text model, switch to an image model in the same conversation, generate a real image, and open the result. Do not use clicking List skills as the main demonstration. (The real Nova → Stable Image Ultra conversation, complete 9.22-second image request, preview zoom/Fit/close interactions, and final exported frames were verified.)
 
 The September 16 evidence audit and unresolved implementation gaps are recorded in [todo-audit.md](todo-audit.md).
 

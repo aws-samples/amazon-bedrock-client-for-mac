@@ -1,0 +1,73 @@
+{
+  "nativeWindow": {
+    "width": 2480,
+    "height": 1560
+  },
+  "padding": 64,
+  "movieTimingChanged": false,
+  "animationEncoding": {
+    "mode": "mixed",
+    "quality": 94,
+    "framesPerSecond": 20
+  },
+  "sourceDuration": 35.008333,
+  "files": {
+    "hero.png": {
+      "bytes": 865424,
+      "sha256": "6fb05930dc60a1ce3b97fe06a80f18ec9812fb0c8fd65d2e03356a731e3da48d",
+      "width": 2608,
+      "height": 1688
+    },
+    "chat-light.webp": {
+      "bytes": 606338,
+      "sha256": "c8bcd15a2a080d147cd7eecc55e66a29cb3e1a1dab7d71cdd9a3358c186a6d0a",
+      "width": 2608,
+      "height": 1688
+    },
+    "chat-dark.webp": {
+      "bytes": 642750,
+      "sha256": "8baad9bc1a9c45c5df82be82c713dd90dcc19bfbd1ad4a9e1265790f8544acbe",
+      "width": 2608,
+      "height": 1688
+    },
+    "settings-light.webp": {
+      "bytes": 37022,
+      "sha256": "2edddd1dc315569e14178f03deee023175429c7b8594ab68a43c8654d0384ce0",
+      "width": 1828,
+      "height": 1528
+    },
+    "settings-dark.webp": {
+      "bytes": 58410,
+      "sha256": "65a8da3dfb4b349357c8cfa957eeaf05a4bb65094fc871750ce08c0c6e5c2e16",
+      "width": 1828,
+      "height": 1528
+    },
+    "tool-details.webp": {
+      "bytes": 63336,
+      "sha256": "064c10bb94d125f5cb0fe22a54f7fd4880d1a3770d25ce94157db09f6c036e78",
+      "width": 2608,
+      "height": 1688
+    },
+    "demo.webp": {
+      "bytes": 11390604,
+      "sha256": "876e29ae06d9c541d4255e2791db7b6d7f187407a813ade89c0a0cddf8298ed4",
+      "width": 2608,
+      "height": 1688
+    },
+    "demo.gif": {
+      "bytes": 6528921,
+      "sha256": "2959c9d9c74a5b81d0eec9c36d3a86f3b6e280a15913d16e9e918c4dc667cc43",
+      "width": 1600,
+      "height": 1036
+    },
+    "demo.mp4": {
+      "bytes": 5038338,
+      "sha256": "b20eed6ac3b3e3b37e5806a7b227ccc6d4f806fe68b88ddf1984984077e66f9b",
+      "codec_name": "h264",
+      "width": 2608,
+      "height": 1688,
+      "r_frame_rate": "60/1",
+      "duration": 35.016667
+    }
+  }
+}
