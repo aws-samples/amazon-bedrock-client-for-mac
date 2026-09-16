@@ -17,14 +17,6 @@
 </p>
 
 <p align="center">
-  <a href="#requirements"><img src="https://img.shields.io/badge/macOS-14%2B-242424?style=flat-square" height="20" alt="macOS 14 or later" /></a>
-  <a href="#build"><img src="https://img.shields.io/badge/Swift-6-F05138?style=flat-square" height="20" alt="Swift 6" /></a>
-  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest"><img src="https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?label=Release&amp;style=flat-square" height="20" alt="Latest release" /></a>
-  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/aws-samples/amazon-bedrock-client-for-mac/ci.yml?branch=main&amp;label=Validation&amp;style=flat-square" height="20" alt="Validation" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT--0-555?style=flat-square" height="20" alt="License: MIT-0" /></a>
-</p>
-
-<p align="center">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/hero.png" />
     <source type="image/webp" srcset="docs/assets/demo.webp" />
