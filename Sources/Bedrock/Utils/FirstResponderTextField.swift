@@ -25,6 +25,18 @@ enum ComposerNavigationKey { case up, down, accept, dismiss }
  */
 final class MyTextView: NSTextView {
     override func menu(for event: NSEvent) -> NSMenu? { WorkbenchTextMenu.make(for: self) }
+    private static let imagePasteboardTypes: [NSPasteboard.PasteboardType] = [
+        .png, .init("public.jpeg"), .init("public.heic"), .init("org.webmproject.webp"),
+        .init("com.compuserve.gif"), .tiff, .init("com.microsoft.bmp")
+    ]
+    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        // AppKit validates Command-V before invoking our paste handler. A plain
+        // NSTextView otherwise disables Paste for Finder URLs or image-only data.
+        var types = super.readablePasteboardTypes + [.fileURL, .html]
+        if allowImagePasting { types += Self.imagePasteboardTypes }
+        var seen = Set<NSPasteboard.PasteboardType>()
+        return types.filter { seen.insert($0).inserted }
+    }
     var onPaste: ((NSImage) -> Void)?
     var onPastePreparedImage: ((PreparedClipboardImage) -> Void)?
     var onPasteError: ((String) -> Void)?
@@ -149,11 +161,9 @@ final class MyTextView: NSTextView {
         let hasFiles = !images.isEmpty || !documents.isEmpty
         // Prefer compressed clipboard types. Asking for TIFF first can expand a
         // modest screenshot into hundreds of megabytes on the UI thread.
-        let imageTypes: [NSPasteboard.PasteboardType] = [.png, .init("public.jpeg"), .init("public.heic"),
-            .init("org.webmproject.webp"), .init("com.compuserve.gif"), .tiff, .init("com.microsoft.bmp")]
         if allowImagePasting && !hasFiles {
             for item in (pasteboard.pasteboardItems ?? []).prefix(maxImagesAllowed) {
-                for type in imageTypes where item.types.contains(type) {
+                for type in Self.imagePasteboardTypes where item.types.contains(type) {
                     if let data = item.data(forType: type) { images.append(.data(data)); break }
                 }
             }

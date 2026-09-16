@@ -161,7 +161,13 @@ final class WorkbenchUITests: XCTestCase {
         let window = settings(app)
         for pane in ["General", "Appearance", "AWS connection", "Models", "Skills", "Tools & MCP", "Keyboard", "Data & history", "Advanced"] {
             openPane(pane, in: window)
-            XCTAssertTrue(window.staticTexts[pane].firstMatch.exists, "Settings pane did not open: \(pane)")
+            let heading = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                window.staticTexts.matching(identifier: pane).allElementsBoundByIndex.contains {
+                    $0.frame.minX > window.frame.minX + 200 && $0.isHittable
+                }
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [heading], timeout: 4), .completed,
+                           "The detail pane must open; its sidebar label alone is not sufficient: \(pane)")
             let image = XCTAttachment(screenshot: window.screenshot())
             image.name = "Settings – \(pane)"
             image.lifetime = .keepAlways
@@ -628,7 +634,8 @@ final class WorkbenchUITests: XCTestCase {
         editor.click()
         editor.typeText("[attachments] Read this source file.")
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects([file as NSURL])
+        NSPasteboard.general.setString(file.absoluteString, forType: .fileURL)
+        XCTAssertNotNil(NSPasteboard.general.data(forType: .fileURL))
         app.typeKey("v", modifierFlags: .command)
         XCTAssertTrue(app.staticTexts["Example"].firstMatch.waitForExistence(timeout: 8))
         XCTAssertEqual(editor.value as? String, "[attachments] Read this source file.")
@@ -642,6 +649,55 @@ final class WorkbenchUITests: XCTestCase {
         XCTAssertEqual(document["format"] as? String, "txt")
         let source = try XCTUnwrap(document["source"] as? [String: Any])
         XCTAssertEqual(Data(base64Encoded: try XCTUnwrap(source["bytes"] as? String)), bytes)
+    }
+
+    @MainActor
+    func testImageOnlyThenMixedLongTextPasteSendsAllImagesAndExactText() throws {
+        let (app, _) = try launch(withRuntime: true)
+        preserveClipboard()
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 3200, pixelsHigh: 1800,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSColor.systemTeal.setFill()
+        NSRect(x: 0, y: 0, width: 3200, height: 1800).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.setData(png, forType: .png)
+        XCTAssertNil(board.string(forType: .string))
+        composer(app).click()
+        app.typeKey("v", modifierFlags: .command)
+        XCTAssertTrue(app.staticTexts["Attachments (1)"].waitForExistence(timeout: 8),
+                      "An image-only clipboard must work through Command-V.")
+
+        let longText = String(repeating: "Mixed paste 한글 with exact whitespace.\n", count: 1500) + "EXACT_PASTE_END_CI"
+        let text = NSPasteboardItem()
+        text.setString(longText, forType: .string)
+        text.setString("<script>wrong content</script><p>Prefer the supplied plain text</p>", forType: .html)
+        let images = (0..<2).map { _ -> NSPasteboardItem in
+            let item = NSPasteboardItem()
+            item.setData(png, forType: .png)
+            return item
+        }
+        board.clearContents()
+        board.writeObjects([text] + images)
+        XCTAssertEqual(board.string(forType: .string), longText)
+        app.typeKey("v", modifierFlags: .command)
+        XCTAssertTrue(app.staticTexts["Attachments (4)"].waitForExistence(timeout: 12))
+        XCTAssertEqual(composer(app).value as? String, "")
+        send("[attachments] Inspect the pasted content.", in: app)
+        _ = response("ATTACHMENTS_RECEIVED: 0 documents, 3 images", in: app)
+        let request = try XCTUnwrap(runtime).requests().first
+        let body = try XCTUnwrap(request?["body"] as? [String: Any])
+        let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        let content = try XCTUnwrap(messages.last?["content"] as? [[String: Any]])
+        let actual = content.compactMap { $0["text"] as? String }.joined()
+        XCTAssertTrue(actual.contains(longText))
+        XCTAssertFalse(actual.contains("<script>wrong content</script>"))
+        XCTAssertEqual(content.filter { $0["image"] != nil }.count, 3)
     }
 
     @MainActor

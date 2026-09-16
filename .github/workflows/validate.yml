@@ -84,5 +84,11 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: native-validation-${{ github.run_id }}
-          path: artifacts/
+          path: |
+            artifacts/*.log
+            artifacts/*.json
+            artifacts/*.md
+            artifacts/core/*.log
+            artifacts/rendering/*.log
+            artifacts/Workbench.xcresult
           retention-days: 14

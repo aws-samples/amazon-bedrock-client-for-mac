@@ -6,6 +6,34 @@ import XCTest
 
 final class ClipboardRenderingTests: XCTestCase {
     @MainActor
+    func testNativePasteMenuAcceptsFileHTMLAndImageOnlyClipboardContents() throws {
+        let board = NSPasteboard.general
+        let saved = (board.pasteboardItems ?? []).map { item -> NSPasteboardItem in
+            let copy = NSPasteboardItem()
+            for type in item.types { if let data = item.data(forType: type) { copy.setData(data, forType: type) } }
+            return copy
+        }
+        defer { board.clearContents(); board.writeObjects(saved) }
+        let editor = MyTextView()
+        editor.isEditable = true
+        editor.isRichText = false
+        let paste = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        let inputs: [(NSPasteboard.PasteboardType, Data)] = [
+            (.fileURL, Data("file:///tmp/source.swift".utf8)),
+            (.html, Data("<p>HTML without a plain-text representation</p>".utf8)),
+            (.png, try png(width: 4, height: 3))
+        ]
+        for (type, data) in inputs {
+            board.clearContents()
+            board.setData(data, forType: type)
+            XCTAssertTrue(editor.readablePasteboardTypes.contains(type))
+            XCTAssertTrue(editor.validateUserInterfaceItem(paste), "Command-V must reach the handler for \(type.rawValue).")
+        }
+        editor.isEditable = false
+        XCTAssertFalse(editor.validateUserInterfaceItem(paste))
+    }
+
+    @MainActor
     func testPastingSourceFileURLsUsesTheDocumentImporterWithoutReplacingDraftText() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -25,6 +53,11 @@ final class ClipboardRenderingTests: XCTestCase {
         XCTAssertTrue(editor.handlePasteboard(board))
         XCTAssertEqual(imported, [swift, json])
         XCTAssertEqual(editor.string, "Keep this draft")
+    }
+
+    private struct ImagePreparation: Sendable {
+        let image: PreparedClipboardImage
+        let onMainThread: Bool
     }
 
     private static func isOnMainThread() -> Bool { Thread.isMainThread }
@@ -169,10 +202,13 @@ final class ClipboardRenderingTests: XCTestCase {
 
     func testImagePreparationHandlesSmallAndLargeImagesWithBoundedPreview() async throws {
         let data = try png(width: 3200, height: 1800)
-        let (image, onMain) = try await Task.detached {
-            (try await ClipboardImageProcessor.prepare(.data(data)), Self.isOnMainThread())
-        }.value
-        XCTAssertFalse(onMain)
+        let preparing = Task.detached { [data] in
+            let image = try await ClipboardImageProcessor.prepare(.data(data))
+            return ImagePreparation(image: image, onMainThread: ClipboardRenderingTests.isOnMainThread())
+        }
+        let prepared = try await preparing.value
+        let image = prepared.image
+        XCTAssertFalse(prepared.onMainThread)
         XCTAssertEqual(image.width, 2560)
         XCTAssertEqual(image.height, 1440)
         XCTAssertLessThanOrEqual(image.data.count, ClipboardImageProcessor.maximumOutputBytes)

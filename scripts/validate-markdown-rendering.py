@@ -86,6 +86,7 @@ let package = Package(name: "BedrockMarkdownValidation", platforms: [.macOS(.v14
     with build_log.open("w") as log:
         result = subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode:
+        print("\n".join(build_log.read_text().splitlines()[-80:]))
         raise SystemExit(f"Native renderer test build failed. See {build_log}")
 
     bundles = list((output / ".build").glob("**/MarkdownRenderingTests.xctest"))
