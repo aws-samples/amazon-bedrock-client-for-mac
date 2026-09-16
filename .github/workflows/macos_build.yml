@@ -28,7 +28,7 @@ jobs:
     env:
       APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Release/Amazon Bedrock.app
       DMG_PATH: Amazon Bedrock Client for Mac.dmg
-      LLVM_PROFILE_FILE: ${{ runner.temp }}/bedrock-%p.profraw
+      LLVM_PROFILE_FILE: /tmp/bedrock-%p.profraw
 
     steps:
       - name: Check out the tested revision

@@ -23,7 +23,7 @@ jobs:
     env:
       BEDROCK_TEST_OFFLINE: "1"
       BEDROCK_TEST_FIXTURES: ${{ github.workspace }}/Tests/Fixtures
-      LLVM_PROFILE_FILE: ${{ runner.temp }}/bedrock-%p.profraw
+      LLVM_PROFILE_FILE: /tmp/bedrock-%p.profraw
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: maxim-lobanov/setup-xcode@v1.7.0
