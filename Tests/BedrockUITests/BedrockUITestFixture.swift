@@ -62,7 +62,8 @@ final class BedrockUITestFixture {
         app.launchEnvironment["AWS_SHARED_CREDENTIALS_FILE"] = directory.appendingPathComponent("aws-credentials").path
         app.launchEnvironment["AWS_CONFIG_FILE"] = directory.appendingPathComponent("aws-config").path
         app.launchEnvironment["AWS_EC2_METADATA_DISABLED"] = "true"
-        app.launchArguments += ["-runtimeEndpoint", "http://127.0.0.1:\(port)"]
+        // The test-only connection mode derives the SDK endpoint from this
+        // port. It cannot inherit a saved endpoint or require a second flag.
     }
 
     func releaseStream() async throws {

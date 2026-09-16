@@ -16,8 +16,10 @@ args = parser.parse_args()
 project = root / "Bedrock.xcodeproj/project.pbxproj"
 graph = json.loads(subprocess.check_output(["plutil", "-convert", "json", "-o", "-", str(project)]))
 objects = graph["objects"]
-target = next(item for item in objects.values()
-              if item.get("isa") == "PBXNativeTarget" and item.get("name") == "Amazon Bedrock Client for Mac")
+target = next((item for item in objects.values()
+               if item.get("isa") == "PBXNativeTarget" and item.get("name") == "Bedrock"), None)
+if target is None:
+    raise SystemExit("The Bedrock application target is missing from Bedrock.xcodeproj.")
 configurations = objects[target["buildConfigurationList"]]["buildConfigurations"]
 versions = {objects[item]["buildSettings"]["MARKETING_VERSION"] for item in configurations}
 if len(versions) != 1:
@@ -39,6 +41,9 @@ if args.app:
     for key, value in expected.items():
         if info.get(key) != value:
             raise SystemExit(f"Packaged {key} is {info.get(key)!r}; expected {value!r}.")
+    if any(key.startswith("BEDROCK_TEST_") or key == "BEDROCK_WORKBENCH_DATA_DIR"
+           for key in info.get("LSEnvironment", {})):
+        raise SystemExit("The distribution contains a preview/test launch environment.")
     if not str(info.get("CFBundleVersion", "")).isdigit():
         raise SystemExit("The distribution must use a numeric build number.")
     binary = args.app / "Contents/MacOS/Amazon Bedrock"

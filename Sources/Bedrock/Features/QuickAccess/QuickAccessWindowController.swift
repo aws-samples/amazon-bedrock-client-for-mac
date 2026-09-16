@@ -158,7 +158,9 @@ class QuickAccessWindowController: NSObject, ObservableObject {
 // MARK: - NSWindowDelegate
 extension QuickAccessWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        window = nil
+        if let closing = notification.object as? QuickAccessWindow, closing === window {
+            window = nil
+        }
         logger.info("Quick access window closed")
     }
     
@@ -170,9 +172,11 @@ extension QuickAccessWindowController: NSWindowDelegate {
         }
         
         // 포커스를 잃으면 윈도우 닫기 (약간의 지연을 두어 안정성 확보)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        guard let resigned = notification.object as? QuickAccessWindow else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self, weak resigned] in
             // 다시 한 번 체크 (지연 시간 동안 파일 업로드가 시작될 수 있음)
-            guard let self = self, !self.isFileUploadInProgress else { return }
+            guard let self, let resigned, self.window === resigned,
+                  !resigned.isKeyWindow, !self.isFileUploadInProgress else { return }
             self.hideWindow()
         }
     }

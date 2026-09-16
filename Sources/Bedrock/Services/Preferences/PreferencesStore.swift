@@ -209,7 +209,7 @@ class PreferencesStore: ObservableObject {
         }
 
         self.profiles = Self.readAWSProfiles()
-        logger.info("Loaded \(self.profiles.count) AWS profiles: \(self.profiles.map { $0.name }.joined(separator: ", "))")
+        logger.info("Loaded \(self.profiles.count) AWS profiles")
         
         //        if let data = UserDefaults.standard.data(forKey: "ssoTokenInfo"),
         //           let tokenInfo = try? JSONDecoder().decode(SSOTokenInfo.self, from: data) {
@@ -321,13 +321,9 @@ class PreferencesStore: ObservableObject {
     }
     
     private func setupFileMonitoring() {
-        let credentialsURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            ".aws/credentials")
-        let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            ".aws/config")
-        
-        monitorFileChanges(at: credentialsURL)
-        monitorFileChanges(at: configURL)
+        let files = Self.configurationFileURLs()
+        monitorFileChanges(at: files.credentials)
+        monitorFileChanges(at: files.config)
     }
     
     private func monitorFileChanges(at url: URL) {
@@ -356,17 +352,14 @@ class PreferencesStore: ObservableObject {
         
         // Capture url path as value type
         let urlPath = url.path
-        let urlLastComponent = url.lastPathComponent
-        
         source.setEventHandler {
             Task { @MainActor in
                 let manager = PreferencesStore.shared
                 manager.logger.info("File change detected at \(urlPath)")
                 
-                if urlLastComponent == "credentials" || urlLastComponent == "config" {
-                    manager.refreshAWSProfiles()
-                    NotificationCenter.default.post(name: .awsCredentialsChanged, object: nil)
-                }
+                // Environment overrides can use any filename.
+                manager.refreshAWSProfiles()
+                NotificationCenter.default.post(name: .awsCredentialsChanged, object: nil)
                 
                 // Re-establish monitoring for the changed file
                 manager.monitorFileChanges(at: url)
@@ -406,40 +399,50 @@ class PreferencesStore: ObservableObject {
         }
     }
     
-    /// Reads AWS profiles from ~/.aws/credentials and ~/.aws/config
-    /// This is a simplified version that just reads profile names - AWS SDK handles the actual credential loading
+    /// Match the SDK's AWS_SHARED_CREDENTIALS_FILE and AWS_CONFIG_FILE
+    /// overrides. Isolated UI tests must never discover the user's profiles.
+    nonisolated static func configurationFileURLs(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> (credentials: URL, config: URL) {
+        let base: URL
+        if ValidationMode.isOffline(environment: environment),
+           let directory = environment["BEDROCK_WORKBENCH_DATA_DIR"] {
+            base = URL(fileURLWithPath: directory).appendingPathComponent("aws", isDirectory: true)
+        } else {
+            base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aws", isDirectory: true)
+        }
+        func file(_ key: String, fallback: String) -> URL {
+            guard let path = environment[key], !path.isEmpty else {
+                return base.appendingPathComponent(fallback)
+            }
+            return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        }
+        return (file("AWS_SHARED_CREDENTIALS_FILE", fallback: "credentials"),
+                file("AWS_CONFIG_FILE", fallback: "config"))
+    }
+
+    /// Only profile names and types are read here; the AWS SDK loads credentials.
     static func readAWSProfiles() -> [ProfileInfo] {
         return readAWSProfilesSync()
     }
     
     /// Non-isolated version for background thread access
-    nonisolated static func readAWSProfilesSync() -> [ProfileInfo] {
-        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+    nonisolated static func readAWSProfilesSync(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [ProfileInfo] {
+        let files = configurationFileURLs(environment: environment)
         var profiles: [ProfileInfo] = []
-        let logger = Logger(label: "PreferencesStore.readAWSProfilesSync")
         
-        // Read from ~/.aws/credentials
-        if let credentialsProfiles = parseProfilesFromFile("\(homePath)/.aws/credentials", isConfig: false) {
-            logger.debug("Loaded \(credentialsProfiles.count) profiles from credentials file")
-            for p in credentialsProfiles {
-                logger.debug("  - \(p.name): \(p.type)")
-            }
+        if let credentialsProfiles = parseProfilesFromFile(files.credentials.path, isConfig: false) {
             profiles.append(contentsOf: credentialsProfiles)
         }
         
-        // Read from ~/.aws/config
-        if let configProfiles = parseProfilesFromFile("\(homePath)/.aws/config", isConfig: true) {
-            logger.debug("Loaded \(configProfiles.count) profiles from config file")
-            for p in configProfiles {
-                logger.debug("  - \(p.name): \(p.type)")
-            }
+        if let configProfiles = parseProfilesFromFile(files.config.path, isConfig: true) {
             profiles.append(contentsOf: configProfiles)
         }
         
         // Merge by name, preferring SSO/credential_process types from config
-        let merged = profiles.mergedByName()
-        logger.info("Final merged profiles: \(merged.map { "\($0.name)(\($0.type))" }.joined(separator: ", "))")
-        return merged
+        return profiles.mergedByName()
     }
     
     /// Parse profile names from an AWS config/credentials file

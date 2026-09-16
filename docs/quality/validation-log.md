@@ -3,6 +3,55 @@
 This file records executed checks. The acceptance inventory is
 `PILOT_LOCAL_PORT_TODO.md`.
 
+## Latest validation — September 16, 2026
+
+The entries below this section preserve earlier experiments and build numbers;
+they are not the current release status.
+
+- The ordinary optimized Release app completed a real Nova 2 Lite request
+  that listed the installed skills. The reported “AWS requests are disabled”
+  message came from an offline test copy; preview launchers now distinguish
+  **Bedrock Validation**, **Bedrock Showcase**, and **Bedrock UI Tests**.
+  Offline test clients derive their exact loopback endpoint from the fixture,
+  use a fake SDK credential resolver, and never fall back to AWS. CI removes
+  inherited AWS environment variables.
+- The latest portable core suite passed **98 cases**, zero failures.
+  The latest optimized native suite executed **82 cases: 78 passed, four
+  opt-in public-network diagnostics skipped, zero failures**. These include
+  connection isolation, profile overrides, Quick Access lifecycle, IME input,
+  image/clipboard work, and real local MCP transports.
+- Hosted run **35116246289**, revision `6dea03a`, completed the core,
+  standalone renderer, and native suites successfully. It ran all 23 UI
+  scenarios: **20 passed and three failed**. The background-command tool loop
+  and output-limit continuation both passed in the actual app.
+- The remaining image failure was reproduced with real pointer clicks:
+  a zoomed image intercepted the Fit button outside its visible viewport.
+  Moving input gestures to the bounded viewport fixed three consecutive
+  open → zoom → Fit → close cycles. This was a real input bug, not a timing
+  assertion change.
+- Quick Access exposed an AXWindow, while its UI test queried a dialog.
+  Its delayed focus-loss callback could also close a newly reopened panel.
+  The corrected native lifecycle test and actual Escape → reopen → submit
+  sequence passed; the request reached the local Bedrock protocol fixture.
+- Failure recovery exposed selectable error text through AXValue rather
+  than AXLabel. The test now uses its stable identifier and checks the actual
+  message. The protocol fixture also incorrectly rejected a new message when
+  Converse retained the prior failed prompt in consecutive-user context.
+  After that fixture correction, the real SDK/app displayed the failure and
+  completed the next request. All **four protocol-fixture tests** passed.
+- Full local XCTest UI execution still requires macOS UI-automation
+  authentication. Targeted native and independent pointer/keyboard checks
+  are evidence for the fixes, not a replacement for the required complete
+  local CI run. No v2.0.0 release or main-branch push has been made.
+
+Evidence under `/tmp/bedrock-pilot-validation/`:
+`release-preflight/isolation-core-fixed`,
+`release-preflight/native-interactions-fixed`,
+`release-preflight/normal-release-fixed`,
+`release-preflight/normal-release-interactions`,
+`release-preflight/github-35116246289`,
+`ui-review-interactions`, and `ui-review-recovery`.
+
 ## Environment
 
 - Source app: `/Users/sanghwa/workspaces/foxl-ai/pilot`.

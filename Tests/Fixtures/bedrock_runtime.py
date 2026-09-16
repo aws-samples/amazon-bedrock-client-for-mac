@@ -113,9 +113,15 @@ class FixtureHandler(BaseHTTPRequestHandler):
             if message.get("role") == "user" and
             any("text" in content for content in message.get("content", []))
         ]
-        prompt = "\n".join(content["text"] for content in user_messages[-1].get("content", []) if "text" in content)
+        if not user_messages:
+            raise ValueError("Expected a user message containing text")
+        prompt_parts = [content["text"] for content in user_messages[-1].get("content", []) if "text" in content]
+        prompt = "\n".join(prompt_parts)
         self.server.record({"model": model, "path": path, "body": request})
-        if "[failure]" in prompt:
+        # Converse merges consecutive user messages after a failed request.
+        # Only reject the new failure prompt, not a later message that retains
+        # that failed prompt in its context.
+        if "[failure]" in prompt_parts[-1]:
             self.json_response(400, {"message": "The fixture rejected this request. Your draft is safe."})
             return
 

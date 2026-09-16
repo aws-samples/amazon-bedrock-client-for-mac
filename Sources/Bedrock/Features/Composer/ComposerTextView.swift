@@ -62,6 +62,14 @@ final class ComposerTextView: NSTextView {
     private var isPasteInProgress = false
     private var pasteJobs: [UUID: Task<Void, Never>] = [:]
     private var lastPasteJob: Task<Void, Never>?
+    private var commandModifiers: NSEvent.ModifierFlags = []
+
+    override func keyDown(with event: NSEvent) {
+        let previous = commandModifiers
+        commandModifiers = event.modifierFlags
+        defer { commandModifiers = previous }
+        super.keyDown(with: event)
+    }
 
     func moveCursorToEnd() {
         let length = (string as NSString).length
@@ -110,7 +118,9 @@ final class ComposerTextView: NSTextView {
     }
 
     override func doCommand(by selector: Selector) {
-        let flags = NSApp.currentEvent?.modifierFlags ?? []
+        // Commands from accessibility or input methods must not inherit a
+        // stale Command/Shift modifier from another window's last event.
+        let flags = commandModifiers
         if !hasMarkedText(), flags.intersection([.command, .control, .option, .shift]).isEmpty {
             let key: ComposerNavigationKey?
             switch selector {
@@ -129,7 +139,6 @@ final class ComposerTextView: NSTextView {
                 super.doCommand(by: selector)
                 return
             }
-            let flags = NSApp.currentEvent?.modifierFlags ?? []
             if flags.contains(.shift) || (sendWithCommandReturn && !flags.contains(.command)) {
                 super.insertText("\n", replacementRange: selectedRange())
             } else {

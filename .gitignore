@@ -70,6 +70,7 @@ Podfile.lock
 DerivedData/
 artifacts/
 *.xcresult/
+*.profraw
 __pycache__/
 *.py[cod]
 

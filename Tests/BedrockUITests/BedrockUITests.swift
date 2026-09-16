@@ -752,7 +752,7 @@ final class BedrockUITests: XCTestCase {
     func testQuickAccessEscapeAndSubmissionReachTheMainConversation() throws {
         let (app, _) = try launch(withRuntime: true)
         app.typeKey("k", modifierFlags: [.command, .shift])
-        let quick = app.dialogs["QuickAccessWindow"].textViews["composer.editor"]
+        let quick = app.windows["QuickAccessWindow"].textViews["composer.editor"]
         XCTAssertTrue(quick.waitForExistence(timeout: 5))
         quick.click()
         quick.typeText("A draft to dismiss")
@@ -813,11 +813,11 @@ final class BedrockUITests: XCTestCase {
     func testFailedRequestLeavesConversationUsableForTheNextMessage() throws {
         let (app, _) = try launch(withRuntime: true)
         send("[failure] Reject this synthetic request.", in: app)
-        let error = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'fixture rejected'")).firstMatch
-        // Errors are rendered using the same selectable native text surface.
-        let errorText = app.textViews.matching(NSPredicate(format: "value CONTAINS 'fixture rejected'")).firstMatch
-        let rejected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in error.exists || errorText.exists }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [rejected], timeout: 10), .completed)
+        let error = app.staticTexts["requestError.message"]
+        XCTAssertTrue(error.waitForExistence(timeout: 10))
+        // SwiftUI exposes selectable Text through AXValue on some macOS
+        // versions. Verify the actual message using its stable identity.
+        XCTAssertTrue((error.label + (error.value as? String ?? "")).contains("fixture rejected"))
         send("Continue after the failure.", in: app)
         _ = response("RESPONSE_COMPLETE", in: app)
         XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 2)

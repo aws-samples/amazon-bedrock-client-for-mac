@@ -36,7 +36,11 @@ lines = ["## Native regression validation", "",
          "The app tests run with Release optimization. Bedrock protocol responses come from a loopback fixture; actual SDK serialization, streaming, tools and local persistence remain in use.",
          "", "| Suite log | Executed | Skipped | Failures |", "| --- | ---: | ---: | ---: |"]
 lines += [f"| {item['log']} | {item['executed']} | {item['skipped']} | {item['failures']} |" for item in results]
-lines += ["", "UI screenshots, measured interactions, exact fixture requests and failure diagnostics are attached to `Bedrock.xcresult`. Renderer cases also run in the app suite; counts are not a unique coverage total. `ci-result.json` records whether every stage passed against unchanged source files.", ""]
+if (directory / "Bedrock.xcresult").is_dir():
+    lines += ["", "Executed UI cases attach screenshots, measured interactions, fixture requests and failure diagnostics to `Bedrock.xcresult`."]
+else:
+    lines += ["", "The pipeline stopped before producing `Bedrock.xcresult`; no app/UI execution is claimed for this run."]
+lines += ["", "Renderer cases also run in the app suite; counts are not a unique coverage total. `ci-result.json` records whether every stage passed against unchanged source files and executable permissions.", ""]
 text = "\n".join(lines)
 (directory / "summary.md").write_text(text)
 if os.environ.get("GITHUB_STEP_SUMMARY"):

@@ -80,6 +80,7 @@ xcodebuild test \
   SWIFT_OPTIMIZATION_LEVEL=-O \
   SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) WORKBENCH_TESTING' \
   BEDROCK_APP_BUNDLE_IDENTIFIER=AWS.Amazon-Bedrock-Client-for-Mac.UITestHost \
+  BEDROCK_TEST_PYTHON="$(python3 -c 'import sys; print(sys.executable)')" \
   CODE_SIGNING_ALLOWED=YES \
   CODE_SIGN_IDENTITY=- \
   CODE_SIGN_STYLE=Manual \
@@ -89,6 +90,10 @@ xcodebuild test \
 App and test executables use local ad-hoc signing for validation; no Apple
 account or distribution certificate is needed. Leaving the UI runner unsigned
 can make macOS reject the copied runner template as damaged.
+Create `/private/tmp/bedrock-ui-fixtures` before running this standalone command.
+The complete CI entry point creates it and checks normal macOS UI automation
+readiness. If Xcode requires user authentication, finish that authentication
+before rerunning the required UI suite; a skipped UI run is not complete CI.
 
 The scheme supplies an isolated data directory and test-only offline mode.
 Fixture paths resolve from the test sources, or from `BEDROCK_TEST_FIXTURES`.
@@ -115,9 +120,29 @@ selected build before signing; the previous app is retained in `previous-builds`
 It writes `preview-build.json` with the source and installed app versions and
 executable hashes. Ad-hoc signing changes the installed hash. The script requires
 an explicit build and never falls back to an older Debug app.
+This launcher uses actual AWS connections and rejects the CI `UITestHost` app
+and offline-test environment. Build the normal Release app in a separate
+Derived Data directory; omit `WORKBENCH_TESTING` and the test bundle override.
+Do not clear all Swift compilation conditions, because dependency packages
+have their own required platform flags.
 For a separate documentation capture, set both
 `BEDROCK_PREVIEW_ROOT` and `BEDROCK_PREVIEW_BUNDLE_IDENTIFIER` to new values so
 neither preferences nor conversations are shared with another preview.
+
+For manual interaction with deterministic responses, use the separate test
+launcher after the CI test app has been built:
+
+```sh
+python3 scripts/run-ui-fixture.py \
+  ".build/ci-derived/Build/Products/Release/Amazon Bedrock.app" \
+  --output /tmp/bedrock-ui-review
+```
+
+It requires a new evidence directory and opens **Bedrock UI Tests**. It launches
+the loopback server, uses synthetic credentials and fresh local data, records
+actual SDK requests, and stops the fixture when the test app exits. It never
+replaces the normal **Bedrock Validation** app. Reopening the test copy without
+its fixture remains offline.
 
 Include:
 

@@ -37,16 +37,7 @@ struct ImagePreviewModal: View {
                         .resizable().interpolation(.high).scaledToFit()
                         .padding(20)
                         .scaleEffect(scale).offset(offset)
-                        .gesture(DragGesture()
-                            .onChanged { value in
-                                offset = CGSize(width: lastOffset.width + value.translation.width,
-                                                height: lastOffset.height + value.translation.height)
-                            }
-                            .onEnded { _ in lastOffset = offset })
-                        .simultaneousGesture(MagnificationGesture()
-                            .onChanged { scale = min(5, max(0.25, lastScale * $0)) }
-                            .onEnded { _ in lastScale = scale })
-                        .onTapGesture(count: 2) { setZoom(scale == 1 ? 2 : 1) }
+                        .allowsHitTesting(false)
                         .accessibilityLabel("Image preview")
                 } else if let loadError {
                     EmptyStateView(symbol: "photo", title: "Image could not be opened", detail: loadError)
@@ -54,7 +45,23 @@ struct ImagePreviewModal: View {
                     ProgressView("Opening image…").controlSize(.small)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .clipped()
+            // The zoomed image can extend beyond the viewport. Clipping pixels
+            // does not clip SwiftUI hit testing: keep gestures on the fixed
+            // viewport so an enlarged image cannot cover Fit/Copy/Close.
+            .gesture(DragGesture()
+                .onChanged { value in
+                    guard image != nil else { return }
+                    offset = CGSize(width: lastOffset.width + value.translation.width,
+                                    height: lastOffset.height + value.translation.height)
+                }
+                .onEnded { _ in lastOffset = offset })
+            .simultaneousGesture(MagnificationGesture()
+                .onChanged { if image != nil { scale = min(5, max(0.25, lastScale * $0)) } }
+                .onEnded { _ in lastScale = scale })
+            .onTapGesture(count: 2) { if image != nil { setZoom(scale == 1 ? 2 : 1) } }
             Divider()
             HStack(spacing: 8) {
                 if let image {

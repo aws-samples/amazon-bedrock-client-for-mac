@@ -4,6 +4,11 @@ set -euo pipefail
 # Run a separate app identity and data store so UI validation cannot overwrite
 # the installed app's conversations, API key, preferences, or MCP configuration.
 validation_root="${BEDROCK_PREVIEW_ROOT:-/tmp/bedrock-pilot-validation}"
+preview_name="${BEDROCK_PREVIEW_NAME:-Bedrock Validation}"
+if [[ ! "$preview_name" =~ '^[A-Za-z0-9][A-Za-z0-9 .-]{0,50}$' ]]; then
+    print -u2 'Use a short app name containing letters, numbers, spaces, dots or hyphens.'
+    exit 2
+fi
 if [[ $# -ne 1 || ! -f "$1/Contents/Info.plist" ]]; then
     print -u2 'Pass the app you just built, for example:'
     print -u2 '  scripts/run-preview.sh ".build/xcode/Build/Products/Release/Amazon Bedrock.app"'
@@ -11,7 +16,14 @@ if [[ $# -ne 1 || ! -f "$1/Contents/Info.plist" ]]; then
 fi
 source_app="${1:A}"
 validation_root="${validation_root:A}"
-preview_app="$validation_root/Bedrock Validation.app"
+source_bundle=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$source_app/Contents/Info.plist")
+source_offline=$(/usr/libexec/PlistBuddy -c "Print :LSEnvironment:BEDROCK_TEST_OFFLINE" "$source_app/Contents/Info.plist" 2>/dev/null || true)
+if [[ "$source_bundle" == *UITest* || "$source_offline" == "1" || "${BEDROCK_TEST_OFFLINE:-0}" == "1" ]]; then
+    print -u2 'This launcher is for the normal Bedrock app, with real AWS connections.'
+    print -u2 'Build Release without WORKBENCH_TESTING. Use scripts/run-ui-fixture.py for an isolated UI test build.'
+    exit 2
+fi
+preview_app="$validation_root/$preview_name.app"
 preview_bundle="${BEDROCK_PREVIEW_BUNDLE_IDENTIFIER:-AWS.Amazon-Bedrock-Client-for-Mac.PilotValidation}"
 if [[ "$source_app" == "${preview_app:A}" ]]; then
     print -u2 'The built app and preview destination must be different.'
@@ -41,7 +53,7 @@ ensure_preview_stopped
 mkdir -p "$validation_root/app-data"
 staging_root=$(mktemp -d "$validation_root/.preview-build.XXXXXX")
 trap 'rm -rf "$staging_root"' EXIT
-staged_app="$staging_root/Bedrock Validation.app"
+staged_app="$staging_root/$preview_name.app"
 # Copy into a fresh bundle so removed sources/resources cannot survive an update.
 ditto "$source_app" "$staged_app"
 python3 - "$source_app" "$staged_app" <<'PY'
@@ -58,7 +70,9 @@ if digest(Path(sys.argv[1])) != digest(Path(sys.argv[2])):
     sys.exit("The staged executable differs from the selected build; the preview was not replaced.")
 PY
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $preview_bundle" "$staged_app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleName Bedrock Validation" "$staged_app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName $preview_name" "$staged_app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :CFBundleDisplayName" "$staged_app/Contents/Info.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $preview_name" "$staged_app/Contents/Info.plist"
 # Keep isolation when Launch Services reopens the preview after Quit.
 /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$staged_app/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Delete :LSEnvironment:BEDROCK_WORKBENCH_DATA_DIR" "$staged_app/Contents/Info.plist" 2>/dev/null || true
@@ -70,7 +84,7 @@ previous_app=""
 if [[ -d "$preview_app" ]]; then
     mkdir -p "$validation_root/previous-builds"
     previous_root=$(mktemp -d "$validation_root/previous-builds/build.XXXXXX")
-    previous_app="$previous_root/Bedrock Validation.app"
+    previous_app="$previous_root/$preview_name.app"
     mv "$preview_app" "$previous_app"
 fi
 if ! mv "$staged_app" "$preview_app"; then
@@ -115,4 +129,5 @@ PY
 [[ -z "$previous_app" ]] || print "Previous app: $previous_app"
 rm -rf "$staging_root"
 trap - EXIT
-exec env BEDROCK_WORKBENCH_DATA_DIR="$validation_root/app-data" "$preview_app/Contents/MacOS/$preview_executable"
+exec env -u BEDROCK_TEST_OFFLINE -u BEDROCK_TEST_RUNTIME_PORT -u BEDROCK_TEST_FIXTURES \
+    BEDROCK_WORKBENCH_DATA_DIR="$validation_root/app-data" "$preview_app/Contents/MacOS/$preview_executable"

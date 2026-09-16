@@ -236,7 +236,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] V08 Update bundled rendering assets and preserve their licenses/provenance.
 - [x] V09 Add meaningful core, integration, renderer, clipboard, migration, and performance regressions.
 - [x] V10 Add deterministic local MCP fixtures and real transport tests.
-- [ ] V11 Add UI tests for navigation, search dismissal, settings, model selection, queueing, and shortcuts. Hosted run 35105311938 at 9325e08 executed all 21 UI scenarios: 14 passed and seven failed. Full local and hosted re-execution must pass after the fixes.
+- [ ] V11 Add UI tests for navigation, search dismissal, settings, model selection, queueing, and shortcuts. Hosted run 35116246289 at 6dea03a executed all 23 UI scenarios: 20 passed and three failed. Image hit testing, Quick Access window identity/lifecycle, and failure-recovery fixture/accessibility corrections passed targeted local interaction checks; full local and hosted re-execution must still pass.
 - [x] V12 Run the relevant local suites and document precise pass/skip/failure counts.
 - [x] V13 Configure PR CI for build/tests and gate release packaging on validation. Workflow syntax passes; hosted execution is tracked separately.
 - [x] V14 Separate offline CI fixtures from optional paid/live-provider tests.
@@ -247,6 +247,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] V19 Rebuild and exercise the complete scenario matrix in the updated Bedrock Validation app, including sidebar, icon, search, and image-preview corrections. The earlier Performance-app request is superseded by the latest Validation request.
 - [x] V20 Reproduce the newer build's typing/scroll regression against the older Validation app and fix the application-scene invalidation loop. See [performance.md](../performance.md).
 - [x] V21 Recheck the latest Validation binary after accessibility corrections and preserve the existing data, shortcuts, and responsiveness.
+- [x] V22 Keep the normal Bedrock Validation app separate from offline UI tests. The normal Release completed a real Nova skill-discovery request. A distinctly named UI test app uses fake credentials and an exact loopback endpoint; real SDK failure/recovery and Quick Access requests passed. Core/native isolation tests cover invalid ports, other inference routes, credential resolution, and profile paths. See validation-log.md.
 - [x] R01 Reorganize source, tests, resources, and configuration into a standard public Swift repository.
 - [ ] R02 Remove unused legacy screens, duplicate resources, dead helpers, and stale project entries.
 - [x] R02a Remove the unreferenced Vapor product and its seven unused package-graph entries; reject unused directly linked products during CI source validation.
@@ -259,6 +260,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] R09 Document verified setup, model support, shortcuts, tools, skills, MCP, privacy, and local storage.
 - [x] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
 - [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
+- [ ] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing, center all five badges, and visually inspect the final README media.
 
 The September 16 evidence audit and unresolved implementation gaps are recorded in [todo-audit.md](todo-audit.md).
 

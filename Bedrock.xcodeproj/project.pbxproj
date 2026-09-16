@@ -34,6 +34,7 @@
 		24BE3689552DD48346F74BA6 /* ConversationViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */; };
 		25B069C1C4BC01BDEE569001 /* BedrockModelChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */; };
 		26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */; };
+		285E7D951A36B4B14518EEB5 /* ConnectionIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */; };
 		2A3D7D6AC9804F91DEF38AD4 /* AppControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B148015A59508132568D9F /* AppControls.swift */; };
 		2B360F375C765DBBB5F31D9A /* AttachmentProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC6EE66C42B933CB7D1E0A0 /* AttachmentProcessor.swift */; };
 		2C2F37B0D68CAC46586B3634 /* BackgroundProcessRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73896BA2A1F5C5C0D6F203D0 /* BackgroundProcessRegistry.swift */; };
@@ -221,6 +222,7 @@
 		0CE48ABC07F84FBECABDDDCA /* foxl-parity.md */ = {isa = PBXFileReference; includeInIndex = 1; path = "foxl-parity.md"; sourceTree = "<group>"; };
 		0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockModelChoice.swift; sourceTree = "<group>"; };
 		1098B5B3CF9B0A6E7577B9F3 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
+		117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionIsolationTests.swift; sourceTree = "<group>"; };
 		119F773F9339A5B2A33ECF33 /* BedrockFailureMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockFailureMessage.swift; sourceTree = "<group>"; };
 		1230F92CA09B52944B24F8C0 /* MCPToolIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolIdentity.swift; sourceTree = "<group>"; };
 		123D11A7DDC046FAA273BF33 /* ConversationCompatibilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCompatibilityTests.swift; sourceTree = "<group>"; };
@@ -1213,6 +1215,7 @@
 				190222772896F50F76316584 /* MCPIntegrationTests.swift */,
 				C200DF2D416C315FD9914A1B /* MCPServerTests.swift */,
 				2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */,
+				117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */,
 			);
 			name = BedrockTests;
 			path = BedrockTests;
@@ -1586,6 +1589,7 @@
 				D8C607E825A8DD8DD2B49408 /* MCPIntegrationTests.swift in Sources */,
 				DA78D175A68A198C7E15D151 /* MCPServerTests.swift in Sources */,
 				26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */,
+				285E7D951A36B4B14518EEB5 /* ConnectionIsolationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

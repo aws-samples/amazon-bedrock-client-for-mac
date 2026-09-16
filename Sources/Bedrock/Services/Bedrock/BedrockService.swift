@@ -184,11 +184,15 @@ class BedrockService: Equatable, @unchecked Sendable {
     init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, profiles: [ProfileInfo] = []) throws {
         self.region = region
         self.profile = profile
-        self.endpoint = endpoint
-        self.runtimeEndpoint = runtimeEndpoint
+        self.endpoint = ValidationMode.connectionEndpoint(endpoint)
+        self.runtimeEndpoint = ValidationMode.connectionEndpoint(runtimeEndpoint)
+
+        if ValidationMode.isOffline {
+            self.awsCredentialIdentityResolver = Self.fixtureCredentials
+            return
+        }
         
-        logger.info("BedrockService init called with \(profiles.count) profiles: \(profiles.map { $0.name }.joined(separator: ", "))")
-        logger.info("Looking for profile: \(profile)")
+        logger.debug("Preparing credentials from \(profiles.count) configured profiles")
         
         // Try to initialize credentials in order of preference
         do {
@@ -226,20 +230,27 @@ class BedrockService: Equatable, @unchecked Sendable {
             self.awsCredentialIdentityResolver = DefaultAWSCredentialIdentityResolverChain()
         }
         
-        logger.info("BedrockService initialized with region: \(region), profile: \(profile), endpoint: \(endpoint), runtimeEndpoint: \(runtimeEndpoint)")
+        logger.info("BedrockService initialized for \(region)")
     }
     
     /// Initializes BedrockService with a custom credential resolver
     init(region: String, profile: String, endpoint: String, runtimeEndpoint: String, awsCredentialIdentityResolver: any AWSCredentialIdentityResolver) {
         self.region = region
         self.profile = profile
-        self.endpoint = endpoint
-        self.runtimeEndpoint = runtimeEndpoint
-        self.awsCredentialIdentityResolver = awsCredentialIdentityResolver
+        self.endpoint = ValidationMode.connectionEndpoint(endpoint)
+        self.runtimeEndpoint = ValidationMode.connectionEndpoint(runtimeEndpoint)
+        self.awsCredentialIdentityResolver = ValidationMode.isOffline
+            ? Self.fixtureCredentials : awsCredentialIdentityResolver
         
         logger.info(
             "BedrockService initialized with custom credential resolver, region: \(region), profile: \(profile)"
         )
+    }
+
+    private static var fixtureCredentials: StaticAWSCredentialIdentityResolver {
+        StaticAWSCredentialIdentityResolver(AWSCredentialIdentity(
+            accessKey: "BEDROCK_UI_TEST", secret: "BEDROCK_UI_TEST_NOT_A_REAL_CREDENTIAL"
+        ))
     }
     
     private func createBedrockClient() throws -> BedrockClient {
@@ -250,7 +261,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             endpoint: self.endpoint.isEmpty ? nil : self.endpoint
         )
         logger.info(
-            "Bedrock client created with region: \(self.region), endpoint: \(self.endpoint)")
+            "Bedrock client created for \(self.region)")
         return BedrockClient(config: config)
     }
     
@@ -262,7 +273,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             endpoint: self.runtimeEndpoint.isEmpty ? nil : self.runtimeEndpoint
         )
         logger.info(
-            "Bedrock Runtime client created with region: \(self.region), runtimeEndpoint: \(self.runtimeEndpoint)"
+            "Bedrock Runtime client created for \(self.region)"
         )
         return BedrockRuntimeClient(config: config)
     }

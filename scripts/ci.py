@@ -25,6 +25,10 @@ def input_hashes(root):
     return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
 
 
+def input_executables(root, paths):
+    return {name: bool((root / name).stat().st_mode & 0o111) for name in paths}
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -36,7 +40,7 @@ def main():
     output = args.artifacts.resolve()
     output.mkdir(parents=True, exist_ok=True)
     result_bundle = output / "Bedrock.xcresult"
-    if result_bundle.exists():
+    if result_bundle.exists() or (output / "ci-result.json").exists():
         parser.error("Use a fresh --artifacts directory to preserve the previous test evidence.")
 
     selected = subprocess.check_output(["xcode-select", "-p"], text=True).strip()
@@ -47,7 +51,7 @@ def main():
     if not xcodebuild.is_file():
         parser.error("Full Xcode is required for the app and UI suites. Pass --developer-dir.")
 
-    environment = os.environ.copy()
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("AWS_")}
     environment.update(
         DEVELOPER_DIR=str(developer),
         BEDROCK_TEST_OFFLINE="1",
@@ -55,10 +59,12 @@ def main():
         BEDROCK_WORKBENCH_DATA_DIR=str(output / "test-data"),
         LLVM_PROFILE_FILE=str(output / "bedrock-%p.profraw"),
         PYTHONUNBUFFERED="1",
+        AWS_EC2_METADATA_DISABLED="true",
     )
     environment.pop("BEDROCK_LIVE_NETWORK_TESTS", None)
 
     hashes = input_hashes(root)
+    executables = input_executables(root, hashes)
     report = {
         "startedAt": datetime.now(timezone.utc).isoformat(),
         "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
@@ -69,6 +75,7 @@ def main():
         "complete": False,
         "steps": [],
         "inputSHA256": hashes,
+        "inputExecutable": executables,
     }
     receipt = output / "ci-result.json"
 
@@ -105,6 +112,7 @@ def main():
     try:
         run("Xcode readiness", [xcodebuild, "-checkFirstLaunchStatus"], "xcode.log")
         run("project membership and compatibility", [python, "scripts/check-project.py"], "project.log")
+        run("release metadata", [python, "scripts/verify-release.py"], "release-metadata.log")
         run("validation script syntax",
             [python, "-m", "py_compile", *sorted((root / "scripts").glob("*.py")),
              *sorted((root / "Tests/Fixtures").glob("*.py"))], "scripts.log")
@@ -161,7 +169,7 @@ def main():
             actual = [case for case in cases if case.get("nodeIdentifier", "").startswith(suite + "/")]
             if not actual or any(case.get("result") != "Passed" for case in actual):
                 raise RuntimeError(f"{suite} did not execute and pass every required case.")
-        if input_hashes(root) != hashes:
+        if input_hashes(root) != hashes or input_executables(root, hashes) != executables:
             raise RuntimeError("Source files changed during validation; rerun the complete pipeline.")
         report["complete"] = True
         print(f"Complete local CI passed. Evidence: {receipt}", flush=True)

@@ -18,6 +18,8 @@ def main():
     objects = graph["objects"]
     parents = {child: key for key, item in objects.items() for child in item.get("children", [])}
     errors = []
+    if not (root / "scripts/run-preview.sh").stat().st_mode & 0o111:
+        errors.append("scripts/run-preview.sh must remain executable; it is invoked directly in the setup instructions.")
 
     def resolve(identifier):
         item = objects[identifier]

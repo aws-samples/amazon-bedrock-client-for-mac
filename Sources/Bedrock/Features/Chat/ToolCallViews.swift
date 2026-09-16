@@ -19,6 +19,7 @@ struct RequestErrorView: View {
                 .font(DesignTokens.label)
             Text(message).font(DesignTokens.body).lineSpacing(3)
                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("requestError.message")
             if source != message {
                 DisclosureGroup("Details") {
                     ScrollView([.vertical, .horizontal]) {

@@ -32,7 +32,8 @@ Foxl evidence: `apps/web/src/components/chat/SingleMessage.tsx`, `apps/web/src/p
 - [ ] FC20 Preserve scroll position while streaming, switching threads and changing layout. Existing renderer/scroll work; continue targeted regression.
 - [x] FC21 Restore the previous per-thread scroll position rather than always jumping to the end. Three consecutive Activity → Back round trips retained the exact native anchor offset on 70.
 - [x] FC22 Preserve exact code-copy text and Markdown structure. Existing tests; retain them as regressions.
-- [ ] FC23 Offer a clear “continue” action for output-limit truncation, with actual stop-reason evidence. Converse stop-reason persistence and a draft-preserving action are implemented; core migration/stop-reason tests passed. The actual UI continuation case must still execute.
+- [x] FC23 Offer a clear “continue” action for Converse output-limit truncation, with actual stop-reason evidence. Stop-reason persistence and a draft-preserving action passed core migration tests and the actual app UI scenario in hosted run 35116246289 at 6dea03a. Mantle incomplete-response recovery is tracked separately.
+- [ ] FC23a Offer equivalent incomplete-response recovery for the Mantle Responses route.
 - [ ] FC24 Keep context reduction visible and offer a real summary-based compaction workflow; current code only bounds history.
 
 ## Search and history
@@ -69,7 +70,7 @@ Foxl evidence: `apps/web/src/pages/SkillsPage.tsx`, `ToolsPage.tsx`, `server/ski
 - [ ] FT01 Add a local image-view tool so an agent can inspect images created/read with file tools.
 - [ ] FT02 Expose local conversation search to the agent without introducing Notes or cloud search.
 - [ ] FT03 Let the agent list/create/update local automations using the same validated scheduler as Settings.
-- [ ] FT04 Add bounded background-process start/poll/stop if a command outlives a tool turn. Implemented with incremental output, per-chat ownership, output/history bounds and process-group cancellation. Six real-process core tests passed; the app's start/poll/stop tool-loop UI test remains unexecuted.
+- [x] FT04 Add bounded background-process start/poll/stop if a command outlives a tool turn. Incremental output, per-chat ownership, output/history bounds and process-group cancellation passed six real-process core tests. The actual app's four-request start/poll/stop tool loop passed in hosted run 35116246289 at 6dea03a.
 - [ ] FT05 Keep raw tool IDs, original input/output, timing and errors inspectable. Existing detail sheet; recheck new tools.
 - [ ] FT06 File-producing tool results offer explicit Open/Reveal/Copy path actions.
 - [ ] FT07 Long tool output is searchable and copyable without blocking the transcript.

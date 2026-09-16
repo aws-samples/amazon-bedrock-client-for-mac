@@ -6,6 +6,25 @@ import XCTest
 
 final class WindowLifecycleTests: XCTestCase {
     @MainActor
+    func testDelayedQuickAccessFocusLossCannotCloseAReopenedPanel() async throws {
+        let controller = QuickAccessWindowController.shared
+        controller.showWindow()
+        defer { controller.hideWindow() }
+        let original = try XCTUnwrap(NSApp.windows.first {
+            $0.identifier?.rawValue == "QuickAccessWindow" && $0.isVisible
+        })
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: original))
+        controller.hideWindow()
+        controller.showWindow()
+        let reopened = try XCTUnwrap(NSApp.windows.first {
+            $0.identifier?.rawValue == "QuickAccessWindow" && $0.isVisible
+        })
+        XCTAssertFalse(original === reopened)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(reopened.isVisible, "A delayed callback from the old panel must not hide the new one.")
+    }
+
+    @MainActor
     func testTypingOnlyInvalidatesTheAffectedDraftIndicator() {
         let store = AppStore.shared
         let id = "draft-observation-\(UUID())"

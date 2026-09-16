@@ -6,6 +6,7 @@ import threading
 import unittest
 from unittest.mock import patch
 import urllib.request
+from urllib.error import HTTPError
 import zlib
 from pathlib import Path
 
@@ -72,6 +73,35 @@ class BedrockFixtureTests(unittest.TestCase):
                 records = [json.loads(line) for line in log.read_text().splitlines()]
                 self.assertEqual(len(records), 2)
                 self.assertTrue(all(record["body"] == body for record in records))
+            finally:
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=3)
+
+    def test_failure_does_not_reject_a_followup_with_consecutive_user_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "requests.jsonl"
+            server = FixtureServer(log)
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            try:
+                endpoint = f"http://127.0.0.1:{server.server_port}/model/us.amazon.nova-2-lite-v1:0/converse"
+                content = [{"text": "[failure] Reject this request."}]
+
+                def send():
+                    return urllib.request.urlopen(urllib.request.Request(
+                        endpoint, data=json.dumps({"messages": [{"role": "user", "content": content}]}).encode(),
+                        headers={"Content-Type": "application/json"}), timeout=5)
+
+                with self.assertRaises(HTTPError) as failure:
+                    send()
+                self.assertEqual(failure.exception.code, 400)
+                failure.exception.close()
+                content.append({"text": "Continue after the failure."})
+                with send() as response:
+                    value = json.loads(response.read())
+                self.assertIn("RESPONSE_COMPLETE", value["output"]["message"]["content"][0]["text"])
+                self.assertEqual(len(log.read_text().splitlines()), 2)
             finally:
                 server.shutdown()
                 server.server_close()
