@@ -58,8 +58,7 @@ struct CustomLogHandler: LogHandler {
 
 @main
 struct Amazon_Bedrock_Client_for_MacApp: App {
-    // Use StateObject for lazy initialization of SettingManager
-    @StateObject private var settingManager = StateObject(wrappedValue: SettingManager.shared).wrappedValue
+    @StateObject private var settingManager = SettingManager.shared
     
     // Use StateObject for AppDelegate to ensure it stays alive
     @StateObject private var appDelegateProvider = AppDelegateProvider()

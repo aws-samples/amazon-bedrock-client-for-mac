@@ -353,13 +353,20 @@ struct MessageBarView: View {
                         Text(workbench.skills.first { $0.id == id }?.name ?? id).lineLimit(1)
                         Button {
                             workbench.updateThread(chatID) { $0.skillIDs.removeAll { $0 == id } }
-                        } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 18, height: 18) }
-                            .buttonStyle(.plain).accessibilityLabel("Remove skill \(id)")
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove skill \(id)")
+                        .accessibilityIdentifier("composer.removeSkill.\(id)")
                     }.font(.system(size: 11)).padding(.leading, 9).padding(.trailing, 4).padding(.vertical, 4)
                         .background(WorkbenchStyle.surface, in: Capsule())
                 }
             }
-        }.padding(.horizontal, 18).padding(.top, 6)
+        }.frame(height: 32).padding(.horizontal, 18).padding(.top, 6)
     }
     private func navigateSlashCommands(_ key: ComposerNavigationKey) -> Bool {
         guard showsSlashCommands else { return false }

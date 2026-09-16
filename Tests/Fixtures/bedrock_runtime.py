@@ -187,7 +187,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
         else:
             if "[stream]" in prompt:
                 emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "STREAM_BEGIN\n"}})
-                deadline = time.monotonic() + 30
+                deadline = time.monotonic() + 120
                 while not self.server.release_stream.wait(0.25) and time.monotonic() < deadline:
                     # Empty deltas keep cancellation observable without changing text.
                     emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": ""}})

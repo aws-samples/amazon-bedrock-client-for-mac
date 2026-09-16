@@ -11,9 +11,12 @@ final class BedrockUITestFixture {
 
     init(directory: URL) throws {
         self.directory = directory
-        let fixtures = try XCTUnwrap(ProcessInfo.processInfo.environment["BEDROCK_TEST_FIXTURES"])
-        let script = URL(fileURLWithPath: fixtures).appendingPathComponent("bedrock_runtime.py")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: script.path))
+        let fixtures = ProcessInfo.processInfo.environment["BEDROCK_TEST_FIXTURES"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("Fixtures", isDirectory: true)
+        let script = fixtures.appendingPathComponent("bedrock_runtime.py")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: script.path), "Missing fixture: \(script.path)")
         let ready = directory.appendingPathComponent("runtime-ready.json")
         requestsURL = directory.appendingPathComponent("runtime-requests.jsonl")
         process = Process()

@@ -63,8 +63,7 @@
       </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable key = "BEDROCK_TEST_OFFLINE" value = "1" isEnabled = "YES"/>
-         <EnvironmentVariable key = "BEDROCK_WORKBENCH_DATA_DIR" value = "$(PROJECT_TEMP_DIR)/BedrockTests" isEnabled = "YES"/>
-         <EnvironmentVariable key = "BEDROCK_TEST_FIXTURES" value = "$(SRCROOT)/Tests/Fixtures" isEnabled = "YES"/>
+         <EnvironmentVariable key = "BEDROCK_WORKBENCH_DATA_DIR" value = "/tmp/bedrock-xcode-tests" isEnabled = "YES"/>
       </EnvironmentVariables>
    </TestAction>
    <LaunchAction

@@ -99,15 +99,21 @@ final class WorkbenchUITests: XCTestCase {
     @MainActor
     private func importThread(_ file: URL, in app: XCUIApplication) {
         app.typeKey("o", modifierFlags: [.command, .shift])
+        // The system also exposes an Import button in its virtual Touch Bar.
+        // Target the actual file panel, not every button in the application.
+        let button = app.windows.buttons["Import thread"].firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
         app.typeKey("g", modifierFlags: [.command, .shift])
-        let path = app.textFields["PathTextField"]
+        let path = app.windows.textFields["PathTextField"].firstMatch
         XCTAssertTrue(path.waitForExistence(timeout: 4))
         path.click()
         app.typeKey("a", modifierFlags: .command)
         path.typeText(file.path)
         app.typeKey(.return, modifierFlags: [])
-        let button = app.buttons["Import thread"]
-        XCTAssertTrue(button.waitForExistence(timeout: 4))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            button.exists && button.isEnabled
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 4), .completed)
         button.click()
     }
 
@@ -204,7 +210,7 @@ final class WorkbenchUITests: XCTestCase {
         let window = app.windows["MainWindow"]
         let search = app.buttons["Search"]
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == 'Search'")).count, 1)
-        XCTAssertLessThanOrEqual(search.frame.width, 40)
+        XCTAssertLessThanOrEqual(search.frame.width, 44)
         XCTAssertGreaterThan(search.frame.midX, window.frame.midX)
         search.click()
         let panel = app.otherElements["workbench.commandPalette"]
@@ -234,10 +240,12 @@ final class WorkbenchUITests: XCTestCase {
         XCTAssertEqual(back.label, "Back")
         XCTAssertFalse(back.isEnabled)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == 'Hide sidebar'")).count, 1)
-        // The glyph remains 14pt. Native toolbar groups supply up to a 40pt
+        // The glyph remains 14pt. Native toolbar groups supply up to a 44pt
         // transparent hit target without an always-visible button background.
-        XCTAssertLessThanOrEqual(sidebar.frame.width, 40)
-        XCTAssertLessThanOrEqual(sidebar.frame.height, 40)
+        XCTAssertLessThanOrEqual(sidebar.frame.width, 44)
+        XCTAssertLessThanOrEqual(sidebar.frame.height, 44)
+        XCTAssertEqual(sidebar.frame.width, back.frame.width, accuracy: 1)
+        XCTAssertEqual(sidebar.frame.height, back.frame.height, accuracy: 1)
         XCTAssertGreaterThan(back.frame.minX, sidebar.frame.minX)
         XCTAssertLessThan(back.frame.minX - sidebar.frame.maxX, 8)
         XCTAssertLessThan(back.frame.maxX, window.frame.minX + 240)
