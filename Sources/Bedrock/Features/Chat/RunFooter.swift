@@ -3,16 +3,34 @@ import SwiftUI
 
 struct RunFooter: View {
     let threadID: String
+    let isBusy: Bool
+    let continueResponse: () -> Void
     @ObservedObject private var store = AppStore.shared
     @ObservedObject private var settings = PreferencesStore.shared
     private var run: RunRecord? { store.state.runs.first { $0.threadID == threadID } }
     var body: some View {
-        if settings.showUsageInfo, let run {
-            Group {
-                if run.status == .running {
-                    TimelineView(.periodic(from: run.startedAt, by: 1)) { context in metrics(run, date: context.date) }
-                } else {
-                    metrics(run, date: run.finishedAt ?? run.startedAt)
+        if let run, settings.showUsageInfo || run.completionNotice != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                if let notice = run.completionNotice {
+                    HStack(spacing: 10) {
+                        Text(notice).foregroundStyle(.secondary)
+                        if run.canContinueResponse {
+                            Button("Continue response", action: continueResponse)
+                                .buttonStyle(AppButtonStyle())
+                                .disabled(isBusy)
+                                .accessibilityIdentifier("chat.continueResponse")
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .font(DesignTokens.detail)
+                    .frame(maxWidth: DesignTokens.contentWidth)
+                }
+                if settings.showUsageInfo {
+                    if run.status == .running {
+                        TimelineView(.periodic(from: run.startedAt, by: 1)) { context in metrics(run, date: context.date) }
+                    } else {
+                        metrics(run, date: run.finishedAt ?? run.startedAt)
+                    }
                 }
             }
             .padding(.horizontal, 24).padding(.bottom, 12)

@@ -99,6 +99,7 @@ def main():
         "-clonedSourcePackagesDirPath", args.packages.resolve(),
     ]
     python = sys.executable
+    Path("/private/tmp/bedrock-ui-fixtures").mkdir(parents=True, exist_ok=True)
     save()
     exit_code = 0
     try:
@@ -116,6 +117,8 @@ def main():
         run("native Markdown and clipboard",
             [python, "scripts/validate-markdown-rendering.py", "--markdown-package",
              args.packages.resolve() / "checkouts/swift-markdownkit", "--output", output / "rendering"], "rendering-suite.log")
+        run("UI automation readiness",
+            [python, "scripts/check-ui-test-environment.py"], "ui-environment.log")
         run("optimized app integration and UI",
             [xcodebuild, "test", *common, "-configuration", "Release",
              "-destination", "platform=macOS", "-resultBundlePath", result_bundle,
@@ -124,6 +127,7 @@ def main():
              "ENABLE_TESTABILITY=YES", "SWIFT_OPTIMIZATION_LEVEL=-O",
              "SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) WORKBENCH_TESTING",
              "BEDROCK_APP_BUNDLE_IDENTIFIER=AWS.Amazon-Bedrock-Client-for-Mac.UITestHost",
+             f"BEDROCK_TEST_PYTHON={python}",
              "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-",
              "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="], "app-tests.log")
         run("Xcode execution receipt",

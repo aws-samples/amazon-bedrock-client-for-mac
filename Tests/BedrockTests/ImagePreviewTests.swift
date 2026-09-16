@@ -52,6 +52,32 @@ final class ImagePreviewTests: XCTestCase {
         XCTAssertEqual(properties[kCGImagePropertyPixelHeight] as? Int, 900)
     }
 
+    func testBulkExportKeepsOriginalBytesAndExistingFilesWithSafeUniqueNames() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let original = Data("User's existing file".utf8)
+        let existing = folder.appendingPathComponent("photo.png")
+        try original.write(to: existing)
+        let first = try png(width: 120, height: 80)
+        let second = try png(width: 80, height: 120)
+        let exporter = AttachmentExporter()
+        let result = try await exporter.save([
+            .init(filename: "photo.gif", source: .encoded(first)),
+            .init(filename: "photo.gif", source: .encoded(second)),
+            .init(filename: "../../escape.jpeg", source: .encoded(first)),
+            .init(filename: "corrupt.png", source: .encoded(Data("invalid".utf8)))
+        ], to: folder)
+        XCTAssertEqual(result.files.map(\.lastPathComponent), ["photo 2.png", "photo 3.png", "escape.png"])
+        XCTAssertEqual(try Data(contentsOf: existing), original)
+        XCTAssertEqual(try Data(contentsOf: result.files[0]), first)
+        XCTAssertEqual(try Data(contentsOf: result.files[1]), second)
+        XCTAssertTrue(result.files.allSatisfy { $0.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL })
+        XCTAssertEqual(result.failures.count, 1)
+        XCTAssertTrue(result.failures[0].contains("corrupt.png"))
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: folder.path).contains { $0.hasPrefix(".bedrock-export-") })
+    }
+
     func testStoredReferenceUsesExplicitDataDirectoryAndRejectsTraversal() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

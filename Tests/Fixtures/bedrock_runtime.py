@@ -125,7 +125,32 @@ class FixtureHandler(BaseHTTPRequestHandler):
             if "toolResult" in content
         ]
         content = None
-        if "[tools]" in prompt:
+        if "[background]" in prompt:
+            results = {result.get("toolUseId"): result for result in tool_results}
+            if "background-start" not in results:
+                content = {"toolUse": {"toolUseId": "background-start", "name": "local_start_process",
+                                       "input": {"command": "printf BACKGROUND_READY; sleep 20", "directory": "/tmp"}}}
+            else:
+                def process_result(name):
+                    parts = results[name].get("content", [])
+                    return json.loads(next(part["text"] for part in parts if "text" in part))
+
+                process_id = process_result("background-start")["id"]
+                if "background-poll" not in results:
+                    content = {"toolUse": {"toolUseId": "background-poll", "name": "local_poll_process",
+                                           "input": {"id": process_id, "wait_seconds": 5}}}
+                elif "BACKGROUND_READY" not in process_result("background-poll")["output"]:
+                    self.json_response(400, {"message": "The background process did not return its real output"})
+                    return
+                elif "background-stop" not in results:
+                    content = {"toolUse": {"toolUseId": "background-stop", "name": "local_stop_process",
+                                           "input": {"id": process_id}}}
+                elif process_result("background-stop")["status"] != "stopped":
+                    self.json_response(400, {"message": "The background process did not stop"})
+                    return
+                else:
+                    content = {"text": "BACKGROUND_TOOLS_COMPLETE: BACKGROUND_READY · stopped"}
+        elif "[tools]" in prompt:
             sequence = [
                 ("fixture-list", "local_list_skills", {}),
                 ("fixture-read", "local_read_skill", {"id": "code-review"}),
@@ -163,10 +188,14 @@ class FixtureHandler(BaseHTTPRequestHandler):
             content = {"text": "QUEUE_TWO_COMPLETE"}
         elif "[quick]" in prompt:
             content = {"text": "QUICK_ACCESS_COMPLETE"}
+        elif "[truncated]" in prompt:
+            content = {"text": "PARTIAL_RESPONSE"}
         else:
             content = {"text": "RESPONSE_COMPLETE\n\n- First **item**.\n- Second item with `inline code`.\n\n```swift\nlet value = 42\n```"}
         usage = {"inputTokens": 32, "outputTokens": 16, "totalTokens": 48}
         reason = "tool_use" if "toolUse" in content else "end_turn"
+        if "[truncated]" in prompt:
+            reason = "max_tokens"
         if path.endswith("/converse"):
             self.json_response(200, {"output": {"message": {"role": "assistant", "content": [content]}},
                                      "stopReason": reason, "usage": usage, "metrics": {"latencyMs": 25}})

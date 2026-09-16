@@ -20,8 +20,18 @@ final class BedrockUITestFixture {
         let ready = directory.appendingPathComponent("runtime-ready.json")
         requestsURL = directory.appendingPathComponent("runtime-requests.jsonl")
         process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["python3", script.path, "--ready", ready.path, "--requests", requestsURL.path]
+        // /usr/bin/python3 is an xcrun shim and cannot run inside Xcode's
+        // signed UI runner sandbox. CI passes the actual Python interpreter.
+        let interpreter = Bundle(for: BedrockUITestFixture.self)
+            .object(forInfoDictionaryKey: "BedrockTestPython") as? String ?? ""
+        guard interpreter.hasPrefix("/"), !interpreter.contains("$("),
+              FileManager.default.isExecutableFile(atPath: interpreter) else {
+            throw NSError(domain: "BedrockUITestFixture", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Run python3 scripts/ci.py so UI tests receive the actual fixture interpreter."
+            ])
+        }
+        process.executableURL = URL(fileURLWithPath: interpreter)
+        process.arguments = [script.path, "--ready", ready.path, "--requests", requestsURL.path]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.standardError
         try process.run()

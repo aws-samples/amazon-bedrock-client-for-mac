@@ -28,6 +28,17 @@ a type-check or a screenshot does not close a behavioral requirement.
   ad-hoc-signed runner times out enabling macOS Automation Mode. The system
   reports that user authentication is required. This is **not a passing local
   CI run**; the full suite must execute again after normal Xcode authentication.
+- The attachment/background-process changes passed 95 portable core cases and
+  78 optimized native cases locally (74 passed, four optional network skips).
+  Bulk export checks original bytes, duplicate names, existing-file preservation,
+  invalid images and temporary-file cleanup. These results do not cover the UI
+  suite, and the subsequent fixture-signing changes still need re-execution.
+- Hosted run `35111372487` exposed a separate signed-runner setup problem:
+  `/usr/bin/python3` delegates to `xcrun`, which refuses the runner's sandbox,
+  and the runner's default temporary directory is inside its private container.
+  The fixture now receives the actual Python executable and uses a disposable,
+  explicitly entitled shared test directory. Loopback-server entitlement is
+  limited to the test target. The app's entitlements are unchanged.
 - Actual typing/scroll measurements and their workload limits are retained in
   [Performance](../performance.md). These short observations do not establish
   a long-session memory plateau or prove every conversation size.
@@ -51,8 +62,7 @@ a type-check or a screenshot does not close a behavioral requirement.
 
 The following are real Foxl convenience gaps, rather than missing checkmarks:
 
-- Output-limit continuation and explicit summary-based context compaction.
-- Background command start, poll and stop across tool turns.
+- Explicit summary-based context compaction.
 - Agent tools for local image inspection, conversation search and automations.
 - Custom shell/HTTP tools with safe configuration import/export.
 - Weekday/active-hour automation schedules with timezone and next-run preview.
@@ -63,13 +73,24 @@ Each has an individual item in [Foxl parity](foxl-parity.md). Existing but
 unverified features—settings controls, automation editing, Activity filtering,
 history management and demo routes—remain open until exercised.
 
+Output-limit continuation now records the actual Converse stop reason and
+preserves an unrelated composer draft. Background start/poll/stop is implemented
+with bounded output, per-chat ownership, process-group termination and shutdown.
+Their dedicated UI tool-loop cases are still awaiting execution, so FC23/FT04
+remain open.
+
 ## Current repository and release gates
 
-The source layout is being changed to `App`, `Core`, `Services`, `Features`,
+The source layout uses `App`, `Core`, `Services`, `Features`,
 `UI` and `Resources`. Test targets match their directories. The app bundle
 identifier, persisted keys, attachment references, Core Data schema and on-disk
 history locations are compatibility requirements even when Swift type and file
 names change.
+
+The message presentation code is now split into transcript attachments,
+disclosures, Markdown, images and video. Unused synchronous image conversion
+helpers have been removed. This split compiled with the optimized native suite;
+it still needs actual transcript, attachment and image-preview UI regression.
 
 Local and hosted validation use one entry point, `python3 scripts/ci.py`.
 Before a release, a complete local run must pass against unchanged source and

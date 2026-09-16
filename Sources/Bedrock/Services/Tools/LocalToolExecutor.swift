@@ -69,9 +69,15 @@ enum LocalToolExecutor {
             case .writeFile:
                 string("path", "Absolute, ~/, or working-directory-relative file path.")
                 string("content", "Complete UTF-8 file content.")
-            case .runCommand:
+            case .runCommand, .startProcess:
                 string("command", "Shell command to run on this Mac.")
                 string("directory", "Working directory for the command. Accepts absolute, ~/, and working-directory-relative paths.", required: false)
+            case .pollProcess, .stopProcess:
+                string("id", "Process ID returned by local_start_process in this chat.")
+                if kind == .pollProcess {
+                    properties["offset"] = ["type": "integer", "minimum": 0, "description": "Previous nextOffset; omitted means return the retained output."]
+                    properties["wait_seconds"] = ["type": "integer", "minimum": 0, "maximum": 10, "description": "Wait for new output or completion, up to 10 seconds. Defaults to 1."]
+                }
             case .gitStatus:
                 properties["action"] = ["type": "string", "enum": ["status", "diff", "log"]]
                 required = ["action"]
@@ -177,6 +183,32 @@ enum LocalToolExecutor {
                 let suffix = result.timedOut ? "\n[Command timed out]" : result.cancelled ? "\n[Command stopped]" : "\n[Exit code: \(result.exitCode)]"
                 return .init(status: result.succeeded ? "success" : "error",
                              text: result.output + suffix, error: result.succeeded ? nil : suffix)
+            case .startProcess, .pollProcess, .stopProcess:
+                let registry = BackgroundProcessRegistry.shared
+                let snapshot: BackgroundProcessSnapshot
+                if kind == .startProcess {
+                    let directory = values["directory"] as? String ?? "."
+                    let root = try LocalFileAccess(workingDirectory: access.workingDirectory).resolve(directory).url
+                    snapshot = try await registry.start(command: string("command"), directory: root, owner: threadID,
+                                                         timeout: Double(preferences.validCommandTimeout),
+                                                         outputLimit: preferences.validToolOutputLimit)
+                } else {
+                    guard let id = UUID(uuidString: try string("id")) else { throw LocalOperationError.invalid("Use a process ID returned by local_start_process.") }
+                    if kind == .stopProcess { snapshot = try await registry.stop(id, owner: threadID) }
+                    else {
+                        snapshot = try await registry.poll(id, owner: threadID, from: values["offset"] as? Int ?? 0,
+                                                           wait: Double(values["wait_seconds"] as? Int ?? 1))
+                    }
+                }
+                // Keep the JSON valid even when stdout has reached its bound.
+                // The original command is already retained in the tool input.
+                var displayed = snapshot
+                displayed.command = String(displayed.command.prefix(160))
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+                let text = String(decoding: try encoder.encode(displayed), as: UTF8.self)
+                return .init(status: snapshot.status == "failed" || snapshot.status == "timed_out" ? "error" : "success",
+                             text: text, error: snapshot.error)
             case .fetchURL:
                 let url = try LocalPath.validatedWebURL(try string("url"), allowedDomains: preferences.allowedWebDomains)
                 output = try await DirectWebFetcher.fetch(url: url, allowedDomains: preferences.allowedWebDomains,

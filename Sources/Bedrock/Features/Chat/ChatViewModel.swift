@@ -235,6 +235,7 @@ class ChatViewModel: ObservableObject {
     private var logger = Logger(label: "ChatViewModel")
     private var cancellables: Set<AnyCancellable> = []
     private var messageTask: Task<Void, Never>?
+    private var backgroundShutdownTask: Task<Void, Never>?
     private var didSetupBindings = false
     
     // Track current message ID being streamed to fix duplicate issue
@@ -435,11 +436,11 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    func discardSession() {
+    func discardSession(stopProcesses: Bool = true) {
         isClosingSession = true
         initialLoadTask?.cancel()
         initialLoadTask = nil
-        cancelSending()
+        cancelSending(stopProcesses: stopProcesses)
         queueDrainTask?.cancel()
         attachmentSaveTask?.cancel()
     }
@@ -454,6 +455,7 @@ class ChatViewModel: ObservableObject {
             queueDrainTask?.cancel()
             cancelSending()
             await messageTask?.value
+            await backgroundShutdownTask?.value
         }
         await initialLoadTask?.value
         await sharedMediaDataSource.waitForImports()
@@ -671,6 +673,16 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    func continueResponse() {
+        guard AppStore.shared.state.runs.first(where: { $0.threadID == chatId })?.canContinueResponse == true else { return }
+        // A follow-up has its own immutable prompt. Preserve the unrelated
+        // draft and attachments already present in the composer.
+        _ = sendPreparedMessage(MessageData(
+            text: "Continue the previous response from where it stopped. Do not repeat content already provided.",
+            user: "User", sentTime: Date()
+        ))
+    }
+
     /// Queue/retry requests have their own immutable attachments. Starting one
     /// must not clear a different draft the user is composing in this thread.
     @discardableResult
@@ -723,7 +735,13 @@ class ChatViewModel: ObservableObject {
         isSending = true
         var prepared = message
         prepared.modelID = chatModel.id
-        messageTask = Task { await sendMessageAsync(prepared) }
+        let previousShutdown = backgroundShutdownTask
+        messageTask = Task {
+            // A queued follow-up must not start a process while the previous
+            // turn's Stop action is still collecting and cancelling its jobs.
+            await previousShutdown?.value
+            await sendMessageAsync(prepared)
+        }
         return true
     }
 
@@ -776,7 +794,17 @@ class ChatViewModel: ObservableObject {
         sendMessage()
     }
     
-    func cancelSending() {
+    func cancelSending() { cancelSending(stopProcesses: true) }
+
+    private func cancelSending(stopProcesses: Bool) {
+        if stopProcesses {
+            let owner = chatId
+            let previousShutdown = backgroundShutdownTask
+            backgroundShutdownTask = Task {
+                await previousShutdown?.value
+                await BackgroundProcessRegistry.shared.stopAll(owner: owner)
+            }
+        }
         messageTask?.cancel()
         thinkingSummaryTask?.cancel()
         ToolApprovalCenter.shared.cancel(threadID: chatId)
@@ -1221,6 +1249,9 @@ class ChatViewModel: ObservableObject {
             )
             for try await chunk in stream {
                 try Task.checkCancellation()
+                if case .messagestop(let event) = chunk, let runID {
+                    AppStore.shared.updateRun(runID) { $0.stopReason = event.stopReason?.rawValue }
+                }
                 if case .contentblockstart(let event) = chunk,
                    let index = event.contentBlockIndex, case .tooluse(let tool)? = event.start,
                    let id = tool.toolUseId, let name = tool.name {
@@ -2549,7 +2580,7 @@ class ChatViewModel: ObservableObject {
         let imageReference = ImageStore.shared.saveImage(data)
         
         // Use the file reference directly in imageBase64Strings
-        // The NSImage extension and LazyImageView handle loading from file references
+        // The image preview worker resolves these local file references.
         // This prevents double-saving in convertImagesToReferences (it skips img_ prefixed strings)
         let imageMessage = MessageData(
             id: UUID(),

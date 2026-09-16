@@ -421,7 +421,7 @@ inventory. A catalog entry is not evidence that inference with that model works.
 ## Foxl parity and regression suites (native 43–60)
 
 The later source audit is itemized in [FOXL_CONVENIENCE_TODO.md](foxl-parity.md)
-and [FOXL_SETTINGS_INVENTORY.md](foxl-settings.md). It includes gaps as
+and [foxl-settings.md](foxl-settings.md). It includes gaps as
 well as implemented features; the presence of a checkbox does not imply parity.
 
 - Builds 45–52 exercised sent-message editing and branching, queued prompts
@@ -472,7 +472,7 @@ Profiling 61 showed repeated scene/menu/view-graph work. The app's root
 `@FocusedValue` observed newly constructed command closures on chat updates.
 Build 62 moved that observation into `WorkbenchAppCommands`, keeping it out of
 the app scene. The 61→62 comparison retained the same Release configuration
-and workload. See [PERFORMANCE.md](../performance.md) and
+and workload. See [performance.md](../performance.md) and
 `scripts/measure-ui-responsiveness.swift`.
 
 Validation 64 was installed in the existing `Bedrock Validation.app` bundle
@@ -667,7 +667,7 @@ A targeted first-keystroke investigation isolated the remaining empty-to-nonempt
 composer cost to whole-store notification for the sidebar draft badge. Per-thread
 observation reduced three first-character samples from 74.4–113.1ms to 28.95–35.77ms.
 Ordinary typing and scroll results, methodology and limits are recorded separately
-in [PERFORMANCE.md](../performance.md). Actual scrolling also retained direction and
+in [performance.md](../performance.md). Actual scrolling also retained direction and
 its original position in a 720-event movement test, with no frozen interval of
 0.2 seconds or longer in the active recording section.
 

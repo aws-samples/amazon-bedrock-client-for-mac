@@ -140,7 +140,7 @@ swiftc -O scripts/measure-ui-responsiveness.swift -o /tmp/bedrock-ui-probe
 
 Open an isolated synthetic conversation and bring the app to the foreground first. Use the same fixture, window dimensions, appearance, and display for both builds. Typing requires an empty composer; the probe restores its own text and never sends a prompt. Scroll injects 360 events over six seconds while checking a single window attribute. Avoid full accessibility-tree snapshots during timing: they can be more expensive than the interaction being measured. Keep raw samples and report median, p95, maximum, failures, and total elapsed time.
 
-The complete scenario list is in [PERFORMANCE_VALIDATION_MATRIX.md](quality/validation-matrix.md); executed results and limitations belong in [PILOT_VALIDATION.md](quality/validation-log.md).
+The complete scenario list is in [PERFORMANCE_VALIDATION_MATRIX.md](quality/validation-matrix.md); executed results and limitations belong in [validation-log.md](quality/validation-log.md).
 
 ## Storage and migration
 

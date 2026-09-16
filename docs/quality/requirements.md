@@ -1,6 +1,6 @@
 # User requirements and completion ledger
 
-Last updated: 2026-09-16. This is the authoritative checklist for the requested rebuild. Each checkbox requires both implementation and relevant verification; a code path, screenshot, or passing build alone is not proof that a feature works. The detailed Foxl audit is in [FOXL_CONVENIENCE_TODO.md](foxl-parity.md), every source settings row is mapped in [FOXL_SETTINGS_INVENTORY.md](foxl-settings.md), and measured evidence belongs in [PILOT_VALIDATION.md](validation-log.md).
+Last updated: 2026-09-16. This is the authoritative checklist for the requested rebuild. Each checkbox requires both implementation and relevant verification; a code path, screenshot, or passing build alone is not proof that a feature works. The detailed Foxl audit is in [FOXL_CONVENIENCE_TODO.md](foxl-parity.md), every source settings row is mapped in [foxl-settings.md](foxl-settings.md), and measured evidence belongs in [validation-log.md](validation-log.md).
 
 ## Final decisions that supersede earlier requests
 
@@ -46,7 +46,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] U04 Keep Light surfaces near white, with restrained gray only where useful. (Latest Light main/Settings captures were inspected; see SCREENSHOTS.md.)
 - [x] U05 Retain a clean black Dark theme without inconsistent blue-gray panels. (Latest Dark main/Settings captures were inspected; see SCREENSHOTS.md.)
 - [x] U06 Extend the frosted sidebar vertically through the titlebar to the bottom in both themes. (The actual Light/Dark captures show a full-height sidebar; see SCREENSHOTS.md.)
-- [x] U07 Extend the Settings sidebar through its titlebar in the same way. (Settings lifecycle/appearance checks and actual full-height captures passed; see PILOT_VALIDATION.md.)
+- [x] U07 Extend the Settings sidebar through its titlebar in the same way. (Settings lifecycle/appearance checks and actual full-height captures passed; see validation-log.md.)
 - [x] U08 Keep the sidebar divider straight and full height. (The latest actual Light/Dark captures retain the straight full-height divider.)
 - [ ] U09 Set an attractive initial main-window size.
 - [ ] U10 Start the sidebar expanded at a usable default width.
@@ -76,7 +76,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] U34 Normalize search-field backgrounds, borders, height, and focus treatment.
 - [x] U35 Make sidebar scrollbars thin and unobtrusive. (Actual sidebar wheel/thumb/keyboard checks passed; see the WS04–WS06 evidence in PILOT_LOCAL_PORT_TODO.md.)
 - [x] U36 Remove the opaque transcript scrollbar track. (Latest Dark transcript capture shows the clear track and slim thumb.)
-- [x] U37 Center the welcome heading and composer as a single group. (Actual welcome draft/relaunch and native layout checks passed; see PILOT_VALIDATION.md.)
+- [x] U37 Center the welcome heading and composer as a single group. (Actual welcome draft/relaunch and native layout checks passed; see validation-log.md.)
 - [x] U38 Add a faint 1px composer border in both themes without a heavy outline. (Latest actual Light/Dark composer captures were inspected.)
 - [ ] U39 Refine composer padding, input font, placeholder contrast, and button alignment.
 - [x] U40 Review Apple’s current macOS/Liquid Glass guidance and use supported APIs with fallbacks.
@@ -181,7 +181,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] T07 Make local path access permissive by default within OS permissions.
 - [x] T08 Offer configurable path and per-tool restrictions in Settings.
 - [x] T09 Enforce the optional file allowlist for built-in file reads, traversal, symlinks, and writes. Command execution has separate enablement, approval, timeout, and cancellation controls; it is not sandboxed by the file allowlist.
-- [x] T10 Show tool name, status, duration, input, full output, and error details. (Actual tool disclosure and original Input/Output details were inspected; see PILOT_VALIDATION.md.)
+- [x] T10 Show tool name, status, duration, input, full output, and error details. (Actual tool disclosure and original Input/Output details were inspected; see validation-log.md.)
 - [ ] T11 Open, reveal, and copy paths from file-producing tool results.
 - [ ] T12 Keep long tool output searchable and copyable.
 - [x] T13 Support real local MCP stdio transport with arguments and environment.
@@ -245,7 +245,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] V17 Repeat targeted validation after fixes; retain evidence for each checked requirement.
 - [x] V18 Relaunch the updated app with existing conversations and drafts preserved.
 - [ ] V19 Rebuild and exercise the complete scenario matrix in the updated Bedrock Validation app, including sidebar, icon, search, and image-preview corrections. The earlier Performance-app request is superseded by the latest Validation request.
-- [x] V20 Reproduce the newer build's typing/scroll regression against the older Validation app and fix the application-scene invalidation loop. See [PERFORMANCE.md](../performance.md).
+- [x] V20 Reproduce the newer build's typing/scroll regression against the older Validation app and fix the application-scene invalidation loop. See [performance.md](../performance.md).
 - [x] V21 Recheck the latest Validation binary after accessibility corrections and preserve the existing data, shortcuts, and responsiveness.
 - [x] R01 Reorganize source, tests, resources, and configuration into a standard public Swift repository.
 - [ ] R02 Remove unused legacy screens, duplicate resources, dead helpers, and stale project entries.
@@ -260,7 +260,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
 - [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
 
-The September 16 evidence audit and unresolved implementation gaps are recorded in [TODO_AUDIT.md](todo-audit.md).
+The September 16 evidence audit and unresolved implementation gaps are recorded in [todo-audit.md](todo-audit.md).
 
 ## Latest validation gate
 
@@ -273,7 +273,7 @@ opt-in network cases skipped. The older/newer-page reading-position regression
 is fixed and passed native teardown tests plus repeated actual paging and
 Activity → Back checks. First-character latency was measured separately and
 the per-thread draft-observation correction was verified. Evidence and exact limits are recorded in
-[PILOT_VALIDATION.md](validation-log.md) and
+[validation-log.md](validation-log.md) and
 [PERFORMANCE_VALIDATION_MATRIX.md](validation-matrix.md).
 
 

@@ -25,7 +25,9 @@ final class ChatSessionPool {
             guard retiring[id] == nil, let existing = sessions[id], !existing.isSending, existing.sharedMediaDataSource.isEmpty,
                   !existing.sharedMediaDataSource.isImporting, existing.outbox.queued.isEmpty,
                   existing.outbox.inFlight == nil, !existing.isSavingLocalWork else { continue }
-            existing.discardSession()
+            // Evicting a view model is not a user request to stop that chat's
+            // background command. The registry retains it across tool turns.
+            existing.discardSession(stopProcesses: false)
             sessions.removeValue(forKey: id)
         }
         recentlyUsed.removeAll { sessions[$0] == nil }

@@ -121,7 +121,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let savedWelcome = await ComposerDraft.welcome.flush()
             let saved = savedSessions && savedWelcome
             if !saved { ChatSessionPool.shared.resumeAfterCancelledQuit() }
-            if saved { await MCPClientManager.shared.shutdown() }
+            if saved {
+                await BackgroundProcessRegistry.shared.stopAll()
+                await MCPClientManager.shared.shutdown()
+            }
             AppStore.shared.flush()
             isPreparingToQuit = false
             sender.reply(toApplicationShouldTerminate: saved)

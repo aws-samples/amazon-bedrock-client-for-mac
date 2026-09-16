@@ -85,6 +85,6 @@ storage, offline mode and fixture paths. UI tests create fresh data per case.
 Normal launches and distribution Release builds retain the production identity
 and do not enable the fixture transport.
 
-Executed local and GitHub results belong in [PILOT_VALIDATION.md](quality/validation-log.md)
+Executed local and GitHub results belong in [validation-log.md](quality/validation-log.md)
 and the [CI scenario map](testing.md). Compilation, executed tests, live AWS
 access, and signed/notarized distribution are separate validation stages.

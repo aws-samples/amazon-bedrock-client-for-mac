@@ -23,13 +23,14 @@ enum LocalProcessRunner {
 
     static func run(executable: String, arguments: [String], directory: URL,
                     timeout: TimeInterval = 30, outputLimit: Int = 32_000,
-                    environment: [String: String]? = nil) async throws -> LocalProcessResult {
+                    environment: [String: String]? = nil,
+                    onOutput: (@Sendable (Data) -> Void)? = nil) async throws -> LocalProcessResult {
         let cancellation = Cancellation()
         return try await withTaskCancellationHandler {
             try await Task.detached(priority: .userInitiated) {
                 try execute(executable: executable, arguments: arguments, directory: directory,
                             timeout: timeout, outputLimit: outputLimit, environment: environment,
-                            cancellation: cancellation)
+                            cancellation: cancellation, onOutput: onOutput)
             }.value
         } onCancel: {
             cancellation.cancel()
@@ -38,7 +39,8 @@ enum LocalProcessRunner {
 
     private static func execute(executable: String, arguments: [String], directory: URL,
                                 timeout: TimeInterval, outputLimit: Int,
-                                environment: [String: String]?, cancellation: Cancellation) throws -> LocalProcessResult {
+                                environment: [String: String]?, cancellation: Cancellation,
+                                onOutput: (@Sendable (Data) -> Void)?) throws -> LocalProcessResult {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
             throw LocalOperationError.unavailable("The command “\(executable)” is not installed or executable.")
         }
@@ -111,9 +113,12 @@ enum LocalProcessRunner {
         var truncated = false
         var stopAt: Date?
         while !reaped || !pipeEnded {
-            while true {
+            // A continuously writing child must not starve cancellation and
+            // timeout checks by keeping this drain loop busy indefinitely.
+            for _ in 0..<32 {
                 let count = read(descriptors[0], &buffer, buffer.count)
                 if count > 0 {
+                    onOutput?(Data(buffer.prefix(count)))
                     let remaining = max(0, byteLimit - data.count)
                     data.append(contentsOf: buffer.prefix(min(count, remaining)))
                     if count > remaining { truncated = true }

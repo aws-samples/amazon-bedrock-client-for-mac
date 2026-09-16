@@ -88,7 +88,10 @@ struct ChatView: View {
                 } else {
                     messageScrollView
                     messageBarView
-                    RunFooter(threadID: viewModel.chatId)
+                    RunFooter(threadID: viewModel.chatId, isBusy: viewModel.isSending || viewModel.isLoadingHistory) {
+                        followsOutput = true
+                        viewModel.continueResponse()
+                    }
                 }
             }
 

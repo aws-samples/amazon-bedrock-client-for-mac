@@ -12,7 +12,7 @@ Notes and meeting recording are outside this project.
 An item is checked only after implementation and the validation named for that
 item. A successful build alone does not prove AWS inference, a permission prompt,
 or an interactive UI works. Live checks that cannot run must remain open with
-the actual error recorded in `PILOT_VALIDATION.md`.
+the actual error recorded in `validation-log.md`.
 
 ## Current design scope
 
@@ -531,4 +531,4 @@ The menu pass found a separate shared-state bug: an explicit `ObservableObjectPu
 
 ## 18. Full Foxl convenience re-audit
 
-See [FOXL_CONVENIENCE_TODO.md](foxl-parity.md) for the source-backed chat/composer, search/history, skills/tools, MCP/model, automation and native-settings gaps. [FOXL_SETTINGS_INVENTORY.md](foxl-settings.md) maps all 129 indexed Foxl settings plus nine dynamic Appearance controls individually. Build 42 is the baseline; only demonstrated new passes are checked in the audit.
+See [FOXL_CONVENIENCE_TODO.md](foxl-parity.md) for the source-backed chat/composer, search/history, skills/tools, MCP/model, automation and native-settings gaps. [foxl-settings.md](foxl-settings.md) maps all 129 indexed Foxl settings plus nine dynamic Appearance controls individually. Build 42 is the baseline; only demonstrated new passes are checked in the audit.

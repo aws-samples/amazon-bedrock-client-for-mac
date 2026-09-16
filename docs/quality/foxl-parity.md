@@ -32,7 +32,7 @@ Foxl evidence: `apps/web/src/components/chat/SingleMessage.tsx`, `apps/web/src/p
 - [ ] FC20 Preserve scroll position while streaming, switching threads and changing layout. Existing renderer/scroll work; continue targeted regression.
 - [x] FC21 Restore the previous per-thread scroll position rather than always jumping to the end. Three consecutive Activity → Back round trips retained the exact native anchor offset on 70.
 - [x] FC22 Preserve exact code-copy text and Markdown structure. Existing tests; retain them as regressions.
-- [ ] FC23 Offer a clear “continue” action for output-limit truncation, with actual stop-reason evidence.
+- [ ] FC23 Offer a clear “continue” action for output-limit truncation, with actual stop-reason evidence. Converse stop-reason persistence and a draft-preserving action are implemented; core migration/stop-reason tests passed. The actual UI continuation case must still execute.
 - [ ] FC24 Keep context reduction visible and offer a real summary-based compaction workflow; current code only bounds history.
 
 ## Search and history
@@ -69,7 +69,7 @@ Foxl evidence: `apps/web/src/pages/SkillsPage.tsx`, `ToolsPage.tsx`, `server/ski
 - [ ] FT01 Add a local image-view tool so an agent can inspect images created/read with file tools.
 - [ ] FT02 Expose local conversation search to the agent without introducing Notes or cloud search.
 - [ ] FT03 Let the agent list/create/update local automations using the same validated scheduler as Settings.
-- [ ] FT04 Add bounded background-process start/poll/stop if a command outlives a tool turn.
+- [ ] FT04 Add bounded background-process start/poll/stop if a command outlives a tool turn. Implemented with incremental output, per-chat ownership, output/history bounds and process-group cancellation. Six real-process core tests passed; the app's start/poll/stop tool-loop UI test remains unexecuted.
 - [ ] FT05 Keep raw tool IDs, original input/output, timing and errors inspectable. Existing detail sheet; recheck new tools.
 - [ ] FT06 File-producing tool results offer explicit Open/Reveal/Copy path actions.
 - [ ] FT07 Long tool output is searchable and copyable without blocking the transcript.
@@ -117,13 +117,13 @@ Foxl evidence: `apps/web/src/pages/SchedulesPage.tsx`, `LogsPage.tsx`, `Settings
 
 ## Settings inventory
 
-The separate `FOXL_SETTINGS_INVENTORY.md` maps every row in Foxl's generated settings index and its additional Appearance controls. “Excluded” is a scope decision, not an implementation pass.
+The separate `foxl-settings.md` maps every row in Foxl's generated settings index and its additional Appearance controls. “Excluded” is a scope decision, not an implementation pass.
 
 ## Validation record
 
 Builds 45–52: actual edit/branch and queue/relaunch checks, cross-message Markdown selection, slash skills and AWS-backed local tool execution. In one conversation, Nova 2 Lite ran a local command and GPT-6 Astra correctly recalled its output after a model switch. Build 52 app integration suite: **55 tests, 4 opt-in public-network tests skipped, 0 failures**. Separate core suite: **82 passed**. Renderer/paste suite: **30 passed** (overlaps the app suite; do not add these counts as unique tests).
 
-Local MCP fixtures execute real stdio processes and cover duplicate tool names, structured/multimodal response serialization, stderr backpressure, literal arguments, timeout, rapid cancellation and reconnect. Remote MCP endpoints and every model/region were not live-tested. New UI work below requires another build and real-window verification. Detailed evidence is maintained in `PILOT_VALIDATION.md`.
+Local MCP fixtures execute real stdio processes and cover duplicate tool names, structured/multimodal response serialization, stderr backpressure, literal arguments, timeout, rapid cancellation and reconnect. Remote MCP endpoints and every model/region were not live-tested. New UI work below requires another build and real-window verification. Detailed evidence is maintained in `validation-log.md`.
 
 
 ## Latest interface and documentation follow-up
@@ -154,9 +154,9 @@ User changes received September 16, 2026. Implementation and runtime verificatio
 - [ ] UX22 Start expanded at a usable default sidebar width and prevent title/profile/region wrapping.
 - [x] UX23 Extend the Settings sidebar through its titlebar to match the main window.
 - [x] UX24 Add a faint 1px composer border in Light and Dark.
-- [ ] UX25 Reconcile every user request in `USER_REQUIREMENTS.md` with implementation and validation evidence.
+- [ ] UX25 Reconcile every user request in `requirements.md` with implementation and validation evidence.
 - [ ] UX26 Reorganize the repository into standard source/test/configuration directories and remove verified dead code/resources.
 
 ## September 16 completion audit
 
-[TODO_AUDIT.md](todo-audit.md) reconciles the latest ledger with actual execution. UX02/UX21 use the native toolbar/navigation evidence; UX15–UX18 use the newly captured optimized-app media and documentation validation; UX23/UX24 use actual Light/Dark Settings and composer captures. FC17 is reopened after a hosted interaction failure. Missing features remain unchecked even when neighboring infrastructure passes.
+[todo-audit.md](todo-audit.md) reconciles the latest ledger with actual execution. UX02/UX21 use the native toolbar/navigation evidence; UX15–UX18 use the newly captured optimized-app media and documentation validation; UX23/UX24 use actual Light/Dark Settings and composer captures. FC17 is reopened after a hosted interaction failure. Missing features remain unchecked even when neighboring infrastructure passes.

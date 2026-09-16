@@ -2,6 +2,28 @@ import XCTest
 @testable import BedrockCore
 
 final class CoreBehaviorTests: XCTestCase {
+    func testOutputLimitSurvivesPersistenceAndOnlyOffersContinuationForCompletedOutput() throws {
+        var run = RunRecord(threadID: "thread", modelID: "model", title: "Output limit")
+        run.status = .completed
+        run.stopReason = "max_tokens"
+        let data = try JSONEncoder().encode(run)
+        let restored = try JSONDecoder().decode(RunRecord.self, from: data)
+        XCTAssertTrue(restored.canContinueResponse)
+        XCTAssertNotNil(restored.completionNotice)
+        run.status = .cancelled
+        XCTAssertFalse(run.canContinueResponse)
+        run.status = .completed
+        run.stopReason = "guardrail_intervened"
+        XCTAssertFalse(run.canContinueResponse)
+        XCTAssertNotNil(run.completionNotice)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        legacy.removeValue(forKey: "stopReason")
+        let oldRun = try JSONDecoder().decode(RunRecord.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(oldRun.stopReason)
+        XCTAssertFalse(oldRun.canContinueResponse)
+        XCTAssertNil(oldRun.completionNotice)
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("bedrock-core-test-\(UUID())")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

@@ -7,8 +7,13 @@ final class BedrockUITests: XCTestCase {
     @MainActor
     private func launch(appearance: String = "light", withRuntime: Bool = false) throws -> (XCUIApplication, URL) {
         continueAfterFailure = false
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("bedrock-ui-\(UUID())")
+        // The signed runner's default temporaryDirectory is inside its app
+        // container. Importing from there raises macOS cross-app privacy UI.
+        // This explicitly entitled folder contains synthetic test data only.
+        let directory = URL(fileURLWithPath: "/private/tmp/bedrock-ui-fixtures", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         let app = XCUIApplication()
         app.launchEnvironment["BEDROCK_WORKBENCH_DATA_DIR"] = directory.path
         app.launchEnvironment["BEDROCK_TEST_OFFLINE"] = "1"
@@ -32,7 +37,6 @@ final class BedrockUITests: XCTestCase {
                 }
                 fixture.stop()
             }
-            try? FileManager.default.removeItem(at: directory)
         }
         return (app, directory)
     }
@@ -763,6 +767,46 @@ final class BedrockUITests: XCTestCase {
         _ = response("QUICK_ACCESS_COMPLETE", in: app)
         XCTAssertFalse(quick.exists)
         XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 1)
+    }
+
+    @MainActor
+    func testBackgroundCommandsCanStartPollAndStopAcrossRealToolTurns() throws {
+        let (app, _) = try launch(withRuntime: true)
+        send("[background] Start the fixture command, read its output, then stop it.", in: app)
+        _ = response("BACKGROUND_TOOLS_COMPLETE", in: app, timeout: 20)
+        let requests = try XCTUnwrap(runtime).requests()
+        XCTAssertEqual(requests.count, 4)
+        let body = try XCTUnwrap(requests.last?["body"] as? [String: Any])
+        let history = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        let historyText = String(decoding: try JSONSerialization.data(withJSONObject: history), as: UTF8.self)
+        for name in ["local_start_process", "local_poll_process", "local_stop_process"] {
+            XCTAssertTrue(historyText.contains(name))
+        }
+        XCTAssertTrue(historyText.contains("BACKGROUND_READY"))
+        XCTAssertTrue(historyText.contains("stopped"))
+    }
+
+    @MainActor
+    func testOutputLimitContinuationKeepsUnsentDraftAndConversationContext() throws {
+        let (app, _) = try launch(withRuntime: true)
+        send("[truncated] Write a response that reaches the output limit.", in: app)
+        _ = response("PARTIAL_RESPONSE", in: app)
+        let button = app.buttons["chat.continueResponse"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        composer(app).click()
+        composer(app).typeText("UNSENT_DRAFT_AFTER_PARTIAL")
+        button.click()
+        _ = response("RESPONSE_COMPLETE", in: app)
+        XCTAssertEqual(composer(app).value as? String, "UNSENT_DRAFT_AFTER_PARTIAL")
+        XCTAssertFalse(button.exists)
+        let requests = try XCTUnwrap(runtime).requests()
+        XCTAssertEqual(requests.count, 2)
+        let body = try XCTUnwrap(requests.last?["body"] as? [String: Any])
+        let history = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        let historyText = String(decoding: try JSONSerialization.data(withJSONObject: history), as: UTF8.self)
+        XCTAssertTrue(historyText.contains("PARTIAL_RESPONSE"))
+        XCTAssertTrue(historyText.contains("Continue the previous response"))
+        XCTAssertFalse(historyText.contains("UNSENT_DRAFT_AFTER_PARTIAL"))
     }
 
     @MainActor

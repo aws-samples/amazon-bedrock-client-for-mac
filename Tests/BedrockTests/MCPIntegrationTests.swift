@@ -16,7 +16,9 @@ final class MCPIntegrationTests: XCTestCase {
         // isolated manager explicitly; production/shared servers stay disabled.
         manager.mcpEnabled = true
         XCTAssertTrue(manager.mcpEnabled)
-        manager.connectionTimeout = 4
+        // A cold hosted Python startup is not the operation being timed by
+        // these tests. Cancellation/deadline assertions retain their limits.
+        manager.connectionTimeout = 10
         manager.toolTimeout = 4
         addTeardownBlock { @MainActor in
             await manager.shutdown()
@@ -35,11 +37,14 @@ final class MCPIntegrationTests: XCTestCase {
     }
 
     private func server(_ name: String, flags: [String] = []) -> MCPServerConfig {
-        .init(name: name, command: "/usr/bin/python3", args: [fixture.path, name] + flags)
+        let interpreter = Bundle(for: MCPIntegrationTests.self)
+            .object(forInfoDictionaryKey: "BedrockTestPython") as? String ?? ""
+        let command = interpreter.hasPrefix("/") && !interpreter.contains("$(") ? interpreter : "/usr/bin/python3"
+        return .init(name: name, command: command, args: [fixture.path, name] + flags)
     }
 
     @MainActor
-    private func awaitConnection(_ manager: MCPClientManager, names: [String], timeout: TimeInterval = 6) async throws {
+    private func awaitConnection(_ manager: MCPClientManager, names: [String], timeout: TimeInterval = 12) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if names.allSatisfy({ manager.connectionStatus[$0] == .connected }) { return }

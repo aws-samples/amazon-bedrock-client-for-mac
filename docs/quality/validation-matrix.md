@@ -73,7 +73,7 @@ An unchecked scenario still needs the stated runtime check. Automated suites sup
 - [ ] PV50 Repeat failed scenarios after correction, preserve measured evidence, and leave the updated Validation app running.
 - [x] PV51 Compare Validation 50 and the updated app with the same 1,000-message fixture, window size, and input/scroll probes.
 - [ ] PV52 Verify ordinary short chats, cold/warm history loading, and streaming separately from network/model latency.
-- [x] PV53 Prevent focused menu/shortcut updates from rebuilding the app scene during typing and scrolling. Release 61→62 comparison and profiler evidence are recorded in [PERFORMANCE.md](../performance.md).
+- [x] PV53 Prevent focused menu/shortcut updates from rebuilding the app scene during typing and scrolling. Release 61→62 comparison and profiler evidence are recorded in [performance.md](../performance.md).
 
 ## Issues found during this pass
 
@@ -83,4 +83,4 @@ An unchecked scenario still needs the stated runtime check. Automated suites sup
 - Profiling 61 showed repeated SwiftUI scene, menu, and view-graph updates. Build 62 moved focused command observation from `App` into its own `Commands` value. The same Release workload measured typing median 8.59ms/p95 13.99ms afterward; the scroll probe completed in 5.99s. Replacing the old Validation executable while retaining its data produced median 7.19ms/p95 12.43ms.
 - Runtime 62 found ambiguous toolbar accessibility labels and inherited popover identifiers. Actual ⌘B worked; the accessibility names were stale. The follow-up corrects semantics and keeps input/scroll performance checks in the matrix.
 
-Runtime evidence belongs in [PILOT_VALIDATION.md](validation-log.md). The complete user request ledger remains [USER_REQUIREMENTS.md](requirements.md).
+Runtime evidence belongs in [validation-log.md](validation-log.md). The complete user request ledger remains [requirements.md](requirements.md).

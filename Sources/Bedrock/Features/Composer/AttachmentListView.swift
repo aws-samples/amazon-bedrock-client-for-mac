@@ -1,7 +1,6 @@
 import SwiftUI
 import Combine
 import UniformTypeIdentifiers
-import Logging
 
 struct PasteLoadingView: View {
     var body: some View {
@@ -36,10 +35,9 @@ struct AttachmentListView: View {
     var onRemoveDocumentAttachment: (UUID) -> Void
     var onRemoveAllAttachments: () -> Void
 
-    @State private var selectedDocumentIndex: Int? = nil
     @State private var documentToPreview: DocumentAttachment? = nil  // Use for sheet(item:)
-
-    var logger = Logger(label: "AttachmentListView")
+    @State private var isSavingImages = false
+    @State private var imageExportTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -51,6 +49,11 @@ struct AttachmentListView: View {
                     .font(.system(size: 13, weight: .medium))
 
                 Spacer()
+
+                if isSavingImages {
+                    ProgressView().controlSize(.small)
+                    Text("Saving images…").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
 
                 if totalAttachments > 1 {
                     Button(action: onRemoveAllAttachments) {
@@ -131,9 +134,11 @@ struct AttachmentListView: View {
                     }) {
                         Label("Save All Images", systemImage: "folder")
                     }
+                    .disabled(isSavingImages)
                 }
             }
         }
+        .onDisappear { imageExportTask?.cancel() }
         .sheet(item: $documentToPreview) { doc in
             if let text = doc.textPreview {
                 PastedTextEditor(filename: doc.filename, initialText: text) { value in
@@ -157,6 +162,7 @@ struct AttachmentListView: View {
     }
 
     private func saveAllImages() {
+        guard !isSavingImages else { return }
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -167,59 +173,32 @@ struct AttachmentListView: View {
 
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                Task {
-                    for (index, image) in sharedMediaDataSource.images.enumerated() {
-                        saveImage(image, at: index, to: url)
+                // Snapshot before leaving the main actor; editing the draft
+                // while saving must not change which images are exported.
+                let items = sharedMediaDataSource.images.enumerated().map { index, image in
+                    let bytes = sharedMediaDataSource.imageEncodedData.indices.contains(index)
+                        ? sharedMediaDataSource.imageEncodedData[index] : nil
+                    let filename = sharedMediaDataSource.filenames.indices.contains(index)
+                        ? sharedMediaDataSource.filenames[index] : "Image"
+                    return ImageExportItem(filename: filename,
+                        source: bytes.map(ImagePreviewSource.encoded) ?? .legacy(ImagePreviewBitmap(image)))
+                }
+                isSavingImages = true
+                imageExportTask = Task {
+                    defer { isSavingImages = false; imageExportTask = nil }
+                    do {
+                        let result = try await AttachmentExporter.shared.save(items, to: url)
+                        if !result.failures.isEmpty {
+                            AppStore.shared.errorMessage = "Saved \(result.files.count) of \(items.count) images.\n"
+                                + result.failures.joined(separator: "\n")
+                        }
+                    } catch is CancellationError {
+                    } catch {
+                        AppStore.shared.errorMessage = error.localizedDescription
                     }
                 }
             }
         }
-    }
-
-    private func saveImage(_ image: NSImage, at index: Int, to folderURL: URL) {
-        let filename = getFilename(for: index)
-        let fileURL = folderURL.appendingPathComponent(filename)
-        if sharedMediaDataSource.imageEncodedData.indices.contains(index), let data = sharedMediaDataSource.imageEncodedData[index] {
-            do { try data.write(to: fileURL, options: .atomic) }
-            catch { logger.info("Failed to save image: \(error.localizedDescription)") }
-            return
-        }
-
-        if let tiffData = image.tiffRepresentation,
-           let bitmapImage = NSBitmapImageRep(data: tiffData) {
-            let fileExtension = index < sharedMediaDataSource.fileExtensions.count ?
-            sharedMediaDataSource.fileExtensions[index] : "jpg"
-
-            let imageData: Data?
-            switch fileExtension.lowercased() {
-            case "jpg", "jpeg":
-                imageData = bitmapImage.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
-            default:
-                imageData = bitmapImage.representation(using: .png, properties: [:])
-            }
-
-            if let data = imageData {
-                do {
-                    try data.write(to: fileURL)
-                } catch {
-                    logger.info("Failed to save image: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-
-    private func getFilename(for index: Int) -> String {
-        if index < sharedMediaDataSource.filenames.count,
-           !sharedMediaDataSource.filenames[index].isEmpty {
-            return sharedMediaDataSource.filenames[index]
-        }
-
-        let ext = index < sharedMediaDataSource.fileExtensions.count ?
-        sharedMediaDataSource.fileExtensions[index] : "img"
-
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
-        return "attachment_\(dateFormatter.string(from: Date())).\(ext)"
     }
 }
 

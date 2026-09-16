@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Only the XCTest runner: serve synthetic loopback responses and share
+         disposable fixtures with the app's real file-import panel. -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+    <array>
+        <string>/private/tmp/bedrock-ui-fixtures/</string>
+    </array>
+</dict>
+</plist>

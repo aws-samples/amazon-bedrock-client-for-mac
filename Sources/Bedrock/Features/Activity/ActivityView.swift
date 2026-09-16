@@ -85,6 +85,10 @@ struct ActivityView: View {
                 Button("Open thread") { store.selectThread(run.threadID) }
             }
             .font(.caption)
+            if let reason = run.stopReason {
+                LabeledContent("Stop reason", value: reason)
+                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
             if let error = run.error { Text(error).font(.caption).foregroundStyle(.orange).textSelection(.enabled).lineLimit(4) }
         }
         .padding(.horizontal, 22).padding(.bottom, 18)
