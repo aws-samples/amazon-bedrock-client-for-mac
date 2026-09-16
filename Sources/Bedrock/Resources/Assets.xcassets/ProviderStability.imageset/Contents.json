@@ -1,0 +1,23 @@
+{
+  "images": [
+    {
+      "filename": "provider-1.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "provider-3.png",
+      "idiom": "universal",
+      "scale": "2x"
+    },
+    {
+      "filename": "provider-2.png",
+      "idiom": "universal",
+      "scale": "3x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

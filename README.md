@@ -9,20 +9,20 @@
 <p align="center">
   <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest"><strong>Download for Mac</strong></a>
   &nbsp;·&nbsp; <a href="#build">Build from source</a>
-  &nbsp;·&nbsp; <a href="TROUBLESHOOTING.md">Get help</a>
+  &nbsp;·&nbsp; <a href="docs/troubleshooting.md">Get help</a>
   &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
 [![macOS](https://img.shields.io/badge/macOS-14%2B-242424?style=flat-square)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-6-orange?style=flat-square)](#build)
 [![Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
-[![Validation](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/validate.yml/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/validate.yml)
+[![Validation](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml)
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-555?style=flat-square)](LICENSE)
 
-<img src="assets/preview.gif" width="1120" alt="Bedrock for Mac: native chat, model selection, tools, and settings" />
+<img src="docs/assets/demo.gif" width="1120" alt="Bedrock for Mac: native chat, model selection, tools, and settings" />
 
 <p align="center"><sub>Version 2.0 · A real Nova conversation, model switching, search, and tool inspection.<br />
-<a href="assets/readme/demo.mp4">Watch the 40-second tour in HD</a> · <a href="assets/preview.png">View a still image</a> · <a href="docs/SCREENSHOTS.md">Capture details</a></sub></p>
+<a href="docs/assets/demo.mp4">Watch the 40-second tour in HD</a> · <a href="docs/assets/hero.png">View a still image</a> · <a href="docs/media.md">Capture details</a></sub></p>
 
 ## Made for the conversation
 
@@ -37,8 +37,8 @@
 <summary>Light, Dark, or your system appearance</summary>
 <p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/main-dark.webp" />
-    <img src="assets/readme/main-light.webp" width="1120" alt="A code review in Bedrock for Mac, with a full-height sidebar and model selection in the composer." />
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-dark.webp" />
+    <img src="docs/assets/chat-light.webp" width="1120" alt="A code review in Bedrock for Mac, with a full-height sidebar and model selection in the composer." />
   </picture>
 </p>
 </details>
@@ -56,12 +56,12 @@ The file allowlist applies to built-in file operations. Shell commands and Git r
 <details>
 <summary>Inspect tools and manage local skills</summary>
 <p>
-  <img src="assets/readme/tool-details.webp" width="1120" alt="The original output from a real skill-listing tool call, in a separate searchable detail view." />
+  <img src="docs/assets/tool-details.webp" width="1120" alt="The original output from a real skill-listing tool call, in a separate searchable detail view." />
 </p>
 <p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/settings-dark.webp" />
-    <img src="assets/readme/settings-light.webp" width="850" alt="Settings with local skill import, creation, reload, and enable controls." />
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/settings-dark.webp" />
+    <img src="docs/assets/settings-light.webp" width="850" alt="Settings with local skill import, creation, reload, and enable controls." />
   </picture>
 </p>
 </details>
@@ -132,14 +132,14 @@ Choose Return or `⌘Return` for sending in Settings → Keyboard. Escape dismis
 
 ## Build
 
-Open `Amazon Bedrock Client for Mac.xcodeproj` in a current Xcode with Swift 6 and the macOS 26 SDK or later. Select the **Amazon Bedrock Client for Mac** scheme and your Mac.
+Open `Bedrock.xcodeproj` in a current Xcode with Swift 6 and the macOS 26 SDK or later. Select the **Bedrock** scheme and your Mac.
 
 The committed `Package.resolved` pins the dependency graph. For a local unsigned Release build:
 
 ```sh
 xcodebuild build \
-  -project "Amazon Bedrock Client for Mac.xcodeproj" \
-  -scheme "Amazon Bedrock Client for Mac" \
+  -project "Bedrock.xcodeproj" \
+  -scheme Bedrock \
   -configuration Release \
   -destination "platform=macOS" \
   -derivedDataPath .build/xcode \
@@ -147,30 +147,45 @@ xcodebuild build \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-Signing and notarization are separate release steps. See [development and validation](docs/DEVELOPMENT.md) for tests, isolated app data, and performance checks.
+Signing and notarization are separate release steps. See [development and validation](docs/development.md) for tests, isolated app data, and performance checks.
 
 ```text
-Sources/Bedrock/           Swift app, native views, local core, and resources
-Tests/Integration/        App, rendering, clipboard, image, and MCP regressions
-Tests/LocalWorkbenchTests/ Storage, migration, routing, tools, and queue tests
-Tests/UITests/            Native interaction scenarios
-Tests/Fixtures/           Deterministic Bedrock protocol and MCP servers
+Bedrock.xcodeproj/         App, integration tests, and UI test targets
+Sources/Bedrock/
+  App/                    Lifecycle, windows, navigation, and app state
+  Core/                   Storage models, migration, routing, and local tools
+  Services/               AWS, MCP, persistence, attachments, and system APIs
+  Features/               Chat, composer, models, settings, demos, and skills
+  UI/                     Design system, Markdown, and shared components
+  Resources/              App icons, Core Data model, and offline resources
+Tests/
+  BedrockCoreTests/        Portable storage, migration, routing, and tool tests
+  BedrockTests/            Native rendering, clipboard, image, and MCP tests
+  BedrockUITests/          Actual app interaction scenarios
+  Fixtures/               Deterministic Bedrock protocol and MCP servers
 Configuration/            App Info.plist and entitlements
-scripts/                  Source registration and validation commands
-docs/                     Development, compatibility, and validation evidence
-assets/                   Screenshots and demo media
+scripts/                  Build, validation, packaging, and preview commands
+docs/                     Contributor guides, quality evidence, and media
 ```
 
 ## Tested before release
 
-Every main push and pull request runs the [validation workflow](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/validate.yml). It checks storage and migrations, native rendering and clipboard behavior, real MCP subprocesses, and UI interactions in an optimized Release app. Streaming, model switching, tools, queues, and attachments run through the actual AWS SDK against a local protocol fixture.
+Run the complete CI locally before releasing:
 
-Release tags must pass the same checks before universal builds, signing, notarization, and publication. Test logs, screenshots, request payloads, and performance measurements remain available as workflow artifacts. See the [scenario map](docs/CI_COVERAGE.md) for coverage and live-test boundaries.
+```sh
+python3 scripts/ci.py
+```
+
+Full Xcode and an unlocked macOS desktop are required for the UI suite. The command saves logs, screenshots, an Xcode result bundle, and a receipt identifying the tested source files in `artifacts/`.
+
+Every main push and pull request runs the same command in the [validation workflow](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml). It checks storage and migrations, native rendering and clipboard behavior, real MCP subprocesses, and UI interactions in an optimized Release app. Streaming, model switching, tools, queues, and attachments run through the actual AWS SDK against a local protocol fixture.
+
+Release tags must pass the same checks before universal builds, signing, notarization, and publication. Test logs, screenshots, request payloads, and performance measurements remain available as workflow artifacts. See the [scenario map](docs/testing.md) for coverage and live-test boundaries.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Include a reproducible scenario and the checks you ran. Performance changes should include the workload, build configuration, and measurements.
 
-The [performance report](docs/PERFORMANCE.md) records comparable Release measurements, and the [validation matrix](docs/PERFORMANCE_VALIDATION_MATRIX.md) separates executed checks from work that remains.
+The [performance report](docs/performance.md) records comparable Release measurements, and the [validation matrix](docs/quality/validation-matrix.md) separates executed checks from work that remains.
 
 This project uses the [MIT-0 license](LICENSE) and the [Amazon Open Source Code of Conduct](CODE_OF_CONDUCT.md).

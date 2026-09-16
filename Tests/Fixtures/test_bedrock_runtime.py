@@ -4,6 +4,7 @@ import struct
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 import urllib.request
 import zlib
 from pathlib import Path
@@ -12,6 +13,16 @@ from bedrock_runtime import FixtureServer, event_frame
 
 
 class BedrockFixtureTests(unittest.TestCase):
+    def test_loopback_startup_never_resolves_or_discovers_network_hosts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("socket.getfqdn", side_effect=AssertionError("Unexpected hostname discovery")):
+                server = FixtureServer(Path(directory) / "requests.jsonl")
+                try:
+                    self.assertEqual(server.server_name, "127.0.0.1")
+                    self.assertGreater(server.server_port, 0)
+                finally:
+                    server.server_close()
+
     def test_event_framing_lengths_checksums_headers_and_unicode(self):
         payload = {"contentBlockIndex": 0, "delta": {"text": "한글 👋"}}
         frame = event_frame("contentBlockDelta", payload)

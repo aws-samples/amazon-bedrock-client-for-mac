@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "BedrockLocalWorkbench",
+    name: "BedrockCore",
     platforms: [.macOS(.v14)],
-    products: [.library(name: "LocalWorkbench", targets: ["LocalWorkbench"])],
+    products: [.library(name: "BedrockCore", targets: ["BedrockCore"])],
     targets: [
-        .target(name: "LocalWorkbench", path: "Sources/Bedrock/LocalCore"),
-        .testTarget(name: "LocalWorkbenchTests", dependencies: ["LocalWorkbench"], path: "Tests/LocalWorkbenchTests")
+        .target(name: "BedrockCore", path: "Sources/Bedrock/Core"),
+        .testTarget(name: "BedrockCoreTests", dependencies: ["BedrockCore"], path: "Tests/BedrockCoreTests")
     ]
 )

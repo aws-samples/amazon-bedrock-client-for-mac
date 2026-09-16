@@ -33,11 +33,11 @@ def main():
             checked += 1
 
     signatures = {
-        "assets/preview.png": lambda data: data.startswith(b"\x89PNG\r\n\x1a\n"),
-        "assets/preview.gif": lambda data: data[:6] in (b"GIF87a", b"GIF89a"),
-        "assets/readme/main-light.webp": lambda data: data[:4] == b"RIFF" and data[8:12] == b"WEBP",
-        "assets/readme/main-dark.webp": lambda data: data[:4] == b"RIFF" and data[8:12] == b"WEBP",
-        "assets/readme/demo.mp4": lambda data: data[4:8] == b"ftyp",
+        "docs/assets/hero.png": lambda data: data.startswith(b"\x89PNG\r\n\x1a\n"),
+        "docs/assets/demo.gif": lambda data: data[:6] in (b"GIF87a", b"GIF89a"),
+        "docs/assets/chat-light.webp": lambda data: data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+        "docs/assets/chat-dark.webp": lambda data: data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+        "docs/assets/demo.mp4": lambda data: data[4:8] == b"ftyp",
     }
     for relative, valid in signatures.items():
         path = root / relative

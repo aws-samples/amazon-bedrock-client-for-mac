@@ -11,15 +11,14 @@ A short recording or a minimal synthetic conversation helps. Remove credentials,
 ## Develop a change
 
 1. Start from the latest `main` and keep the change focused.
-2. Follow the [source layout and build instructions](docs/DEVELOPMENT.md).
+2. Follow the [source layout and build instructions](docs/development.md).
 3. Add a regression that exercises the reported behavior. Use isolated local data and the existing protocol/MCP fixtures where appropriate.
-4. Run the relevant suites and describe the results in your pull request.
+4. Run `python3 scripts/ci.py` before release. For a focused change, run the relevant suites first and describe all results in your pull request.
 
 After adding or moving files:
 
 ```sh
-python3 scripts/register-workbench-sources.py
-python3 scripts/validate-project-layout.py
+python3 scripts/check-project.py
 python3 scripts/validate-documentation.py
 ```
 
@@ -29,7 +28,7 @@ The local core suite is a quick starting point:
 python3 scripts/validate-local-core.py --output .build/validation/core
 ```
 
-Rendering, clipboard, app integration, and native UI test commands are in [Development](docs/DEVELOPMENT.md#regression-suites). CI runs the optimized app and preserves its test results, screenshots, and local protocol request evidence. See [CI coverage](docs/CI_COVERAGE.md) for the scenario map.
+Rendering, clipboard, app integration, and native UI test commands are in [Development](docs/development.md#regression-suites). CI runs the optimized app and preserves its test results, screenshots, and local protocol request evidence. See [CI coverage](docs/testing.md) for the scenario map.
 
 ## Review expectations
 

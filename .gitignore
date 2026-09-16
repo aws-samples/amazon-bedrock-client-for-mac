@@ -18,11 +18,11 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
-!Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/
-Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/*
-!Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
-Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
-!Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+!Bedrock.xcodeproj/project.xcworkspace/xcshareddata/
+Bedrock.xcodeproj/project.xcworkspace/xcshareddata/*
+!Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Carthage
 Carthage/

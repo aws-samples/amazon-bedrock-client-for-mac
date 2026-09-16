@@ -34,25 +34,25 @@ def main():
     tests = output / "Tests/RenderingTests"
     sources.mkdir(parents=True, exist_ok=True)
     tests.mkdir(parents=True, exist_ok=True)
-    for relative in ("Views/WorkbenchMarkdown.swift", "Views/WorkbenchSelectableMarkdown.swift", "Views/WorkbenchTextMenu.swift", "Utils/GithubTheme.swift",
-                     "Utils/SearchEngine.swift", "Managers/WorkbenchClipboard.swift", "Managers/WorkbenchImageIO.swift",
-                     "Managers/SharedMediaDataSource.swift", "Managers/AppStateManager.swift"):
+    for relative in ("UI/Markdown/MarkdownRenderer.swift", "UI/Markdown/SelectableMarkdown.swift", "UI/Components/TextContextMenu.swift", "UI/Markdown/MarkdownColors.swift",
+                     "Features/Chat/ConversationFind.swift", "Services/Attachments/AttachmentProcessor.swift", "Services/Attachments/ImagePreviewLoader.swift",
+                     "Services/Attachments/AttachmentStore.swift", "Features/Composer/EditorFocusState.swift"):
         shutil.copy2(app / relative, sources / Path(relative).name)
-    for source in (app / "LocalCore").glob("*.swift"):
+    for source in (app / "Core").rglob("*.swift"):
         shutil.copy2(source, sources / source.name)
     # Exercise the actual NSTextView paste implementation in isolation from
     # the SwiftUI wrapper's AWS/application state.
-    editor = (app / "Utils/FirstResponderTextField.swift").read_text()
+    editor = (app / "Features/Composer/ComposerTextView.swift").read_text()
     editor = editor.split("/// Extension to validate NSImage")[0]
     (sources / "ClipboardTextView.swift").write_text(editor)
     # Use the actual palette and font sizes, without pulling in AWS managers.
-    components = (app / "Views/WorkbenchComponents.swift").read_text()
-    style = re.search(r"enum WorkbenchStyle \{.*?\n\}", components, re.S)
+    components = (app / "UI/DesignSystem/DesignTokens.swift").read_text()
+    style = re.search(r"enum DesignTokens \{.*?\n\}", components, re.S)
     if not style:
-        raise SystemExit("WorkbenchStyle moved; update the harness source list.")
-    (sources / "WorkbenchStyle.swift").write_text("import AppKit\nimport SwiftUI\n\n" + style.group(0) + "\n")
-    shutil.copy2(repo / "Tests/Integration/MarkdownRenderingTests.swift", tests / "MarkdownRenderingTests.swift")
-    shutil.copy2(repo / "Tests/Integration/ClipboardRenderingTests.swift", tests / "ClipboardRenderingTests.swift")
+        raise SystemExit("DesignTokens moved; update the harness source list.")
+    (sources / "DesignTokens.swift").write_text("import AppKit\nimport SwiftUI\n\n" + style.group(0) + "\n")
+    shutil.copy2(repo / "Tests/BedrockTests/MarkdownRenderingTests.swift", tests / "MarkdownRenderingTests.swift")
+    shutil.copy2(repo / "Tests/BedrockTests/ClipboardRenderingTests.swift", tests / "ClipboardRenderingTests.swift")
 
     developer = developer_directory(args.developer_dir)
     swift, platform, runner, plugin_flags = toolchain(developer, args.xcode)

@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "Sources/Bedrock/LocalCore/BedrockBundledCatalog.swift"
+OUTPUT = ROOT / "Sources/Bedrock/Core/Models/BedrockBundledCatalog.swift"
 REGIONS = [
     "us-east-1", "us-east-2", "us-west-1", "us-west-2", "ca-central-1", "ca-west-1",
     "sa-east-1", "mx-central-1", "eu-west-1", "eu-west-2", "eu-west-3",

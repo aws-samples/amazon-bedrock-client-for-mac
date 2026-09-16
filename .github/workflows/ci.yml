@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: maxim-lobanov/setup-xcode@v1.7.0
+        with:
+          xcode-version: latest-stable
+      - name: Restore pinned Swift packages
+        id: packages
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ runner.temp }}/BedrockPackages
+          key: swift-packages-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      - name: Run the complete local CI command
+        run: |
+          python3 scripts/ci.py \
+            --artifacts artifacts \
+            --derived-data "$RUNNER_TEMP/BedrockDerived" \
+            --packages "$RUNNER_TEMP/BedrockPackages"
+      - name: Cache the resolved package sources
+        if: always() && steps.packages.outputs.cache-hit != 'true' && hashFiles('artifacts/dependencies.log') != ''
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ runner.temp }}/BedrockPackages
+          key: ${{ steps.packages.outputs.cache-primary-key }}
+      - name: Preserve validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: native-validation-${{ github.run_id }}
+          path: |
+            artifacts/*.log
+            artifacts/*.json
+            artifacts/*.md
+            artifacts/core/*.log
+            artifacts/rendering/*.log
+            artifacts/Bedrock.xcresult
+          retention-days: 14

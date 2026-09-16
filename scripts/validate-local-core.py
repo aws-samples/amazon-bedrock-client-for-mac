@@ -33,7 +33,7 @@ def main():
         result = subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode:
         raise SystemExit(f"Core test build failed: {output / 'build.log'}")
-    bundles = list((output / ".build").glob("**/LocalWorkbenchTests.xctest"))
+    bundles = list((output / ".build").glob("**/BedrockCoreTests.xctest"))
     if not bundles:
         bundles = list((output / ".build").glob("**/*PackageTests.xctest"))
     if not bundles:

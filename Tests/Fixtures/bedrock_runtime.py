@@ -14,6 +14,7 @@ import urllib.parse
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 
 
 def event_frame(event_type, payload):
@@ -33,6 +34,13 @@ def event_frame(event_type, payload):
 
 class FixtureServer(ThreadingHTTPServer):
     daemon_threads = True
+
+    def server_bind(self):
+        # HTTPServer resolves its host with getfqdn(), which can trigger macOS
+        # local-network discovery. This fixture only needs a literal loopback
+        # socket and never discovers or contacts another device.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def __init__(self, requests_path):
         super().__init__(("127.0.0.1", 0), FixtureHandler)
