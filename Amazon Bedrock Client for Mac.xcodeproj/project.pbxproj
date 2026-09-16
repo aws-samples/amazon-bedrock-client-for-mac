@@ -7,6 +7,85 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		853B67F64947DF8AF0E33282 /* BedrockUITestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21AC6D2E8D90F6173F02A34 /* BedrockUITestFixture.swift */; };
+		24BE3689552DD48346F74BA6 /* ConversationViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */; };
+		B258B716BBA725FF4A033187 /* ConversationViewportController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194FFD02CEF94F6466F3D01F /* ConversationViewportController.swift */; };
+		26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */; };
+		988BAB6A9EA1D6B4BF851420 /* WorkbenchSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516E982FDDF42BC9B8F39C81 /* WorkbenchSettingsControls.swift */; };
+		7255D15CCA39EA76693ED94A /* ImagePreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A544E82819B7065F2B03BCC /* ImagePreviewTests.swift */; };
+		B494ED9FEB62755947AD8A35 /* WorkbenchImageIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EA5EE69DC6A050D5C4E39D /* WorkbenchImageIO.swift */; };
+		6D97685F02EDED0AB65757CF /* WorkbenchTextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAECEF8D0DE5C1610374850 /* WorkbenchTextMenu.swift */; };
+		2A3D7D6AC9804F91DEF38AD4 /* WorkbenchControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B148015A59508132568D9F /* WorkbenchControls.swift */; };
+		A0923B7A3802F5FA34A15BDD /* WorkbenchNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F3EF5B491084790622AC27F /* WorkbenchNavigation.swift */; };
+		4CD8A0599883B03B7F5172B9 /* WorkbenchToolOutputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BAAA79E11E0BFE0249B25C /* WorkbenchToolOutputView.swift */; };
+		1A5DB7178F6C866CAAA6C570 /* ToolOutputFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE23B238C4524F9750F11CE /* ToolOutputFiles.swift */; };
+		DCEDA1AAE167303C799C97B5 /* WorkbenchComposerDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF065714EACA96319B9995E /* WorkbenchComposerDraft.swift */; };
+		7B8E115ED68C75B61C37FD1A /* MCPToolOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F357A1F1DB79590E3C031A1 /* MCPToolOutput.swift */; };
+		386C9D96081DA3C39EA118DA /* WorkbenchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4875C6DDE33D002AD29528B5 /* WorkbenchUITests.swift */; };
+		D8C607E825A8DD8DD2B49408 /* MCPIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190222772896F50F76316584 /* MCPIntegrationTests.swift */; };
+		3665289D641D785668067F65 /* WorkbenchValidationMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6782C0B8654732434B66E0DF /* WorkbenchValidationMode.swift */; };
+		0E8C2E82C3013EE772417DD1 /* WorkbenchMCPProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BDE79D11E27DF1C6F319C15 /* WorkbenchMCPProcess.swift */; };
+		9337C8508E8044A6B9B34864 /* LocalSkillLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 701B1B4E172263D498A0016F /* LocalSkillLibrary.swift */; };
+		A4C4EB6AFC53DFBFB72F5F90 /* WorkbenchWindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1098B5B3CF9B0A6E7577B9F3 /* WorkbenchWindowChrome.swift */; };
+		6CC03E7F8D82628984617DE4 /* WorkbenchSelectableMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16BD564F8434874E5BBB8132 /* WorkbenchSelectableMarkdown.swift */; };
+		3DE9CBAFE6C85F66157B7F28 /* ConversationAttachmentDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F2AF277861ECE2F725EF3D /* ConversationAttachmentDraft.swift */; };
+		4281ED2814161CB5E0DD16FA /* ConversationOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7409315A17A77A4751C527 /* ConversationOutbox.swift */; };
+		39D44D82F9A64EA17C3BD86F /* WorkbenchMessageActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78F7C13A09D81ED8A25383A /* WorkbenchMessageActions.swift */; };
+		6DB2061B16361F033796DBEF /* ConversationSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306DA119A344104B1243D8A1 /* ConversationSearch.swift */; };
+		6F246551CF3B1F125D2B5E2F /* ConversationEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9937D5E475B13E5DB9DDB785 /* ConversationEditing.swift */; };
+		2D0AB083AC74E01F55A1EEEF /* ConversationArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CA261729B6045A666EF186 /* ConversationArchive.swift */; };
+		DC29EE02939E2E6388F7EFFF /* ClipboardRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B67D160520D5936EE778E6D /* ClipboardRenderingTests.swift */; };
+		0AD95AD8E19BDB64962B9206 /* MarkdownLinkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E0CD6FE0677AE3C881DD20 /* MarkdownLinkPolicy.swift */; };
+		2B360F375C765DBBB5F31D9A /* WorkbenchClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC6EE66C42B933CB7D1E0A0 /* WorkbenchClipboard.swift */; };
+		914650C93DC1922E1C9CD0C8 /* LocalFileAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B42422AB19623876EAC8A02 /* LocalFileAccess.swift */; };
+		EF205482624733FFB0B1A3FA /* ClipboardContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDEB9A610DECFCB2A15BB08 /* ClipboardContent.swift */; };
+		6DF4F992EF7668B13FAA4B43 /* MarkdownRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02B2369C02381C5DE987288 /* MarkdownRenderingTests.swift */; };
+		DA78D175A68A198C7E15D151 /* MCPServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C200DF2D416C315FD9914A1B /* MCPServerTests.swift */; };
+		F55B25DE57E8D3BAC244ACDD /* LumaVideoConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E004007F02B2AB23045680 /* LumaVideoConfiguration.swift */; };
+		CB2623A941859F4C777CA9CE /* DemoModelPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849C2276106F917BA088910C /* DemoModelPolicy.swift */; };
+		35FC9892FF92DB120312CB19 /* BedrockFailureMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119F773F9339A5B2A33ECF33 /* BedrockFailureMessage.swift */; };
+		7353858C0378A35BFCC7A7F4 /* WorkbenchMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B0DA2E72B22C1A67EE296C /* WorkbenchMarkdown.swift */; };
+		9B9EA7D9C21E08A33BA77A72 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 376344B16AFBB53F555BA3BB /* highlight.min.js */; };
+		C51972B38BC5B32CC6B13B2F /* highlight-github.css in Resources */ = {isa = PBXBuildFile; fileRef = 21C32266B007CB1296F2CB2D /* highlight-github.css */; };
+		701F3C86C5D045FC270335E3 /* highlight-github-dark.css in Resources */ = {isa = PBXBuildFile; fileRef = 951464FAD76A8E8151588CE3 /* highlight-github-dark.css */; };
+		4CC6E03D7E75BA72DF34F309 /* highlight-LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = A01CE4343C085D73972C3D79 /* highlight-LICENSE */; };
+		42D9E1FFF0A16FCCFFF32195 /* LegacyPreferencesBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4537DD905CBD2CC3C2AD106 /* LegacyPreferencesBackup.swift */; };
+		B065D13DCA619D46D6001361 /* BedrockInferenceParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB439879B4E3642B0FB1EF2C /* BedrockInferenceParameters.swift */; };
+		BF69FA16EAF2089BA9B21DFA /* LegacyConversationDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8AA5FBFE411D1A6409F531C /* LegacyConversationDecoder.swift */; };
+		05B83F348A25D25CFECB18B4 /* ConversationReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D03F6152EEDB0BD6EE65B87 /* ConversationReplay.swift */; };
+		7814E1779D6A6F4BB2788E1A /* ConversationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED2314B3B55FA1DBB2CD708 /* ConversationModels.swift */; };
+		414B0D3581BC2E9DB83914E3 /* ConversationFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D28F3D8C88AC175FF91A0C /* ConversationFileStore.swift */; };
+		9CC977E417E6728F9C5AE7AA /* BedrockModelType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C4FA6663DB1DA6F44050CD /* BedrockModelType.swift */; };
+		071C607EEF55C72E89FFC2A2 /* MCPToolIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1230F92CA09B52944B24F8C0 /* MCPToolIdentity.swift */; };
+		D07F279CDCEAF0880A2C6A7E /* WorkbenchWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0612B6F47757DC56A059226B /* WorkbenchWindows.swift */; };
+		25B069C1C4BC01BDEE569001 /* BedrockModelChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */; };
+		787D450E8B515C556C26FCB5 /* WorkbenchScrollBehavior.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375F6E4BB6703F0747385198 /* WorkbenchScrollBehavior.swift */; };
+		5E68D7D007EE5F58E681BA47 /* BedrockRegionalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF2C6BD140C26148D25A72F /* BedrockRegionalModel.swift */; };
+		EFCDE9B5AA9E429FA4A9C28C /* BedrockBundledCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE86D10DE2CB04A86876FF8 /* BedrockBundledCatalog.swift */; };
+		738E8E05DD99514072F0FE55 /* BedrockModelDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6985269D8C0D227D417D6C51 /* BedrockModelDescriptor.swift */; };
+		1423D62596DDBDC5C4869458 /* WorkbenchSkills.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3D2FD1071CAF776CFD40B6 /* WorkbenchSkills.swift */; };
+		4B5F984C09E6A951DC489491 /* WorkbenchSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 854145298D0AED1E46735F45 /* WorkbenchSidebar.swift */; };
+		7AF9F85FC8919C43C59E8486 /* WorkbenchDemos.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4EE8474E15A8E7E68781DB1 /* WorkbenchDemos.swift */; };
+		18006CEF828C3AE20593BA95 /* WorkbenchComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B92A71CB0BAB8665BD4E19 /* WorkbenchComponents.swift */; };
+		7867B951BE648B27433FD46D /* WorkbenchCommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B26287549209A36812CCE22 /* WorkbenchCommandPalette.swift */; };
+		821159D870C438D2036B8EC3 /* WorkbenchAutomations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849C40613E281CE126ABAC63 /* WorkbenchAutomations.swift */; };
+		9A5B9E3C630C5825B9A3F891 /* WorkbenchActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596A9D68569F4E92E5671A5F /* WorkbenchActivity.swift */; };
+		524A6D7E0E00B9764BB42A03 /* WorkbenchNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BF947D05E06A0E677EE44F /* WorkbenchNotifications.swift */; };
+		B5ACA4CBE9EF3EB4C16BA2FA /* WorkbenchMCPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A03F3AE446EB2587994056A3 /* WorkbenchMCPConfiguration.swift */; };
+		1C8401FDD3C70B30E96B27FF /* WorkbenchAutomationRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49AE99201C4AB177CEED58DC /* WorkbenchAutomationRunner.swift */; };
+		47177089E725E08AABCEFF9D /* WorkbenchActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90864F0375B85C1FF74F179F /* WorkbenchActions.swift */; };
+		1DEC0DE7EA55CCC219F69701 /* LocalConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54EFB35DD2F1FBBF12D94F06 /* LocalConfiguration.swift */; };
+		66B6FA4483CEC0D61B01ABC7 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A929A488FFA2CE1F3FAA0 /* WorkbenchStore.swift */; };
+		D63C4AC2DE2E1E9600AEA199 /* SecureCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F311AB816B21C2D484D9D /* SecureCredentialStore.swift */; };
+		49EE55EE7EE4EF284920BA01 /* LocalToolManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16974A3C16A72F54F0DBB728 /* LocalToolManager.swift */; };
+		A1709CDDB5DA94EC8886C23E /* WorkbenchSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FEF63DD886C5DBD8C999AB2 /* WorkbenchSettings.swift */; };
+		1C37C647DCFB1F9758BF42D6 /* WorkbenchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A84547FB27E6BAAB44748D /* WorkbenchModels.swift */; };
+		DF56A79C467EEE4BB3B15DA6 /* ToolStreamAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB296B16B86F36E1A8ECDDC8 /* ToolStreamAccumulator.swift */; };
+		4AB7B2CE025D9F6A542B23E7 /* LocalSkill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797CCC2FFD65764BCFD17966 /* LocalSkill.swift */; };
+		1CEB8D476B937CBD23D3E043 /* LocalProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3C4ADE117DF3782E1E3F81 /* LocalProcessRunner.swift */; };
+		471DB3BBF8BC4F470DD4A519 /* LocalFileTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95DD656A11130E878EFE5B1D /* LocalFileTools.swift */; };
+		1D0C53D1C4DDA063F03F1F2B /* DemoPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8382C5045EF3FD3CD8465D /* DemoPreset.swift */; };
+		1D716E39C52CA77403C62C3B /* ContextBudget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79936BAD9F25EC037E1CE500 /* ContextBudget.swift */; };
 		13A132012F10000100A13200 /* InferenceConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13A132022F10000200A13200 /* InferenceConfigTests.swift */; };
 		790804242B99F0DA00930011 /* SharedMediaDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790804232B99F0DA00930011 /* SharedMediaDataSource.swift */; };
 		792D8E652DDFE55E00BB1C01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 792D8E642DDFE55E00BB1C01 /* MCP */; };
@@ -27,7 +106,6 @@
 		79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DCB2AD22A2F00993D09 /* MessageData.swift */; };
 		79610DE42AD22A2F00993D09 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */; };
 		79610DE52AD22A2F00993D09 /* MessageBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD02AD22A2F00993D09 /* MessageBarView.swift */; };
-		79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD32AD22A2F00993D09 /* SidebarView.swift */; };
 		79610DEB2AD22A2F00993D09 /* MessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DD62AD22A2F00993D09 /* MessageView.swift */; };
 		79610DED2AD230A200993D09 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79610DEC2AD230A200993D09 /* ChatView.swift */; };
 		797A12B82C2DB33100494DD9 /* SettingsWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797A12B72C2DB33100494DD9 /* SettingsWindowManager.swift */; };
@@ -99,7 +177,87 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		13A132022F10000200A13200 /* InferenceConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InferenceConfigTests.swift; sourceTree = "<group>"; };
+		B21AC6D2E8D90F6173F02A34 /* BedrockUITestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockUITestFixture.swift; path = "Tests/UITests/BedrockUITestFixture.swift"; sourceTree = SOURCE_ROOT; };
+		7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationViewportTests.swift; path = "Tests/Integration/ConversationViewportTests.swift"; sourceTree = SOURCE_ROOT; };
+		194FFD02CEF94F6466F3D01F /* ConversationViewportController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationViewportController.swift; path = "Sources/Bedrock/Views/ConversationViewportController.swift"; sourceTree = SOURCE_ROOT; };
+		2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WindowLifecycleTests.swift; path = "Tests/Integration/WindowLifecycleTests.swift"; sourceTree = SOURCE_ROOT; };
+		516E982FDDF42BC9B8F39C81 /* WorkbenchSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchSettingsControls.swift; path = "Sources/Bedrock/Views/WorkbenchSettingsControls.swift"; sourceTree = SOURCE_ROOT; };
+		9FD96C525021A9C01EE85B32 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Configuration/Info.plist; sourceTree = SOURCE_ROOT; };
+		4A544E82819B7065F2B03BCC /* ImagePreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImagePreviewTests.swift; path = "Tests/Integration/ImagePreviewTests.swift"; sourceTree = SOURCE_ROOT; };
+		67EA5EE69DC6A050D5C4E39D /* WorkbenchImageIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchImageIO.swift; path = "Sources/Bedrock/Managers/WorkbenchImageIO.swift"; sourceTree = SOURCE_ROOT; };
+		5CAECEF8D0DE5C1610374850 /* WorkbenchTextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchTextMenu.swift; path = "Sources/Bedrock/Views/WorkbenchTextMenu.swift"; sourceTree = SOURCE_ROOT; };
+		24B148015A59508132568D9F /* WorkbenchControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchControls.swift; path = "Sources/Bedrock/Views/WorkbenchControls.swift"; sourceTree = SOURCE_ROOT; };
+		9F3EF5B491084790622AC27F /* WorkbenchNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchNavigation.swift; path = "Sources/Bedrock/LocalCore/WorkbenchNavigation.swift"; sourceTree = SOURCE_ROOT; };
+		87BAAA79E11E0BFE0249B25C /* WorkbenchToolOutputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchToolOutputView.swift; path = "Sources/Bedrock/Views/WorkbenchToolOutputView.swift"; sourceTree = SOURCE_ROOT; };
+		5FE23B238C4524F9750F11CE /* ToolOutputFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ToolOutputFiles.swift; path = "Sources/Bedrock/LocalCore/ToolOutputFiles.swift"; sourceTree = SOURCE_ROOT; };
+		DCF065714EACA96319B9995E /* WorkbenchComposerDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchComposerDraft.swift; path = "Sources/Bedrock/Managers/WorkbenchComposerDraft.swift"; sourceTree = SOURCE_ROOT; };
+		9F357A1F1DB79590E3C031A1 /* MCPToolOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MCPToolOutput.swift; path = "Sources/Bedrock/LocalCore/MCPToolOutput.swift"; sourceTree = SOURCE_ROOT; };
+		4875C6DDE33D002AD29528B5 /* WorkbenchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchUITests.swift; path = "Tests/UITests/WorkbenchUITests.swift"; sourceTree = SOURCE_ROOT; };
+		190222772896F50F76316584 /* MCPIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MCPIntegrationTests.swift; path = "Tests/Integration/MCPIntegrationTests.swift"; sourceTree = SOURCE_ROOT; };
+		6782C0B8654732434B66E0DF /* WorkbenchValidationMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchValidationMode.swift; path = "Sources/Bedrock/LocalCore/WorkbenchValidationMode.swift"; sourceTree = SOURCE_ROOT; };
+		7BDE79D11E27DF1C6F319C15 /* WorkbenchMCPProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchMCPProcess.swift; path = "Sources/Bedrock/Managers/WorkbenchMCPProcess.swift"; sourceTree = SOURCE_ROOT; };
+		701B1B4E172263D498A0016F /* LocalSkillLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalSkillLibrary.swift; path = "Sources/Bedrock/LocalCore/LocalSkillLibrary.swift"; sourceTree = SOURCE_ROOT; };
+		1098B5B3CF9B0A6E7577B9F3 /* WorkbenchWindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchWindowChrome.swift; path = "Sources/Bedrock/Views/WorkbenchWindowChrome.swift"; sourceTree = SOURCE_ROOT; };
+		16BD564F8434874E5BBB8132 /* WorkbenchSelectableMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchSelectableMarkdown.swift; path = "Sources/Bedrock/Views/WorkbenchSelectableMarkdown.swift"; sourceTree = SOURCE_ROOT; };
+		71F2AF277861ECE2F725EF3D /* ConversationAttachmentDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationAttachmentDraft.swift; path = "Sources/Bedrock/LocalCore/ConversationAttachmentDraft.swift"; sourceTree = SOURCE_ROOT; };
+		8A7409315A17A77A4751C527 /* ConversationOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationOutbox.swift; path = "Sources/Bedrock/LocalCore/ConversationOutbox.swift"; sourceTree = SOURCE_ROOT; };
+		B78F7C13A09D81ED8A25383A /* WorkbenchMessageActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchMessageActions.swift; path = "Sources/Bedrock/Views/WorkbenchMessageActions.swift"; sourceTree = SOURCE_ROOT; };
+		306DA119A344104B1243D8A1 /* ConversationSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationSearch.swift; path = "Sources/Bedrock/LocalCore/ConversationSearch.swift"; sourceTree = SOURCE_ROOT; };
+		9937D5E475B13E5DB9DDB785 /* ConversationEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationEditing.swift; path = "Sources/Bedrock/LocalCore/ConversationEditing.swift"; sourceTree = SOURCE_ROOT; };
+		99CA261729B6045A666EF186 /* ConversationArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationArchive.swift; path = "Sources/Bedrock/LocalCore/ConversationArchive.swift"; sourceTree = SOURCE_ROOT; };
+		6B67D160520D5936EE778E6D /* ClipboardRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardRenderingTests.swift; path = "Tests/Integration/ClipboardRenderingTests.swift"; sourceTree = SOURCE_ROOT; };
+		57E0CD6FE0677AE3C881DD20 /* MarkdownLinkPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MarkdownLinkPolicy.swift; path = "Sources/Bedrock/LocalCore/MarkdownLinkPolicy.swift"; sourceTree = SOURCE_ROOT; };
+		AAC6EE66C42B933CB7D1E0A0 /* WorkbenchClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchClipboard.swift; path = "Sources/Bedrock/Managers/WorkbenchClipboard.swift"; sourceTree = SOURCE_ROOT; };
+		8B42422AB19623876EAC8A02 /* LocalFileAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalFileAccess.swift; path = "Sources/Bedrock/LocalCore/LocalFileAccess.swift"; sourceTree = SOURCE_ROOT; };
+		FCDEB9A610DECFCB2A15BB08 /* ClipboardContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardContent.swift; path = "Sources/Bedrock/LocalCore/ClipboardContent.swift"; sourceTree = SOURCE_ROOT; };
+		B02B2369C02381C5DE987288 /* MarkdownRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MarkdownRenderingTests.swift; path = "Tests/Integration/MarkdownRenderingTests.swift"; sourceTree = SOURCE_ROOT; };
+		C200DF2D416C315FD9914A1B /* MCPServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MCPServerTests.swift; path = "Tests/Integration/MCPServerTests.swift"; sourceTree = SOURCE_ROOT; };
+		46E004007F02B2AB23045680 /* LumaVideoConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaVideoConfiguration.swift; path = "Sources/Bedrock/LocalCore/LumaVideoConfiguration.swift"; sourceTree = SOURCE_ROOT; };
+		849C2276106F917BA088910C /* DemoModelPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DemoModelPolicy.swift; path = "Sources/Bedrock/LocalCore/DemoModelPolicy.swift"; sourceTree = SOURCE_ROOT; };
+		119F773F9339A5B2A33ECF33 /* BedrockFailureMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockFailureMessage.swift; path = "Sources/Bedrock/LocalCore/BedrockFailureMessage.swift"; sourceTree = SOURCE_ROOT; };
+		02B0DA2E72B22C1A67EE296C /* WorkbenchMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchMarkdown.swift; path = "Sources/Bedrock/Views/WorkbenchMarkdown.swift"; sourceTree = SOURCE_ROOT; };
+		376344B16AFBB53F555BA3BB /* highlight.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "highlight.min.js"; path = "Sources/Bedrock/Resources/Highlight/highlight.min.js"; sourceTree = SOURCE_ROOT; };
+		21C32266B007CB1296F2CB2D /* highlight-github.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = "highlight-github.css"; path = "Sources/Bedrock/Resources/Highlight/highlight-github.css"; sourceTree = SOURCE_ROOT; };
+		951464FAD76A8E8151588CE3 /* highlight-github-dark.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = "highlight-github-dark.css"; path = "Sources/Bedrock/Resources/Highlight/highlight-github-dark.css"; sourceTree = SOURCE_ROOT; };
+		A01CE4343C085D73972C3D79 /* highlight-LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = "highlight-LICENSE"; path = "Sources/Bedrock/Resources/Highlight/highlight-LICENSE"; sourceTree = SOURCE_ROOT; };
+		F4537DD905CBD2CC3C2AD106 /* LegacyPreferencesBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LegacyPreferencesBackup.swift; path = "Sources/Bedrock/LocalCore/LegacyPreferencesBackup.swift"; sourceTree = SOURCE_ROOT; };
+		DB439879B4E3642B0FB1EF2C /* BedrockInferenceParameters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockInferenceParameters.swift; path = "Sources/Bedrock/LocalCore/BedrockInferenceParameters.swift"; sourceTree = SOURCE_ROOT; };
+		D8AA5FBFE411D1A6409F531C /* LegacyConversationDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LegacyConversationDecoder.swift; path = "Sources/Bedrock/LocalCore/LegacyConversationDecoder.swift"; sourceTree = SOURCE_ROOT; };
+		3D03F6152EEDB0BD6EE65B87 /* ConversationReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationReplay.swift; path = "Sources/Bedrock/LocalCore/ConversationReplay.swift"; sourceTree = SOURCE_ROOT; };
+		6ED2314B3B55FA1DBB2CD708 /* ConversationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationModels.swift; path = "Sources/Bedrock/LocalCore/ConversationModels.swift"; sourceTree = SOURCE_ROOT; };
+		D5D28F3D8C88AC175FF91A0C /* ConversationFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationFileStore.swift; path = "Sources/Bedrock/LocalCore/ConversationFileStore.swift"; sourceTree = SOURCE_ROOT; };
+		D8C4FA6663DB1DA6F44050CD /* BedrockModelType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockModelType.swift; path = "Sources/Bedrock/LocalCore/BedrockModelType.swift"; sourceTree = SOURCE_ROOT; };
+		1230F92CA09B52944B24F8C0 /* MCPToolIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MCPToolIdentity.swift; path = "Sources/Bedrock/LocalCore/MCPToolIdentity.swift"; sourceTree = SOURCE_ROOT; };
+		0612B6F47757DC56A059226B /* WorkbenchWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchWindows.swift; path = "Sources/Bedrock/Managers/WorkbenchWindows.swift"; sourceTree = SOURCE_ROOT; };
+		0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockModelChoice.swift; path = "Sources/Bedrock/LocalCore/BedrockModelChoice.swift"; sourceTree = SOURCE_ROOT; };
+		375F6E4BB6703F0747385198 /* WorkbenchScrollBehavior.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchScrollBehavior.swift; path = "Sources/Bedrock/Views/WorkbenchScrollBehavior.swift"; sourceTree = SOURCE_ROOT; };
+		6CF2C6BD140C26148D25A72F /* BedrockRegionalModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockRegionalModel.swift; path = "Sources/Bedrock/LocalCore/BedrockRegionalModel.swift"; sourceTree = SOURCE_ROOT; };
+		2BE86D10DE2CB04A86876FF8 /* BedrockBundledCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockBundledCatalog.swift; path = "Sources/Bedrock/LocalCore/BedrockBundledCatalog.swift"; sourceTree = SOURCE_ROOT; };
+		6985269D8C0D227D417D6C51 /* BedrockModelDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BedrockModelDescriptor.swift; path = "Sources/Bedrock/LocalCore/BedrockModelDescriptor.swift"; sourceTree = SOURCE_ROOT; };
+		EC3D2FD1071CAF776CFD40B6 /* WorkbenchSkills.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchSkills.swift; path = "Sources/Bedrock/Views/WorkbenchSkills.swift"; sourceTree = SOURCE_ROOT; };
+		854145298D0AED1E46735F45 /* WorkbenchSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchSidebar.swift; path = "Sources/Bedrock/Views/WorkbenchSidebar.swift"; sourceTree = SOURCE_ROOT; };
+		B4EE8474E15A8E7E68781DB1 /* WorkbenchDemos.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchDemos.swift; path = "Sources/Bedrock/Views/WorkbenchDemos.swift"; sourceTree = SOURCE_ROOT; };
+		E7B92A71CB0BAB8665BD4E19 /* WorkbenchComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchComponents.swift; path = "Sources/Bedrock/Views/WorkbenchComponents.swift"; sourceTree = SOURCE_ROOT; };
+		8B26287549209A36812CCE22 /* WorkbenchCommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchCommandPalette.swift; path = "Sources/Bedrock/Views/WorkbenchCommandPalette.swift"; sourceTree = SOURCE_ROOT; };
+		849C40613E281CE126ABAC63 /* WorkbenchAutomations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchAutomations.swift; path = "Sources/Bedrock/Views/WorkbenchAutomations.swift"; sourceTree = SOURCE_ROOT; };
+		596A9D68569F4E92E5671A5F /* WorkbenchActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchActivity.swift; path = "Sources/Bedrock/Views/WorkbenchActivity.swift"; sourceTree = SOURCE_ROOT; };
+		F1BF947D05E06A0E677EE44F /* WorkbenchNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchNotifications.swift; path = "Sources/Bedrock/Managers/WorkbenchNotifications.swift"; sourceTree = SOURCE_ROOT; };
+		A03F3AE446EB2587994056A3 /* WorkbenchMCPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchMCPConfiguration.swift; path = "Sources/Bedrock/Managers/WorkbenchMCPConfiguration.swift"; sourceTree = SOURCE_ROOT; };
+		49AE99201C4AB177CEED58DC /* WorkbenchAutomationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchAutomationRunner.swift; path = "Sources/Bedrock/Managers/WorkbenchAutomationRunner.swift"; sourceTree = SOURCE_ROOT; };
+		90864F0375B85C1FF74F179F /* WorkbenchActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchActions.swift; path = "Sources/Bedrock/Managers/WorkbenchActions.swift"; sourceTree = SOURCE_ROOT; };
+		54EFB35DD2F1FBBF12D94F06 /* LocalConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalConfiguration.swift; path = "Sources/Bedrock/LocalCore/LocalConfiguration.swift"; sourceTree = SOURCE_ROOT; };
+		048A929A488FFA2CE1F3FAA0 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchStore.swift; path = "Sources/Bedrock/Managers/WorkbenchStore.swift"; sourceTree = SOURCE_ROOT; };
+		011F311AB816B21C2D484D9D /* SecureCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SecureCredentialStore.swift; path = "Sources/Bedrock/Managers/SecureCredentialStore.swift"; sourceTree = SOURCE_ROOT; };
+		16974A3C16A72F54F0DBB728 /* LocalToolManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalToolManager.swift; path = "Sources/Bedrock/Managers/LocalToolManager.swift"; sourceTree = SOURCE_ROOT; };
+		9FEF63DD886C5DBD8C999AB2 /* WorkbenchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchSettings.swift; path = "Sources/Bedrock/LocalCore/WorkbenchSettings.swift"; sourceTree = SOURCE_ROOT; };
+		F4A84547FB27E6BAAB44748D /* WorkbenchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkbenchModels.swift; path = "Sources/Bedrock/LocalCore/WorkbenchModels.swift"; sourceTree = SOURCE_ROOT; };
+		CB296B16B86F36E1A8ECDDC8 /* ToolStreamAccumulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ToolStreamAccumulator.swift; path = "Sources/Bedrock/LocalCore/ToolStreamAccumulator.swift"; sourceTree = SOURCE_ROOT; };
+		797CCC2FFD65764BCFD17966 /* LocalSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalSkill.swift; path = "Sources/Bedrock/LocalCore/LocalSkill.swift"; sourceTree = SOURCE_ROOT; };
+		2D3C4ADE117DF3782E1E3F81 /* LocalProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalProcessRunner.swift; path = "Sources/Bedrock/LocalCore/LocalProcessRunner.swift"; sourceTree = SOURCE_ROOT; };
+		95DD656A11130E878EFE5B1D /* LocalFileTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalFileTools.swift; path = "Sources/Bedrock/LocalCore/LocalFileTools.swift"; sourceTree = SOURCE_ROOT; };
+		FF8382C5045EF3FD3CD8465D /* DemoPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DemoPreset.swift; path = "Sources/Bedrock/LocalCore/DemoPreset.swift"; sourceTree = SOURCE_ROOT; };
+		79936BAD9F25EC037E1CE500 /* ContextBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ContextBudget.swift; path = "Sources/Bedrock/LocalCore/ContextBudget.swift"; sourceTree = SOURCE_ROOT; };
+		13A132022F10000200A13200 /* InferenceConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InferenceConfigTests.swift; path = Tests/Integration/InferenceConfigTests.swift; sourceTree = SOURCE_ROOT; };
 		7907BE942ACD87A100C4D500 /* Amazon Bedrock Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Amazon Bedrock Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEA52ACD87A200C4D500 /* Amazon Bedrock Client for MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7907BEAF2ACD87A200C4D500 /* Amazon Bedrock Client for MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amazon Bedrock Client for MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -112,7 +270,6 @@
 		7954F8442AD247DF008B03D3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7954F8462AD249A7008B03D3 /* SettingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingManager.swift; sourceTree = "<group>"; };
 		795D9C8E2BC57D3900DF38C0 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-		79610DBC2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_Mac.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Amazon_Bedrock_Client_for_Mac.entitlements; sourceTree = "<group>"; };
 		79610DBD2AD22A2F00993D09 /* SidebarSelection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SidebarSelection.swift; sourceTree = "<group>"; };
 		79610DBE2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Amazon_Bedrock_Client_for_MacApp.swift; sourceTree = "<group>"; };
 		79610DC12AD22A2F00993D09 /* BedrockClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BedrockClient.swift; sourceTree = "<group>"; };
@@ -123,7 +280,6 @@
 		79610DCB2AD22A2F00993D09 /* MessageData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageData.swift; sourceTree = "<group>"; };
 		79610DCE2AD22A2F00993D09 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		79610DD02AD22A2F00993D09 /* MessageBarView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageBarView.swift; sourceTree = "<group>"; };
-		79610DD32AD22A2F00993D09 /* SidebarView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		79610DD62AD22A2F00993D09 /* MessageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageView.swift; sourceTree = "<group>"; };
 		79610DEC2AD230A200993D09 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		797A12B72C2DB33100494DD9 /* SettingsWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowManager.swift; sourceTree = "<group>"; };
@@ -139,9 +295,9 @@
 		79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		79C7F5EC2AD282EE008FBB35 /* EnvironmentExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentExtensions.swift; sourceTree = "<group>"; };
 		79D3C7822D9C799000CB020F /* AppStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateManager.swift; sourceTree = "<group>"; };
-		79D6E6A22C99BFF300314D86 /* GithubTheme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = GithubTheme.swift; path = "Amazon Bedrock Client for Mac/Utils/GithubTheme.swift"; sourceTree = SOURCE_ROOT; };
+		79D6E6A22C99BFF300314D86 /* GithubTheme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = GithubTheme.swift; path = "Sources/Bedrock/Utils/GithubTheme.swift"; sourceTree = SOURCE_ROOT; };
 		79E0AC5A2D63EDDB0041829A /* TranscribeStreamingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscribeStreamingManager.swift; sourceTree = "<group>"; };
-		79E0AC5E2D63F49F0041829A /* Amazon Bedrock Client for Mac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Amazon Bedrock Client for Mac.entitlements"; sourceTree = "<group>"; };
+		79E0AC5E2D63F49F0041829A /* Bedrock.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = Bedrock.entitlements; path = Configuration/Bedrock.entitlements; sourceTree = SOURCE_ROOT; };
 		79EC4F1C2EE1601300BF73D9 /* NovaCanvasModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaCanvasModels.swift; sourceTree = "<group>"; };
 		79EC4F1E2EE1659500BF73D9 /* ImageStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageStorageManager.swift; sourceTree = "<group>"; };
 		79EC4F202EE165E500BF73D9 /* ImageGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenerationService.swift; sourceTree = "<group>"; };
@@ -204,9 +360,97 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		AA0C74C3152D277D4781A396 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				9FD96C525021A9C01EE85B32 /* Info.plist */,
+				79E0AC5E2D63F49F0041829A /* Bedrock.entitlements */,
+			);
+			name = Configuration;
+			sourceTree = "<group>";
+		};
+		32583FCCE70A8D020372FE59 /* Local Workbench */ = {
+			isa = PBXGroup;
+			children = (
+				194FFD02CEF94F6466F3D01F /* ConversationViewportController.swift */,
+				516E982FDDF42BC9B8F39C81 /* WorkbenchSettingsControls.swift */,
+				67EA5EE69DC6A050D5C4E39D /* WorkbenchImageIO.swift */,
+				5CAECEF8D0DE5C1610374850 /* WorkbenchTextMenu.swift */,
+				24B148015A59508132568D9F /* WorkbenchControls.swift */,
+				9F3EF5B491084790622AC27F /* WorkbenchNavigation.swift */,
+				87BAAA79E11E0BFE0249B25C /* WorkbenchToolOutputView.swift */,
+				5FE23B238C4524F9750F11CE /* ToolOutputFiles.swift */,
+				DCF065714EACA96319B9995E /* WorkbenchComposerDraft.swift */,
+				9F357A1F1DB79590E3C031A1 /* MCPToolOutput.swift */,
+				6782C0B8654732434B66E0DF /* WorkbenchValidationMode.swift */,
+				7BDE79D11E27DF1C6F319C15 /* WorkbenchMCPProcess.swift */,
+				701B1B4E172263D498A0016F /* LocalSkillLibrary.swift */,
+				1098B5B3CF9B0A6E7577B9F3 /* WorkbenchWindowChrome.swift */,
+				16BD564F8434874E5BBB8132 /* WorkbenchSelectableMarkdown.swift */,
+				71F2AF277861ECE2F725EF3D /* ConversationAttachmentDraft.swift */,
+				8A7409315A17A77A4751C527 /* ConversationOutbox.swift */,
+				B78F7C13A09D81ED8A25383A /* WorkbenchMessageActions.swift */,
+				306DA119A344104B1243D8A1 /* ConversationSearch.swift */,
+				9937D5E475B13E5DB9DDB785 /* ConversationEditing.swift */,
+				99CA261729B6045A666EF186 /* ConversationArchive.swift */,
+				57E0CD6FE0677AE3C881DD20 /* MarkdownLinkPolicy.swift */,
+				AAC6EE66C42B933CB7D1E0A0 /* WorkbenchClipboard.swift */,
+				8B42422AB19623876EAC8A02 /* LocalFileAccess.swift */,
+				FCDEB9A610DECFCB2A15BB08 /* ClipboardContent.swift */,
+				46E004007F02B2AB23045680 /* LumaVideoConfiguration.swift */,
+				849C2276106F917BA088910C /* DemoModelPolicy.swift */,
+				119F773F9339A5B2A33ECF33 /* BedrockFailureMessage.swift */,
+				02B0DA2E72B22C1A67EE296C /* WorkbenchMarkdown.swift */,
+				376344B16AFBB53F555BA3BB /* highlight.min.js */,
+				21C32266B007CB1296F2CB2D /* highlight-github.css */,
+				951464FAD76A8E8151588CE3 /* highlight-github-dark.css */,
+				A01CE4343C085D73972C3D79 /* highlight-LICENSE */,
+				F4537DD905CBD2CC3C2AD106 /* LegacyPreferencesBackup.swift */,
+				DB439879B4E3642B0FB1EF2C /* BedrockInferenceParameters.swift */,
+				D8AA5FBFE411D1A6409F531C /* LegacyConversationDecoder.swift */,
+				3D03F6152EEDB0BD6EE65B87 /* ConversationReplay.swift */,
+				6ED2314B3B55FA1DBB2CD708 /* ConversationModels.swift */,
+				D5D28F3D8C88AC175FF91A0C /* ConversationFileStore.swift */,
+				D8C4FA6663DB1DA6F44050CD /* BedrockModelType.swift */,
+				1230F92CA09B52944B24F8C0 /* MCPToolIdentity.swift */,
+				0612B6F47757DC56A059226B /* WorkbenchWindows.swift */,
+				0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */,
+				375F6E4BB6703F0747385198 /* WorkbenchScrollBehavior.swift */,
+				6CF2C6BD140C26148D25A72F /* BedrockRegionalModel.swift */,
+				2BE86D10DE2CB04A86876FF8 /* BedrockBundledCatalog.swift */,
+				6985269D8C0D227D417D6C51 /* BedrockModelDescriptor.swift */,
+				EC3D2FD1071CAF776CFD40B6 /* WorkbenchSkills.swift */,
+				854145298D0AED1E46735F45 /* WorkbenchSidebar.swift */,
+				B4EE8474E15A8E7E68781DB1 /* WorkbenchDemos.swift */,
+				E7B92A71CB0BAB8665BD4E19 /* WorkbenchComponents.swift */,
+				8B26287549209A36812CCE22 /* WorkbenchCommandPalette.swift */,
+				849C40613E281CE126ABAC63 /* WorkbenchAutomations.swift */,
+				596A9D68569F4E92E5671A5F /* WorkbenchActivity.swift */,
+				F1BF947D05E06A0E677EE44F /* WorkbenchNotifications.swift */,
+				A03F3AE446EB2587994056A3 /* WorkbenchMCPConfiguration.swift */,
+				49AE99201C4AB177CEED58DC /* WorkbenchAutomationRunner.swift */,
+				90864F0375B85C1FF74F179F /* WorkbenchActions.swift */,
+				54EFB35DD2F1FBBF12D94F06 /* LocalConfiguration.swift */,
+				048A929A488FFA2CE1F3FAA0 /* WorkbenchStore.swift */,
+				011F311AB816B21C2D484D9D /* SecureCredentialStore.swift */,
+				16974A3C16A72F54F0DBB728 /* LocalToolManager.swift */,
+				9FEF63DD886C5DBD8C999AB2 /* WorkbenchSettings.swift */,
+				F4A84547FB27E6BAAB44748D /* WorkbenchModels.swift */,
+				CB296B16B86F36E1A8ECDDC8 /* ToolStreamAccumulator.swift */,
+				797CCC2FFD65764BCFD17966 /* LocalSkill.swift */,
+				2D3C4ADE117DF3782E1E3F81 /* LocalProcessRunner.swift */,
+				95DD656A11130E878EFE5B1D /* LocalFileTools.swift */,
+				FF8382C5045EF3FD3CD8465D /* DemoPreset.swift */,
+				79936BAD9F25EC037E1CE500 /* ContextBudget.swift */,
+			);
+			name = "Local Workbench";
+			sourceTree = "<group>";
+		};
 		7907BE8B2ACD87A000C4D500 = {
 			isa = PBXGroup;
 			children = (
+				AA0C74C3152D277D4781A396 /* Configuration */,
+				13A132032F10000300A13200 /* Tests */,
 				791461202AD0E51B00C454DC /* LICENSE */,
 				79BF645E2ACFF8FD00383300 /* README.md */,
 				79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */,
@@ -218,10 +462,19 @@
 		13A132032F10000300A13200 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				B21AC6D2E8D90F6173F02A34 /* BedrockUITestFixture.swift */,
+				7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */,
+				2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */,
+				4A544E82819B7065F2B03BCC /* ImagePreviewTests.swift */,
+				4875C6DDE33D002AD29528B5 /* WorkbenchUITests.swift */,
+				190222772896F50F76316584 /* MCPIntegrationTests.swift */,
+				6B67D160520D5936EE778E6D /* ClipboardRenderingTests.swift */,
+				B02B2369C02381C5DE987288 /* MarkdownRenderingTests.swift */,
+				C200DF2D416C315FD9914A1B /* MCPServerTests.swift */,
 				13A132022F10000200A13200 /* InferenceConfigTests.swift */,
 			);
 			path = Tests;
-			sourceTree = "<group>";
+			sourceTree = SOURCE_ROOT;
 		};
 		7907BE952ACD87A100C4D500 /* Products */ = {
 			isa = PBXGroup;
@@ -236,24 +489,22 @@
 		79610DBA2AD22A2F00993D09 /* Amazon Bedrock Client for Mac */ = {
 			isa = PBXGroup;
 			children = (
+				32583FCCE70A8D020372FE59 /* Local Workbench */,
 				79F2C4012EB0705A003F46E6 /* Bedrock.icon */,
-				79E0AC5E2D63F49F0041829A /* Amazon Bedrock Client for Mac.entitlements */,
 				79610DC22AD22A2F00993D09 /* Assets.xcassets */,
 				79610DBB2AD22A2F00993D09 /* Core */,
 				79610DBF2AD22A2F00993D09 /* Managers */,
 				79610DC92AD22A2F00993D09 /* Models */,
 				79610DCD2AD22A2F00993D09 /* Preview Content */,
-				13A132032F10000300A13200 /* Tests */,
 				79610DC32AD22A2F00993D09 /* Utils */,
 				79610DCF2AD22A2F00993D09 /* Views */,
 			);
-			path = "Amazon Bedrock Client for Mac";
+			path = "Sources/Bedrock";
 			sourceTree = "<group>";
 		};
 		79610DBB2AD22A2F00993D09 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				79610DBC2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_Mac.entitlements */,
 				79610DBE2AD22A2F00993D09 /* Amazon_Bedrock_Client_for_MacApp.swift */,
 				79C4F01D2C30362100C488C2 /* AppDelegate.swift */,
 				797A12BD2C2EB53800494DD9 /* ChatModel.xcdatamodeld */,
@@ -347,7 +598,6 @@
 				79FDE2582DFBF410003960BC /* ModelSelectorDropdown.swift */,
 				79F53C882E7B0B3800F129F4 /* QuickAccessView.swift */,
 				7954F8442AD247DF008B03D3 /* SettingsView.swift */,
-				79610DD32AD22A2F00993D09 /* SidebarView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -480,6 +730,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9B9EA7D9C21E08A33BA77A72 /* highlight.min.js in Resources */,
+				C51972B38BC5B32CC6B13B2F /* highlight-github.css in Resources */,
+				701F3C86C5D045FC270335E3 /* highlight-github-dark.css in Resources */,
+				4CC6E03D7E75BA72DF34F309 /* highlight-LICENSE in Resources */,
 				79BF645F2ACFF8FD00383300 /* README.md in Resources */,
 				79F2C4022EB0705A003F46E6 /* Bedrock.icon in Resources */,
 				79610DE42AD22A2F00993D09 /* Preview Assets.xcassets in Resources */,
@@ -508,10 +762,75 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B258B716BBA725FF4A033187 /* ConversationViewportController.swift in Sources */,
+				988BAB6A9EA1D6B4BF851420 /* WorkbenchSettingsControls.swift in Sources */,
+				B494ED9FEB62755947AD8A35 /* WorkbenchImageIO.swift in Sources */,
+				6D97685F02EDED0AB65757CF /* WorkbenchTextMenu.swift in Sources */,
+				2A3D7D6AC9804F91DEF38AD4 /* WorkbenchControls.swift in Sources */,
+				A0923B7A3802F5FA34A15BDD /* WorkbenchNavigation.swift in Sources */,
+				4CD8A0599883B03B7F5172B9 /* WorkbenchToolOutputView.swift in Sources */,
+				1A5DB7178F6C866CAAA6C570 /* ToolOutputFiles.swift in Sources */,
+				DCEDA1AAE167303C799C97B5 /* WorkbenchComposerDraft.swift in Sources */,
+				7B8E115ED68C75B61C37FD1A /* MCPToolOutput.swift in Sources */,
+				3665289D641D785668067F65 /* WorkbenchValidationMode.swift in Sources */,
+				0E8C2E82C3013EE772417DD1 /* WorkbenchMCPProcess.swift in Sources */,
+				9337C8508E8044A6B9B34864 /* LocalSkillLibrary.swift in Sources */,
+				A4C4EB6AFC53DFBFB72F5F90 /* WorkbenchWindowChrome.swift in Sources */,
+				6CC03E7F8D82628984617DE4 /* WorkbenchSelectableMarkdown.swift in Sources */,
+				3DE9CBAFE6C85F66157B7F28 /* ConversationAttachmentDraft.swift in Sources */,
+				4281ED2814161CB5E0DD16FA /* ConversationOutbox.swift in Sources */,
+				39D44D82F9A64EA17C3BD86F /* WorkbenchMessageActions.swift in Sources */,
+				6DB2061B16361F033796DBEF /* ConversationSearch.swift in Sources */,
+				6F246551CF3B1F125D2B5E2F /* ConversationEditing.swift in Sources */,
+				2D0AB083AC74E01F55A1EEEF /* ConversationArchive.swift in Sources */,
+				0AD95AD8E19BDB64962B9206 /* MarkdownLinkPolicy.swift in Sources */,
+				2B360F375C765DBBB5F31D9A /* WorkbenchClipboard.swift in Sources */,
+				914650C93DC1922E1C9CD0C8 /* LocalFileAccess.swift in Sources */,
+				EF205482624733FFB0B1A3FA /* ClipboardContent.swift in Sources */,
+				F55B25DE57E8D3BAC244ACDD /* LumaVideoConfiguration.swift in Sources */,
+				CB2623A941859F4C777CA9CE /* DemoModelPolicy.swift in Sources */,
+				35FC9892FF92DB120312CB19 /* BedrockFailureMessage.swift in Sources */,
+				7353858C0378A35BFCC7A7F4 /* WorkbenchMarkdown.swift in Sources */,
+				42D9E1FFF0A16FCCFFF32195 /* LegacyPreferencesBackup.swift in Sources */,
+				B065D13DCA619D46D6001361 /* BedrockInferenceParameters.swift in Sources */,
+				BF69FA16EAF2089BA9B21DFA /* LegacyConversationDecoder.swift in Sources */,
+				05B83F348A25D25CFECB18B4 /* ConversationReplay.swift in Sources */,
+				7814E1779D6A6F4BB2788E1A /* ConversationModels.swift in Sources */,
+				414B0D3581BC2E9DB83914E3 /* ConversationFileStore.swift in Sources */,
+				9CC977E417E6728F9C5AE7AA /* BedrockModelType.swift in Sources */,
+				071C607EEF55C72E89FFC2A2 /* MCPToolIdentity.swift in Sources */,
+				D07F279CDCEAF0880A2C6A7E /* WorkbenchWindows.swift in Sources */,
+				25B069C1C4BC01BDEE569001 /* BedrockModelChoice.swift in Sources */,
+				787D450E8B515C556C26FCB5 /* WorkbenchScrollBehavior.swift in Sources */,
+				5E68D7D007EE5F58E681BA47 /* BedrockRegionalModel.swift in Sources */,
+				EFCDE9B5AA9E429FA4A9C28C /* BedrockBundledCatalog.swift in Sources */,
+				738E8E05DD99514072F0FE55 /* BedrockModelDescriptor.swift in Sources */,
+				1423D62596DDBDC5C4869458 /* WorkbenchSkills.swift in Sources */,
+				4B5F984C09E6A951DC489491 /* WorkbenchSidebar.swift in Sources */,
+				7AF9F85FC8919C43C59E8486 /* WorkbenchDemos.swift in Sources */,
+				18006CEF828C3AE20593BA95 /* WorkbenchComponents.swift in Sources */,
+				7867B951BE648B27433FD46D /* WorkbenchCommandPalette.swift in Sources */,
+				821159D870C438D2036B8EC3 /* WorkbenchAutomations.swift in Sources */,
+				9A5B9E3C630C5825B9A3F891 /* WorkbenchActivity.swift in Sources */,
+				524A6D7E0E00B9764BB42A03 /* WorkbenchNotifications.swift in Sources */,
+				B5ACA4CBE9EF3EB4C16BA2FA /* WorkbenchMCPConfiguration.swift in Sources */,
+				1C8401FDD3C70B30E96B27FF /* WorkbenchAutomationRunner.swift in Sources */,
+				47177089E725E08AABCEFF9D /* WorkbenchActions.swift in Sources */,
+				1DEC0DE7EA55CCC219F69701 /* LocalConfiguration.swift in Sources */,
+				66B6FA4483CEC0D61B01ABC7 /* WorkbenchStore.swift in Sources */,
+				D63C4AC2DE2E1E9600AEA199 /* SecureCredentialStore.swift in Sources */,
+				49EE55EE7EE4EF284920BA01 /* LocalToolManager.swift in Sources */,
+				A1709CDDB5DA94EC8886C23E /* WorkbenchSettings.swift in Sources */,
+				1C37C647DCFB1F9758BF42D6 /* WorkbenchModels.swift in Sources */,
+				DF56A79C467EEE4BB3B15DA6 /* ToolStreamAccumulator.swift in Sources */,
+				4AB7B2CE025D9F6A542B23E7 /* LocalSkill.swift in Sources */,
+				1CEB8D476B937CBD23D3E043 /* LocalProcessRunner.swift in Sources */,
+				471DB3BBF8BC4F470DD4A519 /* LocalFileTools.swift in Sources */,
+				1D0C53D1C4DDA063F03F1F2B /* DemoPreset.swift in Sources */,
+				1D716E39C52CA77403C62C3B /* ContextBudget.swift in Sources */,
 				79610DE22AD22A2F00993D09 /* MessageData.swift in Sources */,
 				7954F8452AD247DF008B03D3 /* SettingsView.swift in Sources */,
 				79D6E6A32C99BFF300314D86 /* GithubTheme.swift in Sources */,
-				79610DE82AD22A2F00993D09 /* SidebarView.swift in Sources */,
 				79AF97552D9E332A00313A4C /* NSImage.swift in Sources */,
 				79EC4F1F2EE1659500BF73D9 /* ImageStorageManager.swift in Sources */,
 				79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */,
@@ -573,6 +892,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				24BE3689552DD48346F74BA6 /* ConversationViewportTests.swift in Sources */,
+				26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */,
+				7255D15CCA39EA76693ED94A /* ImagePreviewTests.swift in Sources */,
+				D8C607E825A8DD8DD2B49408 /* MCPIntegrationTests.swift in Sources */,
+				DC29EE02939E2E6388F7EFFF /* ClipboardRenderingTests.swift in Sources */,
+				6DF4F992EF7668B13FAA4B43 /* MarkdownRenderingTests.swift in Sources */,
+				DA78D175A68A198C7E15D151 /* MCPServerTests.swift in Sources */,
 				13A132012F10000100A13200 /* InferenceConfigTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -581,6 +907,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				853B67F64947DF8AF0E33282 /* BedrockUITestFixture.swift in Sources */,
+				386C9D96081DA3C39EA118DA /* WorkbenchUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -733,11 +1061,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				ASSETCATALOG_OTHER_FLAGS = "";
-				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
+				CODE_SIGN_ENTITLEMENTS = Configuration/Bedrock.entitlements;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1.4.10;
+				CURRENT_PROJECT_VERSION = 20000;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"Sources/Bedrock/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -746,7 +1074,7 @@
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_FILE[sdk=*]" = Info.plist;
+				"INFOPLIST_FILE[sdk=*]" = Configuration/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Amazon Bedrock";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -763,9 +1091,10 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.10;
+				MARKETING_VERSION = 2.0.0;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
+				BEDROCK_APP_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BEDROCK_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_MODULE_NAME = Amazon_Bedrock_Client_for_Mac;
 				PRODUCT_NAME = "Amazon Bedrock Debug";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -788,11 +1117,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				ASSETCATALOG_OTHER_FLAGS = "";
-				CODE_SIGN_ENTITLEMENTS = "Amazon Bedrock Client for Mac/Amazon Bedrock Client for Mac.entitlements";
+				CODE_SIGN_ENTITLEMENTS = Configuration/Bedrock.entitlements;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1.4.10;
+				CURRENT_PROJECT_VERSION = 20000;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_ASSET_PATHS = "\"Amazon Bedrock Client for Mac/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"Sources/Bedrock/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -801,7 +1130,7 @@
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_FILE[sdk=*]" = Info.plist;
+				"INFOPLIST_FILE[sdk=*]" = Configuration/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Amazon Bedrock";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -818,8 +1147,9 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4.10;
-				PRODUCT_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
+				MARKETING_VERSION = 2.0.0;
+				BEDROCK_APP_BUNDLE_IDENTIFIER = "AWS.Amazon-Bedrock-Client-for-Mac";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BEDROCK_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_MODULE_NAME = Amazon_Bedrock_Client_for_Mac;
 				PRODUCT_NAME = "Amazon Bedrock";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -968,7 +1298,7 @@
 			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk.git";
 			requirement = {
 				kind = upToNextMinorVersion;
-				minimumVersion = 0.12.0;
+				minimumVersion = 0.12.1;
 			};
 		};
 		798A9CE42AD3AB2E00E9D039 /* XCRemoteSwiftPackageReference "vapor" */ = {
@@ -976,7 +1306,7 @@
 			repositoryURL = "https://github.com/vapor/vapor.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 4.84.4;
+				minimumVersion = 4.122.1;
 			};
 		};
 		79A305672EB05A2200DAE32F /* XCRemoteSwiftPackageReference "swift-markdownkit" */ = {
@@ -984,7 +1314,7 @@
 			repositoryURL = "https://github.com/objecthub/swift-markdownkit";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.3.0;
+				minimumVersion = 1.4.1;
 			};
 		};
 		79E59FFC2ACDA88700DC6657 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */ = {
@@ -992,7 +1322,7 @@
 			repositoryURL = "https://github.com/awslabs/aws-sdk-swift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.58;
+				minimumVersion = 1.7.84;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

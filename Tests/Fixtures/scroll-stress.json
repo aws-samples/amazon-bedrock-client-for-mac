@@ -1,0 +1,593 @@
+{
+  "version": 1,
+  "title": "UI regression — scroll and shortcuts",
+  "modelID": "us.openai.gpt-5.6-luna",
+  "modelName": "GPT-5.6 Luna",
+  "provider": "OpenAI",
+  "messages": [
+    {
+      "id": "e3052eb7-b4dd-5873-ade5-10f6d7f4f9d5",
+      "text": "SCROLL_01: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811180800.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "00fc0f3f-d641-5d93-933f-df151c7f86bb",
+      "text": "SCROLL_01 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_01\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811180805.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning.",
+      "toolUses": [
+        {
+          "toolId": "fixture-SCROLL_01",
+          "toolName": "fixture_echo",
+          "inputs": {
+            "marker": "SCROLL_01",
+            "enabled": true,
+            "count": 2
+          },
+          "result": "{\"marker\": \"SCROLL_01\", \"source\": \"local UI fixture\"}",
+          "status": "succeeded",
+          "elapsedSeconds": 0.125,
+          "displayName": "Fixture echo",
+          "serverName": "UI fixture"
+        }
+      ]
+    },
+    {
+      "id": "6f7f57c8-0bee-5809-8781-0b04ac6b0c2c",
+      "text": "SCROLL_02: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811180860.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "3468c897-4a3d-58f4-96b1-114f0d9b9b73",
+      "text": "SCROLL_02 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811180865.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "ea156291-5f6c-525c-bf24-a0a50b1c8d59",
+      "text": "SCROLL_03: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811180920.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "4068994d-1886-5523-bbab-4999af81d1a9",
+      "text": "SCROLL_03 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811180925.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "998bf35e-7342-5ba7-b464-502190416752",
+      "text": "SCROLL_04: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811180980.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "1dc2b8e4-0f22-5971-9d6f-1600ba7f4440",
+      "text": "SCROLL_04 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_04\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811180985.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "764b773f-4bec-5ba3-a27b-ee26cea0f4eb",
+      "text": "SCROLL_05: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181040.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "5278b18e-7067-521f-9e87-ecc0f48a65cd",
+      "text": "SCROLL_05 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181045.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning."
+    },
+    {
+      "id": "177d344b-6c63-5642-9143-c1ff0ef379b0",
+      "text": "SCROLL_06: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181100.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "0db4a308-c451-53fe-b0eb-63a7827c1fa3",
+      "text": "SCROLL_06 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181105.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "toolUses": [
+        {
+          "toolId": "fixture-SCROLL_06",
+          "toolName": "fixture_echo",
+          "inputs": {
+            "marker": "SCROLL_06",
+            "enabled": true,
+            "count": 2
+          },
+          "result": "{\"marker\": \"SCROLL_06\", \"source\": \"local UI fixture\"}",
+          "status": "succeeded",
+          "elapsedSeconds": 0.125,
+          "displayName": "Fixture echo",
+          "serverName": "UI fixture"
+        }
+      ]
+    },
+    {
+      "id": "80d8a097-a9e5-53dc-8c55-b0bee1118092",
+      "text": "SCROLL_07: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181160.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "5f9d4d0d-6234-50dd-a638-ff94bfffac2f",
+      "text": "SCROLL_07 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_07\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811181165.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "dfb5d115-5f20-59d8-a837-6e7254a0c71d",
+      "text": "SCROLL_08: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181220.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "773256eb-e21b-5fa9-9f8e-1254c5d484fb",
+      "text": "SCROLL_08 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181225.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "8f461b60-0c5f-5987-9650-b4b3fd70e8a4",
+      "text": "SCROLL_09: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181280.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "4fdd0726-7e19-5346-9eb7-e013d00d4b0a",
+      "text": "SCROLL_09 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181285.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning."
+    },
+    {
+      "id": "e1137648-0c18-5ffb-8dc8-46bd3d7655cb",
+      "text": "SCROLL_10: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181340.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "1fae9ce3-fdcf-502e-832d-575a67dadedf",
+      "text": "SCROLL_10 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_10\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811181345.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "1ff6eea5-1cb9-5f35-9c16-7324c0423343",
+      "text": "SCROLL_11: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181400.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "413a574e-b326-56f8-8048-b193220aedb5",
+      "text": "SCROLL_11 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181405.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "toolUses": [
+        {
+          "toolId": "fixture-SCROLL_11",
+          "toolName": "fixture_echo",
+          "inputs": {
+            "marker": "SCROLL_11",
+            "enabled": true,
+            "count": 2
+          },
+          "result": "{\"marker\": \"SCROLL_11\", \"source\": \"local UI fixture\"}",
+          "status": "succeeded",
+          "elapsedSeconds": 0.125,
+          "displayName": "Fixture echo",
+          "serverName": "UI fixture"
+        }
+      ]
+    },
+    {
+      "id": "f5a47bfe-3e7e-5c73-b7c1-9f25bdcee95d",
+      "text": "SCROLL_12: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181460.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "c6e6add9-b9fb-5cf5-8bc7-571d3bc8661d",
+      "text": "SCROLL_12 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181465.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "e0da15fa-8d56-559f-9877-113d144a55a3",
+      "text": "SCROLL_13: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181520.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "c842e5ba-e651-5be0-8fbd-48e5a184808e",
+      "text": "SCROLL_13 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_13\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811181525.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning."
+    },
+    {
+      "id": "e259287a-3e41-5869-8c6e-b1e2375dec11",
+      "text": "SCROLL_14: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181580.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "add8b4dc-4be8-509c-810b-44fbbf60fab0",
+      "text": "SCROLL_14 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181585.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "eb156963-b750-5f5a-9b44-9d4375bf3d1f",
+      "text": "SCROLL_15: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181640.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "a3815334-b6f2-5ace-9524-d2352d060528",
+      "text": "SCROLL_15 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181645.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "17c37996-90fe-5766-a530-bb6acb46031e",
+      "text": "SCROLL_16: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181700.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "e60ccd04-c771-51e9-824c-3bea9e3ae9b2",
+      "text": "SCROLL_16 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_16\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811181705.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "toolUses": [
+        {
+          "toolId": "fixture-SCROLL_16",
+          "toolName": "fixture_echo",
+          "inputs": {
+            "marker": "SCROLL_16",
+            "enabled": true,
+            "count": 2
+          },
+          "result": "{\"marker\": \"SCROLL_16\", \"source\": \"local UI fixture\"}",
+          "status": "succeeded",
+          "elapsedSeconds": 0.125,
+          "displayName": "Fixture echo",
+          "serverName": "UI fixture"
+        }
+      ]
+    },
+    {
+      "id": "d0b4e158-c7e5-5318-a26a-0be3da028660",
+      "text": "SCROLL_17: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181760.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "46bacd0c-996f-58dd-8802-e71212a1cfdd",
+      "text": "SCROLL_17 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181765.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning."
+    },
+    {
+      "id": "784127e8-21ea-5640-800f-8e1219b93ed9",
+      "text": "SCROLL_18: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181820.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "7f3f9f6b-73ba-516c-8fab-a4798a787271",
+      "text": "SCROLL_18 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181825.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "6bde2ba3-e3c9-5d9c-88dd-45cd60b78552",
+      "text": "SCROLL_19: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181880.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "6ef626e9-56f3-54a8-94ee-d20a047383e2",
+      "text": "SCROLL_19 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_19\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811181885.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "42cd72f7-0973-50ea-a68c-b5a6bc47cc13",
+      "text": "SCROLL_20: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811181940.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "67c03484-1747-5aad-8995-cd60ff5b4fe6",
+      "text": "SCROLL_20 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811181945.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "f0d581df-1515-541b-ae0a-185452421cdc",
+      "text": "SCROLL_21: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182000.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "6db9abf3-1138-5677-a0cc-0cbac181de07",
+      "text": "SCROLL_21 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182005.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning.",
+      "toolUses": [
+        {
+          "toolId": "fixture-SCROLL_21",
+          "toolName": "fixture_echo",
+          "inputs": {
+            "marker": "SCROLL_21",
+            "enabled": true,
+            "count": 2
+          },
+          "result": "{\"marker\": \"SCROLL_21\", \"source\": \"local UI fixture\"}",
+          "status": "succeeded",
+          "elapsedSeconds": 0.125,
+          "displayName": "Fixture echo",
+          "serverName": "UI fixture"
+        }
+      ]
+    },
+    {
+      "id": "77c6b70b-b1f1-5001-9b81-07ccd82c2b44",
+      "text": "SCROLL_22: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182060.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "89017188-b232-5eb5-9bc8-19d3f55406fc",
+      "text": "SCROLL_22 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_22\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811182065.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "b6c802c7-e6e4-5824-a89f-04bd79ab3ea6",
+      "text": "SCROLL_23: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182120.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "5ab5813b-e823-520e-a189-56526bd48aec",
+      "text": "SCROLL_23 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182125.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "9bd4e379-5111-5b94-90e3-a9c4395366db",
+      "text": "SCROLL_24: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182180.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "696d4eaf-13d7-58b3-9381-eff44e264f08",
+      "text": "SCROLL_24 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182185.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "f2352d35-bd16-58ec-bebb-8b73b6183df1",
+      "text": "SCROLL_25: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182240.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "a2580c14-0b88-56a1-a987-a2b38e2e93a7",
+      "text": "SCROLL_25 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_25\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811182245.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning."
+    },
+    {
+      "id": "2c483c54-2c8a-5914-a38e-6052872b3a3f",
+      "text": "SCROLL_26: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182300.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "b8449419-d03e-5a04-8dd8-d3e95873b7c3",
+      "text": "SCROLL_26 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182305.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "toolUses": [
+        {
+          "toolId": "fixture-SCROLL_26",
+          "toolName": "fixture_echo",
+          "inputs": {
+            "marker": "SCROLL_26",
+            "enabled": true,
+            "count": 2
+          },
+          "result": "{\"marker\": \"SCROLL_26\", \"source\": \"local UI fixture\"}",
+          "status": "succeeded",
+          "elapsedSeconds": 0.125,
+          "displayName": "Fixture echo",
+          "serverName": "UI fixture"
+        }
+      ]
+    },
+    {
+      "id": "ec27064c-347f-53b9-943b-c3a67f93fefb",
+      "text": "SCROLL_27: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182360.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "79536b6e-f9c1-56cb-8603-0ebea7e261a3",
+      "text": "SCROLL_27 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182365.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "de15e3c6-b4c9-51a4-964a-e2a0a56584de",
+      "text": "SCROLL_28: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182420.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "5ade3be5-85a3-53e2-b1f1-463ec51f4755",
+      "text": "SCROLL_28 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.\n\n### Native rendering check\n\n- Korean and English wrap correctly.\n- Code remains selectable.\n\n```swift\nlet marker = \"SCROLL_28\"\nprint(marker)\n```\n\n| Check | Expected |\n| --- | --- |\n| Scrolling | Responsive |\n| Storage | Local |",
+      "role": "assistant",
+      "timestamp": 811182425.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "7cae9abc-a20c-5b78-ae11-848fd85ed74e",
+      "text": "SCROLL_29: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182480.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "fc69a1a1-15f2-5dca-9e83-dd51ca186f99",
+      "text": "SCROLL_29 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182485.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna",
+      "thinking": "검증용 접이식 영역입니다. 스크롤 위치와 본문 레이아웃을 확인합니다.\nThis is fixture text, not model reasoning."
+    },
+    {
+      "id": "b2856847-a182-5afc-a1ef-1653adba73ee",
+      "text": "SCROLL_30: 스크롤과 단축키 검증용 대화입니다.",
+      "role": "user",
+      "timestamp": 811182540.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    },
+    {
+      "id": "e595cfe8-663d-5bf1-840b-8c8482601627",
+      "text": "SCROLL_30 응답입니다. 창 크기와 글자 크기를 바꾸어도 문장 전체가 보여야 합니다. 이 대화는 UI 검증용 고정 데이터이며 Bedrock 모델이 생성한 응답이 아닙니다.\n\nScroll up to read earlier messages, then return to the latest message. Text selection and copying should continue to work.",
+      "role": "assistant",
+      "timestamp": 811182545.0,
+      "isError": false,
+      "modelID": "us.openai.gpt-5.6-luna"
+    }
+  ]
+}

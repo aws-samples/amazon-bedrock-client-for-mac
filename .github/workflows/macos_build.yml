@@ -1,206 +1,161 @@
 name: Build and Release
 
-permissions:
-  contents: write
-
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  validation:
+    uses: ./.github/workflows/validate.yml
+    permissions:
+      contents: read
+
   build:
+    needs: validation
     runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Release/Amazon Bedrock.app
+      DMG_PATH: Amazon Bedrock Client for Mac.dmg
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    # Set the build number using the first 8 characters of the commit SHA
-    - name: Set Build Number from Commit SHA
-      run: |
-        SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-8)
-        /usr/bin/xcrun agvtool new-version -all $SHORT_SHA
-
-    # Import macOS code-signing certificates
-    - name: Import Code-Signing Certificates
-      uses: Apple-Actions/import-codesign-certs@v3
-      with:
-        p12-file-base64: ${{ secrets.MACOS_CERTS_P12 }}
-        p12-password: ${{ secrets.P12_PASSWORD }}
-
-    # Install Dependencies
-    - name: Install Dependencies
-      run: |
-        brew install create-dmg
-
-    # Use default Xcode 26.0 on macOS 26
-    - uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: '26.0'
-
-    # Build Xcode Project for both architectures with code signing
-    - name: Build Xcode Project
-      env:
-        DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
-      run: |
-        xcodebuild clean build \
-          -project "Amazon Bedrock Client for Mac.xcodeproj" \
-          -scheme "Amazon Bedrock Client for Mac" \
-          -configuration Release \
-          -arch x86_64 -arch arm64 \
-          -derivedDataPath DerivedData \
-          -skipMacroValidation \
-          -skipPackagePluginValidation \
-          ONLY_ACTIVE_ARCH=NO \
-          ASSETCATALOG_COMPILER_OPTIMIZATION=time \
-          CODE_SIGN_STYLE=Manual \
-          CODE_SIGN_IDENTITY="Developer ID Application" \
-          DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-          ENABLE_HARDENED_RUNTIME=YES \
-          OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
-
-    # Verify code signing before notarization
-    - name: Verify Code Signing
-      run: |
-        APP_PATH="$(pwd)/DerivedData/Build/Products/Release/Amazon Bedrock.app"
-        echo "=== Checking code signature ==="
-        codesign -dv --verbose=4 "$APP_PATH"
-        echo ""
-        echo "=== Verifying signature validity ==="
-        codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-        echo ""
-        echo "=== Checking entitlements ==="
-        codesign -d --entitlements :- "$APP_PATH" || true
-        echo ""
-        echo "=== Checking hardened runtime ==="
-        codesign -d --verbose "$APP_PATH" 2>&1 | grep -i runtime || echo "Hardened runtime info not found"
-
-    # Notarize the app
-    - name: Notarize App
-      env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      run: |
-        set -x
-        APP_PATH="$(pwd)/DerivedData/Build/Products/Release/Amazon Bedrock.app"
-        
-        # Create a zip for notarization
-        ditto -c -k --keepParent "$APP_PATH" "Amazon_Bedrock.zip"
-        
-        # Submit for notarization
-        xcrun notarytool submit "Amazon_Bedrock.zip" \
-          --apple-id "$APPLE_ID" \
-          --password "$APPLE_APP_PASSWORD" \
-          --team-id "$APPLE_TEAM_ID" \
-          --wait \
-          --output-format json > notarization_result.json 2>&1 || true
-        
-        echo "=== Notarization Result ==="
-        cat notarization_result.json
-        
-        # Extract submission ID
-        SUBMISSION_ID=$(cat notarization_result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
-        STATUS=$(cat notarization_result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
-        
-        echo "Submission ID: $SUBMISSION_ID"
-        echo "Status: $STATUS"
-        
-        # Always fetch the log for debugging
-        if [ -n "$SUBMISSION_ID" ]; then
-          echo ""
-          echo "=== Fetching Notarization Log ==="
-          xcrun notarytool log "$SUBMISSION_ID" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            notarization_log.json || true
-          cat notarization_log.json
-        fi
-        
-        # Check status and fail if invalid
-        if [ "$STATUS" != "Accepted" ]; then
-          echo "Notarization failed with status: $STATUS"
-          exit 1
-        fi
-        
-        # Staple the notarization ticket to the app
-        xcrun stapler staple "$APP_PATH"
-        
-        # Clean up
-        rm "Amazon_Bedrock.zip"
-
-    # Package as DMG
-    - name: Package as DMG
-      run: |
-        export APP_PATH="$(pwd)/DerivedData/Build/Products/Release/Amazon Bedrock.app"
-        create-dmg --window-pos 200 120 \
-        --window-size 800 400 \
-        --icon-size 100 \
-        --icon "Amazon Bedrock.app" 200 190 \
-        --hide-extension "Amazon Bedrock.app" \
-        --app-drop-link 600 185 \
-        'Amazon Bedrock Client for Mac.dmg' "$APP_PATH"
-
-    # Notarize the DMG
-    - name: Notarize DMG
-      env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      run: |
-        xcrun notarytool submit "Amazon Bedrock Client for Mac.dmg" \
-          --apple-id "$APPLE_ID" \
-          --password "$APPLE_APP_PASSWORD" \
-          --team-id "$APPLE_TEAM_ID" \
-          --wait
-        
-        xcrun stapler staple "Amazon Bedrock Client for Mac.dmg"
-
-    # Upload Artifact (for both tags and main branch)
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: "Amazon Bedrock Client for Mac"
-        path: "Amazon Bedrock Client for Mac.dmg"
-
-    # The following steps only run for tag pushes (releases)
-    - name: Calculate SHA256 for Homebrew cask
-      if: startsWith(github.ref, 'refs/tags/v')
-      id: shasum
-      run: |
-        DMG_SHA256=$(shasum -a 256 'Amazon Bedrock Client for Mac.dmg' | awk '{print $1}')
-        echo "sha=$DMG_SHA256" >> $GITHUB_OUTPUT
-
-    # Extract version from tag
-    - name: Extract version
-      if: startsWith(github.ref, 'refs/tags/v')
-      id: get_version
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-    # Create Release
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: Amazon Bedrock Client for Mac.dmg
-        draft: false
-        prerelease: false
-
-    # Bump Homebrew Cask
-    - name: Bump Homebrew Cask
-      if: startsWith(github.ref, 'refs/tags/v')
-      env:
-        HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.BREW_TOKEN }}
-      run: |
-        brew tap didhd/tap
-        brew bump-cask-pr --version=${{ steps.get_version.outputs.version }} --no-browse --no-audit \
-        --sha256=${{ steps.shasum.outputs.sha }} \
-        --url="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/download/v${{ steps.get_version.outputs.version }}/Amazon.Bedrock.Client.for.Mac.dmg" \
-        didhd/tap/amazon-bedrock-client
+      - name: Check out the tested revision
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: maxim-lobanov/setup-xcode@v1.7.0
+        with:
+          xcode-version: latest-stable
+      - name: Check version and main ancestry
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          python3 scripts/verify-release.py --tag "$RELEASE_TAG"
+          xcrun agvtool new-version -all "$GITHUB_RUN_NUMBER"
+      - name: Import Developer ID certificate
+        uses: Apple-Actions/import-codesign-certs@v7.0.0
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTS_P12 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+      - name: Install packaging tool
+        run: brew install create-dmg
+      - name: Resolve committed dependencies
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "Amazon Bedrock Client for Mac.xcodeproj" \
+            -scheme "Amazon Bedrock Client for Mac" \
+            -derivedDataPath DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
+            2>&1 | tee artifacts/dependencies.log
+      - name: Build optimized universal app
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "Amazon Bedrock Client for Mac.xcodeproj" \
+            -scheme "Amazon Bedrock Client for Mac" \
+            -configuration Release \
+            -arch x86_64 -arch arm64 \
+            -derivedDataPath DerivedData \
+            -disableAutomaticPackageResolution \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
+            2>&1 | tee artifacts/build.log
+      - name: Verify version, architectures and signature
+        run: |
+          python3 scripts/verify-release.py --app "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign -dv --verbose=4 "$APP_PATH" 2> artifacts/signature.log
+          lipo -verify_arch arm64 x86_64 "$APP_PATH/Contents/MacOS/Amazon Bedrock"
+          grep -q 'flags=.*runtime' artifacts/signature.log
+      - name: Store notarization credentials in the runner keychain
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool store-credentials bedrock-release \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID"
+      - name: Notarize and staple the app
+        run: |
+          ditto -c -k --keepParent "$APP_PATH" artifacts/Amazon_Bedrock.zip
+          python3 scripts/notarize.py artifacts/Amazon_Bedrock.zip --report artifacts/notarization-app.json
+          xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+          rm artifacts/Amazon_Bedrock.zip
+      - name: Package universal DMG
+        run: |
+          create-dmg --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "Amazon Bedrock.app" 200 190 \
+            --hide-extension "Amazon Bedrock.app" \
+            --app-drop-link 600 185 \
+            "$DMG_PATH" "$APP_PATH"
+      - name: Notarize and verify the DMG
+        run: |
+          python3 scripts/notarize.py "$DMG_PATH" --report artifacts/notarization-dmg.json
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          shasum -a 256 "$DMG_PATH" > SHA256SUMS.txt
+      - name: Preserve build and notarization evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: release-evidence-${{ github.run_id }}
+          path: |
+            artifacts/*.log
+            artifacts/*.json
+            SHA256SUMS.txt
+          retention-days: 30
+      - name: Upload tested distribution
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Amazon Bedrock Client for Mac
+          path: |
+            Amazon Bedrock Client for Mac.dmg
+            SHA256SUMS.txt
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          name: Bedrock for Mac ${{ github.ref_name }}
+          body_path: docs/releases/${{ env.RELEASE_VERSION }}.md
+          fail_on_unmatched_files: true
+          files: |
+            Amazon Bedrock Client for Mac.dmg
+            SHA256SUMS.txt
+          draft: false
+          prerelease: false
+      - name: Update Homebrew cask
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.BREW_TOKEN }}
+        run: |
+          DMG_SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
+          brew tap didhd/tap
+          brew bump-cask-pr --version="$RELEASE_VERSION" --no-browse --no-audit \
+            --sha256="$DMG_SHA256" \
+            --url="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/download/v$RELEASE_VERSION/Amazon.Bedrock.Client.for.Mac.dmg" \
+            didhd/tap/amazon-bedrock-client

@@ -27,12 +27,12 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
+      shouldUseLaunchSchemeArgsEnv = "NO"
       shouldAutocreateTestPlan = "YES">
       <Testables>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "7907BEA42ACD87A200C4D500"
@@ -43,7 +43,7 @@
          </TestableReference>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "7907BEAE2ACD87A200C4D500"
@@ -53,6 +53,16 @@
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+         <CommandLineArgument argument = "-checkForUpdates NO" isEnabled = "YES"/>
+         <CommandLineArgument argument = "-enableQuickAccess NO" isEnabled = "YES"/>
+         <CommandLineArgument argument = "-mcpEnabled NO" isEnabled = "YES"/>
+      </CommandLineArguments>
+      <EnvironmentVariables>
+         <EnvironmentVariable key = "BEDROCK_TEST_OFFLINE" value = "1" isEnabled = "YES"/>
+         <EnvironmentVariable key = "BEDROCK_WORKBENCH_DATA_DIR" value = "$(PROJECT_TEMP_DIR)/BedrockTests" isEnabled = "YES"/>
+         <EnvironmentVariable key = "BEDROCK_TEST_FIXTURES" value = "$(SRCROOT)/Tests/Fixtures" isEnabled = "YES"/>
+      </EnvironmentVariables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

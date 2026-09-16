@@ -18,6 +18,11 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
+!Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/
+Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/*
+!Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!Amazon Bedrock Client for Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Carthage
 Carthage/
@@ -63,6 +68,10 @@ Podfile.lock
 
 # Generated files
 DerivedData/
+artifacts/
+*.xcresult/
+__pycache__/
+*.py[cod]
 
 # OMC
 .omc/

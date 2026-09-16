@@ -1,0 +1,2 @@
+This local attachment must stay in the composer when the selected model changes.
+Attachment marker: FILE_BRIDGE_42.

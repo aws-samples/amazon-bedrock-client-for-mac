@@ -1,5 +1,7 @@
 # Contributing Guidelines
 
+For the Swift source layout, build commands, isolated test data, CI, and performance checks, start with [Development and validation](docs/DEVELOPMENT.md).
+
 Thank you for your interest in contributing to our project. Whether it's a bug report, new feature, correction, or additional
 documentation, we greatly value feedback and contributions from our community.
 

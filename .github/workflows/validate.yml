@@ -1,0 +1,88 @@
+name: Workbench validation
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      BEDROCK_TEST_OFFLINE: "1"
+      BEDROCK_TEST_FIXTURES: ${{ github.workspace }}/Tests/Fixtures
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: maxim-lobanov/setup-xcode@v1.7.0
+        with:
+          xcode-version: latest-stable
+      - name: Verify source registration
+        run: |
+          echo "BEDROCK_WORKBENCH_DATA_DIR=$RUNNER_TEMP/bedrock-test-data" >> "$GITHUB_ENV"
+          python3 scripts/register-workbench-sources.py
+          git diff --exit-code -- "Amazon Bedrock Client for Mac.xcodeproj/project.pbxproj"
+          python3 scripts/validate-project-layout.py
+          python3 -m py_compile scripts/*.py Tests/Fixtures/*.py
+      - name: Core storage, tools, migrations and skills
+        run: python3 scripts/validate-local-core.py --output artifacts/core
+      - name: Validate loopback transport fixtures
+        run: python3 -m unittest discover -s Tests/Fixtures -p 'test_*.py' -v
+      - name: Resolve the committed dependency graph
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "Amazon Bedrock Client for Mac.xcodeproj" \
+            -scheme "Amazon Bedrock Client for Mac" \
+            -derivedDataPath "$RUNNER_TEMP/BedrockDerived" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            2>&1 | tee artifacts/dependencies.log
+      - name: Native Markdown, selection and clipboard regressions
+        run: |
+          python3 scripts/validate-markdown-rendering.py \
+            --markdown-package "$RUNNER_TEMP/BedrockDerived/SourcePackages/checkouts/swift-markdownkit" \
+            --output artifacts/rendering
+      - name: Run integration and end-to-end UI tests in the optimized app
+        run: |
+          set -o pipefail
+          # Xcode expands its inherited settings; the shell must leave them literal.
+          # shellcheck disable=SC2016
+          xcodebuild test \
+            -project "Amazon Bedrock Client for Mac.xcodeproj" \
+            -scheme "Amazon Bedrock Client for Mac" \
+            -configuration Release \
+            -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/BedrockDerived" \
+            -resultBundlePath artifacts/Workbench.xcresult \
+            -disableAutomaticPackageResolution \
+            -parallel-testing-enabled NO \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            ENABLE_TESTABILITY=YES \
+            SWIFT_OPTIMIZATION_LEVEL=-O \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) WORKBENCH_TESTING' \
+            BEDROCK_APP_BUNDLE_IDENTIFIER=AWS.Amazon-Bedrock-Client-for-Mac.UITestHost \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee artifacts/app-tests.log
+      - name: Summarize regression coverage
+        if: always()
+        run: python3 scripts/summarize-validation.py artifacts
+      - name: Preserve validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: native-validation-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 14

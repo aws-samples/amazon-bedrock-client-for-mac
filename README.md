@@ -1,103 +1,156 @@
-# Amazon Bedrock Client for Mac
+<h1 align="center">Bedrock for Mac</h1>
 
-![macOS](https://img.shields.io/badge/macOS-14%2B-blue?style=flat-square) [![Latest Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest) [![Swift](https://img.shields.io/badge/Swift-6.2-orange?style=flat-square)](https://swift.org) [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-green.svg?style=flat-square)](https://opensource.org/license/mit-0/)
+<p align="center">
+  <strong>Amazon Bedrock. At home on your Mac.</strong><br />
+  A Swift app for conversations, documents, images, and local tools.<br />
+  Your models, a direct AWS connection, and a little more room to work.
+</p>
 
-A native macOS client that brings Amazon Bedrock's AI models directly to your desktop. Access Claude Opus 5, Sonnet 5, and other foundation models through a clean interface designed for macOS, with system-wide quick access and full AWS integration.
+<p align="center">
+  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest"><strong>Download for Mac</strong></a>
+  &nbsp;·&nbsp; <a href="#build">Build from source</a>
+  &nbsp;·&nbsp; <a href="TROUBLESHOOTING.md">Get help</a>
+  &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a>
+</p>
 
-<img width="2034" alt="Amazon Bedrock Client for Mac" src="assets/preview.gif" />
+[![macOS](https://img.shields.io/badge/macOS-14%2B-242424?style=flat-square)](#requirements)
+[![Swift](https://img.shields.io/badge/Swift-6-orange?style=flat-square)](#build)
+[![Release](https://img.shields.io/github/v/release/aws-samples/amazon-bedrock-client-for-mac?style=flat-square)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest)
+[![Validation](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/validate.yml/badge.svg)](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/validate.yml)
+[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-555?style=flat-square)](LICENSE)
+
+<img src="assets/preview.gif" width="1120" alt="Bedrock for Mac: native chat, model selection, tools, and settings" />
+
+<p align="center"><sub>Recorded from the running app with demonstration data. <a href="assets/preview.png">View a still image</a> · <a href="docs/SCREENSHOTS.md">Capture details</a></sub></p>
+
+## Made for the conversation
+
+- **Models within reach.** Search and favorite models from the composer. Switch models in an existing conversation, keeping its context and draft. Settings has one default-model picker with an immutable model ID.
+- **A comfortable native interface.** Light, Dark, and System appearance; a full-height frosted sidebar; restrained controls; adjustable text; and a centered composer for a new conversation.
+- **Attachments that stay with your work.** Paste text, images, and browser content, or attach documents, source code, and configuration files. Inspect attachments before sending. Large text becomes an editable attachment, and unsent attachment drafts survive a restart.
+- **Readable answers.** Native Markdown selection across paragraphs, lists, tables, and code. Copy exact code or the complete Markdown response. Image previews support zoom, copy, and saving the original image.
+- **Room for the next thought.** Queue another message during a response, including its model, skills, and attachments. Edit or remove queued work, interrupt and send now, or resume a paused queue.
+- **History without clutter.** Search across local conversations, find within the current chat, edit a prompt, retry a response, or branch from a message. Archive and Trash share one view in Settings.
+
+<details>
+<summary>Light, Dark, or your system appearance</summary>
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/main-dark.webp" />
+    <img src="assets/readme/main-light.webp" width="1120" alt="A code review in Bedrock for Mac, with a full-height sidebar and model selection in the composer." />
+  </picture>
+</p>
+</details>
+
+## Skills, tools, and demos
+
+**Local skills** are reusable `SKILL.md` instructions. Import or create them in Settings → Skills, inspect their references, and select one with `/` in the composer. Models can also discover enabled skills and load their instructions when needed.
+
+**Built-in tools** read, search, and write local files; inspect Git; run shell commands; fetch pages; and load skills. Tools are enabled with permissive local access by default. Settings → Tools & MCP lets you change the tool preset, individual tools, approval behavior, working directory, file allowlist, timeouts, and output limits.
+
+The file allowlist applies to built-in file operations. Shell commands and Git run with your macOS account's permissions and their own tool enablement, approval, timeout, and cancellation settings.
+
+**MCP connections** support local stdio servers and HTTP servers. Manage servers and individual tools in Settings. In a conversation, expand a tool call to inspect its original input, output, timing, or error. Larger output has a separate searchable detail view.
+
+**Demo library** provides prompts for conversation, reasoning, documents, vision, local tools, images, video, embeddings, and model comparison. Each demo checks task/model compatibility; attachment-dependent demos explain the required input. Video generation requires an S3 output bucket.
+
+**Automations and Activity** keep repeatable prompts and their results on this Mac. Schedules run while the app is open, new schedules start paused, and missed runs are skipped after sleep or restart. Activity shows reported token usage, timings, tool counts, and errors.
+
+## Direct connection, local storage
+
+Conversations, drafts, skills, schedules, and settings are stored locally. There is no hosted app backend, relay, account system, or conversation sync.
+
+Model requests and the context you include go directly to Amazon Bedrock. Enabled web tools and configured MCP servers make their own connections. Optional update checks contact GitHub. Bedrock API keys are stored in macOS Keychain; AWS profiles use your local AWS configuration.
+
+The app discovers foundation models and inference profiles for your connection and region. It supports Bedrock Converse and Mantle Responses routes, with dedicated image, video, and embedding requests where implemented. Access and capabilities depend on your AWS account, region, and endpoint. Retired models are excluded from new selections; existing conversations remain readable.
 
 ## Get started
 
-### Install via Homebrew (recommended)
+### Install
 
-```bash
+Download the latest signed app from [Releases](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest), or use the existing Homebrew tap:
+
+```sh
 brew tap didhd/tap
 brew install amazon-bedrock-client
 ```
 
-### Or download the DMG
+The screenshots and source on the default branch can include changes that have not yet shipped in a release.
 
-<a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest/download/Amazon.Bedrock.Client.for.Mac.dmg">
-  <img src="https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=apple" alt="Download Latest Release" height="36">
-</a>
+### Connect
 
-### Configure and launch
+1. Configure an AWS profile with Bedrock access. Profiles can use credentials, SSO, or `credential_process`.
+2. Open **Settings → AWS connection**, then choose the profile and region.
+3. Select **Test connection & refresh models**.
+4. Choose a model in the composer and send a message.
 
-1. Configure your AWS credentials (SSO or access keys in `~/.aws/credentials`)
-2. Press **Option+Space** from anywhere to start using AI
+For SSO, sign in using your profile before connecting:
 
-## Core capabilities
+```sh
+aws sso login --profile your-profile
+```
 
-**System-wide access**  
-Press Option+Space from any application to open a lightweight AI assistant window. Ask questions, analyze code, or process documents without switching contexts.
+An optional Bedrock API key can be entered in AWS connection settings for compatible Mantle requests.
 
-**Native AWS integration**  
-Built on Amazon Bedrock's ConverseStream API with full support for AWS SSO, credential profiles, and multi-region deployments. Your credentials stay local and secure.
+## Keyboard
 
-**Latest foundation models**  
-Access Claude Opus 5, Sonnet 5, Fable 5, Opus 4.8, Haiku 4.5, and other Bedrock models including Llama 4, Mistral, Qwen3, and DeepSeek V3. Adaptive thinking with configurable effort levels, multi-modal support for images and documents, and prompt caching.
+| Action | Shortcut |
+| --- | --- |
+| New chat | `⌘N` |
+| Move current chat to Trash | `⌘D` |
+| Show/hide sidebar | `⌘B` |
+| Back | `⌘[` |
+| Search conversations and commands | `⌘K` |
+| Find in current conversation | `⌘F` |
+| Settings | `⌘,` |
+| Import a conversation | `⌘⇧O` |
+| Quick Access | `⌥Space` by default; configurable |
+| Show Quick Access from the app | `⌘⇧K` |
+| Adjust conversation text | `⌘+`, `⌘−`, `⌘0` |
 
-**OpenAI models via bedrock-mantle**  
-GPT-5.6 Sol, Terra, and Luna through the Responses API, with per-tier reasoning effort (up to `max`) and prompt caching. GPT-5.5 and GPT-5.4 are also supported. Models are offered only in the regions that serve them.
-
-**Image & Video generation**  
-Nova Canvas, Titan Image Generator, and Stability AI (SD3, Ultra, Core) with 13 specialized services. Nova Reel for video generation (6s-2min) with async S3 output.
-
-**Model Context Protocol**  
-Extend capabilities with MCP tools and agents. Track tool usage and execution directly in your conversations.
-
-**Built for macOS**  
-Native Swift 6 application optimized for macOS 14+. Liquid glass UI effects on macOS 26+, dark mode support, and keyboard-first navigation throughout.
-
-## Features
-
-- Real-time streaming responses with extended thinking support
-- Document and image upload (PDF, Word, images) with compression
-- Image generation: Nova Canvas, Titan Image, Stability AI
-- Video generation: Nova Reel with text-to-video and multi-shot modes
-- Conversation search and history management
-- Voice transcription for hands-free input
-- Custom system prompts and inference parameters
-- Code generation with syntax highlighting
-- Configurable hotkeys and keyboard shortcuts
+Choose Return or `⌘Return` for sending in Settings → Keyboard. Escape dismisses search and preview/detail sheets.
 
 ## Requirements
 
-- macOS 14 or later
-- AWS account with Amazon Bedrock access
-- AWS credentials configured via SSO or access keys
+- macOS 14 or later. Liquid Glass is used on macOS 26 and later, with a compatible appearance on earlier systems.
+- An AWS account/profile with access to the models you want to use.
+- Network access for inference. Local storage does not make Bedrock inference offline.
 
-## Usage
+## Build
 
-Navigate to your project directory and press **Option+Space** to open Quick Access, or launch the full application from your Applications folder.
+Open `Amazon Bedrock Client for Mac.xcodeproj` in a current Xcode with Swift 6 and the macOS 26 SDK or later. Select the **Amazon Bedrock Client for Mac** scheme and your Mac.
 
-**Keyboard shortcuts:**
-- `Option+Space` - Quick Access window (customizable)
-- `Cmd+Shift+K` - Toggle Quick Access from menu
-- `Cmd+F` - Search conversations
-- `Cmd+N` - New chat
-- `Cmd+,` - Settings
+The committed `Package.resolved` pins the dependency graph. For a local unsigned Release build:
 
-**Model configuration:**  
-Select models from the dropdown, configure system prompts, adjust temperature and reasoning parameters in Settings.
+```sh
+xcodebuild build \
+  -project "Amazon Bedrock Client for Mac.xcodeproj" \
+  -scheme "Amazon Bedrock Client for Mac" \
+  -configuration Release \
+  -destination "platform=macOS" \
+  -derivedDataPath .build/xcode \
+  -onlyUsePackageVersionsFromResolvedFile \
+  CODE_SIGNING_ALLOWED=NO
+```
 
-**AWS profiles:**  
-Switch between credential profiles and regions in Settings > Developer tab.
+Signing and notarization are separate release steps. See [development and validation](docs/DEVELOPMENT.md) for tests, isolated app data, and performance checks.
 
-## Troubleshooting
-
-See the [Troubleshooting Guide](TROUBLESHOOTING.md) for common issues including AWS credential setup and parameter validation.
+```text
+Sources/Bedrock/           Swift app, native views, local core, and resources
+Tests/Integration/        App, rendering, clipboard, image, and MCP regressions
+Tests/LocalWorkbenchTests/ Storage, migration, routing, tools, and queue tests
+Tests/UITests/            Native interaction scenarios
+Tests/Fixtures/           Deterministic inputs and a local MCP server
+Configuration/            App Info.plist and entitlements
+scripts/                  Source registration and validation commands
+docs/                     Development, compatibility, and validation evidence
+assets/                   Screenshots and demo media
+```
 
 ## Contributing
 
-Contributions are welcome. Fork the repository, create a feature branch, and submit a pull request. See the [CONTRIBUTING.md](CONTRIBUTING.md) file for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Include a reproducible scenario and the checks you ran. Performance changes should include the workload, build configuration, and measurements.
 
-## License
+The [performance report](docs/PERFORMANCE.md) records comparable Release measurements, and the [validation matrix](docs/PERFORMANCE_VALIDATION_MATRIX.md) separates executed checks from work that remains.
 
-This project is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-Developed by the AWS Community
-</div>
+This project uses the [MIT-0 license](LICENSE) and the [Amazon Open Source Code of Conduct](CODE_OF_CONDUCT.md).
