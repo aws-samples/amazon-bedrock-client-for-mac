@@ -179,6 +179,13 @@ final class BedrockUITests: XCTestCase {
             }, object: nil)
             XCTAssertEqual(XCTWaiter.wait(for: [heading], timeout: 4), .completed,
                            "The detail pane must open; its sidebar label alone is not sufficient: \(pane)")
+            if pane == "Keyboard" {
+                XCTAssertEqual(window.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reset'")).count, 1)
+                let reset = window.buttons["quickAccess.resetShortcut"]
+                XCTAssertTrue(reset.exists)
+                reset.click()
+                XCTAssertEqual(window.buttons["quickAccess.shortcutRecorder"].value as? String, "⌥Space")
+            }
             let image = XCTAttachment(screenshot: window.screenshot())
             image.name = "Settings – \(pane)"
             image.lifetime = .keepAlways
@@ -299,6 +306,10 @@ final class BedrockUITests: XCTestCase {
         let search = app.textFields.matching(NSPredicate(format: "placeholderValue CONTAINS[c] 'Search'")).firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 3))
         search.click()
+        search.typeText("Nova 2 Pro Preview")
+        XCTAssertTrue(app.staticTexts["No models found"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Select Nova 2 Pro Preview"].exists)
+        search.typeKey("a", modifierFlags: .command)
         search.typeText("GPT-6 Astra")
         let result = app.buttons.matching(NSPredicate(format: "label CONTAINS 'GPT-6 Astra'")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 3))
@@ -371,10 +382,11 @@ final class BedrockUITests: XCTestCase {
         let (app, directory) = try launch()
         let file = try longConversation(in: directory)
         importThread(file, in: app)
-        XCTAssertTrue(app.buttons["conversation.loadEarlier"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["conversation.transcript"].firstMatch.waitForExistence(timeout: 10))
+        _ = response("Fixture answer 499", in: app)
 
         // Store clock measurements in the xcresult, using a bounded live
-        // transcript rather than full accessibility-tree snapshots per key.
+        // row set rather than full accessibility-tree snapshots per key.
         let editor = composer(app)
         let text = "Typing must not rebuild the application scene."
         let options = XCTMeasureOptions()
@@ -406,30 +418,31 @@ final class BedrockUITests: XCTestCase {
     }
 
     @MainActor
-    func testPagingAndReturningToThreadKeepTheReadingPosition() throws {
+    func testFullConversationScrollSearchAndReturnKeepTheReadingPosition() throws {
         let (app, directory) = try launch()
         importThread(try longConversation(in: directory), in: app)
         let window = app.windows["MainWindow"]
-        let earlier = app.buttons["conversation.loadEarlier"]
-        XCTAssertTrue(earlier.waitForExistence(timeout: 10))
-        let transcript = window.scrollViews.containing(.button, identifier: "conversation.loadEarlier").firstMatch
-        for _ in 0..<8 {
-            transcript.scroll(byDeltaX: 0, deltaY: 3_000)
-            if earlier.isHittable { break }
+        let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
+        XCTAssertTrue(transcript.waitForExistence(timeout: 10))
+        XCTAssertTrue(response("Fixture answer 499", in: app).isHittable)
+        let first = window.staticTexts["Fixture question 0"]
+        for _ in 0..<4 {
+            transcript.scroll(byDeltaX: 0, deltaY: 1_000_000)
+            if first.isHittable { break }
         }
-        XCTAssertTrue(earlier.isHittable)
-        let anchor = window.staticTexts["Fixture question 484"]
-        XCTAssertTrue(anchor.exists)
+        XCTAssertTrue(first.isHittable, "The first message must be reachable by scrolling, without loading a page.")
+        app.buttons["Scroll to latest message"].click()
+        XCTAssertTrue(response("Fixture answer 499", in: app).isHittable)
+
+        app.typeKey("f", modifierFlags: .command)
+        let find = app.textFields["Find in chat"]
+        XCTAssertTrue(find.waitForExistence(timeout: 3))
+        find.typeText("Fixture question 250")
+        let anchor = window.staticTexts["Fixture question 250"]
+        let found = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in anchor.isHittable }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [found], timeout: 8), .completed)
+        app.typeKey(.escape, modifierFlags: [])
         let before = anchor.frame.minY
-        earlier.click()
-        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            window.textViews.matching(NSPredicate(format: "label == 'Assistant response text'")).count == 32
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 8), .completed)
-        let preserved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            anchor.exists && abs(anchor.frame.minY - before) < 2
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [preserved], timeout: 5), .completed)
         window.buttons["Activity"].click()
         window.buttons["Back"].click()
         let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -580,11 +593,11 @@ final class BedrockUITests: XCTestCase {
     func testFinishingAStreamDoesNotMoveThePassageBeingRead() async throws {
         let (app, directory) = try launch(withRuntime: true)
         importThread(try longConversation(in: directory), in: app)
-        XCTAssertTrue(app.buttons["conversation.loadEarlier"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["conversation.transcript"].firstMatch.waitForExistence(timeout: 10))
         send("[stream] Keep the previous passage readable while this finishes.", in: app)
         _ = response("STREAM_BEGIN", in: app)
         let window = app.windows["MainWindow"]
-        let transcript = window.scrollViews.containing(.button, identifier: "conversation.loadEarlier").firstMatch
+        let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
         let anchor = window.staticTexts["Fixture question 492"]
         for _ in 0..<10 {
             transcript.scroll(byDeltaX: 0, deltaY: 300)
@@ -594,7 +607,10 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(anchor.isHittable, "The test must read an older visible passage, not stay at the bottom.")
         let before = anchor.frame.minY
         try await XCTUnwrap(runtime).releaseStream()
-        _ = response("STREAM_COMPLETE", in: app)
+        let completed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !app.buttons["Stop response"].exists
+        }, object: nil)
+        await fulfillment(of: [completed], timeout: 12)
         let preserved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             anchor.exists && abs(anchor.frame.minY - before) < 2
         }, object: nil)
@@ -628,17 +644,81 @@ final class BedrockUITests: XCTestCase {
     }
 
     @MainActor
+    func testRenderedSelectionCopiesRichHTMLWhileCopyResponseKeepsMarkdown() throws {
+        preserveClipboard()
+        let (app, directory) = try launch()
+        let model = "amazon.nova-2-lite-v1:0"
+        let source = """
+        **Bold welcome** and *italic detail*.
+
+        - First item
+        - 두 번째 item
+
+        [Documentation](https://example.com)
+        """
+        let file = directory.appendingPathComponent("rich-copy.json")
+        let fixture: [String: Any] = [
+            "version": 1, "title": "Formatted response", "modelID": model,
+            "modelName": "Nova 2 Lite", "provider": "Amazon",
+            "messages": [
+                ["id": UUID().uuidString, "role": "Assistant", "text": source,
+                 "timestamp": Date().timeIntervalSinceReferenceDate, "isError": false, "modelID": model]
+            ]
+        ]
+        try JSONSerialization.data(withJSONObject: fixture).write(to: file, options: .atomic)
+        importThread(file, in: app)
+        let answer = response("Bold welcome", in: app)
+        answer.click()
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("c", modifierFlags: .command)
+        let board = NSPasteboard.general
+        let htmlReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            board.string(forType: .html)?.contains("<strong>Bold welcome</strong>") == true
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [htmlReady], timeout: 3), .completed)
+        let html = try XCTUnwrap(board.string(forType: .html))
+        XCTAssertTrue(html.contains("<em>italic detail</em>"))
+        XCTAssertTrue(html.contains("<ul><li>"))
+        XCTAssertTrue(html.contains("두 번째 item"))
+        XCTAssertTrue(html.contains("href=\"https://example.com\""))
+        XCTAssertFalse(html.contains("•"))
+
+        answer.rightClick()
+        let copySelection = app.menuItems["Copy"]
+        XCTAssertTrue(copySelection.waitForExistence(timeout: 3))
+        copySelection.click()
+        XCTAssertNotNil(board.string(forType: .html))
+
+        let copyResponse = app.buttons["Copy response"]
+        XCTAssertLessThanOrEqual(copyResponse.frame.minY - answer.frame.maxY, 20)
+        copyResponse.click()
+        XCTAssertEqual(board.string(forType: .string), source)
+        XCTAssertNil(board.data(forType: .html), "Copy response remains the original Markdown.")
+    }
+
+    @MainActor
     func testModelSwitchUsesNewModelAndCarriesConversationContext() throws {
         let (app, _) = try launch(withRuntime: true)
         send("[remember] Remember BRIDGE_CI.", in: app)
         _ = response("CONTEXT_SAVED", in: app)
+        XCTAssertFalse(app.buttons["conversation.loadEarlier"].exists)
+        XCTAssertFalse(app.buttons["conversation.loadNewer"].exists)
         chooseModel("GPT-6 Astra", in: app)
+        let switches = app.descendants(matching: .any).matching(identifier: "conversation.modelSwitch")
+        XCTAssertTrue(switches.firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(switches.firstMatch.label.contains("GPT-6 Astra"))
+        XCTAssertEqual(switches.count, 1)
         send("[recall] Recall the code from this conversation.", in: app)
         _ = response("CONTEXT_RECALLED: BRIDGE_CI", in: app)
+        XCTAssertEqual(switches.count, 1, "Sending must not duplicate the pending switch indicator.")
+        XCTAssertFalse(app.buttons["conversation.loadEarlier"].exists)
+        XCTAssertFalse(app.buttons["conversation.loadNewer"].exists)
         let requests = try XCTUnwrap(runtime).requests()
         XCTAssertEqual(requests.count, 2)
         XCTAssertTrue((requests[0]["model"] as? String)?.contains("nova-2-lite") == true)
         XCTAssertTrue((requests[1]["model"] as? String)?.contains("gpt-6-astra") == true)
+        let wire = String(decoding: try JSONSerialization.data(withJSONObject: requests), as: UTF8.self)
+        XCTAssertFalse(wire.contains("Switched to"), "A visual boundary must not become model context.")
     }
 
     @MainActor
@@ -752,7 +832,10 @@ final class BedrockUITests: XCTestCase {
     func testQuickAccessEscapeAndSubmissionReachTheMainConversation() throws {
         let (app, _) = try launch(withRuntime: true)
         app.typeKey("k", modifierFlags: [.command, .shift])
-        let quick = app.windows["QuickAccessWindow"].textViews["composer.editor"]
+        // NSPanel is exposed as a Dialog on hosted macOS and as a Window on
+        // some local versions. Use its stable identifier across both roles.
+        let quick = app.descendants(matching: .any).matching(identifier: "QuickAccessWindow")
+            .firstMatch.textViews["composer.editor"]
         XCTAssertTrue(quick.waitForExistence(timeout: 5))
         quick.click()
         quick.typeText("A draft to dismiss")

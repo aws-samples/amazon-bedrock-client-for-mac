@@ -42,6 +42,7 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
     private(set) var listMarkers: [ListMarker] = []
     private(set) var quoteBlocks: [QuoteBlock] = []
     private var inlineCodeRanges: [NSRange] = []
+    private var clipboardBlocks: [MarkdownClipboardBlock] = []
     private var copyButtons: [NSButton] = []
 
     init() {
@@ -88,6 +89,7 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
         codeBlocks = result.codeBlocks
         listMarkers = result.listMarkers
         quoteBlocks = result.quoteBlocks
+        clipboardBlocks = result.clipboardBlocks
         inlineCodeRanges.removeAll(keepingCapacity: true)
         result.text.enumerateAttribute(MarkdownNativeAttributedDocument.inlineCodeKey,
                                        in: NSRange(location: 0, length: result.text.length)) { value, range, _ in
@@ -121,7 +123,20 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
             container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
         }
         manager.ensureLayout(for: container)
-        return NSSize(width: width, height: ceil(max(1, manager.usedRect(for: container).maxY)) + 2)
+        var bottom = manager.usedRect(for: container).maxY
+        // Paragraph terminators are necessary for tables and continuous
+        // selection. TextKit also reserves a final empty insertion line after
+        // them, which a read-only response does not need to display.
+        if manager.extraLineFragmentTextContainer === container,
+           manager.extraLineFragmentRect.height > 0 {
+            bottom = min(bottom, manager.extraLineFragmentRect.minY)
+        }
+        // Code backgrounds extend below their final glyph. Keep that padding
+        // without retaining an entire empty text line below every response.
+        for block in codeBlocks {
+            bottom = max(bottom, blockRect(block).maxY)
+        }
+        return NSSize(width: width, height: ceil(max(1, bottom)) + 2)
     }
 
     override func layout() {
@@ -191,6 +206,11 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
     /// versions. Always supply public UTF-8 text as well. Decorative list markers
     /// behave like HTML ::marker; Copy response still exports the source Markdown.
     override func writeSelection(to pasteboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        if type == .html {
+            guard let textStorage, let html = MarkdownClipboard.html(
+                text: textStorage, blocks: clipboardBlocks, ranges: selectedRanges.map(\.rangeValue)) else { return false }
+            return pasteboard.setString(html, forType: .html)
+        }
         guard type == .string else { return super.writeSelection(to: pasteboard, type: type) }
         let source = string as NSString
         let selections = selectedRanges.compactMap { value -> String? in
@@ -205,10 +225,15 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
     override func copy(_ sender: Any?) {
         guard selectedRanges.contains(where: { $0.rangeValue.length > 0 }) else { return }
         let pasteboard = NSPasteboard.general
+        let html = textStorage.flatMap {
+            MarkdownClipboard.html(text: $0, blocks: clipboardBlocks, ranges: selectedRanges.map(\.rangeValue))
+        }
         pasteboard.clearContents()
-        pasteboard.declareTypes([.string, .rtf], owner: nil)
+        // Rich destinations read semantic HTML; plain editors still receive the
+        // exact selected text. AppKit RTF omits our decorative list semantics.
+        pasteboard.declareTypes(html == nil ? [.string] : [.html, .string], owner: nil)
+        if let html { pasteboard.setString(html, forType: .html) }
         _ = writeSelection(to: pasteboard, type: .string)
-        _ = super.writeSelection(to: pasteboard, type: .rtf)
     }
 
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
@@ -226,6 +251,7 @@ enum MarkdownNativeAttributedDocument {
         let codeBlocks: [MarkdownSelectionTextView.CodeBlock]
         let listMarkers: [MarkdownSelectionTextView.ListMarker]
         let quoteBlocks: [MarkdownSelectionTextView.QuoteBlock]
+        let clipboardBlocks: [MarkdownClipboardBlock]
     }
 
     static func render(_ rows: [MarkdownLayoutRow], fontSize: CGFloat, highlights: [String], dark: Bool, isStreaming: Bool) -> Result {
@@ -233,10 +259,15 @@ enum MarkdownNativeAttributedDocument {
         var codeBlocks: [MarkdownSelectionTextView.CodeBlock] = []
         var listMarkers: [MarkdownSelectionTextView.ListMarker] = []
         var quoteBlocks: [MarkdownSelectionTextView.QuoteBlock] = []
+        var clipboardBlocks: [MarkdownClipboardBlock] = []
         for row in rows {
             let start = output.length
+            var clipboardKind = MarkdownClipboardBlock.Kind.text(tag: "p")
             defer {
                 if output.length > start {
+                    clipboardBlocks.append(.init(
+                        range: NSRange(location: start, length: output.length - start),
+                        containers: row.clipboardContainers, kind: clipboardKind))
                     for indent in row.quoteIndents {
                         if let index = quoteBlocks.lastIndex(where: { $0.indent == indent }),
                            NSMaxRange(quoteBlocks[index].range) == start {
@@ -259,16 +290,17 @@ enum MarkdownNativeAttributedDocument {
             case .paragraph(let text):
                 body = inline(text, size: size)
             case .heading(let level, let text):
+                clipboardKind = .text(tag: "h\(min(6, max(1, level)))")
                 size += CGFloat(max(0, 5 - level)) * 2
                 body = inline(text, size: size, weight: .semibold)
                 style.paragraphSpacingBefore += 4
             case .fencedCode(let language, let lines):
-                appendCode(lines.joined(), language: language ?? "Code", row: row, to: output,
-                           codeBlocks: &codeBlocks, size: fontSize, dark: dark, isStreaming: isStreaming)
+                clipboardKind = .code(appendCode(lines.joined(), language: language ?? "Code", row: row, to: output,
+                           codeBlocks: &codeBlocks, size: fontSize, dark: dark, isStreaming: isStreaming))
                 continue
             case .indentedCode(let lines):
-                appendCode(lines.joined(), language: "Code", row: row, to: output,
-                           codeBlocks: &codeBlocks, size: fontSize, dark: dark, isStreaming: isStreaming)
+                clipboardKind = .code(appendCode(lines.joined(), language: "Code", row: row, to: output,
+                           codeBlocks: &codeBlocks, size: fontSize, dark: dark, isStreaming: isStreaming))
                 continue
             case .table(let header, let alignments, let cells):
                 let table = NSTextTable()
@@ -276,8 +308,10 @@ enum MarkdownNativeAttributedDocument {
                 table.collapsesBorders = true
                 table.setContentWidth(100, type: .percentageValueType)
                 table.setWidth(row.spacing, type: .absoluteValueType, for: .margin, edge: .minY)
+                var clipboardCells: [MarkdownClipboardBlock.Cell] = []
                 for (r, values) in ([header] + cells).enumerated() {
                     for (c, value) in values.enumerated() {
+                        let cellStart = output.length
                         let block = NSTextTableBlock(table: table, startingRow: r, rowSpan: 1, startingColumn: c, columnSpan: 1)
                         block.setContentWidth(100 / CGFloat(table.numberOfColumns), type: .percentageValueType)
                         block.setWidth(8, type: .absoluteValueType, for: .padding)
@@ -292,10 +326,14 @@ enum MarkdownNativeAttributedDocument {
                         cell.append(NSAttributedString(string: "\n"))
                         cell.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: cell.length))
                         output.append(cell)
+                        clipboardCells.append(.init(range: NSRange(location: cellStart, length: cell.length),
+                                                    row: r, isHeader: r == 0))
                     }
                 }
+                clipboardKind = .table(clipboardCells)
                 continue
             case .thematicBreak:
+                clipboardKind = .rule
                 body = NSMutableAttributedString(string: "────────", attributes: [.foregroundColor: NSColor.separatorColor])
             default:
                 body = NSMutableAttributedString(string: row.block.string)
@@ -320,7 +358,8 @@ enum MarkdownNativeAttributedDocument {
                 remaining = NSRange(location: NSMaxRange(match), length: text.length - NSMaxRange(match))
             }
         }
-        return Result(text: output, codeBlocks: codeBlocks, listMarkers: listMarkers, quoteBlocks: quoteBlocks)
+        return Result(text: output, codeBlocks: codeBlocks, listMarkers: listMarkers,
+                      quoteBlocks: quoteBlocks, clipboardBlocks: clipboardBlocks)
     }
 
     private static func inline(_ text: MarkdownKit.Text, size: CGFloat, weight: NSFont.Weight = .regular, italic: Bool = false) -> NSMutableAttributedString {
@@ -349,13 +388,18 @@ enum MarkdownNativeAttributedDocument {
             case .hardLineBreak: part = NSMutableAttributedString(string: "\n", attributes: [.font: font])
             default: part = NSMutableAttributedString(string: fragment.string, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
             }
+            let range = NSRange(location: 0, length: part.length)
+            if weight.rawValue >= NSFont.Weight.semibold.rawValue {
+                part.addAttribute(MarkdownClipboard.strongKey, value: true, range: range)
+            }
+            if italic { part.addAttribute(MarkdownClipboard.emphasisKey, value: true, range: range) }
             output.append(part)
         }
         return output
     }
 
     private static func appendCode(_ code: String, language: String, row: MarkdownLayoutRow, to output: NSMutableAttributedString,
-                                   codeBlocks: inout [MarkdownSelectionTextView.CodeBlock], size: CGFloat, dark: Bool, isStreaming: Bool) {
+                                   codeBlocks: inout [MarkdownSelectionTextView.CodeBlock], size: CGFloat, dark: Bool, isStreaming: Bool) -> NSRange {
         let start = output.length
         let headingStyle = NSMutableParagraphStyle()
         headingStyle.firstLineHeadIndent = row.indent + 12
@@ -365,6 +409,7 @@ enum MarkdownNativeAttributedDocument {
         output.append(NSAttributedString(string: language + "\n", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: headingStyle
         ]))
+        let codeStart = output.length
         let body = NSMutableAttributedString(attributedString: isStreaming ? NSAttributedString(string: code) :
             NSAttributedString(CodeHighlightCache.shared.text(code, language: language, dark: dark)))
         if !body.string.hasSuffix("\n") { body.append(NSAttributedString(string: "\n")) }
@@ -381,5 +426,6 @@ enum MarkdownNativeAttributedDocument {
         }
         output.append(body)
         codeBlocks.append(.init(range: NSRange(location: start, length: output.length - start), source: code, indent: row.indent))
+        return NSRange(location: codeStart, length: output.length - codeStart)
     }
 }

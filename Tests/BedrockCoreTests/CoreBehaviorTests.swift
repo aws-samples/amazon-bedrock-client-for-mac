@@ -236,6 +236,38 @@ final class CoreBehaviorTests: XCTestCase {
         }
     }
 
+    func testNova2ProPreviewIsExcludedFromChoicesIncludingSavedProfilesAndFavorites() throws {
+        let previewID = "amazon.nova-2-pro-preview-20251202-v1:0"
+        let preview = BedrockModelDescriptor(id: previewID, name: "Nova 2 Pro Preview", provider: "Amazon",
+            inputModalities: ["TEXT", "IMAGE"], outputModalities: ["TEXT"],
+            inferenceTypes: ["INFERENCE_PROFILE"], streaming: true, lifecycle: "ACTIVE")
+        var profiles = ["us.", "global.", "arn:aws:bedrock:us-west-2:123456789012:inference-profile/us."].map { prefix in
+            var profile = preview
+            profile.id = prefix + previewID
+            profile.isProfile = true
+            return profile
+        }
+        var applicationProfile = preview
+        applicationProfile.id = "arn:aws:bedrock:us-west-2:123456789012:application-inference-profile/custom123"
+        applicationProfile.foundationID = previewID
+        applicationProfile.isProfile = true
+        profiles.append(applicationProfile)
+        let available = ["amazon.nova-2-lite-v1:0", "amazon.nova-2-sonic-v1:0",
+                         "amazon.nova-pro-v1:0", "amazon.nova-2-pro-v1:0", "openai.gpt-6-astra"].map { id in
+            BedrockModelDescriptor(id: id, name: id, provider: BedrockModelID.providerName(id),
+                inputModalities: ["TEXT"], outputModalities: ["TEXT"],
+                inferenceTypes: ["ON_DEMAND"], streaming: true, lifecycle: "ACTIVE")
+        }
+        let restored = try JSONDecoder().decode([BedrockModelDescriptor].self,
+            from: JSONEncoder().encode([preview] + profiles + available))
+        let choices = BedrockModelChoice.make(descriptors: restored, selectedID: applicationProfile.id,
+            favoriteIDs: Set(profiles.map(\.id)), region: "us-west-2")
+        XCTAssertEqual(Set(choices.map(\.preferredID)), Set(available.map(\.id)))
+        XCTAssertTrue(([preview] + profiles).allSatisfy(\.isHiddenFromSelection))
+        XCTAssertFalse(preview.isLegacy, "An app exclusion must not misreport AWS lifecycle status.")
+        XCTAssertEqual(preview.route, .conversation, "Existing conversation metadata must remain usable.")
+    }
+
     func testProfileResolutionUsesMetadataAndKeepsExplicitRouting() {
         let registry = BedrockCapabilityRegistry()
         let base = BedrockModelDescriptor(id: "openai.gpt-6-astra", name: "GPT-6 Astra", provider: "OpenAI",

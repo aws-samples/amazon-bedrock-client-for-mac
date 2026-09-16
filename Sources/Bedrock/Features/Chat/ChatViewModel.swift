@@ -400,10 +400,9 @@ class ChatViewModel: ObservableObject {
         initialLoadTask = Task { [weak self] in
             guard let self else { return }
             let loaded = await chatManager.loadMessages(for: chatId)
-            let start = ConversationViewport.initialStart(in: loaded)
-            // Only the initial viewport can delay first paint. Older messages
-            // are parsed when requested, never ahead of the conversation.
-            async let markdown: Void = MarkdownPreparation.prewarm(loaded.dropFirst(start).filter { $0.user != "User" && $0.user != "ToolResult" }.map(\.text))
+            // The full history is available immediately. Prewarming nearby
+            // Markdown is a cache optimization, never a visible page boundary.
+            async let markdown: Void = MarkdownPreparation.prewarm(ConversationTranscript.prewarmingTexts(in: loaded))
             async let queue: Void = loadOutbox(sentMessageIDs: Set(loaded.map(\.id)))
             async let attachments: Void = loadAttachmentDraft()
             _ = await (markdown, queue, attachments)
@@ -1947,19 +1946,22 @@ class ChatViewModel: ObservableObject {
 
         let stream = await backend.mantleResponsesStream(
             modelId: chatModel.id,
-            input: input,
-            usageHandler: { @Sendable [weak self] usage in
-                Task { @MainActor [weak self] in
-                    guard let self = self else { return }
-                    self.usageHandler?(self.formatUsageString(usage))
+            input: input
+        )
+
+        for try await event in stream {
+            try Task.checkCancellation()
+            switch event {
+            case .text(let text):
+                streamedText += text
+            case .finished(let reason, let usage, let fallbackText):
+                if streamedText.isEmpty { streamedText = fallbackText }
+                if let runID { AppStore.shared.updateRun(runID) { $0.stopReason = reason } }
+                if let usage {
+                    usageHandler?(formatUsageString(usage))
                     if let runID { AppStore.shared.recordUsage(usage, runID: runID) }
                 }
             }
-        )
-
-        for try await textChunk in stream {
-            try Task.checkCancellation()
-            streamedText += textChunk
             let displayInterval = streamedText.utf8.count > 24_000 ? 0.12 : 0.08
             if Date().timeIntervalSince(lastDisplayUpdate) >= displayInterval {
                 displayStream(id: messageId, text: streamedText, thinking: "", signature: "")

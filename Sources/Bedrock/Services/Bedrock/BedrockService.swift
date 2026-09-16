@@ -1626,13 +1626,11 @@ class BedrockService: Equatable, @unchecked Sendable {
     
     // MARK: - Bedrock Mantle (Responses API)
 
-    /// Streams an OpenAI frontier model (GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5.4) response
-    /// via the bedrock-mantle Responses API. These models are not served by bedrock-runtime.
+    /// Streams a model routed to the Bedrock Mantle Responses API.
     func mantleResponsesStream(
         modelId: String,
-        input: [[String: Any]],
-        usageHandler: (@Sendable (UsageInfo) -> Void)? = nil
-    ) async -> AsyncThrowingStream<String, Error> {
+        input: [[String: Any]]
+    ) async -> AsyncThrowingStream<MantleResponseEvent, Error> {
         // Guard the region before signing anything. A saved chat keeps pointing at its model
         // after the user switches regions, so without this the request goes to a bedrock-mantle
         // endpoint that doesn't serve the model and surfaces an opaque HTTP failure.
@@ -1667,8 +1665,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             modelId: modelId,
             input: input,
             maxOutputTokens: maxTokens,
-            reasoningEffort: effort,
-            usageHandler: usageHandler
+            reasoningEffort: effort
         )
     }
 
@@ -1852,7 +1849,7 @@ class BedrockService: Equatable, @unchecked Sendable {
 /**
  * Usage information for tracking token consumption and prompt caching metrics
  */
-struct UsageInfo {
+struct UsageInfo: Sendable, Equatable {
     let inputTokens: Int?
     let outputTokens: Int?
     let cacheCreationInputTokens: Int?

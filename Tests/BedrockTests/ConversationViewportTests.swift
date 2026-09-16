@@ -9,7 +9,7 @@ final class ConversationViewportTests: XCTestCase {
     }
 
     @MainActor
-    func testPrependingAndTrimmingKeepTheSameMessageAtTheSamePixelOffset() throws {
+    func testRowHeightChangesKeepTheSameMessageAtTheSamePixelOffset() throws {
         _ = NSApplication.shared
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
@@ -25,14 +25,14 @@ final class ConversationViewportTests: XCTestCase {
         XCTAssertEqual(anchor.offset, 80, accuracy: 0.5)
         controller.preserve(anchor)
 
-        // A newly loaded page grows above the message being read.
+        // A previously offscreen Markdown row receives its measured height.
         document.setFrameSize(NSSize(width: 800, height: 5_000))
         message.setFrameOrigin(NSPoint(x: 0, y: 3_000))
         controller.restore()
         XCTAssertEqual(message.frame.minY - scroll.documentVisibleRect.minY, 80, accuracy: 0.5)
 
-        // The next page drops an equal-height page from the bottom. Total
-        // content height is unchanged, so height-delta anchoring would fail.
+        // Another row grows above while a row below shrinks. Total content
+        // height is unchanged, so height-delta anchoring would fail.
         message.setFrameOrigin(NSPoint(x: 0, y: 4_000))
         controller.restore()
         XCTAssertEqual(message.frame.minY - scroll.documentVisibleRect.minY, 80, accuracy: 0.5)
@@ -42,6 +42,31 @@ final class ConversationViewportTests: XCTestCase {
         controller.restore()
         XCTAssertEqual(message.frame.minY - scroll.documentVisibleRect.minY, 80, accuracy: 0.5)
         controller.disconnect()
+    }
+
+    @MainActor
+    func testNativeScrollingChangesFollowModeWithoutTreatingLayoutAsAGesture() throws {
+        _ = NSApplication.shared
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
+        scroll.documentView = document
+        let controller = ConversationViewportController()
+        var nearBottom: [Bool] = []
+        var ended = 0
+        controller.observeScrolling(didScroll: { nearBottom.append($0) }, didEnd: { ended += 1 },
+                                    contentDidResize: {})
+        controller.connect(to: scroll)
+        document.setFrameSize(NSSize(width: 800, height: 5_000))
+        XCTAssertTrue(nearBottom.isEmpty)
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+        XCTAssertEqual(nearBottom, [false])
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 4_400))
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        XCTAssertEqual(nearBottom, [false, true])
+        XCTAssertEqual(ended, 1)
+        controller.disconnect()
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        XCTAssertEqual(ended, 1)
     }
 
     @MainActor

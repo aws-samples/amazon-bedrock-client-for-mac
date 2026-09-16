@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Samples native geometry only when a page or conversation changes. Scrolling
-/// does not publish per-frame SwiftUI state or walk the accessibility tree.
+/// Observes the native transcript scroll view. Row reuse and height changes
+/// preserve reading position without publishing per-frame SwiftUI geometry.
 @MainActor
 final class ConversationViewportController: ObservableObject {
     struct Anchor: Equatable {
@@ -23,23 +23,50 @@ final class ConversationViewportController: ObservableObject {
 
     private weak var scrollView: NSScrollView?
     private var views: [UUID: WeakView] = [:]
-    private var observation: Observation?
+    private var observations: [Observation] = []
     private var pending: Anchor?
     private var restoreScheduled = false
     private var lastCaptured: Anchor?
     private var capturingRemoval = false
+    private var didScroll: ((Bool) -> Void)?
+    private var didEnd: (() -> Void)?
+    private var contentDidResize: (() -> Void)?
+
+    func observeScrolling(didScroll: @escaping (Bool) -> Void, didEnd: @escaping () -> Void,
+                          contentDidResize: @escaping () -> Void) {
+        self.didScroll = didScroll
+        self.didEnd = didEnd
+        self.contentDidResize = contentDidResize
+    }
 
     func connect(to scrollView: NSScrollView) {
         guard self.scrollView !== scrollView else { return }
-        observation = nil
+        observations.removeAll()
         self.scrollView = scrollView
         if let document = scrollView.documentView {
             document.postsFrameChangedNotifications = true
-            observation = Observation(NotificationCenter.default.addObserver(
+            observations.append(Observation(NotificationCenter.default.addObserver(
                 forName: NSView.frameDidChangeNotification, object: document, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.scheduleRestore() }
-            })
+                MainActor.assumeIsolated {
+                    self?.scheduleRestore()
+                    self?.contentDidResize?()
+                }
+            }))
+        }
+        for name in [NSScrollView.didLiveScrollNotification, NSScrollView.didEndLiveScrollNotification] {
+            let ended = name == NSScrollView.didEndLiveScrollNotification
+            observations.append(Observation(NotificationCenter.default.addObserver(
+                forName: name, object: scrollView, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let scroll = self.scrollView, let document = scroll.documentView else { return }
+                    self.cancelPreservation()
+                    let nearBottom = document.bounds.maxY - scroll.documentVisibleRect.maxY < 65
+                    self.didScroll?(nearBottom)
+                    if ended { self.didEnd?() }
+                }
+            }))
         }
         scheduleRestore()
     }
@@ -99,10 +126,19 @@ final class ConversationViewportController: ObservableObject {
 
     func cancelPreservation() { pending = nil }
 
+    func isVisible(messageID: UUID) -> Bool {
+        guard let view = views[messageID]?.value, let scroll = scrollView,
+              let document = scroll.documentView, view.window != nil else { return false }
+        return view.convert(view.bounds, to: document).intersects(scroll.documentVisibleRect)
+    }
+
     func disconnect() {
-        observation = nil
+        observations.removeAll()
         scrollView = nil
         pending = nil
+        didScroll = nil
+        didEnd = nil
+        contentDidResize = nil
     }
 
     private func scheduleRestore() {
@@ -116,7 +152,7 @@ final class ConversationViewportController: ObservableObject {
     }
 
     /// Also runs when a newly inserted WebKit/image row reports its final height.
-    /// A real user scroll cancels preservation through ConversationScrollBehavior.
+    /// A real user scroll cancels preservation through native scroll notifications.
     func restore() {
         guard let pending, let scroll = scrollView, let document = scroll.documentView,
               let view = views[pending.messageID]?.value else { return }
@@ -187,7 +223,6 @@ struct ConversationMessageAnchor: NSViewRepresentable {
 @MainActor
 final class ConversationViewportMemory {
     struct Position {
-        let range: Range<Int>
         let anchor: ConversationViewportController.Anchor
     }
     static let shared = ConversationViewportMemory()

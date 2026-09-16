@@ -10,35 +10,35 @@
     "quality": 94,
     "framesPerSecond": 20
   },
-  "sourceDuration": 35.008333,
+  "sourceDuration": 35.0,
   "files": {
     "hero.png": {
-      "bytes": 865424,
-      "sha256": "6fb05930dc60a1ce3b97fe06a80f18ec9812fb0c8fd65d2e03356a731e3da48d",
+      "bytes": 1027540,
+      "sha256": "c10ead9aa17470aa38e20162dc8697ed7a983f1f93a5f74d83a210627b60e589",
       "width": 2608,
       "height": 1688
     },
     "chat-light.webp": {
-      "bytes": 606338,
-      "sha256": "c8bcd15a2a080d147cd7eecc55e66a29cb3e1a1dab7d71cdd9a3358c186a6d0a",
+      "bytes": 673566,
+      "sha256": "d7aacd34db0d31e4fec9f17b019c1f0a38583e59005c3602825aac975fa92a68",
       "width": 2608,
       "height": 1688
     },
     "chat-dark.webp": {
-      "bytes": 642750,
-      "sha256": "8baad9bc1a9c45c5df82be82c713dd90dcc19bfbd1ad4a9e1265790f8544acbe",
+      "bytes": 711812,
+      "sha256": "5f8a09883f60175f55216f01bd7bce34422a1f23c04a33636e032d79a274040d",
       "width": 2608,
       "height": 1688
     },
     "settings-light.webp": {
-      "bytes": 37022,
-      "sha256": "2edddd1dc315569e14178f03deee023175429c7b8594ab68a43c8654d0384ce0",
+      "bytes": 56344,
+      "sha256": "776d9566cb0a4556b3929a97e38c07b11201f27fb15efa30a6e027639405bbf1",
       "width": 1828,
       "height": 1528
     },
     "settings-dark.webp": {
-      "bytes": 58410,
-      "sha256": "65a8da3dfb4b349357c8cfa957eeaf05a4bb65094fc871750ce08c0c6e5c2e16",
+      "bytes": 56018,
+      "sha256": "d71959d3a167ad956977794dcefa6e78fb875f8cc026396a4fc79fd61bbc71d1",
       "width": 1828,
       "height": 1528
     },
@@ -49,25 +49,25 @@
       "height": 1688
     },
     "demo.webp": {
-      "bytes": 11390604,
-      "sha256": "876e29ae06d9c541d4255e2791db7b6d7f187407a813ade89c0a0cddf8298ed4",
+      "bytes": 16511918,
+      "sha256": "439775fcd7bbcf98ae1c3644e7e9a06b00e0fc2866c898a60e6ec02b1af4506e",
       "width": 2608,
       "height": 1688
     },
     "demo.gif": {
-      "bytes": 6528921,
-      "sha256": "2959c9d9c74a5b81d0eec9c36d3a86f3b6e280a15913d16e9e918c4dc667cc43",
+      "bytes": 9685638,
+      "sha256": "9fd044abfe5ecb8eaf26a36943d6da1ef3229dda6d03dd54efd3211ca6b72b25",
       "width": 1600,
       "height": 1036
     },
     "demo.mp4": {
-      "bytes": 5038338,
-      "sha256": "b20eed6ac3b3e3b37e5806a7b227ccc6d4f806fe68b88ddf1984984077e66f9b",
+      "bytes": 5525740,
+      "sha256": "babad167240886677a01572f709b4966a4cd80eabc7633aee8699033f1915170",
       "codec_name": "h264",
       "width": 2608,
       "height": 1688,
       "r_frame_rate": "60/1",
-      "duration": 35.016667
+      "duration": 35.0
     }
   }
 }

@@ -31,10 +31,12 @@ struct ImagePreviewModal: View {
             ZStack {
                 DesignTokens.canvas
                 if let image {
-                    CheckerboardPattern(colorScheme: colorScheme)
-                        .opacity(colorScheme == .dark ? 0.10 : 0.06)
                     Image(decorative: image.preview, scale: 1)
                         .resizable().interpolation(.high).scaledToFit()
+                        .background {
+                            CheckerboardPattern(colorScheme: colorScheme)
+                                .opacity(colorScheme == .dark ? 0.10 : 0.06)
+                        }
                         .padding(20)
                         .scaleEffect(scale).offset(offset)
                         .allowsHitTesting(false)

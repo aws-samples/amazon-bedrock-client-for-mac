@@ -36,7 +36,8 @@ final class ModelCatalog: ObservableObject {
         let settings = PreferencesStore.shared
         let requested = settings.defaultModelId.trimmingCharacters(in: .whitespacesAndNewlines)
         if !requested.isEmpty, !BedrockModelID.isLegacy(requested),
-           descriptor(requested)?.isLegacy != true {
+           !BedrockModelID.isExcludedFromSelection(requested),
+           descriptor(requested)?.isHiddenFromSelection != true {
             // An explicit custom model/profile ARN must remain usable even when
             // the caller lacks permission to list the catalog.
             if let descriptor = descriptor(requested), !descriptor.isProfile { return invocationModel(descriptor) }
@@ -126,7 +127,7 @@ final class ModelCatalog: ObservableObject {
 
     private func install(_ entries: [BedrockModelDescriptor], region: String) {
         var seen = Set<String>()
-        descriptors = entries.filter { !$0.isLegacy && !$0.id.isEmpty && seen.insert($0.id).inserted }
+        descriptors = entries.filter { !$0.isHiddenFromSelection && !$0.id.isEmpty && seen.insert($0.id).inserted }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         BedrockCapabilityRegistry.shared.replace(region: region, descriptors: descriptors)
         models = descriptors.filter { !$0.needsProvisionedThroughput }.map {

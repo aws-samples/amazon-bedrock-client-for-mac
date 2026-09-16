@@ -106,6 +106,11 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 
 ## Chat, rendering, and attachments
 
+- [ ] C41 Remove all manual earlier/newer-message buttons. The full transcript is scrollable immediately; offscreen rendering loads automatically, including after sending a new message.
+- [ ] C42 Show a compact model-switch divider at the transition, preserve it after reopening the chat, and keep it out of inference history.
+- [ ] C43 Tighten the vertical gap between an answer and its Copy/Retry/More actions, including text, code, tables, and generated images.
+- [ ] C44 Copy selected rendered text as semantic HTML with bold, italic, lists, links, and tables; preserve plain-text fallback and keep Copy response as original Markdown.
+
 - [x] C01 Keep assistant model headings out of every transcript segment. (Actual tool-loop and response captures have no repeated assistant model headings.)
 - [ ] C02 Make the actual response model/timestamp available through message details.
 - [ ] C03 Stream text without repeated whole-history parsing or layout.
@@ -171,6 +176,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] M20 Validate comparison, embeddings, and other retained demo paths.
 - [x] M21 Keep AWS errors readable with raw details available on demand.
 - [ ] M22 Measure actual request timing/token throughput rather than claiming unmeasured performance superiority.
+- [x] M23 Hide Nova 2 Pro Preview from available model choices, including cached/live discovery, profiles, favorites, and the default-model picker. Keep the existing recording unchanged. (Core regression covers ACTIVE metadata, restored cache entries, regional/application profiles and favorites. The rebuilt app excludes it in both pickers; the refreshed 180-entry cache contains no preview entries, and an old preview default falls back to an available model.)
 
 ## Local tools, skills, MCP, and automation
 
@@ -224,6 +230,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] G17 Keep data migration atomic/recoverable and do not overwrite unreadable history with empty data.
 - [ ] G18 Preserve Quick Access, menu-bar access, launch-at-login, notifications, and updates.
 - [ ] G19 Respect accessibility contrast, transparency, font size, keyboard navigation, and IME.
+- [x] G20 Show one Reset button for Quick Access shortcut in Settings → Keyboard. Restore ⌥Space, end shortcut recording when resetting, and retain reset access when Quick Access is off. (Release build and actual Settings UI verified: one Reset, custom ⌃⌥K restored to ⌥Space while disabled, recording ends on Reset, and reopening Settings preserves the default. UI regression assertion added.)
 
 ## Performance, validation, dependencies, and delivery
 
@@ -264,6 +271,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
 - [x] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing, center all five badges, and visually inspect the final README media. (September 16 exports preserve the 2480×1560 native window inside a 2608×1688 frame. The 35-second WebP/MP4, Light/Dark captures, GitHub-sanitized README layout, five centered badges, media hashes, and links were inspected; see [media.md](../media.md).)
 - [x] R13 Make the main demonstration visually engaging: develop a concept with a text model, switch to an image model in the same conversation, generate a real image, and open the result. Do not use clicking List skills as the main demonstration. (The real Nova → Stable Image Ultra conversation, complete 9.22-second image request, preview zoom/Fit/close interactions, and final exported frames were verified.)
+- [x] R14 Re-record the same concept-to-image demonstration in the current Release app using GPT-6 Astra with Low reasoning effort, then Stable Image Ultra 1.0. Replace the README animation, movie, and matching screenshots, retain actual inference timing, and verify the exported media. (Real AWS conversation, Low effort setting, image generation, preview, zoom, and fit verified. Refreshed 35-second Retina media preserves the 8.99-second image request; MP4 frames and animated WebP inspected. GitHub-rendered README has centered badges, no horizontal overflow, and the updated downloads and media. Documentation/media validation passes.)
 
 The September 16 evidence audit and unresolved implementation gaps are recorded in [todo-audit.md](todo-audit.md).
 

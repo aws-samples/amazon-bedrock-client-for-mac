@@ -6,22 +6,28 @@ desktop windows out of the capture.
 
 ## Current capture
 
-Recorded September 16, 2026 from the optimized 2.0.0 Release app on macOS
-26.6.2. The separate **Bedrock Showcase** app uses demonstration data and
-contains the current image-preview, Quick Access, and connection-isolation
-corrections. It is a normal Release build with AWS connections enabled.
+Re-recorded September 16, 2026 from the current 2.0.0 source, built in Release
+configuration on macOS 26.6.2. The separate **Bedrock Showcase** app uses
+demonstration data and a real AWS connection. The recording includes the
+current model-switch divider, compact response actions, and image preview.
 
-The conversation starts with a real Nova 2 Lite response developing a glass
-cabin beside an alpine lake under the northern lights. During the recording,
+The conversation starts with a real **GPT-6 Astra** response
+(`us.openai.gpt-6-astra`) at **Low reasoning effort**, developing a glass
+cabin beside an alpine lake under the northern lights. Low was selected in
+Response settings and verified before the request. During the recording,
 the same conversation switches to **Stable Image Ultra 1.0**
-(`stability.stable-image-ultra-v1:1`) and sends Nova's image prompt. The result
+(`stability.stable-image-ultra-v1:1`) and sends Astra's image prompt. The result
 is generated through the app's real AWS connection, then opened and enlarged
-in the image preview. The image request took approximately **9.22 seconds** in
-this recording; its entire wait is included.
+in the image preview. The image request took approximately **8.99 seconds** in
+this recording; its entire wait is included. Both model IDs are retained in
+the saved conversation.
+
+The recording is unchanged by the subsequent removal of Nova 2 Pro Preview
+from model choices.
 
 | Time | Interaction |
 | --- | --- |
-| 0–3s | Read Nova's concept and image prompt |
+| 0–3s | Read GPT-6 Astra's concept and image prompt |
 | 3–6s | Find and select Stable Image Ultra in the composer |
 | 7–9s | Send the image prompt in the same conversation |
 | 9–18s | Wait for the real image generation request |
@@ -38,11 +44,11 @@ Dark appearance.
 
 | Asset | Resolution | Format and timing | Size |
 | --- | --- | --- | --- |
-| Main animation | 2608×1688 | Adaptive WebP, up to 20fps, 35 seconds | 11.4MB |
-| Downloadable tour | 2608×1688 | H.264 MP4, 60fps, 35 seconds | 5.0MB |
-| Legacy animation fallback | 1600×1036 | GIF, 15fps, 35 seconds | 6.5MB |
-| Main screenshots | 2608×1688 | Lossless WebP and PNG | 0.6–0.9MB |
-| Settings screenshots | 1828×1528 | Lossless WebP | 0.04–0.06MB |
+| Main animation | 2608×1688 | Adaptive WebP, up to 20fps, 35 seconds | 16.5MB |
+| Downloadable tour | 2608×1688 | H.264 MP4, 60fps, 35 seconds | 5.5MB |
+| Legacy animation fallback | 1600×1036 | GIF, 15fps, 35 seconds | 9.7MB |
+| Main screenshots | 2608×1688 | Lossless WebP and PNG | 0.7–1.0MB |
+| Settings screenshots | 1828×1528 | Lossless WebP | 0.06MB |
 
 The main README picture prefers WebP and uses the still image when
 `prefers-reduced-motion` is enabled. Only unused trailing footage was trimmed
@@ -66,24 +72,26 @@ Dark preference. Resolutions, sizes, and checksums are recorded in
 
 3. Configure an AWS connection in this preview. Set the window to 1240×780
    points, keep the sidebar expanded at 240 points, and choose Light appearance.
-4. Choose Nova 2 Lite and send:
+4. Choose **GPT-6 Astra**. Open **Response settings**, choose **Low** under
+   Reasoning effort, and send:
 
    > Imagine a quiet glass cabin beside an alpine lake under the northern lights. Give me a short concept and a vivid image prompt, in about 60 words.
 
    Review the real answer before recording. A live model response varies. The
    image prompt returned in this capture was:
 
-   > Moonlight glints off the glassy cabin, reflecting shimmering greens and purples of the northern lights across the still lake; snow-capped peaks loom silently in the distance, while a warm amber glow spills from the cabin's hearth, inviting quiet contemplation.
+   > Floor-to-ceiling glass cabin beside a mirror-still alpine lake, emerald and violet northern lights sweeping above jagged snowy peaks. Amber firelight spills across cedar floors; a wool blanket rests on a chair. Frosted pines, delicate stars, cinematic wide angle, photorealistic textures.
 
 5. Set the image response's aspect ratio to **16:9**. Start the recording with
-   Nova's concept visible. Open the model picker, search for Stable Image Ultra,
+   Astra's concept visible. Open the model picker, search for Stable Image Ultra,
    select it, and send the image prompt. Wait for the actual request to finish.
    Open the generated image, zoom in, choose Fit, and return to the conversation.
    Keep the complete request wait and original playback speed.
 6. Capture the generated image conversation in Light and Dark, and Settings →
-   Skills in both appearances. The separate tool-output screenshot documents an
-   actual earlier tool call from the same Release build; it is not part of the
-   main demonstration. Save complete window PNGs with transparent corners and
+   Skills in both appearances. These screenshots were also refreshed for this
+   recording. The separate tool-output screenshot is retained from the earlier
+   September 16 capture of a real tool call; it is not part of the main
+   demonstration. Save complete window PNGs with transparent corners and
    without the system's outer shadow (`screencapture -o`).
 7. Record the fixed app rectangle at the display's native resolution, without
    microphone audio. Keep the window's position and size unchanged. A screen-area

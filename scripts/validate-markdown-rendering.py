@@ -34,7 +34,7 @@ def main():
     tests = output / "Tests/RenderingTests"
     sources.mkdir(parents=True, exist_ok=True)
     tests.mkdir(parents=True, exist_ok=True)
-    for relative in ("UI/Markdown/MarkdownRenderer.swift", "UI/Markdown/SelectableMarkdown.swift", "UI/Components/TextContextMenu.swift", "UI/Markdown/MarkdownColors.swift",
+    for relative in ("UI/Markdown/MarkdownRenderer.swift", "UI/Markdown/MarkdownClipboard.swift", "UI/Markdown/SelectableMarkdown.swift", "UI/Components/TextContextMenu.swift", "UI/Markdown/MarkdownColors.swift",
                      "Features/Chat/ConversationFind.swift", "Services/Attachments/AttachmentProcessor.swift", "Services/Attachments/ImagePreviewLoader.swift",
                      "Services/Attachments/AttachmentStore.swift", "Features/Composer/EditorFocusState.swift"):
         shutil.copy2(app / relative, sources / Path(relative).name)

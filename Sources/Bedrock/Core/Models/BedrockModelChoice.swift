@@ -17,7 +17,7 @@ struct BedrockModelChoice: Identifiable, Equatable, Sendable {
     }
 
     static func make(descriptors: [BedrockModelDescriptor], selectedID: String?, favoriteIDs: Set<String>, region: String) -> [Self] {
-        let active = descriptors.filter { !$0.isLegacy && !$0.needsProvisionedThroughput && !$0.id.isEmpty }
+        let active = descriptors.filter { !$0.isHiddenFromSelection && !$0.needsProvisionedThroughput && !$0.id.isEmpty }
         let groups = Dictionary(grouping: active) { BedrockModelID.base($0.foundationID ?? $0.id) }
         let regionPrefix = region.hasPrefix("us-gov-") ? "us-gov." :
             region.hasPrefix("eu-") ? "eu." : region.hasPrefix("ap-") ? "apac." : "us."

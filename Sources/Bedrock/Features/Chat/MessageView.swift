@@ -68,7 +68,7 @@ struct MessageView: View, Equatable {
 
     // MARK: - Assistant Message Bubble
     private var assistantMessageBubble: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             assistantMessageContent
             if !isStreaming && !isToolOnly {
                 HStack(spacing: 8) {
@@ -103,26 +103,17 @@ struct MessageView: View, Equatable {
     }
 
     // MARK: - Assistant Content Components
-    @ViewBuilder
     private var assistantMessageContent: some View {
-        // Generated video (displayed with video player)
-        if let videoUrl = message.videoUrl {
-            GeneratedVideoView(videoUrl: videoUrl)
-                .padding(.bottom, 8)
-        }
-
-        // Generated images (displayed larger for AI-generated content)
-        if let imageBase64Strings = message.imageBase64Strings,
-           !imageBase64Strings.isEmpty {
-            GeneratedImagesView(
-                imageBase64Strings: imageBase64Strings
-            ) { imageData in
-                viewModel.selectImage(with: imageData)
+        VStack(alignment: .leading, spacing: 8) {
+            if let videoUrl = message.videoUrl {
+                GeneratedVideoView(videoUrl: videoUrl)
             }
-            .padding(.bottom, 8)
-        }
-
-        VStack(spacing: 8) {
+            if let imageBase64Strings = message.imageBase64Strings,
+               !imageBase64Strings.isEmpty {
+                GeneratedImagesView(imageBase64Strings: imageBase64Strings) { imageData in
+                    viewModel.selectImage(with: imageData)
+                }
+            }
             // Expandable "thinking" section
             if let thinking = message.thinking, !thinking.isEmpty {
                 MessageDisclosureView(
@@ -178,7 +169,7 @@ struct MessageView: View, Equatable {
             if let data = viewModel.selectedImageData {
                 ImagePreviewModal(
                     source: .stored(data, directory: URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory).appendingPathComponent("generated_images")),
-                    filename: "Generated image.png",
+                    filename: "Generated image",
                     isPresented: $viewModel.isShowingImageModal
                 )
             }
@@ -337,7 +328,7 @@ struct MessageView: View, Equatable {
             if let imageData = viewModel.selectedImageData {
                 ImagePreviewModal(
                     source: .stored(imageData, directory: URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory).appendingPathComponent("generated_images")),
-                    filename: "Image.png",
+                    filename: "Image",
                     isPresented: $viewModel.isShowingImageModal
                 )
             }

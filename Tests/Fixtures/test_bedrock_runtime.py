@@ -1,8 +1,11 @@
 """Validate the transport fixture before using it to diagnose app failures."""
 import json
 import struct
+import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 import urllib.request
@@ -14,6 +17,26 @@ from bedrock_runtime import FixtureServer, event_frame
 
 
 class BedrockFixtureTests(unittest.TestCase):
+    def test_ready_file_is_complete_as_soon_as_the_child_publishes_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for attempt in range(10):
+                ready = Path(directory) / f"ready-{attempt}.json"
+                child = subprocess.Popen([
+                    sys.executable, str(Path(__file__).with_name("bedrock_runtime.py")),
+                    "--ready", str(ready), "--requests", str(Path(directory) / "requests.jsonl")
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                try:
+                    deadline = time.monotonic() + 5
+                    while not ready.exists() and child.poll() is None and time.monotonic() < deadline:
+                        time.sleep(0.0005)
+                    self.assertTrue(ready.exists(), "Fixture must publish readiness before requests.")
+                    port = json.loads(ready.read_bytes())["port"]
+                    self.assertGreater(port, 0)
+                    self.assertLessEqual(port, 65535)
+                finally:
+                    child.terminate()
+                    child.communicate(timeout=5)
+
     def test_loopback_startup_never_resolves_or_discovers_network_hosts(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch("socket.getfqdn", side_effect=AssertionError("Unexpected hostname discovery")):

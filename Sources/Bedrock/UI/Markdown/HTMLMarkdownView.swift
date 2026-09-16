@@ -36,11 +36,15 @@ final class MarkdownWebView: WKWebView {
     }
 
     @objc private func copySelectedText(_ sender: Any?) {
-        callAsyncJavaScript("return window.getSelection()?.toString() ?? '';",
+        callAsyncJavaScript("return window.bedrockSelectionPayload();",
                             arguments: [:], in: nil, in: .page) { result in
-            guard case .success(let value) = result, let text = value as? String, !text.isEmpty else { return }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            guard case .success(let value) = result, let payload = value as? [String: String],
+                  let text = payload["text"], let html = payload["html"], !html.isEmpty else { return }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.declareTypes([.html, .string], owner: nil)
+            pasteboard.setString(MarkdownClipboard.document(html), forType: .html)
+            pasteboard.setString(text, forType: .string)
         }
     }
     @objc private func selectResponse(_ sender: Any?) {
@@ -640,6 +644,7 @@ struct HTMLMarkdownView: NSViewRepresentable {
                 if (typeof hljs !== 'undefined') hljs.highlightAll();
                 \(MarkdownDOMUpdateScript.source)
                 \(MarkdownSearchScript.source)
+                \(MarkdownClipboardScript.source)
                 (() => {
                     const content = document.getElementById('bedrock-content');
                     let previousHeight = 0;

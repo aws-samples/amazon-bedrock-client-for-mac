@@ -109,6 +109,216 @@ final class MarkdownRenderingTests: XCTestCase {
     }
 
     @MainActor
+    func testResponseHeightDoesNotIncludeAnEmptyInsertionLine() throws {
+        for source in ["Hello", "안녕하세요, 상화님.", "- First\n- Last", "> A final quotation."] {
+            let view = MarkdownSelectionTextView()
+            view.install(rows: MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(source)),
+                         fontSize: 15, highlights: [], dark: false)
+            let size = view.measuredSize(width: 600)
+            let manager = try XCTUnwrap(view.layoutManager)
+            let container = try XCTUnwrap(view.textContainer)
+            let last = (view.string as NSString).rangeOfCharacter(
+                from: .whitespacesAndNewlines.inverted, options: .backwards)
+            let glyphs = manager.glyphRange(forCharacterRange: last, actualCharacterRange: nil)
+            let ink = manager.boundingRect(forGlyphRange: glyphs, in: container)
+            XCTAssertGreaterThanOrEqual(size.height, ink.maxY, source)
+            XCTAssertLessThanOrEqual(size.height - ink.maxY, 8, source)
+            XCTAssertTrue(view.string.hasSuffix("\n"), "Preserve paragraph structure for selection.")
+        }
+    }
+
+    @MainActor
+    func testCompactResponseHeightPreservesTheFinalCodeBlockAndTable() throws {
+        for source in ["```swift\nprint(\"Hello\")\n```",
+                       "| Name | Result |\n| --- | --- |\n| Example | Passed |"] {
+            let view = MarkdownSelectionTextView()
+            view.install(rows: MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(source)),
+                         fontSize: 15, highlights: [], dark: true)
+            let size = view.measuredSize(width: 600)
+            view.frame.size = size
+            view.layoutSubtreeIfNeeded()
+            let manager = try XCTUnwrap(view.layoutManager)
+            let container = try XCTUnwrap(view.textContainer)
+            let visible = manager.boundingRect(
+                forGlyphRange: NSRange(location: 0, length: manager.numberOfGlyphs), in: container)
+            XCTAssertGreaterThanOrEqual(size.height, visible.maxY)
+            // Table cell padding and the code card's lower edge remain visible.
+            XCTAssertLessThanOrEqual(size.height - visible.maxY, 16, source)
+            for button in view.subviews.compactMap({ $0 as? NSButton }) {
+                XCTAssertTrue(view.bounds.contains(button.frame), "Keep Copy code inside its rendered block.")
+            }
+            view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+            let pasteboard = NSPasteboard(name: .init("bedrock-compact-selection-\(UUID())"))
+            defer { pasteboard.releaseGlobally() }
+            pasteboard.declareTypes([.string], owner: nil)
+            XCTAssertTrue(view.writeSelection(to: pasteboard, type: .string))
+            XCTAssertEqual(pasteboard.string(forType: .string), view.string)
+        }
+    }
+
+    @MainActor
+    func testSelectedMarkdownPastesWithBoldItalicAndEditableLists() throws {
+        let view = MarkdownSelectionTextView()
+        let source = "**Bold** and *italic*.\n\n- First item\n- 두 번째 item 😀"
+        view.install(rows: MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(source)),
+                     fontSize: 15, highlights: [], dark: true)
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+        let board = NSPasteboard(name: .init("bedrock-rich-selection-\(UUID())"))
+        defer { board.releaseGlobally() }
+        board.declareTypes([.html, .string], owner: nil)
+        XCTAssertTrue(view.writeSelection(to: board, type: .html))
+        XCTAssertTrue(view.writeSelection(to: board, type: .string))
+        let html = try XCTUnwrap(board.string(forType: .html))
+        XCTAssertTrue(html.contains("<strong>Bold</strong>"))
+        XCTAssertTrue(html.contains("<em>italic</em>"))
+        XCTAssertTrue(html.contains("<ul><li>"))
+        XCTAssertEqual(html.components(separatedBy: "<li>").count - 1, 2)
+        XCTAssertFalse(html.contains("•"))
+        XCTAssertFalse(html.contains("color:"), "Dark appearance must not paste white text onto a white document.")
+        XCTAssertEqual(board.string(forType: .string), view.string)
+
+        // Use AppKit's actual rich-paste reader, like a native document editor.
+        let destination = NSTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 300))
+        destination.isRichText = true
+        XCTAssertTrue(destination.readSelection(from: board, type: .html))
+        let storage = try XCTUnwrap(destination.textStorage)
+        func attributes(_ word: String) throws -> [NSAttributedString.Key: Any] {
+            let range = (storage.string as NSString).range(of: word)
+            XCTAssertNotEqual(range.location, NSNotFound, word)
+            return storage.attributes(at: range.location, effectiveRange: nil)
+        }
+        let bold = try XCTUnwrap(try attributes("Bold")[.font] as? NSFont)
+        let italic = try XCTUnwrap(try attributes("italic")[.font] as? NSFont)
+        XCTAssertTrue(bold.fontDescriptor.symbolicTraits.contains(.bold))
+        XCTAssertTrue(italic.fontDescriptor.symbolicTraits.contains(.italic))
+        for item in ["First item", "두 번째 item 😀"] {
+            let paragraph = try XCTUnwrap(try attributes(item)[.paragraphStyle] as? NSParagraphStyle)
+            XCTAssertEqual(paragraph.textLists.count, 1, "Pasted bullets must remain editable list items.")
+        }
+    }
+
+    @MainActor
+    func testPartialSelectionPreservesNestedListsAndOrderedStartingNumber() throws {
+        let source = """
+        > 3. **Build**
+        >    - Nested *item*
+        > 4. Validate
+
+        Unselected tail.
+        """
+        let view = MarkdownSelectionTextView()
+        view.install(rows: MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(source)),
+                     fontSize: 15, highlights: [], dark: false)
+        let text = view.string as NSString
+        let from = text.range(of: "Nested").location
+        let end = NSMaxRange(text.range(of: "Val"))
+        view.setSelectedRange(NSRange(location: from, length: end - from))
+        let board = NSPasteboard(name: .init("bedrock-nested-selection-\(UUID())"))
+        defer { board.releaseGlobally() }
+        board.declareTypes([.html], owner: nil)
+        XCTAssertTrue(view.writeSelection(to: board, type: .html))
+        let html = try XCTUnwrap(board.string(forType: .html))
+        XCTAssertTrue(html.contains("<blockquote><ol start=\"3\"><li value=\"3\"><ul>"), html)
+        XCTAssertTrue(html.contains("<em>item</em>"))
+        XCTAssertTrue(html.contains("<li value=\"4\"><p>Val</p></li>"))
+        XCTAssertFalse(html.contains("Build"))
+        XCTAssertFalse(html.contains("Validate"))
+        XCTAssertFalse(html.contains("Unselected tail"))
+    }
+
+    @MainActor
+    func testRichCopyKeepsTablesCodeAndSafeLinksWithoutActiveMarkup() throws {
+        let source = """
+        [Documentation](https://example.com/?a=1&b=2) [Unsafe](javascript:alert)
+
+        | Name | Result |
+        | --- | --- |
+        | Example | **Passed** |
+
+        ```html
+        <script>alert("literal")</script>
+        ```
+        """
+        let result = MarkdownNativeAttributedDocument.render(
+            MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(source)),
+            fontSize: 15, highlights: [], dark: false, isStreaming: false)
+        let html = try XCTUnwrap(MarkdownClipboard.html(text: result.text, blocks: result.clipboardBlocks,
+                                                       ranges: [NSRange(location: 0, length: result.text.length)]))
+        XCTAssertTrue(html.contains("<table><tr><th>"))
+        XCTAssertTrue(html.contains("<td><strong>Passed</strong></td>"))
+        XCTAssertTrue(html.contains("<pre><code>&lt;script&gt;"))
+        XCTAssertTrue(html.contains("href=\"https://example.com/?a=1&amp;b=2\""))
+        XCTAssertFalse(html.contains("<script>"))
+        XCTAssertFalse(html.contains("javascript:"))
+        XCTAssertFalse(html.contains("Copy code"))
+        XCTAssertNil(MarkdownClipboard.html(text: result.text, blocks: result.clipboardBlocks,
+                                            ranges: [NSRange(location: NSNotFound, length: 10),
+                                                     NSRange(location: 1, length: Int.max)]))
+    }
+
+    @MainActor
+    func testWebSelectionAndCopyEventKeepSemanticHTMLWithoutControls() async throws {
+        let webView = WKWebView()
+        let ready = expectation(description: "Rich clipboard page loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+            <html><body><main id="bedrock-content"></main>
+            <script>\(MarkdownDOMUpdateScript.source)\(MarkdownClipboardScript.source)</script></body></html>
+            """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        defer { webView.stopLoading(); withExtendedLifetime(delegate) {} }
+        let result = try await webView.callAsyncJavaScript("""
+            bedrockUpdateContent(html, 15);
+            const root = document.getElementById('bedrock-content');
+            const range = document.createRange(); range.selectNodeContents(root);
+            getSelection().removeAllRanges(); getSelection().addRange(range);
+            const clipboard = new DataTransfer();
+            document.dispatchEvent(new ClipboardEvent('copy', {clipboardData: clipboard, cancelable: true, bubbles: true}));
+            const fragment = document.createElement('div'); fragment.innerHTML = clipboard.getData('text/html');
+            return {html: clipboard.getData('text/html'), text: clipboard.getData('text/plain'),
+                    strong: fragment.querySelector('strong')?.textContent,
+                    italic: fragment.querySelector('em')?.textContent,
+                    items: fragment.querySelectorAll('li').length,
+                    start: fragment.querySelector('ol')?.getAttribute('start'),
+                    controls: fragment.querySelectorAll('button,script,svg,[onclick],[style]').length,
+                    unsafe: fragment.querySelector('a[href^="javascript:"]') !== null};
+            """, arguments: ["html": """
+                <p><strong>Bold</strong> and <em>italic</em></p>
+                <ol start="3"><li>First item</li><li>한글 second item</li></ol>
+                <a href="javascript:alert(1)" onclick="alert(2)">Unsafe</a>
+                <button>Copy code</button>
+                """], in: nil, contentWorld: .page)
+        let values = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(values["strong"] as? String, "Bold")
+        XCTAssertEqual(values["italic"] as? String, "italic")
+        XCTAssertEqual(values["items"] as? Int, 2)
+        XCTAssertEqual(values["start"] as? String, "3")
+        XCTAssertEqual(values["controls"] as? Int, 0)
+        XCTAssertEqual(values["unsafe"] as? Bool, false)
+        XCTAssertTrue((values["text"] as? String)?.contains("한글 second item") == true)
+        let partial = try await webView.callAsyncJavaScript("""
+            const emphasis = document.querySelector('em').firstChild;
+            const range = document.createRange(); range.setStart(emphasis, 1); range.setEnd(emphasis, 4);
+            getSelection().removeAllRanges(); getSelection().addRange(range);
+            return bedrockSelectionPayload();
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let selected = try XCTUnwrap(partial as? [String: String])
+        XCTAssertEqual(selected["text"], "tal")
+        XCTAssertTrue(selected["html"]?.contains("<em>tal</em>") == true)
+        XCTAssertFalse(selected["html"]?.contains("Bold") == true)
+        let all = try await webView.callAsyncJavaScript("""
+            const range = document.createRange(); range.selectNodeContents(document.body);
+            getSelection().removeAllRanges(); getSelection().addRange(range);
+            return bedrockSelectionPayload();
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let whole = try XCTUnwrap(all as? [String: String])
+        XCTAssertTrue(whole["html"]?.contains("<strong>Bold</strong>") == true)
+        XCTAssertFalse(whole["html"]?.contains("<script") == true)
+        XCTAssertFalse(whole["text"]?.contains("bedrockSelectionPayload") == true)
+    }
+
+    @MainActor
     func testNativeStreamingPreservesSelectionAcrossTwoListItems() {
         let view = MarkdownSelectionTextView()
         let parser = ExtendedMarkdownParser()

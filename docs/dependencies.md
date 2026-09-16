@@ -23,6 +23,49 @@ Smithy 0.251.0, AWS CRT 0.64.1, Swift Collections 1.6.0 and Swift Log 1.15.1.
 The lockfile records all versions and revisions; a transitive package's next
 incompatible major version is not silently substituted.
 
+A second check on September 16 compared all 30 resolved packages with their
+maintainers' stable tags and regenerated the resolution without the old lockfile.
+The same 30-package graph was selected: 29 packages are at their latest stable
+release, and Swift Crypto is at its latest compatible 4.x release, 4.5.2.
+Highlight.js and all six GitHub Actions are also at their latest stable tags.
+
+[Swift Crypto 5.0.0](https://github.com/apple/swift-crypto/releases/tag/5.0.0)
+was released on September 16. Swift Certificates 1.20.0, reached through NIO SSL,
+[requires Crypto below 5.0.0](https://github.com/apple/swift-certificates/blob/1.20.0/Package.swift).
+Forcing 5.0.0 would make that dependency graph unsatisfiable. Keep 4.5.2 until the
+maintained certificate package accepts 5.x; do not patch vendored manifests or
+replace TLS dependencies to bypass the constraint.
+
+| Transitive package | Resolved stable version |
+| --- | --- |
+| async-http-client | 1.36.1 |
+| aws-crt-swift | 0.64.1 |
+| eventsource | 1.5.1 |
+| smithy-swift | 0.251.0 |
+| swift-algorithms | 1.2.1 |
+| swift-argument-parser | 1.8.2 |
+| swift-asn1 | 1.7.2 |
+| swift-async-algorithms | 1.1.5 |
+| swift-atomics | 1.3.1 |
+| swift-certificates | 1.20.0 |
+| swift-collections | 1.6.0 |
+| swift-commandlinekit | 1.1.1 |
+| swift-configuration | 1.2.0 |
+| swift-crypto | 4.5.2 |
+| swift-distributed-tracing | 1.4.1 |
+| swift-http-structured-headers | 1.7.0 |
+| swift-http-types | 1.8.0 |
+| swift-log | 1.15.1 |
+| swift-nio | 2.102.0 |
+| swift-nio-extras | 1.35.1 |
+| swift-nio-http2 | 1.46.0 |
+| swift-nio-ssl | 2.37.4 |
+| swift-nio-transport-services | 1.28.0 |
+| swift-numerics | 1.1.1 |
+| swift-service-context | 1.3.0 |
+| swift-service-lifecycle | 2.12.0 |
+| swift-system | 1.8.1 |
+
 The bundled highlighter remains offline. Its source, license and checksums are
 recorded in `Sources/Bedrock/Resources/Highlight/README.md`.
 

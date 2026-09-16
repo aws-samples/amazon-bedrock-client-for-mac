@@ -330,8 +330,8 @@ struct SettingsView: View {
             HStack {
                 Text(row.title)
                 Spacer(minLength: 12)
-                HotkeyRecorderView(modifiers: $modifiers, keyCode: $keyCode).disabled(!settings.enableQuickAccess)
-                Button("Reset") { modifiers = UInt32(optionKey); keyCode = 49 }.fixedSize()
+                HotkeyRecorderView(modifiers: $modifiers, keyCode: $keyCode,
+                                   isEnabled: settings.enableQuickAccess)
             }
         case "send":
             AppSegmentedControl(title: row.title, selection: pref(\.sendWithCommandReturn),

@@ -36,13 +36,18 @@ final class BedrockUITestFixture {
         process.standardError = FileHandle.standardError
         try process.run()
         let deadline = Date().addingTimeInterval(8)
-        while !FileManager.default.fileExists(atPath: ready.path), process.isRunning, Date() < deadline {
+        var readyPort: Int?
+        while process.isRunning, Date() < deadline {
+            if let data = try? Data(contentsOf: ready),
+               let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Int],
+               let port = result["port"], (1...65535).contains(port) {
+                readyPort = port
+                break
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
         }
-        guard let data = try? Data(contentsOf: ready),
-              let result = try JSONSerialization.jsonObject(with: data) as? [String: Int],
-              let port = result["port"] else {
-            process.terminate()
+        guard let port = readyPort else {
+            if process.isRunning { process.terminate() }
             throw NSError(domain: "BedrockUITestFixture", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "The loopback Bedrock fixture did not start."])
         }

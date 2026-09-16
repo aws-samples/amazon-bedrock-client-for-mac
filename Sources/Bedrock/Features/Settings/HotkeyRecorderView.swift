@@ -11,13 +11,14 @@ import Carbon
 struct HotkeyRecorderView: View {
     @Binding var modifiers: UInt32
     @Binding var keyCode: UInt32
+    var isEnabled = true
     
     @State private var isRecording = false
     @State private var displayText = ""
     @State private var eventMonitor: Any?
     
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Button(action: {
                 if isRecording {
                     stopRecording()
@@ -28,7 +29,7 @@ struct HotkeyRecorderView: View {
                 Text(isRecording ? "Press keys..." : displayText)
                     .frame(minWidth: 120)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .frame(height: DesignTokens.controlSize)
                     .background(isRecording ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
                     .cornerRadius(6)
                     .overlay(
@@ -37,28 +38,33 @@ struct HotkeyRecorderView: View {
                     )
             }
             .buttonStyle(PlainButtonStyle())
+            .disabled(!isEnabled)
+            .accessibilityIdentifier("quickAccess.shortcutRecorder")
+            .accessibilityLabel("Quick Access shortcut")
+            .accessibilityValue(isRecording ? "Recording" : displayText)
             
-            if !isRecording {
-                Button("Reset") {
-                    modifiers = UInt32(optionKey)
-                    keyCode = 49 // Space
-                    updateDisplayText()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Button("Reset") {
+                stopRecording()
+                modifiers = UInt32(optionKey)
+                keyCode = 49 // Space
+                updateDisplayText()
             }
+            .fixedSize()
+            .accessibilityIdentifier("quickAccess.resetShortcut")
+            .accessibilityLabel("Reset Quick Access shortcut")
+            .help("Restore ⌥Space")
         }
         .onAppear {
             updateDisplayText()
-            print("DEBUG: HotkeyRecorderView onAppear - modifiers: \(modifiers), keyCode: \(keyCode)")
         }
-        .onChange(of: modifiers) { _, newValue in
+        .onChange(of: modifiers) { _, _ in
             updateDisplayText()
-            print("DEBUG: Modifiers changed to: \(newValue)")
         }
-        .onChange(of: keyCode) { _, newValue in
+        .onChange(of: keyCode) { _, _ in
             updateDisplayText()
-            print("DEBUG: KeyCode changed to: \(newValue)")
+        }
+        .onChange(of: isEnabled) { _, enabled in
+            if !enabled { stopRecording() }
         }
         .onDisappear {
             stopRecording()

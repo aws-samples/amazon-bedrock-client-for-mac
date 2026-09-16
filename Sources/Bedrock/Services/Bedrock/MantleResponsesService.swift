@@ -10,9 +10,12 @@ import Foundation
 import Logging
 import SmithyIdentity
 
-/// Client for the OpenAI-compatible Responses API on the Amazon Bedrock Mantle endpoint.
-/// OpenAI frontier models (GPT-5.5 / GPT-5.4) are served exclusively through
-/// bedrock-mantle — they are not available on bedrock-runtime InvokeModel/Converse.
+enum MantleResponseEvent: Sendable, Equatable {
+    case text(String)
+    case finished(stopReason: String, usage: UsageInfo?, fallbackText: String)
+}
+
+/// Client for models using the Responses API on the Amazon Bedrock Mantle endpoint.
 ///
 /// Authentication follows the same precedence as the Codex/Bedrock integration:
 /// a Bedrock API key (Bearer token) is used when configured, otherwise requests
@@ -21,12 +24,15 @@ final class MantleResponsesService: Sendable {
     private let region: String
     private let apiKey: String
     private let credentialResolver: (any AWSCredentialIdentityResolver)?
+    private let session: URLSession
     private let logger = Logger(label: "MantleResponsesService")
 
-    init(region: String, apiKey: String, credentialResolver: (any AWSCredentialIdentityResolver)? = nil) {
+    init(region: String, apiKey: String, credentialResolver: (any AWSCredentialIdentityResolver)? = nil,
+         session: URLSession = .shared) {
         self.region = region
         self.apiKey = apiKey
         self.credentialResolver = credentialResolver
+        self.session = session
     }
 
     private var host: String {
@@ -34,7 +40,7 @@ final class MantleResponsesService: Sendable {
     }
 
     private var responsesURL: URL? {
-        URL(string: "https://\(host)/openai/v1/responses")
+        URL(string: "https://\(host)/v1/responses")
     }
 
     /// Streams text deltas from the Responses API.
@@ -43,9 +49,8 @@ final class MantleResponsesService: Sendable {
         modelId: String,
         input: [[String: Any]],
         maxOutputTokens: Int,
-        reasoningEffort: String,
-        usageHandler: (@Sendable (UsageInfo) -> Void)? = nil
-    ) -> AsyncThrowingStream<String, Error> {
+        reasoningEffort: String
+    ) -> AsyncThrowingStream<MantleResponseEvent, Error> {
         // Serialize the request body before entering the stream closure so the
         // non-Sendable [[String: Any]] payload is not captured across tasks
         let body: [String: Any] = [
@@ -89,11 +94,11 @@ final class MantleResponsesService: Sendable {
                     } else {
                         throw NSError(
                             domain: "MantleResponsesService", code: 401,
-                            userInfo: [NSLocalizedDescriptionKey: "No AWS credentials available. Configure an AWS profile or set a Bedrock API key in Settings → Developer → Advanced."]
+                            userInfo: [NSLocalizedDescriptionKey: "No AWS credentials available. Configure an AWS profile or set a Bedrock API key in Settings → AWS connection."]
                         )
                     }
 
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    let (bytes, response) = try await self.session.bytes(for: request)
 
                     if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
                         var errorBody = ""
@@ -111,40 +116,15 @@ final class MantleResponsesService: Sendable {
                     var completed = false
                     for try await line in bytes.lines {
                         try Task.checkCancellation()
-                        guard line.hasPrefix("data: ") else { continue }
-                        let payload = String(line.dropFirst(6))
+                        guard line.hasPrefix("data:") else { continue }
+                        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
                         if payload == "[DONE]" { break }
-                        guard let data = payload.data(using: .utf8),
-                              let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                              let type = event["type"] as? String else { continue }
-
-                        switch type {
-                        case "response.output_text.delta":
-                            if let delta = event["delta"] as? String {
-                                continuation.yield(delta)
-                            }
-                        case "response.completed":
+                        guard let event = try Self.parseEvent(payload) else { continue }
+                        continuation.yield(event)
+                        if case .finished = event {
                             completed = true
-                            if let resp = event["response"] as? [String: Any],
-                               let usage = resp["usage"] as? [String: Any] {
-                                // GPT-5.6 supports prompt caching and reports it under
-                                // input_tokens_details (cached_tokens is already part of input_tokens).
-                                let details = usage["input_tokens_details"] as? [String: Any]
-                                let usageInfo = UsageInfo(
-                                    inputTokens: usage["input_tokens"] as? Int,
-                                    outputTokens: usage["output_tokens"] as? Int,
-                                    cacheCreationInputTokens: details?["cache_write_tokens"] as? Int,
-                                    cacheReadInputTokens: details?["cached_tokens"] as? Int
-                                )
-                                usageHandler?(usageInfo)
-                            }
-                        case "response.failed", "response.incomplete", "error":
-                            let message = Self.extractErrorMessage(from: payload) ?? "Response failed"
-                            throw NSError(
-                                domain: "MantleResponsesService", code: 500,
-                                userInfo: [NSLocalizedDescriptionKey: message]
-                            )
-                        default:
+                            // A terminal event completes the request even when the
+                            // server leaves its SSE connection open.
                             break
                         }
                     }
@@ -154,12 +134,57 @@ final class MantleResponsesService: Sendable {
                     }
                     continuation.finish()
                 } catch {
-                    self.logger.error("Mantle Responses stream error: \(error.localizedDescription)")
+                    let failure = error as NSError
+                    self.logger.error("Mantle Responses stream error (\(failure.domain), \(failure.code))")
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { @Sendable _ in task.cancel() }
         }
+    }
+
+    private static func parseEvent(_ payload: String) throws -> MantleResponseEvent? {
+        guard let data = payload.data(using: .utf8),
+              let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = event["type"] as? String else { return nil }
+        if type == "response.output_text.delta", let text = event["delta"] as? String {
+            return .text(text)
+        }
+        if type == "response.failed" || type == "error" {
+            throw NSError(domain: "MantleResponsesService", code: 500,
+                          userInfo: [NSLocalizedDescriptionKey: extractErrorMessage(from: payload) ??
+                                     "The model could not complete this response."])
+        }
+        guard type == "response.completed" || type == "response.incomplete" else { return nil }
+        guard let response = event["response"] as? [String: Any] else {
+            throw NSError(domain: "MantleResponsesService", code: 502,
+                          userInfo: [NSLocalizedDescriptionKey: "The model returned an invalid completion event."])
+        }
+        let stopReason: String
+        if type == "response.completed" {
+            stopReason = "end_turn"
+        } else {
+            let reason = (response["incomplete_details"] as? [String: Any])?["reason"] as? String
+            switch reason {
+            case "max_output_tokens": stopReason = "max_tokens"
+            case "content_filter": stopReason = "content_filtered"
+            default:
+                throw NSError(domain: "MantleResponsesService", code: 502,
+                              userInfo: [NSLocalizedDescriptionKey: "The response stopped before it was complete. Please try again."])
+            }
+        }
+        let usage = (response["usage"] as? [String: Any]).map { value in
+            let details = value["input_tokens_details"] as? [String: Any]
+            return UsageInfo(inputTokens: value["input_tokens"] as? Int,
+                             outputTokens: value["output_tokens"] as? Int,
+                             cacheCreationInputTokens: details?["cache_write_tokens"] as? Int,
+                             cacheReadInputTokens: details?["cached_tokens"] as? Int)
+        }
+        let fallbackText = (response["output"] as? [[String: Any]] ?? [])
+            .flatMap { $0["content"] as? [[String: Any]] ?? [] }
+            .filter { $0["type"] as? String == "output_text" }
+            .compactMap { $0["text"] as? String }.joined(separator: "\n")
+        return .finished(stopReason: stopReason, usage: usage, fallbackText: fallbackText)
     }
 
     // MARK: - SigV4 Signing
@@ -234,6 +259,10 @@ final class MantleResponsesService: Sendable {
         guard let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         if let error = json["error"] as? [String: Any], let message = error["message"] as? String {
+            return message
+        }
+        if let response = json["response"] as? [String: Any],
+           let error = response["error"] as? [String: Any], let message = error["message"] as? String {
             return message
         }
         return json["message"] as? String

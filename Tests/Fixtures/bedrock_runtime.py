@@ -252,7 +252,11 @@ def main():
     parser.add_argument("--requests", required=True, type=Path)
     args = parser.parse_args()
     server = FixtureServer(args.requests)
-    args.ready.write_text(json.dumps({"port": server.server_port}))
+    # The UI runner starts reading as soon as this path exists. Publish the
+    # complete payload atomically so it never observes a newly created empty file.
+    pending = args.ready.with_name(args.ready.name + ".tmp")
+    pending.write_text(json.dumps({"port": server.server_port}))
+    pending.replace(args.ready)
     server.serve_forever(poll_interval=0.05)
 
 

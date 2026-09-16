@@ -34,7 +34,9 @@ enum MarkdownSanitizerScript {
                 const name = attribute.name.toLowerCase();
                 const keep = attributes.has(name) ||
                     (tag === 'a' && name === 'href' && safeLink(attribute.value)) ||
-                    (tag === 'img' && name === 'src');
+                    (tag === 'img' && name === 'src') ||
+                    ((tag === 'ol' && name === 'start' || tag === 'li' && name === 'value') &&
+                     /^-?\d+$/.test(attribute.value));
                 if (!keep) element.removeAttribute(attribute.name);
             }
         }
@@ -161,28 +163,40 @@ struct MarkdownLayoutRow: Identifiable, Equatable, @unchecked Sendable {
     let marker: String?
     let quoteDepth: Int
     let quoteIndents: [CGFloat]
+    let clipboardContainers: [MarkdownClipboardContainer]
     let spacing: CGFloat
     let revision: Int
 
     static func flatten(_ document: Block) -> [Self] {
         var rows: [Self] = []
+        var nextContainerID = 0
+        func containerID() -> Int {
+            defer { nextContainerID += 1 }
+            return nextContainerID
+        }
         func visit(_ block: Block, indent: CGFloat = 0, marker: String? = nil, quoteDepth: Int = 0,
-                   quoteIndents: [CGFloat] = [], spacing: CGFloat = 12) {
+                   quoteIndents: [CGFloat] = [], spacing: CGFloat = 12,
+                   clipboardContainers: [MarkdownClipboardContainer] = []) {
             switch block {
             case .document(let children), .listItem(_, _, let children):
                 for (index, child) in children.enumerated() {
                     visit(child, indent: indent, marker: index == 0 ? marker : nil, quoteDepth: quoteDepth,
-                          quoteIndents: quoteIndents, spacing: spacing)
+                          quoteIndents: quoteIndents, spacing: spacing, clipboardContainers: clipboardContainers)
                 }
             case .list(let start, let tight, let items):
+                let list = MarkdownClipboardContainer.list(id: containerID(), start: start)
                 for (index, item) in items.enumerated() {
+                    let ordinal = start.map { $0 + index }
                     visit(item, indent: indent + 24, marker: start.map { "\($0 + index)." } ?? "•",
-                          quoteDepth: quoteDepth, quoteIndents: quoteIndents, spacing: tight ? 6 : 12)
+                          quoteDepth: quoteDepth, quoteIndents: quoteIndents, spacing: tight ? 6 : 12,
+                          clipboardContainers: clipboardContainers + [list, .item(id: containerID(), ordinal: ordinal)])
                 }
             case .blockquote(let children):
+                let quote = MarkdownClipboardContainer.quote(containerID())
                 for child in children {
                     visit(child, indent: indent + 16, quoteDepth: quoteDepth + 1,
-                          quoteIndents: quoteIndents + [indent], spacing: 8)
+                          quoteIndents: quoteIndents + [indent], spacing: 8,
+                          clipboardContainers: clipboardContainers + [quote])
                 }
             case .referenceDef:
                 break
@@ -190,8 +204,10 @@ struct MarkdownLayoutRow: Identifiable, Equatable, @unchecked Sendable {
                 var hasher = Hasher()
                 hasher.combine(block.description)
                 hasher.combine(indent); hasher.combine(marker); hasher.combine(quoteIndents); hasher.combine(spacing)
+                hasher.combine(clipboardContainers)
                 rows.append(Self(id: rows.count, block: block, indent: indent, marker: marker, quoteDepth: quoteDepth,
-                                 quoteIndents: quoteIndents, spacing: rows.isEmpty ? 0 : spacing, revision: hasher.finalize()))
+                                 quoteIndents: quoteIndents, clipboardContainers: clipboardContainers,
+                                 spacing: rows.isEmpty ? 0 : spacing, revision: hasher.finalize()))
             }
         }
         visit(document)

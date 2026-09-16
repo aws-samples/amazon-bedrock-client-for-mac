@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="56" viewBox="0 0 256 56" role="img" aria-label="Download for macOS — Latest release">
+  <rect x=".5" y=".5" width="255" height="55" rx="13.5" fill="#171717" stroke="#343434"/>
+  <g transform="translate(21 16)" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 1v14m-5-5 5 5 5-5M3 16v5h18v-5"/>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="58" y="25" fill="#fff" font-size="15" font-weight="600">Download for macOS</text>
+    <text x="58" y="42" fill="#b8b8b8" font-size="11">Latest release · DMG</text>
+  </g>
+</svg>

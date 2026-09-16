@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		70A9D1C92E8049AD98516852 /* ConversationTranscript.swift in Sources */ = {isa = PBXBuildFile; fileRef = F240BABF697F41A0A9E2E52C /* ConversationTranscript.swift */; };
 		0185669AACF09F197C9B52AB /* BedrockUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB7D717E90A77D570C1B21C /* BedrockUITests.swift */; };
 		034B158A6FE6478CC6B24CE3 /* HTMLMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB5676C2066EB4005395D952 /* HTMLMarkdownView.swift */; };
 		0354249235EA16694ADC6201 /* AttachmentExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A3E9E8774B5C1514E04B0E1 /* AttachmentExporter.swift */; };
@@ -35,6 +36,7 @@
 		25B069C1C4BC01BDEE569001 /* BedrockModelChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */; };
 		26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */; };
 		285E7D951A36B4B14518EEB5 /* ConnectionIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */; };
+		0F3B089D2E91BC386189A85D /* MantleResponsesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5BE8F33FA4B925ACB37F18C /* MantleResponsesTests.swift */; };
 		2A3D7D6AC9804F91DEF38AD4 /* AppControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B148015A59508132568D9F /* AppControls.swift */; };
 		2B360F375C765DBBB5F31D9A /* AttachmentProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC6EE66C42B933CB7D1E0A0 /* AttachmentProcessor.swift */; };
 		2C2F37B0D68CAC46586B3634 /* BackgroundProcessRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73896BA2A1F5C5C0D6F203D0 /* BackgroundProcessRegistry.swift */; };
@@ -75,6 +77,7 @@
 		701F3C86C5D045FC270335E3 /* highlight-github-dark.css in Resources */ = {isa = PBXBuildFile; fileRef = 951464FAD76A8E8151588CE3 /* highlight-github-dark.css */; };
 		7255D15CCA39EA76693ED94A /* ImagePreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A544E82819B7065F2B03BCC /* ImagePreviewTests.swift */; };
 		7353858C0378A35BFCC7A7F4 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B0DA2E72B22C1A67EE296C /* MarkdownRenderer.swift */; };
+		98C67A82C89D48F09C0CB704 /* MarkdownClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA0C2F3A52D4F08967A9431 /* MarkdownClipboard.swift */; };
 		738E8E05DD99514072F0FE55 /* BedrockModelDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6985269D8C0D227D417D6C51 /* BedrockModelDescriptor.swift */; };
 		755F0A3F6BEF86BADDE30740 /* MCPToolDefinitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ECE7DB8FDB92A765C47E30 /* MCPToolDefinitionView.swift */; };
 		7590C1668B013FFC27E489F6 /* NavigationDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D397CE70578C9F41C1B9560 /* NavigationDestination.swift */; };
@@ -210,8 +213,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F240BABF697F41A0A9E2E52C /* ConversationTranscript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTranscript.swift; sourceTree = "<group>"; };
 		011F311AB816B21C2D484D9D /* SecureCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureCredentialStore.swift; sourceTree = "<group>"; };
 		02B0DA2E72B22C1A67EE296C /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
+		7CA0C2F3A52D4F08967A9431 /* MarkdownClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownClipboard.swift; sourceTree = "<group>"; };
 		0612B6F47757DC56A059226B /* WindowCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCommands.swift; sourceTree = "<group>"; };
 		081CA27572BF8A4D36866279 /* SurfaceStyles.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SurfaceStyles.swift; sourceTree = "<group>"; };
 		08731DDD50011CDBC9F24E44 /* LocalOperationError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalOperationError.swift; sourceTree = "<group>"; };
@@ -223,6 +228,7 @@
 		0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockModelChoice.swift; sourceTree = "<group>"; };
 		1098B5B3CF9B0A6E7577B9F3 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
 		117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionIsolationTests.swift; sourceTree = "<group>"; };
+		A5BE8F33FA4B925ACB37F18C /* MantleResponsesTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MantleResponsesTests.swift; sourceTree = "<group>"; };
 		119F773F9339A5B2A33ECF33 /* BedrockFailureMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockFailureMessage.swift; sourceTree = "<group>"; };
 		1230F92CA09B52944B24F8C0 /* MCPToolIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolIdentity.swift; sourceTree = "<group>"; };
 		123D11A7DDC046FAA273BF33 /* ConversationCompatibilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCompatibilityTests.swift; sourceTree = "<group>"; };
@@ -687,6 +693,7 @@
 				8A7409315A17A77A4751C527 /* ConversationOutbox.swift */,
 				3D03F6152EEDB0BD6EE65B87 /* ConversationReplay.swift */,
 				306DA119A344104B1243D8A1 /* ConversationSearch.swift */,
+				F240BABF697F41A0A9E2E52C /* ConversationTranscript.swift */,
 				D8AA5FBFE411D1A6409F531C /* LegacyConversationDecoder.swift */,
 				D96710AA8CDE4BA160D2D661 /* ThreadMetadata.swift */,
 			);
@@ -711,6 +718,7 @@
 			children = (
 				79D6E6A22C99BFF300314D86 /* MarkdownColors.swift */,
 				02B0DA2E72B22C1A67EE296C /* MarkdownRenderer.swift */,
+				7CA0C2F3A52D4F08967A9431 /* MarkdownClipboard.swift */,
 				16BD564F8434874E5BBB8132 /* SelectableMarkdown.swift */,
 				98FA8411C37A94B030A8221C /* MessageMarkdownView.swift */,
 				DB5676C2066EB4005395D952 /* HTMLMarkdownView.swift */,
@@ -1216,6 +1224,7 @@
 				C200DF2D416C315FD9914A1B /* MCPServerTests.swift */,
 				2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */,
 				117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */,
+				A5BE8F33FA4B925ACB37F18C /* MantleResponsesTests.swift */,
 			);
 			name = BedrockTests;
 			path = BedrockTests;
@@ -1460,6 +1469,7 @@
 				4281ED2814161CB5E0DD16FA /* ConversationOutbox.swift in Sources */,
 				05B83F348A25D25CFECB18B4 /* ConversationReplay.swift in Sources */,
 				6DB2061B16361F033796DBEF /* ConversationSearch.swift in Sources */,
+				70A9D1C92E8049AD98516852 /* ConversationTranscript.swift in Sources */,
 				79BFF5102AD342710057BF3A /* ConversationStore.swift in Sources */,
 				B258B716BBA725FF4A033187 /* ConversationViewportController.swift in Sources */,
 				797A12BC2C2EB4C300494DD9 /* CoreDataStack.swift in Sources */,
@@ -1499,6 +1509,7 @@
 				79D6E6A32C99BFF300314D86 /* MarkdownColors.swift in Sources */,
 				0AD95AD8E19BDB64962B9206 /* MarkdownLinkPolicy.swift in Sources */,
 				7353858C0378A35BFCC7A7F4 /* MarkdownRenderer.swift in Sources */,
+				98C67A82C89D48F09C0CB704 /* MarkdownClipboard.swift in Sources */,
 				79FF2B332D925EDB0075249D /* MCPClientManager.swift in Sources */,
 				B5ACA4CBE9EF3EB4C16BA2FA /* MCPConfiguration.swift in Sources */,
 				923D77A4972EBA386D630E6B /* MCPImportView.swift in Sources */,
@@ -1590,6 +1601,7 @@
 				DA78D175A68A198C7E15D151 /* MCPServerTests.swift in Sources */,
 				26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */,
 				285E7D951A36B4B14518EEB5 /* ConnectionIsolationTests.swift in Sources */,
+				0F3B089D2E91BC386189A85D /* MantleResponsesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

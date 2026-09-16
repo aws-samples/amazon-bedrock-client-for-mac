@@ -8,14 +8,6 @@
 import SwiftUI
 import Combine
 
-struct BottomAnchorPreferenceKey: PreferenceKey {
-    typealias Value = CGFloat
-    nonisolated(unsafe) static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sharedMediaDataSource = AttachmentStore()
@@ -47,8 +39,6 @@ struct ChatView: View {
     @State private var editingMessage: Message?
     @State private var inspectingMessage: MessageData?
     @State private var requestedMatchMessageID: UUID?
-    @State private var visibleRange: Range<Int>?
-    @State private var pageTask: Task<Void, Never>?
     private let initialPosition: ConversationViewportMemory.Position?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -58,7 +48,6 @@ struct ChatView: View {
         _viewModel = StateObject(wrappedValue: session)
         _sharedMediaDataSource = StateObject(wrappedValue: session.sharedMediaDataSource)
         initialPosition = position
-        _visibleRange = State(initialValue: position?.range)
         _followsOutput = State(initialValue: position == nil)
         _isAtBottom = State(initialValue: position == nil)
         self._backendModel = ObservedObject(wrappedValue: backendModel)
@@ -120,7 +109,7 @@ struct ChatView: View {
             EditorFocusState.shared.isSearchFieldActive = showSearchBar && newValue
         }
         .onChange(of: searchQuery) { _, newQuery in
-            cancelPageLoad()
+            viewport.cancelPreservation()
             performDebouncedSearch(query: newQuery)
         }
         .onAppear {
@@ -131,7 +120,6 @@ struct ChatView: View {
             if let keyboardMonitor { NSEvent.removeMonitor(keyboardMonitor); self.keyboardMonitor = nil }
             searchDebounceTimer?.invalidate()
             scrollTask?.cancel()
-            cancelPageLoad()
             viewport.disconnect()
             viewModel.usageHandler = nil
             EditorFocusState.shared.isSearchFieldActive = false
@@ -208,186 +196,141 @@ struct ChatView: View {
     // MARK: - Message Scroll View
 
     private var messageScrollView: some View {
-        GeometryReader { outerGeo in
-            ScrollViewReader { proxy in
-                ZStack {
-                    scrollableMessageList(outerGeo: outerGeo, proxy: proxy)
-                    enhancedScrollToBottomButton(outerGeo: outerGeo, proxy: proxy)
-                }
-                .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
-                    if #unavailable(macOS 15.0) {
-                        handleBottomAnchorChange(bottomY, containerHeight: outerGeo.size.height)
-                    }
-                }
-                .onChange(of: searchResult) { _, newResult in
-                    jumpToFirstMatch(newResult, proxy: proxy)
-                }
-                .onChange(of: currentMatchIndex) { _, idx in
-                    jumpToMatchIndex(idx, proxy: proxy)
-                }
+        ScrollViewReader { proxy in
+            ZStack {
+                scrollableMessageList(proxy: proxy)
+                enhancedScrollToBottomButton(proxy: proxy)
+            }
+            .onChange(of: searchResult) { _, newResult in
+                jumpToFirstMatch(newResult, proxy: proxy)
+            }
+            .onChange(of: currentMatchIndex) { _, idx in
+                jumpToMatchIndex(idx, proxy: proxy)
             }
         }
     }
 
-    private func scrollableMessageList(
-        outerGeo: GeometryProxy,
-        proxy: ScrollViewProxy
-    ) -> some View {
-        let proposed = visibleRange ?? ConversationViewport.initialRange(in: viewModel.messages)
-        let range = min(proposed.lowerBound, viewModel.messages.count)..<min(proposed.upperBound, viewModel.messages.count)
-        let isLatestPage = range.upperBound == viewModel.messages.count
-        let visible = range.map { (offset: $0, element: viewModel.messages[$0]) }.filter {
-            ConversationViewport.isVisible($0.element)
-        }
-        // Prepend older messages in bounded pages, retaining exact geometry and
-        // the current top message. Hidden history still participates in search.
-        let messageList = VStack(spacing: 12) {
-            if range.lowerBound > 0 {
-                Button {
-                    loadPage(ConversationViewport.earlier(than: range, in: viewModel.messages),
-                             preserving: visible.first?.element.id, alignment: .top, proxy: proxy)
-                } label: {
-                    Label("Load earlier messages", systemImage: "arrow.up")
-                }
-                .buttonStyle(AppButtonStyle()).controlSize(.small)
-                .disabled(pageTask != nil)
-                .padding(.bottom, 12).accessibilityIdentifier("conversation.loadEarlier")
-            }
-            ForEach(visible, id: \.element.id) { idx, message in
-                Group {
+    private func scrollableMessageList(proxy: ScrollViewProxy) -> some View {
+        let rows = ConversationTranscript.rows(in: viewModel.messages)
+        // List keeps the complete transcript in one native scroll view and
+        // reuses offscreen rows. No paging controls or truncated data window.
+        return List {
+            Color.clear.frame(height: 12)
+                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
+                .listRowBackground(Color.clear).accessibilityHidden(true)
+            ForEach(rows) { row in
+                let message = row.message
+                VStack(spacing: 12) {
+                    if let change = row.modelTransition {
+                        modelTransitionView(change)
+                    }
                     if viewModel.currentStreamingMessageId == message.id {
                         StreamingMessageView(stream: viewModel.streamingMessage, fallback: message,
-                                             searchResult: getSearchResultForMessage(idx),
+                                             searchResult: getSearchResultForMessage(row.sourceIndex),
                                              adjustedFontSize: CGFloat(adjustedFontSize),
                                              showTimestamp: workbench.preferences.showTimestamps)
                     } else {
-                        MessageView(message: message, searchResult: getSearchResultForMessage(idx),
+                        MessageView(message: message, searchResult: getSearchResultForMessage(row.sourceIndex),
                                     adjustedFontSize: CGFloat(adjustedFontSize),
                                     showTimestamp: workbench.preferences.showTimestamps,
                                     canModify: !viewModel.isSending && !viewModel.isLoadingHistory,
-                                    canRetry: message.user != "User" && message.id == visible.last?.element.id,
+                                    canRetry: message.user != "User" && message.id == rows.last?.id,
                                     onAction: handleMessageAction)
                             .equatable()
                     }
                 }
                 .id(message.id)
+                .frame(maxWidth: DesignTokens.contentWidth)
+                .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity)
                 .background {
                     ConversationMessageAnchor(messageID: message.id, controller: viewport)
                         .allowsHitTesting(false).accessibilityHidden(true)
                 }
+                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .selectionDisabled()
             }
-            if !isLatestPage {
-                Button {
-                    loadPage(ConversationViewport.newer(than: range, in: viewModel.messages),
-                             preserving: visible.last?.element.id, alignment: .bottom, proxy: proxy)
-                } label: {
-                    Label("Load newer messages", systemImage: "arrow.down")
-                }
-                .buttonStyle(AppButtonStyle()).controlSize(.small)
-                .disabled(pageTask != nil)
-                .padding(.top, 12).accessibilityIdentifier("conversation.loadNewer")
+            if let change = ConversationTranscript.pendingTransition(after: rows, to: viewModel.chatModel.id) {
+                modelTransitionView(change)
+                    .frame(maxWidth: DesignTokens.contentWidth)
+                    .padding(.horizontal, 24).frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                    .selectionDisabled()
+                    .id("PendingModelTransition")
             }
-            if #available(macOS 15.0, *) {
-                Color.clear.frame(height: 1).id("Bottom")
-            } else {
-                Color.clear.frame(height: 1).id("Bottom")
-                    .anchorPreference(key: BottomAnchorPreferenceKey.self, value: .bottom) { anchor in outerGeo[anchor].y }
-            }
+            Color.clear.frame(height: 18).id("Bottom")
+                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
+                .listRowBackground(Color.clear).accessibilityHidden(true)
         }
-        .frame(maxWidth: DesignTokens.contentWidth)
-        .padding(.horizontal, 24).padding(.vertical, 24).frame(maxWidth: .infinity)
-
-        return ScrollView {
-            messageList
-        }
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 1)
+        .scrollContentBackground(.hidden)
+        .accessibilityIdentifier("conversation.transcript")
         .background(SidebarScrollChrome(viewport: viewport))
         .modifier(ScrollEdgeEffectModifier())
-        .modifier(ConversationScrollBehavior(
-            followsOutput: Binding(get: { followsOutput }, set: { followsOutput = $0 && isLatestPage }),
-            isAtBottom: Binding(get: { isAtBottom }, set: { isAtBottom = $0 && isLatestPage }),
-            userDidScroll: cancelPageLoad,
-            userDidEndScroll: rememberReadingPosition
-        ) {
-            if followsOutput && searchQuery.isEmpty { scheduleFollowing(proxy) }
-        })
         .onChange(of: viewModel.messages.last?.id) { _, _ in
             if followsOutput && searchQuery.isEmpty {
-                visibleRange = ConversationViewport.initialRange(in: viewModel.messages)
                 scheduleFollowing(proxy)
             }
         }
         .onChange(of: viewModel.isSending) { _, isSending in
             if isSending && followsOutput && searchQuery.isEmpty {
-                visibleRange = ConversationViewport.initialRange(in: viewModel.messages)
                 scheduleFollowing(proxy)
             }
         }
         .task {
-            if visibleRange == nil { visibleRange = range }
+            viewport.observeScrolling(
+                didScroll: { nearBottom in
+                    if followsOutput != nearBottom { followsOutput = nearBottom }
+                    if isAtBottom != nearBottom { isAtBottom = nearBottom }
+                },
+                didEnd: rememberReadingPosition,
+                contentDidResize: {
+                    if followsOutput && searchQuery.isEmpty { scheduleFollowing(proxy) }
+                }
+            )
             if let initialPosition,
-               let index = viewModel.messages.firstIndex(where: { $0.id == initialPosition.anchor.messageID }) {
-                let restoredRange = range.contains(index) ? range :
-                    ConversationViewport.around(index, in: viewModel.messages)
-                visibleRange = restoredRange
-                await MarkdownPreparation.prewarm(viewModel.messages[restoredRange].compactMap {
-                    $0.user != "User" && $0.user != "ToolResult" ? $0.text : nil
-                })
-                guard !Task.isCancelled, searchQuery.isEmpty else { return }
+               rows.contains(where: { $0.id == initialPosition.anchor.messageID }) {
                 isAtBottom = false
                 followsOutput = false
+                proxy.scrollTo(initialPosition.anchor.messageID, anchor: .top)
                 viewport.preserve(initialPosition.anchor)
                 return
             }
-            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-            guard searchQuery.isEmpty else { return }
+            await Task.yield()
+            guard !Task.isCancelled, searchQuery.isEmpty else { return }
             proxy.scrollTo("Bottom", anchor: .bottom)
             isAtBottom = true
             followsOutput = true
         }
     }
 
-    private func loadPage(_ range: Range<Int>, preserving messageID: UUID?,
-                          alignment: UnitPoint, proxy: ScrollViewProxy) {
-        guard pageTask == nil else { return }
-        followsOutput = false
-        let messages = viewModel.messages
-        let texts = range.compactMap { index -> String? in
-            guard messages.indices.contains(index) else { return nil }
-            let message = messages[index]
-            return message.user != "User" && message.user != "ToolResult" ? message.text : nil
-        }
-        pageTask = Task { @MainActor in
-            // A cold renderer starts empty, then grows after its asynchronous
-            // parse. Prepare only this bounded page before inserting it so
-            // native geometry can retain the message and its screen offset.
-            await MarkdownPreparation.prewarm(texts)
-            guard !Task.isCancelled else { return }
-            let anchor = viewport.capture(preferredID: messageID)
-            if let anchor { viewport.preserve(anchor) }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                visibleRange = range
+    private func modelTransitionView(_ change: ConversationTranscript.ModelTransition) -> some View {
+        HStack(spacing: 12) {
+            Rectangle().fill(DesignTokens.border).frame(height: 1).accessibilityHidden(true)
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").accessibilityHidden(true)
+                Text("Switched to \(ModelCatalog.shared.model(change.toModelID).name)")
+                    .lineLimit(1)
             }
-            if anchor == nil, let messageID {
-                DispatchQueue.main.async { proxy.scrollTo(messageID, anchor: alignment) }
-            }
-            pageTask = nil
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.secondary)
+            .layoutPriority(1)
+            Rectangle().fill(DesignTokens.border).frame(height: 1).accessibilityHidden(true)
         }
-    }
-
-    private func cancelPageLoad() {
-        pageTask?.cancel()
-        pageTask = nil
-        viewport.cancelPreservation()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("conversation.modelSwitch")
     }
 
     private func rememberReadingPosition() {
         guard !viewModel.isLoadingHistory else { return }
         let position = !followsOutput ? viewport.capture().map {
-            ConversationViewportMemory.Position(
-                range: visibleRange ?? ConversationViewport.initialRange(in: viewModel.messages), anchor: $0)
+            ConversationViewportMemory.Position(anchor: $0)
         } : nil
         ConversationViewportMemory.shared.remember(position, for: viewModel.chatId)
         if let position { viewport.preserve(position.anchor) }
@@ -421,10 +364,7 @@ struct ChatView: View {
         }
     }
 
-    private func enhancedScrollToBottomButton(
-        outerGeo: GeometryProxy,
-        proxy: ScrollViewProxy
-    ) -> some View {
+    private func enhancedScrollToBottomButton(proxy: ScrollViewProxy) -> some View {
         Group {
             if !isAtBottom {
                 VStack {
@@ -432,11 +372,10 @@ struct ChatView: View {
                     HStack {
                         Spacer()
                         Button {
-                            cancelPageLoad()
+                            viewport.cancelPreservation()
                             var transaction = Transaction(animation: nil)
                             transaction.disablesAnimations = true
                             withTransaction(transaction) {
-                                visibleRange = ConversationViewport.initialRange(in: viewModel.messages)
                                 isAtBottom = true
                                 followsOutput = true
                             }
@@ -481,9 +420,8 @@ struct ChatView: View {
             transcribeManager: transcribeManager,
             sendMessage: {
                 if !viewModel.isSending {
-                    cancelPageLoad()
+                    viewport.cancelPreservation()
                     followsOutput = true
-                    visibleRange = ConversationViewport.initialRange(in: viewModel.messages)
                 }
                 await viewModel.submitDraft()
             },
@@ -677,12 +615,6 @@ struct ChatView: View {
         return match
     }
 
-    private func handleBottomAnchorChange(_ bottomY: CGFloat, containerHeight: CGFloat) {
-        let threshold: CGFloat = 50
-        let nearBottom = bottomY <= containerHeight + threshold
-        if isAtBottom != nearBottom { isAtBottom = nearBottom }
-    }
-
     private func jumpToFirstMatch(_ result: SearchResult, proxy: ScrollViewProxy) {
         guard !result.matches.isEmpty else { return }
         jumpToMatchIndex(currentMatchIndex, proxy: proxy)
@@ -705,21 +637,14 @@ struct ChatView: View {
 
     private func scrollToMatch(messageIndex: Int, proxy: ScrollViewProxy) {
         guard viewModel.messages.indices.contains(messageIndex) else { return }
-        cancelPageLoad()
+        viewport.cancelPreservation()
         // Search holds its position until the user returns to the bottom.
         isAtBottom = false
         followsOutput = false
 
         let message = viewModel.messages[messageIndex]
-        let range = visibleRange ?? ConversationViewport.initialRange(in: viewModel.messages)
-        if !range.contains(messageIndex) {
-            visibleRange = ConversationViewport.around(messageIndex, in: viewModel.messages)
-            DispatchQueue.main.async {
-                proxy.scrollTo(message.id, anchor: .center)
-            }
-            return
-        }
-        if message.user != "User", MarkdownPreparation.usesWebRenderer(message.text) {
+        if viewport.isVisible(messageID: message.id),
+           message.user != "User", MarkdownPreparation.usesWebRenderer(message.text) {
             // The WebKit renderer scrolls to the exact match. A coarse scroll
             // here can run afterward and incorrectly recenter a long response.
             return

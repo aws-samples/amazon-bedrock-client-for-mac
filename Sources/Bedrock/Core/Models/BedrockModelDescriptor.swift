@@ -77,6 +77,13 @@ enum BedrockModelID {
             "ai21.jamba-1-5-large-", "ai21.jamba-1-5-mini-"
         ].contains { id.hasPrefix($0) }
     }
+
+    /// Product exclusions apply to bundled, cached, and live model choices.
+    /// Keep the model metadata and invocation support for existing conversations.
+    static func isExcludedFromSelection(_ value: String) -> Bool {
+        let id = base(value).lowercased()
+        return id == "amazon.nova-2-pro-preview" || id.hasPrefix("amazon.nova-2-pro-preview-")
+    }
 }
 
 enum BedrockModelOrigin: String, Codable, Sendable { case runtime, mantle, custom }
@@ -95,6 +102,10 @@ struct BedrockModelDescriptor: Codable, Identifiable, Equatable, Sendable {
     var origin: BedrockModelOrigin = .runtime
     var route: BedrockModelRoute { BedrockModelID.route(foundationID ?? id, output: outputModalities) }
     var isLegacy: Bool { BedrockModelID.isLegacy(foundationID ?? id, lifecycle: lifecycle) }
+    var isHiddenFromSelection: Bool {
+        isLegacy || BedrockModelID.isExcludedFromSelection(id)
+            || BedrockModelID.isExcludedFromSelection(foundationID ?? id)
+    }
     var isConversation: Bool { route == .conversation || route == .responses || route == .videoAnalysis }
     var acceptsImages: Bool { inputModalities.contains("IMAGE") }
     var acceptsAudio: Bool { inputModalities.contains("SPEECH") || inputModalities.contains("AUDIO") }

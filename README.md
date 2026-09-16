@@ -7,8 +7,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest"><strong>Download for Mac</strong></a>
-  &nbsp;·&nbsp; <a href="#build">Build from source</a>
+  <a href="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest/download/Amazon.Bedrock.Client.for.Mac.dmg"><img src="docs/assets/download-macos.svg" width="256" height="56" alt="Download for macOS — latest DMG" /></a>
+</p>
+
+<p align="center">
+  <a href="#build">Build from source</a>
   &nbsp;·&nbsp; <a href="docs/troubleshooting.md">Get help</a>
   &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a>
 </p>
@@ -25,15 +28,13 @@
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/hero.png" />
     <source type="image/webp" srcset="docs/assets/demo.webp" />
-    <img src="docs/assets/demo.gif" width="1120" alt="From an idea to an image: Nova develops a glass-cabin concept, then Stable Image Ultra generates an aurora landscape in the same conversation." />
+    <img src="docs/assets/demo.gif" width="1120" alt="From an idea to an image: GPT-6 Astra at Low reasoning effort develops a glass-cabin concept, then Stable Image Ultra 1.0 generates an aurora landscape in the same conversation." />
   </picture>
 </p>
 
 <p align="center">
   <strong>From a thought to an image.</strong><br />
-  <sub>Develop an idea with Nova, switch to Stable Image Ultra, and open the result.</sub><br />
-  <a href="docs/assets/demo.mp4">Watch the 35-second tour · Retina, 60fps</a>
-  &nbsp;·&nbsp; <a href="docs/assets/hero.png">View full-resolution screenshot</a>
+  <sub>Develop an idea with GPT-6 Astra at Low effort, switch to Stable Image Ultra 1.0, and open the result.</sub>
 </p>
 
 ## Made for the conversation
@@ -94,7 +95,9 @@ The app discovers foundation models and inference profiles for your connection a
 
 ### Install
 
-Download the latest signed app from [Releases](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest), or use the existing Homebrew tap:
+[Download the latest DMG](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest/download/Amazon.Bedrock.Client.for.Mac.dmg), open it, and drag **Amazon Bedrock** into **Applications**.
+
+Alternatively, install with Homebrew:
 
 ```sh
 brew tap didhd/tap
