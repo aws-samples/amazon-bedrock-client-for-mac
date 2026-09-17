@@ -33,6 +33,10 @@ final class BedrockUITests: XCTestCase {
                                "-appearance", appearance, "-selectedRegion", "us-west-2",
                                 "-selectedProfile", "default",
                                 "-defaultModelId", "us.amazon.nova-2-lite-v1:0"]
+        // AppKit saves window geometry outside the isolated conversation data.
+        // Ignore a previous scenario's resized frame so a fresh launch exercises
+        // the app's real default size, rather than inheriting that test's size.
+        app.launchArguments += ["-NSWindow Frame MainWindow", ""]
         if let scrollbars {
             app.launchArguments += ["-AppleShowScrollBars", scrollbars]
         }
@@ -58,6 +62,21 @@ final class BedrockUITests: XCTestCase {
         XCTAssertEqual(TISSelectInputSource(keyboard), noErr)
         XCTAssertEqual(app.state, .runningForeground, "UI input requires the test app to own keyboard focus.")
         XCTAssertTrue(app.staticTexts["How can I help?"].waitForExistence(timeout: 15))
+        // XCTest window captures can fail on a secondary display with negative
+        // coordinates. Move only the test window, retaining its default size.
+        let window = app.windows["MainWindow"]
+        let display = CGDisplayBounds(CGMainDisplayID())
+        let frame = window.frame
+        if !display.contains(frame) {
+            let titlebar = window.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: frame.width / 2, dy: 14))
+            let destination = titlebar.withOffset(CGVector(dx: display.midX - frame.midX,
+                                                          dy: display.midY - frame.midY))
+            titlebar.press(forDuration: 0.1, thenDragTo: destination,
+                           withVelocity: .fast, thenHoldForDuration: 0.1)
+            XCTAssertTrue(display.insetBy(dx: -1, dy: -1).contains(window.frame),
+                          "Keep UI captures on the main display without resizing the app's default window.")
+        }
         return (app, directory)
     }
 

@@ -11,6 +11,13 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Local `833f9d3` passed all non-UI suites and 26/27 UI scenarios. Its remaining
+  default-window-size assertion inherited saved geometry from the small-window
+  scenario. The UI fixture now ignores that saved frame at launch and moves its
+  own window onto the primary display for reliable captures on multi-monitor
+  systems. It still tests the app's real default size and does not change
+  production window restoration. Small-window history, initial titlebar/default
+  size and long-attachment relaunch then each passed three consecutive runs.
 - Actual small-window inspection isolated a wheel-input trap in short native
   tool previews. Scrolling outside the preview worked; scrolling inside it
   could leave Open details out of reach. Fitting inline previews now pass wheel

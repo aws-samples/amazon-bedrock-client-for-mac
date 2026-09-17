@@ -43,6 +43,11 @@ protects existing user preferences.
 
 `Tests/Fixtures/bedrock_runtime.py` serves AWS Converse JSON and binary event-stream responses over HTTP. Tests run the app's actual AWS SDK, request serialization, stream decoder, tool loop, queue, persistence and rendering. Fixture tests validate frame sizes, headers and both CRCs first. No AWS credential or paid request is needed.
 
+UI launches ignore a previous test's saved MainWindow frame, preserving the app's
+actual default-size behavior. On multi-monitor Macs, the fixture moves its window
+to the primary display without resizing it so XCTest can capture the full window.
+These launch overrides do not change the normal app's window restoration.
+
 Only fixed synthetic prompts and attachments are recorded. SDK request logs are attached to the test result so an incorrect model, missing tool schema, lost context or changed document bytes is visible.
 
 ## Performance evidence

@@ -6,6 +6,18 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Complete local CI at `833f9d3` passed 115 core, 43 renderer and 106 native app
+  cases (four optional network checks skipped), plus 26/27 UI scenarios.
+  The remaining first-launch size assertion inherited the 1024-point window
+  saved by the preceding small-window test. Test launches now mask only AppKit's
+  saved MainWindow frame through the argument defaults domain, so the unchanged
+  application default size is tested. Production window restoration is intact.
+  A multi-display follow-up also found XCTest window capture failing at negative
+  coordinates on a secondary screen. The fixture moves only its own window to
+  the primary display without resizing it; the original width assertion remains.
+  `isolated-main-display-history.xcresult` then passed small-window history,
+  default-window/titlebar behavior and long-attachment relaunch three times each,
+  including the retained window screenshots.
 - Small-window tool inspection revealed a separate nested-scrolling problem:
   wheel input over a short native input preview stayed inside that preview,
   leaving Open details below the conversation viewport. Actual wheel input
