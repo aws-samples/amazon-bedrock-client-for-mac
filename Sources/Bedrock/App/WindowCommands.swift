@@ -31,8 +31,8 @@ extension Notification.Name {
 }
 
 struct WindowCommands {
-    var canTrash: Bool
-    var trash: () -> Void
+    var canArchive: Bool
+    var archive: () -> Void
     var toggleSidebar: () -> Void
     var canGoBack: Bool
     var goBack: () -> Void
@@ -69,12 +69,12 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: .command)
 
-            Button("Move Thread to Trash") {
+            Button("Archive Thread") {
                 guard AppWindows.isMainWindowKey else { return }
-                windowCommands?.trash()
+                windowCommands?.archive()
             }
             .keyboardShortcut("d", modifiers: .command)
-            .disabled(windowCommands?.canTrash != true)
+            .disabled(windowCommands?.canArchive != true)
 
             Button("Import Thread…", action: AppActions.importThread)
                 .keyboardShortcut("o", modifiers: [.command, .shift])

@@ -279,3 +279,16 @@ No release has been triggered by this audit.
   verified main commit's artifacts during release without weakening source,
   signing or test verification. This is deferred until after v2.0.1; do not
   repeat full local CI when the changed-path checks have already passed.
+
+## v2.0.1: one Archive
+
+The latest request combines Archive and Trash as one behavior, beyond the earlier
+shared Settings surface. Existing hidden conversations must migrate into Archive.
+Restore, restore-and-open, search and confirmed permanent delete remain available
+there; `⌘D` retains its navigation and draft behavior. The dedicated A01–A06
+checks in [requirements.md](requirements.md) track this work. The user subsequently
+authorized including it in v2.0.1 if CI had not already consumed 20 minutes.
+The previous candidate was still queued after about 12 minutes with no executed
+steps, so its run was canceled and the changes combined. Migration, byte-preserving
+recovery, paused queues and the Archive UI passed targeted local checks. The
+combined revision still needs complete main CI and release validation.

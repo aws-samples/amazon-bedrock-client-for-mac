@@ -292,7 +292,7 @@ class ConversationStore: ObservableObject {
            FileManager.default.fileExists(atPath: draftURL.path) { return false }
         let metadata = store.thread(id)
         return store.selectedThreadID != id && !metadata.hasUnsentWork &&
-            !metadata.archived && metadata.deletedAt == nil && !metadata.isPinned
+            !metadata.archived && !metadata.isPinned
     }
     
     func cleanupTemporaryChats() {

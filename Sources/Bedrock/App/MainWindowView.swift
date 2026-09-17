@@ -155,7 +155,7 @@ struct MainWindowView: View {
         .onChange(of: coordinator.shouldDeleteChat) { _, delete in
             guard delete else { return }
             coordinator.shouldDeleteChat = false
-            if let selectedChat { store.trash(selectedChat.chatId) }
+            if let selectedChat { store.archive(selectedChat.chatId) }
         }
         .onChange(of: chats.persistenceError) { _, value in if let value { store.errorMessage = value } }
         .onReceive(approvals.$pending) { requests in
@@ -190,9 +190,9 @@ struct MainWindowView: View {
     var body: some View {
         presentedContent
         .focusedSceneValue(\.workbenchCommands, WindowCommands(
-            canTrash: selectedChat != nil && store.destination == .chats && !store.showCommandPalette,
-            trash: {
-                if let selectedChat, store.destination == .chats { store.trash(selectedChat.chatId) }
+            canArchive: selectedChat != nil && store.destination == .chats && !store.showCommandPalette,
+            archive: {
+                if let selectedChat, store.destination == .chats { store.archive(selectedChat.chatId) }
             },
             toggleSidebar: toggleSidebar,
             canGoBack: canGoBack,
@@ -304,7 +304,7 @@ struct MainWindowView: View {
     private func canOpen(_ location: NavigationLocation) -> Bool {
         guard location.destination == .chats, let id = location.threadID else { return true }
         return chats.chats.contains(where: { $0.chatId == id }) &&
-            store.thread(id).deletedAt == nil && !store.thread(id).archived
+            !store.thread(id).archived
     }
     private func goBack() {
         guard let previous = navigationHistory.back(where: canOpen) else { return }

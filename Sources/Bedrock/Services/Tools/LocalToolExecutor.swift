@@ -163,7 +163,7 @@ enum LocalToolExecutor {
                              error: nil, images: [.init(base64: image.data.base64EncodedString(), format: image.fileExtension)])
             case .searchConversations:
                 let query = try string("query")
-                let chats = ConversationStore.shared.chats.filter { store.thread($0.chatId).deletedAt == nil }
+                let chats = ConversationStore.shared.chats.filter { !store.thread($0.chatId).archived }
                     .sorted { $0.lastMessageDate > $1.lastMessageDate }
                 let root = URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory)
                 let inputs = chats.map { ConversationSearchInput(id: $0.chatId,

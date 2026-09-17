@@ -103,7 +103,7 @@ enum BuiltInTool: String, CaseIterable, Codable, Identifiable, Sendable {
         case .listSkills: "List enabled local skills with their exact IDs, English names, and descriptions."
         case .readSkill: "Load an enabled local skill's instructions by ID. Use its reference directory for related files and scripts."
         case .viewImage: "Inspect a local image using an absolute, ~/ or working-directory-relative path. Returns a bounded image to vision-capable models and an image preview in the conversation."
-        case .searchConversations: "Search saved local conversations, including pasted text and tool output. Returns matching snippets and conversation IDs. Excludes Trash."
+        case .searchConversations: "Search saved local conversations, including pasted text and tool output. Returns matching snippets and conversation IDs. Excludes archived conversations."
         case .listAutomations: "List local automations and their actual model, enabled state, next run, and last result."
         case .saveAutomation: "Create or update a local automation using the app's validated scheduler. Omit id to create; include an existing id to update. New schedules start paused unless enabled is explicitly true. Schedules run while this Mac and Bedrock are awake."
         }

@@ -36,7 +36,7 @@
 - **Attachments that stay with your work.** Paste text, images, and browser content, or attach documents, source code, and configuration files. Inspect attachments before sending. Large text becomes an editable attachment, and unsent attachment drafts survive a restart.
 - **Readable answers.** Select across paragraphs, lists, tables, and code, and paste with rich formatting. Copy-response and code buttons preserve the original Markdown and code. Image previews support zoom, copy, and saving the original image.
 - **Room for the next thought.** Queue another message during a response, including its model, skills, and attachments. Edit or remove queued work, interrupt and send now, or resume a paused queue.
-- **History without clutter.** Browse chats by date and collapse sidebar sections when you want more space. Scroll the complete conversation without loading pages. Search across local conversations, find within the current chat, edit a prompt, retry a response, or branch from a message. Archive and Trash share one view in Settings.
+- **History without clutter.** Browse chats by date and collapse sidebar sections when you want more space. Scroll the complete conversation without loading pages. Search across local conversations, find within the current chat, edit a prompt, retry a response, or branch from a message. Recover archived conversations in Settings.
 
 <details>
 <summary>Light, Dark, or your system appearance</summary>
@@ -123,7 +123,7 @@ An optional Bedrock API key can be entered in AWS connection settings for compat
 | Action | Shortcut |
 | --- | --- |
 | New chat | `⌘N` |
-| Move current chat to Trash | `⌘D` |
+| Archive current chat | `⌘D` |
 | Show/hide sidebar | `⌘B` |
 | Back | `⌘[` |
 | Search conversations and commands | `⌘K` |

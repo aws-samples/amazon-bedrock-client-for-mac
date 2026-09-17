@@ -631,7 +631,7 @@ class ChatViewModel: ObservableObject {
     private func drainQueue() {
         guard !isClosingSession, !isSending, !isLoadingHistory, !isUpdatingQueue, queueDrainTask == nil,
               outbox.pauseReason == nil, outbox.inFlight == nil, !outbox.queued.isEmpty,
-              AppStore.shared.thread(chatId).deletedAt == nil else { return }
+              !AppStore.shared.thread(chatId).archived else { return }
         queueDrainTask = Task { [weak self] in
             guard let self else { return }
             defer { queueDrainTask = nil }

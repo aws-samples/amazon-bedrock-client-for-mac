@@ -62,6 +62,15 @@ enum AppActions {
         }
     }
 
+    static func confirmPermanentDeletion(of chat: ChatModel) {
+        let alert = NSAlert()
+        alert.messageText = "Permanently delete “\(chat.title)”?"
+        alert.informativeText = "This removes this conversation's local history and saved drafts. It cannot be undone."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { AppStore.shared.deletePermanently(chat.chatId) }
+    }
+
     static func markdown(for chat: ChatModel) async throws -> String {
         let history = try await ConversationStore.shared.conversationSnapshot(for: chat.chatId)
         let title = chat.title, name = chat.name, modelID = chat.id

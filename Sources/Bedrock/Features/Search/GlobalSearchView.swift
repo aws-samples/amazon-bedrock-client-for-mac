@@ -50,7 +50,7 @@ struct GlobalSearchView: View {
             }
         }
         let threadResults = chats.chats.filter {
-            store.thread($0.chatId).deletedAt == nil &&
+            !store.thread($0.chatId).archived &&
             (text.isEmpty || "\($0.title) \($0.name)".localizedStandardContains(text) || contentMatches[$0.chatId] != nil)
         }.sorted {
             let leftTitle = !text.isEmpty && $0.title.localizedStandardContains(text)
@@ -168,7 +168,7 @@ struct GlobalSearchView: View {
         isSearching = true
         do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
         let root = URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory).appendingPathComponent("history")
-        let inputs = chats.chats.filter { store.thread($0.chatId).deletedAt == nil }
+        let inputs = chats.chats.filter { !store.thread($0.chatId).archived }
             .sorted { $0.lastMessageDate > $1.lastMessageDate }.map {
             ConversationSearchInput(id: $0.chatId,
                 unifiedURL: root.appendingPathComponent("\($0.chatId)_unified_history.json"),

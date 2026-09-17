@@ -5,64 +5,79 @@ struct HistorySettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = AppStore.shared
     @ObservedObject private var chats = ConversationStore.shared
-    @State private var scope: Scope = .archived
     @State private var query = ""
-    private enum Scope: String, CaseIterable { case archived = "Archived", trash = "Trash" }
     private var filtered: [ChatModel] {
         chats.chats.filter {
-            let metadata = store.thread($0.chatId)
-            let included = scope == .trash ? metadata.deletedAt != nil : metadata.archived && metadata.deletedAt == nil
-            return included && (query.isEmpty || "\($0.title) \($0.name)".localizedStandardContains(query))
+            store.thread($0.chatId).archived &&
+                (query.isEmpty || "\($0.title) \($0.name)".localizedStandardContains(query))
         }.sorted { $0.lastMessageDate > $1.lastMessageDate }
     }
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Chat history").font(.system(size: 21, weight: .semibold))
+                Text("Archive").font(.system(size: 21, weight: .semibold))
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }.padding(24)
-            HStack(spacing: 16) {
-                AppSegmentedControl(title: "Show", selection: $scope,
-                                          options: Scope.allCases.map { ($0, $0.rawValue) }).frame(width: 210)
-                TextField("Search history", text: $query).textFieldStyle(.roundedBorder)
-            }.padding(.horizontal, 24).padding(.bottom, 16)
+            SearchField(placeholder: "Search archived chats", text: $query)
+                .padding(.horizontal, 24).padding(.bottom, 16)
             Divider()
             if filtered.isEmpty {
-                EmptyStateView(symbol: scope == .trash ? "trash" : "archivebox",
-                    title: query.isEmpty ? (scope == .trash ? "Trash is empty" : "No archived chats") : "No matching chats",
-                    detail: query.isEmpty ? "Move a chat here using its menu in the sidebar." : "Try a different name.")
+                EmptyStateView(symbol: "archivebox",
+                    title: query.isEmpty ? "No archived chats" : "No matching chats",
+                    detail: query.isEmpty ? "Archive a chat from its menu or press ⌘D." : "Try a different name.")
             } else {
-                List(filtered, id: \.chatId) { chat in
-                    HStack(spacing: 12) {
-                        Image(systemName: "bubble.left").foregroundStyle(.secondary).frame(width: 20)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(chat.title).font(DesignTokens.label).lineLimit(1)
-                            Text(chat.lastMessageDate.formatted(date: .abbreviated, time: .shortened))
-                                .font(DesignTokens.detail).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Restore") { store.restore(chat.chatId) }.controlSize(.small)
-                        ActionMenu {
-                            Button("Restore and open") {
-                                store.restore(chat.chatId); store.selectThread(chat.chatId)
-                                dismiss(); AppWindows.showMain()
+                ScrollViewReader { proxy in
+                    List(filtered, id: \.chatId) { chat in
+                        HStack(spacing: 12) {
+                            Image(systemName: "bubble.left").foregroundStyle(.secondary).frame(width: 20)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(chat.title).font(DesignTokens.label).lineLimit(1)
+                                Text(chat.lastMessageDate.formatted(date: .abbreviated, time: .shortened))
+                                    .font(DesignTokens.detail).foregroundStyle(.secondary)
                             }
-                            Divider()
-                            ThreadContextMenu(chat: chat)
-                        } label: { Image(systemName: "ellipsis") }
-                        .menuStyle(.borderlessButton).fixedSize().help("Chat actions")
-                    }.padding(.vertical, 7)
-                }.listStyle(.inset)
+                            Spacer()
+                            Button("Restore") { store.restore(chat.chatId) }.controlSize(.small)
+                            ActionMenu {
+                                Button("Restore and open") {
+                                    store.restore(chat.chatId); store.selectThread(chat.chatId)
+                                    dismiss(); AppWindows.showMain()
+                                }
+                                Divider()
+                                Button("Copy conversation") { AppActions.copyThread(chat) }
+                                Button("Export Markdown…") { AppActions.exportThread(chat, asJSON: false) }
+                                Button("Export JSON…") { AppActions.exportThread(chat, asJSON: true) }
+                                Divider()
+                                Button("Delete permanently…", role: .destructive) {
+                                    AppActions.confirmPermanentDeletion(of: chat)
+                                }
+                            } label: { Image(systemName: "ellipsis") }
+                            .menuStyle(.borderlessButton).fixedSize().help("Chat actions")
+                            .accessibilityLabel("Actions for \(chat.title)")
+                        }.padding(.vertical, 7)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("archive.chat.\(chat.chatId)")
+                            .id(chat.chatId)
+                    }.listStyle(.inset)
+                        .onChange(of: query) { _, _ in
+                            if let firstID = filtered.first?.chatId {
+                                // Filtering must not retain a partially scrolled row
+                                // when earlier matches are inserted back into the list.
+                                proxy.scrollTo(firstID, anchor: .top)
+                            }
+                        }
+                }
             }
             Divider()
             HStack {
                 Text("\(filtered.count) chat\(filtered.count == 1 ? "" : "s")").font(DesignTokens.detail).foregroundStyle(.secondary)
                 Spacer()
-                if scope == .trash { Text("Deleted only when you choose to remove them permanently.").font(DesignTokens.detail).foregroundStyle(.secondary) }
+                Text("Kept until you restore or permanently delete them.")
+                    .font(DesignTokens.detail).foregroundStyle(.secondary)
             }.padding(.horizontal, 24).padding(.vertical, 14)
         }
         .frame(width: 640, height: 500)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("settings.chatHistory")
     }
 }

@@ -9,7 +9,7 @@ struct SidebarView: View {
     @State private var referenceDate = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var visibleChats: [ChatModel] {
-        chats.chats.filter { !store.thread($0.chatId).archived && store.thread($0.chatId).deletedAt == nil }
+        chats.chats.filter { !store.thread($0.chatId).archived }
     }
     private var selectedItem: String {
         store.destination == .chats ? store.selectedThreadID.map { "thread:\($0)" } ?? "new" : "page:\(store.destination.rawValue)"
@@ -220,22 +220,14 @@ struct ThreadContextMenu: View {
             Button("Export Markdown…") { AppActions.exportThread(chat, asJSON: false) }
             Button("Export JSON…") { AppActions.exportThread(chat, asJSON: true) }
             Divider()
-            Button(store.thread(chat.chatId).archived ? "Unarchive" : "Archive") { store.archive(chat.chatId, archived: !store.thread(chat.chatId).archived) }
-            if store.thread(chat.chatId).deletedAt != nil {
-                Button("Restore from trash") { store.restore(chat.chatId) }
+            if store.thread(chat.chatId).archived {
+                Button("Restore") { store.restore(chat.chatId) }
                 Button("Delete permanently…", role: .destructive) {
-                    let alert = NSAlert()
-                    alert.messageText = "Permanently delete “\(chat.title)”?"
-                    alert.informativeText = "This removes this conversation's local history. It cannot be undone."
-                    alert.addButton(withTitle: "Delete")
-                    alert.addButton(withTitle: "Cancel")
-                    if alert.runModal() == .alertFirstButtonReturn { store.deletePermanently(chat.chatId) }
+                    AppActions.confirmPermanentDeletion(of: chat)
                 }
             } else {
-                Button("Move to trash", role: .destructive) { store.trash(chat.chatId) }
+                Button("Archive") { store.archive(chat.chatId) }
             }
         }
     }
 }
-
-/// Archived and deleted chats share one management surface in Settings.

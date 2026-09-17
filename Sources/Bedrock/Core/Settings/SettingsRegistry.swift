@@ -100,7 +100,7 @@ struct SettingsItem: Identifiable, Sendable {
         .init(id: "notificationTest", pane: .general, title: "Test notification", detail: "Send a sample desktop notification.", keywords: "permission"),
         .init(id: "dataDirectory", pane: .storage, title: "Data folder", detail: "Conversations and workbench data stay on this Mac.", keywords: "storage reveal finder"),
         .init(id: "skills", pane: .skills, title: "Skills", detail: "Import, edit, enable, and apply local SKILL.md files.", keywords: "plugins extensions instructions"),
-        .init(id: "history", pane: .storage, title: "Chat history", detail: "Browse archived chats and Trash in one place.", keywords: "archive trash recover restore delete undo"),
+        .init(id: "history", pane: .storage, title: "Archive", detail: "Restore or permanently delete archived chats.", keywords: "history archive trash recover restore delete undo"),
         .init(id: "logging", pane: .advanced, title: "Debug logging", detail: "Write diagnostic logs locally. Takes effect on next launch.", keywords: "console debug"),
         .init(id: "logs", pane: .advanced, title: "Open logs folder", detail: "Inspect local diagnostic output.", keywords: "finder console"),
         .init(id: "diagnostics", pane: .advanced, title: "Export diagnostics", detail: "Export app configuration and run counts without credentials or prompts.", keywords: "report debug"),

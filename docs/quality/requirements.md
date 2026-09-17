@@ -8,7 +8,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 |---|---|
 | Product | Swift macOS client with direct Bedrock inference and local storage; no hosted Foxl backend, relay, cloud sync, Notes, or account/billing system |
 | Main navigation | Keep Demo library, Automations and Activity under a collapsible Library subheader. Chats retains Today, Yesterday and earlier date groups. Remember section disclosure choices. Remove Files and Projects. Skills belong in Settings. |
-| History management | Archive and Trash share one Settings section; neither is a main navigation destination. |
+| History management | Include one Archive state and one Settings list in v2.0.1, with restore and permanent delete. Migrate existing Archive and Trash conversations without losing data. The latest instruction supersedes the earlier next-release-only plan because candidate CI was still queued after about 12 minutes. |
 | Theme | Light, Dark, and System. Light is predominantly white with a slightly gray frosted sidebar. Dark retains the simple black design. |
 | Branding | Bedrock wordmark only in the sidebar; no Bedrock pictogram inside the application. Provider identity may appear in the model picker. |
 | Search location | Restore the original upper-right toolbar Search button and size. It opens a centered global-search panel, not a dropdown. Outside click and Escape dismiss it; ⌘F opens Find within the current chat. The earlier wordmark-adjacent search request is superseded. |
@@ -20,6 +20,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 | Validation | Repeated build → actual interaction → inspection → correction cycles. Maintain an itemized ledger; do not claim an infinite unattended run or mark untested items complete. |
 | Current priority | Speed, responsiveness, and usability come first. Compare the fast older Bedrock Validation with the latest changes using identical workloads, fix measured regressions, and put the verified updates back into Bedrock Validation. Do not call a successful build the final result. |
 | Release gate | Latest instruction: run changed or previously failing scenarios locally, then require the final main revision and release workflow to pass the complete GitHub CI. A redundant full local rerun is not required. |
+| Release naming | Tags and release titles use only `vx.y.z`, such as `v2.0.1`, with no added product name. |
 | Repository | Organize Swift sources by responsibility, use descriptive filenames, remove verified dead files/resources, and update the Xcode project, scripts and documentation together. Preserve stored data and production identity. |
 | Updates | Preserve automatic checks or improve the existing upgrade route. Keep 1.x release/DMG compatibility, retain the update preference and user data, and verify download, replacement, rollback and restart behavior before publication. |
 
@@ -97,7 +98,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [x] N08 Find searches the full history, including messages outside the current screen.
 - [x] N09 Search is cancelable and stale results never replace a newer query. (ConversationSearch tests cover cancellation/cache replacement; the palette also checks the current query before publishing.)
 - [x] N10 ⌘N matches released behavior: create a distinct chat using the current model.
-- [x] N11 ⌘D matches released behavior while keeping deletion recoverable in Trash.
+- [x] N11 ⌘D preserves released navigation and draft behavior while moving the conversation to Archive.
 - [x] N12 ⌘B matches the visible sidebar toggle.
 - [x] N13 ⌘, opens Settings reliably from applicable windows.
 - [x] N14 Back and ⌘[ restore the previous valid destination without losing drafts.
@@ -220,7 +221,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [ ] G05 Validate every Skills control and sheet.
 - [ ] G06 Validate every Tools & MCP control and sheet.
 - [ ] G07 Validate Keyboard reference and supported rebinding/conflict handling.
-- [ ] G08 Validate combined Archive/Trash search, restore, batch actions, and permanent-delete confirmation.
+- [ ] G08 Validate Archive search, restore, batch actions, and permanent-delete confirmation. Single-chat flows passed (A04); batch actions remain open.
 - [ ] G09 Validate Data/history import/export, storage location, and migration.
 - [ ] G10 Validate every Advanced control.
 - [ ] G11 Fix clipped inputs, overlapping controls, malformed rows, and excessive gaps at minimum width.
@@ -330,3 +331,16 @@ Mark behavior complete only after the relevant execution evidence is recorded.
 - [x] Refine Chats/date hierarchy, consistent left alignment and compact header spacing in both themes. The optimized UI checks measure the header/date gap and title alignment; actual Light/Dark captures were inspected.
 - [ ] Run the changed native, Markdown, image and UI regressions locally; require the complete main workflow before tagging.
 - [ ] Publish v2.0.1 and verify its signed/notarized universal DMG, public download, update installation and Homebrew route.
+
+## v2.0.1 — one Archive
+
+The latest instruction includes this change in v2.0.1. Candidate CI had not
+started executing after about 12 minutes in the queue, so no executed validation
+was discarded when combining the changes.
+
+- [x] A01 Replace the two recovery states and tabs with one Archive in Settings.
+- [x] A02 Migrate old Archive and Trash entries without losing history, drafts, attachments, queues, pins, skills or parent links.
+- [x] A03 Keep `⌘D` and the chat menu consistent: archive the current chat and select the latest remaining active chat.
+- [x] A04 Support search, restore, restore-and-open and confirmed permanent deletion from the single list; preserve cancellation and restart behavior. Search changes reset the list to its first complete row.
+- [x] A05 Exclude archived conversations from the sidebar, Back history, launch restoration, global/tool search and automatic queue processing.
+- [ ] A06 Run the affected migration, persistence and UI regressions, commit and push the combined candidate, then require complete main CI before the v2.0.1 release.

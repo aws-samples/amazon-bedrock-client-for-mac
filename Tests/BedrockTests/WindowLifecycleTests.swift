@@ -137,6 +137,99 @@ final class WindowLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testArchiveRestoreAndPermanentDeletePreserveHistoryDraftsAndNavigation() async throws {
+        let store = AppStore.shared
+        let chats = ConversationStore.shared
+        let previousSelection = store.selectedThreadID
+        let previousCompanion = store.companionThreadID
+        let previousPreferences = store.preferences
+        let model = "us.amazon.nova-2-lite-v1:0"
+        let searchMarker = "ARCHIVE_SEARCH_\(UUID().uuidString)"
+        let message = Message(id: UUID(), text: searchMarker, role: .user,
+                              timestamp: Date(), isError: false, modelID: model)
+        var created: [String] = []
+        defer {
+            for id in created {
+                chats.setIsLoading(false, for: id)
+                _ = chats.deleteChat(with: id)
+                store.state.threads.removeValue(forKey: id)
+            }
+            store.selectedThreadID = previousSelection
+            store.companionThreadID = previousCompanion
+            store.preferences = previousPreferences
+        }
+        func create(_ title: String, hoursAhead: Double) async throws -> ChatModel {
+            let chat = try await chats.createConversation(
+                modelID: model, modelName: "Nova 2 Lite", provider: "Amazon", title: title,
+                messages: [message], systemPrompt: "Preserved system prompt",
+                lastMessageDate: Date().addingTimeInterval(hoursAhead * 3600))
+            created.append(chat.chatId)
+            return chat
+        }
+        let next = try await create("Most recent active conversation", hoursAhead: 1)
+        let current = try await create("Conversation to archive", hoursAhead: 2)
+        let alreadyArchived = try await create("A newer archived conversation", hoursAhead: 3)
+        store.archive(alreadyArchived.chatId)
+        store.selectThread(current.chatId)
+        store.companionThreadID = current.chatId
+        let metadata = ThreadMetadata(draft: "Unsent draft", skillIDs: ["code-review"],
+                                      systemPrompt: "Preserved system prompt", pinnedAt: Date(),
+                                      hasQueuedMessages: true, hasDraftAttachments: true)
+        store.state.threads[current.chatId] = metadata
+        let historyURL = URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory)
+            .appendingPathComponent("history/\(current.chatId)_unified_history.json")
+        let queueURL = try ConversationOutboxFile.url(threadID: current.chatId, directory: store.directory)
+        let draftURL = try ConversationAttachmentDraftFile.url(threadID: current.chatId, directory: store.directory)
+        let queued = QueuedPrompt(message: MessageData(text: "Queued follow-up", user: "User", sentTime: Date()),
+                                  modelID: model)
+        try ConversationOutboxFile.write(ConversationOutbox(queued: [queued]), to: queueURL)
+        let attachment = DraftAttachment(id: UUID(), data: Data("Draft attachment".utf8),
+                                        filename: "draft.txt", format: "txt", pastedText: "Draft attachment")
+        try ConversationAttachmentDraftFile.write(.init(documents: [attachment]), to: draftURL)
+        let urls = [historyURL, queueURL, draftURL]
+        let originalBytes = try urls.map { try Data(contentsOf: $0) }
+
+        store.archive(current.chatId)
+        XCTAssertTrue(store.thread(current.chatId).archived)
+        XCTAssertEqual(store.selectedThreadID, next.chatId, "⌘D must choose the latest active chat, ignoring archived chats.")
+        XCTAssertEqual(store.preferences.lastThreadID, next.chatId)
+        XCTAssertNil(store.companionThreadID)
+        XCTAssertEqual(try urls.map { try Data(contentsOf: $0) }, originalBytes)
+        store.preferences.toolProfile = .all
+        store.preferences.disabledTools.remove(.searchConversations)
+        let hiddenSearch = await LocalToolExecutor.execute(
+            kind: .searchConversations, input: .object(["query": .string(searchMarker)]),
+            threadID: next.chatId, modelID: model)
+        XCTAssertEqual(hiddenSearch.status, "success")
+        XCTAssertTrue(hiddenSearch.text.contains(next.chatId))
+        XCTAssertFalse(hiddenSearch.text.contains(current.chatId), "Tools must not expose archived conversation content.")
+        XCTAssertFalse(hiddenSearch.text.contains(alreadyArchived.chatId))
+
+        store.restore(current.chatId)
+        XCTAssertEqual(store.thread(current.chatId), metadata)
+        let restoredSearch = await LocalToolExecutor.execute(
+            kind: .searchConversations, input: .object(["query": .string(searchMarker)]),
+            threadID: next.chatId, modelID: model)
+        XCTAssertTrue(restoredSearch.text.contains(current.chatId), "Restored conversations must return to normal search.")
+        store.deletePermanently(current.chatId)
+        XCTAssertNotNil(chats.getChatModel(for: current.chatId), "An active chat cannot be permanently deleted.")
+        XCTAssertEqual(try urls.map { try Data(contentsOf: $0) }, originalBytes)
+
+        store.archive(current.chatId)
+        chats.setIsLoading(true, for: current.chatId)
+        store.deletePermanently(current.chatId)
+        XCTAssertNotNil(chats.getChatModel(for: current.chatId), "A running conversation must retain its files.")
+        XCTAssertEqual(try urls.map { try Data(contentsOf: $0) }, originalBytes)
+        chats.setIsLoading(false, for: current.chatId)
+        store.deletePermanently(current.chatId)
+        XCTAssertNil(chats.getChatModel(for: current.chatId))
+        XCTAssertNil(store.state.threads[current.chatId])
+        for url in urls { XCTAssertFalse(FileManager.default.fileExists(atPath: url.path)) }
+        XCTAssertNotNil(chats.getChatModel(for: next.chatId))
+        XCTAssertTrue(store.thread(alreadyArchived.chatId).archived)
+    }
+
+    @MainActor
     func testSettingsWindowCanCloseAndReopenWithoutAppKitReleasingSwiftOwnership() throws {
         _ = NSApplication.shared
         let manager = SettingsWindowController()

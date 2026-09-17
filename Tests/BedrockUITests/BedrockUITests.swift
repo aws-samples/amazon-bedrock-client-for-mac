@@ -327,7 +327,7 @@ final class BedrockUITests: XCTestCase {
     }
 
     @MainActor
-    func testNewChatDraftAndTrashShortcutsPreservePreviousDraft() throws {
+    func testNewChatDraftAndArchiveShortcutsPreservePreviousDraft() throws {
         let (app, _) = try launch()
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == 'New chat'")).count, 1)
         app.typeKey("n", modifierFlags: .command)
@@ -347,6 +347,173 @@ final class BedrockUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 3), .completed)
         app.typeKey("b", modifierFlags: .command)
         XCTAssertTrue(app.buttons["New chat"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testArchiveMigratesLegacyTrashAndSupportsRestoreSearchAndPermanentDelete() throws {
+        let (app, directory) = try launch()
+        let model = "us.amazon.nova-2-lite-v1:0"
+        for name in ["Legacy archive", "Legacy trash"] {
+            let file = directory.appendingPathComponent("\(name).json")
+            let messages: [[String: Any]] = [
+                ["id": UUID().uuidString, "role": "user", "text": "\(name) question",
+                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate],
+                ["id": UUID().uuidString, "role": "assistant", "text": "\(name) preserved response",
+                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate]
+            ]
+            try JSONSerialization.data(withJSONObject: [
+                "version": 1, "title": name, "modelID": model, "modelName": "Nova 2 Lite",
+                "provider": "Amazon", "messages": messages
+            ]).write(to: file)
+            importThread(file, in: app)
+            _ = response("\(name) preserved response", in: app)
+        }
+        app.terminate()
+        let workspaceURL = directory.appendingPathComponent("workbench/workspace.json")
+        var workspace = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: workspaceURL)) as? [String: Any])
+        var threads = try XCTUnwrap(workspace["threads"] as? [String: [String: Any]])
+        var ids: [String: String] = [:]
+        var originalHistory: [String: Data] = [:]
+        let historyDirectory = directory.appendingPathComponent("history")
+        for file in try FileManager.default.contentsOfDirectory(at: historyDirectory, includingPropertiesForKeys: nil)
+            where file.lastPathComponent.hasSuffix("_unified_history.json") {
+            let data = try Data(contentsOf: file)
+            let history = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let messages = try XCTUnwrap(history["messages"] as? [[String: Any]])
+            let question = try XCTUnwrap(messages.first?["text"] as? String)
+            let name = question.replacingOccurrences(of: " question", with: "")
+            let id = try XCTUnwrap(history["chatId"] as? String)
+            guard ["Legacy archive", "Legacy trash"].contains(name) else { continue }
+            ids[name] = id
+            originalHistory[id] = data
+            var metadata = try XCTUnwrap(threads[id])
+            metadata["archived"] = name == "Legacy archive"
+            if name == "Legacy trash" {
+                metadata["deletedAt"] = Date().timeIntervalSinceReferenceDate
+                metadata["draft"] = "Recovered unsent draft"
+            }
+            threads[id] = metadata
+        }
+        let archivedID = try XCTUnwrap(ids["Legacy archive"])
+        let trashedID = try XCTUnwrap(ids["Legacy trash"])
+        workspace["threads"] = threads
+        try JSONSerialization.data(withJSONObject: workspace).write(to: workspaceURL, options: .atomic)
+        app.launch()
+        app.activate()
+        XCTAssertTrue(app.staticTexts["How can I help?"].waitForExistence(timeout: 10),
+                      "A legacy hidden last selection must not reopen itself on launch.")
+        app.typeKey("k", modifierFlags: .command)
+        let palette = app.descendants(matching: .any)["workbench.commandPalette"].firstMatch
+        XCTAssertTrue(palette.waitForExistence(timeout: 3))
+        let globalSearch = palette.textFields.firstMatch
+        globalSearch.click()
+        globalSearch.typeText("Legacy archive")
+        XCTAssertTrue(palette.staticTexts["No results"].waitForExistence(timeout: 5),
+                      "Archived conversations belong in Archive, not active global search.")
+        app.typeKey(.escape, modifierFlags: [])
+
+        func openArchive() -> XCUIElement {
+            let window = settings(app)
+            openPane("Data & history", in: window)
+            window.buttons["Manage archived chats"].click()
+            let history = app.descendants(matching: .any)["settings.chatHistory"].firstMatch
+            XCTAssertTrue(history.waitForExistence(timeout: 5))
+            return history
+        }
+        func row(_ id: String, in history: XCUIElement) -> XCUIElement {
+            history.descendants(matching: .any)["archive.chat.\(id)"].firstMatch
+        }
+        let history = openArchive()
+        XCTAssertTrue(row(archivedID, in: history).waitForExistence(timeout: 3))
+        XCTAssertTrue(row(trashedID, in: history).exists)
+        XCTAssertEqual(history.buttons.matching(identifier: "Restore").count, 2)
+        XCTAssertFalse(history.buttons["Trash"].exists, "Recovery must use one list, not separate Archive and Trash tabs.")
+        let search = history.textFields["Search archived chats"]
+        search.click()
+        search.typeText("Legacy archive")
+        XCTAssertTrue(row(archivedID, in: history).exists)
+        XCTAssertFalse(row(trashedID, in: history).exists)
+        history.buttons["Clear search"].click()
+        let firstTitle = row(trashedID, in: history).staticTexts["Legacy trash"]
+        let list = history.outlines.firstMatch
+        let fullyVisible = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            firstTitle.exists && list.exists && firstTitle.isHittable
+                && firstTitle.frame.minY >= list.frame.minY
+                && firstTitle.frame.maxY <= list.frame.maxY
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [fullyVisible], timeout: 5), .completed,
+                       "Clearing the search must show the complete first row, not a clipped title.")
+        let screenshot = XCTAttachment(screenshot: app.windows["Settings"].screenshot())
+        screenshot.name = "Archive – former Archive and Trash in one list"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        row(archivedID, in: history).buttons["Restore"].click()
+        XCTAssertFalse(row(archivedID, in: history).exists)
+        row(trashedID, in: history).buttons["Actions for Legacy trash"].click()
+        app.buttons["Restore and open"].click()
+        XCTAssertTrue(response("Legacy trash preserved response", in: app).isHittable)
+        XCTAssertEqual(composer(app).value as? String, "Recovered unsent draft")
+        for (id, data) in originalHistory {
+            XCTAssertEqual(try Data(contentsOf: historyDirectory.appendingPathComponent("\(id)_unified_history.json")), data)
+        }
+
+        app.typeKey("d", modifierFlags: .command)
+        XCTAssertTrue(response("Legacy archive preserved response", in: app).isHittable)
+        let reopened = openArchive()
+        XCTAssertTrue(row(trashedID, in: reopened).waitForExistence(timeout: 3))
+        row(trashedID, in: reopened).buttons["Actions for Legacy trash"].click()
+        app.buttons["Delete permanently…"].click()
+        // NSAlert is an AXDialog; the Touch Bar exposes duplicate actions.
+        let cancel = app.dialogs.buttons["Cancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 3))
+        cancel.click()
+        XCTAssertTrue(row(trashedID, in: reopened).exists)
+        row(trashedID, in: reopened).buttons["Actions for Legacy trash"].click()
+        app.buttons["Delete permanently…"].click()
+        app.dialogs.buttons["Delete"].firstMatch.click()
+        XCTAssertTrue(reopened.staticTexts["No archived chats"].waitForExistence(timeout: 3))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: historyDirectory.appendingPathComponent("\(trashedID)_unified_history.json").path))
+        app.terminate()
+        app.launch()
+        app.activate()
+        XCTAssertTrue(response("Legacy archive preserved response", in: app).isHittable)
+        XCTAssertTrue(openArchive().staticTexts["No archived chats"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testArchivingAStreamingChatPausesItsQueueAndPreservesTheDraftAcrossRestart() throws {
+        let (app, _) = try launch(withRuntime: true)
+        send("[stream] Archive this conversation while it runs.", in: app)
+        _ = response("STREAM_BEGIN", in: app)
+        send("[queue-one] Keep this queued message in the archive.", in: app)
+        XCTAssertTrue(app.staticTexts["Up next"].waitForExistence(timeout: 5))
+        composer(app).click()
+        composer(app).typeText("Keep this archive draft")
+        app.typeKey("d", modifierFlags: .command)
+        XCTAssertTrue(app.staticTexts["How can I help?"].waitForExistence(timeout: 5))
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 1)
+        let window = settings(app)
+        openPane("Data & history", in: window)
+        window.buttons["Manage archived chats"].click()
+        let history = app.descendants(matching: .any)["settings.chatHistory"].firstMatch
+        XCTAssertTrue(history.waitForExistence(timeout: 5))
+        history.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Actions for '")).firstMatch.click()
+        app.buttons["Restore and open"].click()
+        XCTAssertTrue(app.staticTexts["Queue paused"].waitForExistence(timeout: 8))
+        XCTAssertEqual(composer(app).value as? String, "Keep this archive draft")
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 1, "Restoring must not silently replay queued requests.")
+        app.typeKey("q", modifierFlags: .command)
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.state == .notRunning }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 8), .completed)
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Queue paused"].waitForExistence(timeout: 10))
+        XCTAssertEqual(composer(app).value as? String, "Keep this archive draft")
+        _ = response("STREAM_BEGIN", in: app)
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 1)
+        app.buttons["Resume"].click()
+        _ = response("QUEUE_ONE_COMPLETE", in: app)
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 2)
+        XCTAssertEqual(composer(app).value as? String, "Keep this archive draft")
     }
 
     @MainActor

@@ -17,6 +17,34 @@ verified behavior, remaining implementation gaps and release gates.
   app at 1,024×634 points in `v2.0.1/ci-text-value-regression`. The reading
   anchor, response height, model switch, following message and actual SDK
   request assertions remain intact. Complete main CI is still required.
+- Archive validation was initially separate from the v2.0.1 candidate.
+  All 32 core behavior cases passed, including the four legacy Archive/Trash
+  combinations, complete metadata retention, restoration and encoding without
+  the old deletion timestamp. The native lifecycle case preserves the exact
+  history, draft-attachment and outbox bytes, selects the latest active chat,
+  excludes archived content from tool search, and guards active/running
+  conversations against permanent deletion.
+- The optimized Archive UI checks passed the existing `⌘N`/`⌘D` draft
+  behavior and archiving during a real SDK fixture stream. Restore and
+  relaunch retain the draft and paused queue; only an explicit Resume sends
+  the queued request. The complete migration/search/restore/delete/relaunch
+  scenario then passed in 64.90 seconds in
+  `v2.0.1/archive-filter-and-delete-regression`. Original history bytes were
+  compared, Cancel retained the chat, and confirmed deletion survived restart.
+  Its Settings-only screenshot in `v2.0.1/archive-filter-final-captures`
+  was inspected.
+- That UI work found a real list defect: clearing search could preserve an
+  offset that clipped the newly inserted first title. Filtering now returns
+  to the first complete row, and the test measures title visibility. Earlier
+  runs also exposed test queries that selected a heading rather than its
+  accessibility container, or matched both an alert and its Touch Bar buttons.
+  Containers now expose children explicitly, and destructive-dialog checks
+  target the actual AXDialog. An interrupted file-panel attempt and all
+  failed receipts are retained separately; they are not counted as passes.
+- The user subsequently authorized combining Archive into v2.0.1 when fewer
+  than 20 minutes of CI had elapsed. At 20:20 UTC, main run `35269072109`
+  had spent about 12 minutes queued with no assigned runner or executed
+  steps. That queued run was canceled to validate one combined candidate.
 - Main CI `35260024696` at `0ae1c2f` passed the core, renderer and app
   integration suites, but two of 35 UI scenarios failed. Its 1,024-point
   display could not reach a requested 1,120-point window width, and WebKit did

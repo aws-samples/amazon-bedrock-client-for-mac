@@ -47,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard AppWindows.isMainWindowKey,
               AppStore.shared.destination == .chats,
               let id = AppStore.shared.selectedThreadID else { return }
-        AppStore.shared.trash(id)
+        AppStore.shared.archive(id)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

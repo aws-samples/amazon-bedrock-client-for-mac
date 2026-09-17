@@ -379,7 +379,7 @@ struct SettingsView: View {
             HStack {
                 Text(row.title)
                 Spacer()
-                Button("Manage…") { showHistory = true }.accessibilityLabel("Manage chat history")
+                Button("Manage…") { showHistory = true }.accessibilityLabel("Manage archived chats")
             }
         case "logging": Toggle(row.title, isOn: $settings.enableDebugLog)
         case "logs": Button(row.title) { revealLogs() }
@@ -466,7 +466,7 @@ struct SettingsView: View {
     }
     private var shortcutReference: some View {
         VStack(spacing: 8) {
-            ForEach([("New thread", "⌘N"), ("Move thread to Trash", "⌘D"), ("Command palette", "⌘K"), ("Find in thread", "⌘F"), ("Toggle sidebar", "⌘B"),
+            ForEach([("New thread", "⌘N"), ("Archive thread", "⌘D"), ("Command palette", "⌘K"), ("Find in thread", "⌘F"), ("Toggle sidebar", "⌘B"),
                      ("Settings", "⌘,"), ("Import thread", "⇧⌘O"), ("Quick Access", "⇧⌘K"),
                      ("Stop response", "Esc"), ("New line", "⇧ Return"), ("Change text size", "⌘+ / ⌘− / ⌘0")], id: \.0) { shortcut in
                 HStack { Text(shortcut.0); Spacer(); Text(shortcut.1).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary) }

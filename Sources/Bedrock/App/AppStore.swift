@@ -69,7 +69,8 @@ final class AppStore: ObservableObject {
             state.runs[index].finishedAt = Date()
             state.runs[index].error = "The app closed before this run finished."
         }
-        if state.preferences.restoreLastThread { selectedThreadID = state.preferences.lastThreadID }
+        if state.preferences.restoreLastThread, let id = state.preferences.lastThreadID,
+           !thread(id).archived { selectedThreadID = id }
         seedSkillsIfNeeded()
         reloadSkills()
         terminateObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
@@ -108,27 +109,23 @@ final class AppStore: ObservableObject {
         if state.preferences.lastThreadID != id { state.preferences.lastThreadID = id }
     }
     func togglePin(_ id: String) { updateThread(id) { $0.pinnedAt = $0.isPinned ? nil : Date() } }
-    func archive(_ id: String, archived: Bool) {
-        updateThread(id) { $0.archived = archived }
-        if archived && selectedThreadID == id { selectedThreadID = nil }
-    }
-    func trash(_ id: String) {
-        updateThread(id) { $0.deletedAt = Date() }
+    func archive(_ id: String) {
+        updateThread(id) { $0.archived = true }
         ChatSessionPool.shared.remove(id)
         if selectedThreadID == id {
             // Match the original ⌘D navigation: open the most recent remaining
-            // conversation, while retaining recovery in Settings → Chat history.
+            // conversation, while retaining recovery in Settings → Archive.
             let next = ConversationStore.shared.chats.filter {
-                $0.chatId != id && !thread($0.chatId).archived && thread($0.chatId).deletedAt == nil
+                $0.chatId != id && !thread($0.chatId).archived
             }.max { $0.lastMessageDate < $1.lastMessageDate }
             selectThread(next?.chatId)
             AppWindows.focusComposer()
         }
         if companionThreadID == id { companionThreadID = nil }
     }
-    func restore(_ id: String) { updateThread(id) { $0.deletedAt = nil; $0.archived = false } }
+    func restore(_ id: String) { updateThread(id) { $0.archived = false } }
     func deletePermanently(_ id: String) {
-        guard thread(id).deletedAt != nil, !ConversationStore.shared.getIsLoading(for: id) else { return }
+        guard thread(id).archived, !ConversationStore.shared.getIsLoading(for: id) else { return }
         guard !ChatSessionPool.shared.isSavingLocalWork(id) else {
             errorMessage = "Wait for the conversation's drafts to finish saving before deleting it."
             return

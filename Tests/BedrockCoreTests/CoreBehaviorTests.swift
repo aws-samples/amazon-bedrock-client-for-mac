@@ -47,6 +47,47 @@ final class CoreBehaviorTests: XCTestCase {
         XCTAssertEqual(loaded.projects, [project])
     }
 
+    func testLegacyTrashAndArchiveBecomeOneRecoverableStateWithoutLosingMetadata() throws {
+        let source = ThreadMetadata(
+            draft: "Keep this unsent draft — 안녕하세요", projectID: UUID(),
+            workingDirectory: "/tmp/example", skillIDs: ["code-review"],
+            systemPrompt: "Keep the original instructions.", pinnedAt: Date(timeIntervalSinceReferenceDate: 123),
+            parentThreadID: "original-thread", contextNotice: "Earlier context",
+            demoID: "demo", hasQueuedMessages: true, hasDraftAttachments: true)
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(source)) as? [String: Any])
+        for (wasArchived, wasTrashed) in [(false, false), (true, false), (false, true), (true, true)] {
+            var legacy = original
+            legacy["archived"] = wasArchived
+            if wasTrashed { legacy["deletedAt"] = 456 }
+            else { legacy["deletedAt"] = NSNull() }
+            let data = try JSONSerialization.data(withJSONObject: legacy)
+            let decoded = try JSONDecoder().decode(ThreadMetadata.self, from: data)
+            var expected = source
+            expected.archived = wasArchived || wasTrashed
+            XCTAssertEqual(decoded, expected, "Migrating visibility must preserve drafts, pins, tools and attachments.")
+
+            let saved = try JSONEncoder().encode(decoded)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: saved) as? [String: Any])
+            XCTAssertNil(object["deletedAt"], "New snapshots must have one recovery state.")
+            XCTAssertEqual(object["archived"] as? Bool, expected.archived)
+            XCTAssertEqual(try JSONDecoder().decode(ThreadMetadata.self, from: saved), decoded)
+
+            var restored = decoded
+            restored.archived = false
+            XCTAssertEqual(try JSONDecoder().decode(ThreadMetadata.self, from: JSONEncoder().encode(restored)), source,
+                           "A legacy Trash timestamp must not rearchive a restored conversation.")
+        }
+    }
+
+    func testOlderThreadMetadataDefaultsDoNotHideActiveChats() throws {
+        let empty = try JSONDecoder().decode(ThreadMetadata.self, from: Data("{}".utf8))
+        XCTAssertEqual(empty, ThreadMetadata())
+        let archived = try JSONDecoder().decode(ThreadMetadata.self, from: Data(#"{"deletedAt":123}"#.utf8))
+        XCTAssertTrue(archived.archived)
+        XCTAssertThrowsError(try JSONDecoder().decode(ThreadMetadata.self, from: Data(#"{"deletedAt":"invalid"}"#.utf8)),
+                             "Corrupt recovery data must not silently make a hidden conversation active.")
+    }
+
     func testCorruptStateIsNotTreatedAsEmptyAndRemainsUntouched() throws {
         let root = try temporaryDirectory()
         let url = root.appendingPathComponent("state.json")
