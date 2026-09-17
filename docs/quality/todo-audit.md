@@ -177,8 +177,10 @@ helpers have been removed. Actual transcript, attachment and image-preview
 regressions passed in the complete local suite; the final hosted run must
 include the subsequent corrections.
 
-Local and hosted validation use one entry point, `python3 scripts/ci.py`.
-Before a release, a complete local run must pass against unchanged source and
-record its hashes in `ci-result.json`. The final main revision must then pass
-on GitHub, followed by universal signing, notarization, DMG verification and
-published-asset checks. No release has been triggered by this audit.
+Local and hosted validation share `python3 scripts/ci.py`. The latest instruction
+replaces mandatory repeated full local runs with targeted checks of changed or
+failing paths. Those regressions have passed; the redundant `9327147` local rerun
+was canceled as requested and is not reported as a passing complete receipt.
+The final main revision must pass the complete GitHub pipeline, followed by
+universal signing, notarization, DMG verification and published-asset checks.
+No release has been triggered by this audit.

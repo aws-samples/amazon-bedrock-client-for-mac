@@ -6,6 +6,13 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- The user updated the release gate: rerun changed or previously failing paths
+  locally, then require complete CI on main before release. The redundant local
+  run at `9327147` was canceled during dependency resolution; its incomplete
+  receipt and cancellation record are retained. The targeted viewport,
+  small-window history, original tool details, model-switch, initial-window and
+  attachment-relaunch checks passed. A complete local rerun is no longer a
+  prerequisite; complete main and release CI remain required.
 - Complete local CI at `833f9d3` passed 115 core, 43 renderer and 106 native app
   cases (four optional network checks skipped), plus 26/27 UI scenarios.
   The remaining first-launch size assertion inherited the 1024-point window

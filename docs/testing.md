@@ -1,8 +1,10 @@
 # CI regression coverage
 
 `CI` runs for every main push, release branch push, pull request and manual dispatch.
-Local validation and GitHub both execute `python3 scripts/ci.py`. The entire local
-pipeline must pass before a release; a partial test run does not satisfy that gate.
+Local validation and GitHub share `python3 scripts/ci.py`. For focused changes,
+run the affected or previously failing suites locally. The final main revision
+must pass the entire GitHub pipeline before release; targeted local results do
+not replace that gate.
 Release tags call the same workflow before signing or publication. The app runs
 with **Release optimization** and isolated local data; a distinct bundle identity
 protects existing user preferences.

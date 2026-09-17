@@ -19,7 +19,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 | Conversation history | Open the full conversation as one continuous scrollable transcript. Remove manual “Load earlier/newer messages” controls and page limits. Keep long-history rendering responsive without making the user load pages. |
 | Validation | Repeated build → actual interaction → inspection → correction cycles. Maintain an itemized ledger; do not claim an infinite unattended run or mark untested items complete. |
 | Current priority | Speed, responsiveness, and usability come first. Compare the fast older Bedrock Validation with the latest changes using identical workloads, fix measured regressions, and put the verified updates back into Bedrock Validation. Do not call a successful build the final result. |
-| Release gate | Run the entire GitHub CI pipeline locally, including actual optimized-app UI tests, before releasing. Then require the final main revision and release workflow to pass on GitHub. |
+| Release gate | Latest instruction: run changed or previously failing scenarios locally, then require the final main revision and release workflow to pass the complete GitHub CI. A redundant full local rerun is not required. |
 | Repository | Organize Swift sources by responsibility, use descriptive filenames, remove verified dead files/resources, and update the Xcode project, scripts and documentation together. Preserve stored data and production identity. |
 
 ## Scope and source comparison
@@ -303,5 +303,5 @@ and remaining features are recorded in [the completion audit](todo-audit.md),
 - [ ] D06 Validate and push the final revision to main, then confirm its workflow succeeds.
 - [ ] D07 Tag v2.0.0; build universal Intel/Apple silicon binaries, sign, notarize, staple and publish on GitHub.
 - [ ] D08 Verify the published DMG checksum, release assets, release notes and Homebrew update.
-- [ ] D09 Execute `python3 scripts/ci.py` locally against unchanged release source; every required stage, native integration case and UI scenario must pass before tagging. Preserve `ci-result.json`, logs, measurements and `Bedrock.xcresult`.
+- [x] D09 Follow the latest release-validation instruction: run changed or previously failing scenarios locally and retain their evidence; require complete main CI before tagging. Native viewport cases and affected UI scenarios passed repeated targeted runs. The redundant full local rerun was canceled at the user's request; it is not a passing full-CI receipt.
 - [ ] D10 Verify the reorganized `Bedrock.xcodeproj`, `Bedrock` scheme, `BedrockCore` package, feature directories and resource names in local and hosted builds; retain the production bundle identifier, data paths and Core Data schema.

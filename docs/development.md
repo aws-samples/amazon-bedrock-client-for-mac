@@ -25,7 +25,8 @@ The validator checks missing/duplicate files, app/test membership, resources, co
 
 ## Regression suites
 
-Run the complete pipeline used by GitHub before a release:
+For focused changes, run the affected or previously failing suites locally.
+To reproduce the complete pipeline used by GitHub:
 
 ```sh
 python3 scripts/ci.py \
@@ -177,7 +178,7 @@ Preserve history IDs, attachment references, drafts, queued work, skills, and ex
 
 ## Release
 
-Keep `MARKETING_VERSION` equal in both app configurations, write `docs/releases/<version>.md`, pass the complete local CI against the release source, and run:
+Keep `MARKETING_VERSION` equal in both app configurations, write `docs/releases/<version>.md`, verify the affected local regressions, and run:
 
 ```sh
 python3 scripts/verify-release.py --tag v2.0.0

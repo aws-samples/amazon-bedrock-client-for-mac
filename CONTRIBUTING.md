@@ -13,7 +13,7 @@ A short recording or a minimal synthetic conversation helps. Remove credentials,
 1. Start from the latest `main` and keep the change focused.
 2. Follow the [source layout and build instructions](docs/development.md).
 3. Add a regression that exercises the reported behavior. Use isolated local data and the existing protocol/MCP fixtures where appropriate.
-4. Run `python3 scripts/ci.py` before release. For a focused change, run the relevant suites first and describe all results in your pull request.
+4. Run the relevant local suites for changed or failing behavior and describe the results in your pull request. Use `python3 scripts/ci.py` to reproduce the complete pipeline when needed. The final main revision must pass the full GitHub CI before release.
 
 After adding or moving files:
 

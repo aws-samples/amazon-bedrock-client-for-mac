@@ -177,7 +177,8 @@ docs/                     Contributor guides, quality evidence, and media
 
 ## Tested before release
 
-Run the complete CI locally before releasing:
+Run the relevant regression suites locally for a focused change. To reproduce
+the complete GitHub CI pipeline on your Mac:
 
 ```sh
 python3 scripts/ci.py
