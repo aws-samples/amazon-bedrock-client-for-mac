@@ -1,11 +1,13 @@
 import AppKit
+import Carbon
 import XCTest
 
 final class BedrockUITests: XCTestCase {
     @MainActor private var runtime: BedrockUITestFixture?
 
     @MainActor
-    private func launch(appearance: String = "light", withRuntime: Bool = false) throws -> (XCUIApplication, URL) {
+    private func launch(appearance: String = "light", withRuntime: Bool = false,
+                        scrollbars: String? = nil) throws -> (XCUIApplication, URL) {
         continueAfterFailure = false
         // The signed runner's default temporaryDirectory is inside its app
         // container. Importing from there raises macOS cross-app privacy UI.
@@ -14,20 +16,33 @@ final class BedrockUITests: XCTestCase {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        // XCTest's character-based Shift shortcuts are layout dependent. Use
+        // an ASCII keyboard for synthetic keystrokes, then restore the user's
+        // input method after the app terminates. IME behavior has native tests.
+        let previousInput = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        let keyboard = TISCopyCurrentASCIICapableKeyboardInputSource().takeRetainedValue()
+        addTeardownBlock { @MainActor in
+            if CFEqual(TISCopyCurrentKeyboardInputSource().takeRetainedValue(), keyboard) {
+                TISSelectInputSource(previousInput)
+            }
+        }
         let app = XCUIApplication()
         app.launchEnvironment["BEDROCK_WORKBENCH_DATA_DIR"] = directory.path
         app.launchEnvironment["BEDROCK_TEST_OFFLINE"] = "1"
         app.launchArguments = ["-checkForUpdates", "NO", "-enableQuickAccess", "NO", "-mcpEnabled", "NO",
                                "-appearance", appearance, "-selectedRegion", "us-west-2",
-                               "-selectedProfile", "default",
-                               "-defaultModelId", "us.amazon.nova-2-lite-v1:0"]
+                                "-selectedProfile", "default",
+                                "-defaultModelId", "us.amazon.nova-2-lite-v1:0"]
+        if let scrollbars {
+            app.launchArguments += ["-AppleShowScrollBars", scrollbars]
+        }
         let fixture = try withRuntime ? BedrockUITestFixture(directory: directory) : nil
         runtime = fixture
         fixture?.configure(app)
-        app.launch()
-        XCTAssertTrue(app.staticTexts["How can I help?"].waitForExistence(timeout: 15))
+        // Register cleanup before any launch assertion. A failed setup must
+        // not leave an app or fixture process behind for the next scenario.
         addTeardownBlock { @MainActor in
-            app.terminate()
+            if app.state != .notRunning { app.terminate() }
             if let fixture {
                 if let data = try? Data(contentsOf: fixture.requestsURL) {
                     let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.plain-text")
@@ -38,6 +53,11 @@ final class BedrockUITests: XCTestCase {
                 fixture.stop()
             }
         }
+        app.launch()
+        app.activate()
+        XCTAssertEqual(TISSelectInputSource(keyboard), noErr)
+        XCTAssertEqual(app.state, .runningForeground, "UI input requires the test app to own keyboard focus.")
+        XCTAssertTrue(app.staticTexts["How can I help?"].waitForExistence(timeout: 15))
         return (app, directory)
     }
 
@@ -102,7 +122,8 @@ final class BedrockUITests: XCTestCase {
 
     @MainActor
     private func importThread(_ file: URL, in app: XCUIApplication) {
-        app.typeKey("o", modifierFlags: [.command, .shift])
+        app.menuBars.menuBarItems["File"].click()
+        app.menuItems["Import Thread…"].click()
         // The system also exposes an Import button in its virtual Touch Bar.
         // Target the actual file panel, not every button in the application.
         let button = app.windows.buttons["Import thread"].firstMatch
@@ -419,17 +440,33 @@ final class BedrockUITests: XCTestCase {
 
     @MainActor
     func testFullConversationScrollSearchAndReturnKeepTheReadingPosition() throws {
-        let (app, directory) = try launch()
+        let (app, directory) = try launch(scrollbars: "Always")
         importThread(try longConversation(in: directory), in: app)
         let window = app.windows["MainWindow"]
         let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
         XCTAssertTrue(transcript.waitForExistence(timeout: 10))
         XCTAssertTrue(response("Fixture answer 499", in: app).isHittable)
         let first = window.staticTexts["Fixture question 0"]
-        for _ in 0..<4 {
-            transcript.scroll(byDeltaX: 0, deltaY: 1_000_000)
-            if first.isHittable { break }
-        }
+        // Move the native scroll thumb across the complete 1,000-message
+        // transcript. A million-pixel wheel event takes minutes to synthesize.
+        transcript.scroll(byDeltaX: 0, deltaY: 300)
+        let scrollbar = transcript.scrollBars.firstMatch
+        XCTAssertTrue(scrollbar.waitForExistence(timeout: 3))
+        let thumb = scrollbar.descendants(matching: .valueIndicator).firstMatch
+        XCTAssertTrue(thumb.waitForExistence(timeout: 3))
+        // AppKit exposes a scroll thumb's frame but not an AXPress action.
+        // Drive one real drag instead of treating the scroller as a button.
+        let origin = window.coordinate(withNormalizedOffset: .zero)
+        let frame = thumb.frame
+        let start = origin.withOffset(CGVector(dx: frame.midX - window.frame.minX,
+                                               dy: frame.midY - window.frame.minY))
+        let end = origin.withOffset(CGVector(dx: frame.midX - window.frame.minX,
+                                             dy: scrollbar.frame.minY + 4 - window.frame.minY))
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        let image = XCTAttachment(screenshot: window.screenshot())
+        image.name = "First message of the complete transcript after one thumb drag"
+        image.lifetime = .keepAlways
+        add(image)
         XCTAssertTrue(first.isHittable, "The first message must be reachable by scrolling, without loading a page.")
         app.buttons["Scroll to latest message"].click()
         XCTAssertTrue(response("Fixture answer 499", in: app).isHittable)
@@ -438,9 +475,15 @@ final class BedrockUITests: XCTestCase {
         let find = app.textFields["Find in chat"]
         XCTAssertTrue(find.waitForExistence(timeout: 3))
         find.typeText("Fixture question 250")
+        XCTAssertEqual(find.value as? String, "Fixture question 250")
         let anchor = window.staticTexts["Fixture question 250"]
         let found = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in anchor.isHittable }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [found], timeout: 8), .completed)
+        let foundResult = XCTWaiter.wait(for: [found], timeout: 8)
+        let searchImage = XCTAttachment(screenshot: window.screenshot())
+        searchImage.name = "Full transcript search position"
+        searchImage.lifetime = .keepAlways
+        add(searchImage)
+        XCTAssertEqual(foundResult, .completed)
         app.typeKey(.escape, modifierFlags: [])
         let before = anchor.frame.minY
         window.buttons["Activity"].click()
@@ -485,7 +528,8 @@ final class BedrockUITests: XCTestCase {
             .matching(identifier: "toolCall.fixture-skill-list").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         XCTAssertEqual(row.label, "List skills")
-        row.click()
+        XCTAssertGreaterThanOrEqual(row.frame.height, 32, "The entire disclosure row must be clickable.")
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).click()
         let open = app.buttons["Open details"]
         XCTAssertTrue(open.waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Copy tool input"].exists)
@@ -661,7 +705,7 @@ final class BedrockUITests: XCTestCase {
             "version": 1, "title": "Formatted response", "modelID": model,
             "modelName": "Nova 2 Lite", "provider": "Amazon",
             "messages": [
-                ["id": UUID().uuidString, "role": "Assistant", "text": source,
+                ["id": UUID().uuidString, "role": "assistant", "text": source,
                  "timestamp": Date().timeIntervalSinceReferenceDate, "isError": false, "modelID": model]
             ]
         ]
@@ -684,8 +728,10 @@ final class BedrockUITests: XCTestCase {
         XCTAssertFalse(html.contains("•"))
 
         answer.rightClick()
-        let copySelection = app.menuItems["Copy"]
-        XCTAssertTrue(copySelection.waitForExistence(timeout: 3))
+        let copies = app.menuItems.matching(identifier: "Copy")
+        XCTAssertTrue(copies.firstMatch.waitForExistence(timeout: 3))
+        // The Edit menu also exposes Copy while the text's context menu is open.
+        let copySelection = try XCTUnwrap(copies.allElementsBoundByIndex.first(where: \.isHittable))
         copySelection.click()
         XCTAssertNotNil(board.string(forType: .html))
 
@@ -706,7 +752,9 @@ final class BedrockUITests: XCTestCase {
         chooseModel("GPT-6 Astra", in: app)
         let switches = app.descendants(matching: .any).matching(identifier: "conversation.modelSwitch")
         XCTAssertTrue(switches.firstMatch.waitForExistence(timeout: 3))
-        XCTAssertTrue(switches.firstMatch.label.contains("GPT-6 Astra"))
+        // macOS exposes a static text's displayed content as AXValue.
+        let transition = switches.firstMatch
+        XCTAssertEqual((transition.value as? String) ?? transition.label, "Switched to GPT-6 Astra")
         XCTAssertEqual(switches.count, 1)
         send("[recall] Recall the code from this conversation.", in: app)
         _ = response("CONTEXT_RECALLED: BRIDGE_CI", in: app)
@@ -719,6 +767,12 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue((requests[1]["model"] as? String)?.contains("gpt-6-astra") == true)
         let wire = String(decoding: try JSONSerialization.data(withJSONObject: requests), as: UTF8.self)
         XCTAssertFalse(wire.contains("Switched to"), "A visual boundary must not become model context.")
+        app.typeKey("n", modifierFlags: .command)
+        app.windows["MainWindow"].buttons["Back"].click()
+        _ = response("CONTEXT_RECALLED: BRIDGE_CI", in: app)
+        XCTAssertEqual(switches.count, 1, "Reopening the conversation must retain one model boundary.")
+        XCTAssertEqual((switches.firstMatch.value as? String) ?? switches.firstMatch.label, "Switched to GPT-6 Astra")
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 2, "Reopening must not invoke the model again.")
     }
 
     @MainActor
@@ -749,6 +803,51 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(detail.waitForExistence(timeout: 3))
         XCTAssertTrue((detail.value as? String)?.contains("EXEC_FROM_REAL_TOOL") == true)
         app.buttons["Done"].click()
+    }
+
+    @MainActor
+    func testLocalImageSearchAndAutomationToolsReturnTheirActualResults() throws {
+        let (app, directory) = try launch(withRuntime: true)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 48,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.bitmapData?.initialize(repeating: 180, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        let file = directory.appendingPathComponent("local-tool-image.png")
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: file)
+        send("[remember] Save the synthetic bridge code for another conversation.", in: app)
+        _ = response("CONTEXT_SAVED: BRIDGE_CI", in: app)
+        app.typeKey("n", modifierFlags: .command)
+        send("[local-tools] \(file.path)", in: app)
+        _ = response("LOCAL_TOOLS_COMPLETE: image · saved conversation · paused automation", in: app, timeout: 20)
+
+        let requests = try XCTUnwrap(runtime).requests()
+        XCTAssertEqual(requests.count, 6)
+        let body = try XCTUnwrap(requests.last?["body"] as? [String: Any])
+        let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        let results = messages.flatMap { $0["content"] as? [[String: Any]] ?? [] }
+            .compactMap { $0["toolResult"] as? [String: Any] }
+        XCTAssertEqual(results.count, 4)
+        XCTAssertTrue(results.allSatisfy { $0["status"] as? String == "success" })
+        let imageResult = try XCTUnwrap(results.first { $0["toolUseId"] as? String == "local-image" })
+        let content = try XCTUnwrap(imageResult["content"] as? [[String: Any]])
+        let wireImage = try XCTUnwrap(content.compactMap { $0["image"] as? [String: Any] }.first)
+        let source = try XCTUnwrap(wireImage["source"] as? [String: Any])
+        let bytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(source["bytes"] as? String)))
+        let decoded = try XCTUnwrap(NSBitmapImageRep(data: bytes))
+        XCTAssertEqual(decoded.pixelsWide, 64)
+        XCTAssertEqual(decoded.pixelsHigh, 48)
+        let wire = String(decoding: try JSONSerialization.data(withJSONObject: results), as: UTF8.self)
+        XCTAssertTrue(wire.contains("CONTEXT_SAVED: BRIDGE_CI"), "Search must find the saved earlier conversation.")
+        XCTAssertTrue(wire.contains("Local workflow automation"))
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: directory.appendingPathComponent("workbench/workspace.json"))) as? [String: Any])
+        let schedule = try XCTUnwrap((state["automations"] as? [[String: Any]])?.first)
+        XCTAssertEqual(schedule["name"] as? String, "Local workflow automation")
+        XCTAssertEqual(schedule["enabled"] as? Bool, false)
+        XCTAssertEqual(schedule["timeZoneIdentifier"] as? String, "Asia/Seoul")
+        XCTAssertEqual(Set(schedule["weekdays"] as? [Int] ?? []), [2, 6])
+        app.buttons["Automations"].click()
+        XCTAssertTrue(app.staticTexts["Local workflow automation"].waitForExistence(timeout: 5))
     }
 
     @MainActor
@@ -829,9 +928,76 @@ final class BedrockUITests: XCTestCase {
     }
 
     @MainActor
+    func testAutomationUsesGroupedProviderModelPickerAndPersistsTheSelectedRoute() throws {
+        let (app, directory) = try launch()
+        app.buttons["Automations"].click()
+        app.buttons["automations.new"].click()
+        let name = app.textFields["automation.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeText("Provider-aware schedule")
+        let prompt = app.textViews["automation.prompt"]
+        prompt.click()
+        prompt.typeText("Describe the weather in three fictional words.")
+        let picker = try XCTUnwrap(app.buttons.matching(identifier: "modelPicker.button")
+            .allElementsBoundByIndex.first(where: \.isHittable))
+        picker.click()
+        let search = app.textFields["modelPicker.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.click()
+        search.typeText("Anthropic Fable")
+        XCTAssertEqual(search.value as? String, "Anthropic Fable")
+        let rows = app.buttons.matching(NSPredicate(format: "label == 'Select Claude Fable 5.1'"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(rows.count, 1, "Regional and global routes must share one model row.")
+        XCTAssertTrue((rows.firstMatch.value as? String ?? "").contains("Anthropic"))
+        let screenshot = XCTAttachment(screenshot: app.windows["MainWindow"].screenshot())
+        screenshot.name = "Automation – shared provider model picker"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        rows.firstMatch.click()
+        let details = app.staticTexts["automation.modelDetails"]
+        // Selectable SwiftUI Text exposes AXValue on macOS, unlike labels.
+        let description = (details.value as? String) ?? details.label
+        XCTAssertTrue(description.contains("Anthropic"), description)
+        XCTAssertTrue(description.contains("anthropic.claude-fable-5-1"), description)
+        let selected = description.components(separatedBy: " · ").last
+        app.buttons["automation.save"].click()
+        XCTAssertTrue(app.staticTexts["Provider-aware schedule"].waitForExistence(timeout: 5))
+        let data = try Data(contentsOf: directory.appendingPathComponent("workbench/workspace.json"))
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let saved = try XCTUnwrap((state["automations"] as? [[String: Any]])?.first)
+        XCTAssertEqual(saved["modelID"] as? String, selected)
+        XCTAssertEqual(saved["enabled"] as? Bool, false)
+
+        let id = try XCTUnwrap(saved["id"] as? String)
+        app.terminate()
+        app.launch()
+        app.activate()
+        XCTAssertTrue(app.buttons["Automations"].waitForExistence(timeout: 10))
+        app.buttons["Automations"].click()
+        let options = app.buttons["automation.options.\(id)"]
+        XCTAssertTrue(options.waitForExistence(timeout: 5))
+        options.click()
+        app.buttons["Edit"].click()
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertEqual((details.value as? String) ?? details.label, description)
+        app.buttons["automation.save"].click()
+        XCTAssertTrue(app.staticTexts["Provider-aware schedule"].waitForExistence(timeout: 5))
+        let updated = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: directory.appendingPathComponent("workbench/workspace.json"))) as? [String: Any]
+        XCTAssertEqual((updated?["automations"] as? [[String: Any]])?.first?["modelID"] as? String, selected,
+                       "Opening and saving an existing automation must preserve its selected inference route.")
+    }
+
+    @MainActor
     func testQuickAccessEscapeAndSubmissionReachTheMainConversation() throws {
         let (app, _) = try launch(withRuntime: true)
-        app.typeKey("k", modifierFlags: [.command, .shift])
+        let mainEditor = composer(app)
+        mainEditor.click()
+        mainEditor.typeText("MAIN_DRAFT")
+        app.menuBars.menuBarItems["Amazon Bedrock"].click()
+        app.menuItems["Show Quick Access"].click()
         // NSPanel is exposed as a Dialog on hosted macOS and as a Window on
         // some local versions. Use its stable identifier across both roles.
         let quick = app.descendants(matching: .any).matching(identifier: "QuickAccessWindow")
@@ -841,6 +1007,9 @@ final class BedrockUITests: XCTestCase {
         quick.typeText("A draft to dismiss")
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertFalse(quick.exists)
+        app.typeText("_RESTORED")
+        XCTAssertEqual(mainEditor.value as? String, "MAIN_DRAFT_RESTORED",
+                       "Escape must return keyboard input to the previous editor without another click.")
         app.typeKey("k", modifierFlags: [.command, .shift])
         XCTAssertTrue(quick.waitForExistence(timeout: 5))
         quick.click()

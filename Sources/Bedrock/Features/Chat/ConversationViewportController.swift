@@ -23,10 +23,16 @@ final class ConversationViewportController: ObservableObject {
 
     private weak var scrollView: NSScrollView?
     private var views: [UUID: WeakView] = [:]
+    private var measuredFrames: [UUID: CGRect] = [:]
     private var observations: [Observation] = []
     private var pending: Anchor?
+    private var pendingAlignment: (messageID: UUID, fraction: CGFloat)?
     private var restoreScheduled = false
+    private var resizeCallbackScheduled = false
     private var lastCaptured: Anchor?
+    private var departureAnchor: Anchor?
+    private var isDeparting = false
+    private var interactionGeneration = 0
     private var capturingRemoval = false
     private var didScroll: ((Bool) -> Void)?
     private var didEnd: (() -> Void)?
@@ -40,9 +46,11 @@ final class ConversationViewportController: ObservableObject {
     }
 
     func connect(to scrollView: NSScrollView) {
-        guard self.scrollView !== scrollView else { return }
+        guard !isDeparting, self.scrollView !== scrollView else { return }
         observations.removeAll()
         self.scrollView = scrollView
+        departureAnchor = nil
+        resizeCallbackScheduled = false
         if let document = scrollView.documentView {
             document.postsFrameChangedNotifications = true
             observations.append(Observation(NotificationCenter.default.addObserver(
@@ -50,10 +58,17 @@ final class ConversationViewportController: ObservableObject {
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
                     self?.scheduleRestore()
-                    self?.contentDidResize?()
+                    self?.scheduleResizeCallback()
                 }
             }))
         }
+        observations.append(Observation(NotificationCenter.default.addObserver(
+            forName: NSScrollView.willStartLiveScrollNotification, object: scrollView, queue: .main
+        ) { [weak self] _ in
+            // Thumb tracking can resize a lazy document before didLiveScroll.
+            // Stop restoring the old passage as soon as the gesture starts.
+            MainActor.assumeIsolated { self?.cancelPreservation() }
+        }))
         for name in [NSScrollView.didLiveScrollNotification, NSScrollView.didEndLiveScrollNotification] {
             let ended = name == NSScrollView.didEndLiveScrollNotification
             observations.append(Observation(NotificationCenter.default.addObserver(
@@ -77,34 +92,60 @@ final class ConversationViewportController: ObservableObject {
         scheduleRestore()
     }
 
+    func messageDidLayout(_ messageID: UUID, frame: CGRect) {
+        // SwiftUI revises lazy row positions before updating or reattaching
+        // their native views. Native conversion can still return the old frame,
+        // even after the total document height changes. Use the actual layout.
+        guard frame.minY.isFinite, frame.height.isFinite, frame.height > 0 else { return }
+        measuredFrames[messageID] = frame
+        // Content coordinates stay unchanged during ordinary scrolling; this
+        // never publishes viewport geometry through SwiftUI state.
+        guard messageID == (pendingAlignment?.messageID ?? pending?.messageID) else { return }
+        scheduleRestore()
+    }
+
     func unregister(_ view: NSView, messageID: UUID) {
         if views[messageID]?.value === view {
             // NSViewRepresentable can dismantle before AppKit detaches it.
             captureBeforeRemoval()
             views.removeValue(forKey: messageID)
+            if messageID != (pendingAlignment?.messageID ?? pending?.messageID) {
+                measuredFrames.removeValue(forKey: messageID)
+            }
         }
     }
 
     func capture(preferredID: UUID? = nil) -> Anchor? {
+        if let departureAnchor { return departureAnchor }
         guard let scroll = scrollView, let document = scroll.documentView else { return lastCaptured }
         let viewport = scroll.documentVisibleRect
         func anchor(_ id: UUID, _ view: NSView) -> Anchor {
-            Anchor(messageID: id, offset: view.convert(view.bounds, to: document).minY - viewport.minY)
+            let frame = measuredFrames[id] ?? view.convert(view.bounds, to: document)
+            return Anchor(messageID: id, offset: frame.minY - viewport.minY)
         }
-        if let preferredID, let view = views[preferredID]?.value {
+        if let preferredID, let view = views[preferredID]?.value, view.isDescendant(of: document) {
             let result = anchor(preferredID, view)
             lastCaptured = result
             return result
         }
         let visible = views.compactMap { id, entry -> (UUID, NSView, CGRect)? in
-            guard let view = entry.value, view.window != nil else { return nil }
-            let rect = view.convert(view.bounds, to: document)
+            guard let view = entry.value, view.window != nil, view.isDescendant(of: document) else { return nil }
+            let rect = measuredFrames[id] ?? view.convert(view.bounds, to: document)
             return rect.intersects(viewport) ? (id, view, rect) : nil
         }
         guard let first = visible.min(by: { $0.2.minY < $1.2.minY }) else { return lastCaptured }
         let result = anchor(first.0, first.1)
         lastCaptured = result
         return result
+    }
+
+    func prepareForDeparture() {
+        // Navigation changes are published before SwiftUI dismantles the lazy
+        // stack. Its partially removed rows no longer have useful coordinates.
+        guard !isDeparting else { return }
+        departureAnchor = capture()
+        isDeparting = true
+        cancelPreservation()
     }
 
     func captureBeforeRemoval() {
@@ -117,32 +158,96 @@ final class ConversationViewportController: ObservableObject {
     }
 
     func preserve(_ anchor: Anchor) {
+        guard !isDeparting else { return }
         // A restored view may disappear again without another user gesture.
         // Keep that valid checkpoint even if all native anchors are dismantled.
         lastCaptured = anchor
         pending = anchor
+        pendingAlignment = nil
         scheduleRestore()
     }
 
-    func cancelPreservation() { pending = nil }
+    func align(messageID: UUID, fraction: CGFloat) {
+        pending = nil
+        pendingAlignment = (messageID, min(1, max(0, fraction)))
+        scheduleRestore()
+    }
+
+    func align(messageID: UUID, fraction: CGFloat, seek: @MainActor () -> Void) async {
+        let generation = interactionGeneration
+        align(messageID: messageID, fraction: fraction)
+        for _ in 0..<4 {
+            guard !Task.isCancelled, !isDeparting, generation == interactionGeneration else { return }
+            seek()
+            do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
+            guard !Task.isCancelled, !isDeparting, generation == interactionGeneration else { return }
+            restore()
+            if isVisible(messageID: messageID) { return }
+        }
+    }
+
+    func cancelPreservation() {
+        if let id = pendingAlignment?.messageID ?? pending?.messageID, views[id]?.value == nil {
+            measuredFrames.removeValue(forKey: id)
+        }
+        pending = nil
+        pendingAlignment = nil
+        interactionGeneration &+= 1
+    }
+
+    /// A lazy stack may not have measured an offscreen destination during its
+    /// first layout. Seek again only until that row exists at its saved offset.
+    /// User input or leaving the conversation cancels this bounded operation.
+    func restore(_ anchor: Anchor, seek: @MainActor () -> Void) async {
+        let generation = interactionGeneration
+        preserve(anchor)
+        for _ in 0..<4 {
+            guard !Task.isCancelled, !isDeparting, generation == interactionGeneration else { return }
+            seek()
+            do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
+            guard !Task.isCancelled, !isDeparting, generation == interactionGeneration else { return }
+            restore()
+            if isVisible(messageID: anchor.messageID),
+               let actual = capture(preferredID: anchor.messageID),
+               abs(actual.offset - anchor.offset) < 0.5 { return }
+        }
+    }
 
     func isVisible(messageID: UUID) -> Bool {
         guard let view = views[messageID]?.value, let scroll = scrollView,
-              let document = scroll.documentView, view.window != nil else { return false }
-        return view.convert(view.bounds, to: document).intersects(scroll.documentVisibleRect)
+              let document = scroll.documentView, view.window != nil,
+              view.isDescendant(of: document) else { return false }
+        let frame = measuredFrames[messageID] ?? view.convert(view.bounds, to: document)
+        return frame.intersects(scroll.documentVisibleRect)
     }
 
     func disconnect() {
         observations.removeAll()
         scrollView = nil
-        pending = nil
+        views.removeAll()
+        measuredFrames.removeAll()
+        resizeCallbackScheduled = false
+        cancelPreservation()
+        isDeparting = false
         didScroll = nil
         didEnd = nil
         contentDidResize = nil
     }
 
+    private func scheduleResizeCallback() {
+        guard !resizeCallbackScheduled, let source = scrollView else { return }
+        resizeCallbackScheduled = true
+        // AppKit reports document sizes during SwiftUI layout. Publishing follow
+        // state from that notification would mutate SwiftUI state during an update.
+        DispatchQueue.main.async { [weak self, weak source] in
+            guard let self, let source, self.scrollView === source else { return }
+            self.resizeCallbackScheduled = false
+            self.contentDidResize?()
+        }
+    }
+
     private func scheduleRestore() {
-        guard pending != nil, !restoreScheduled else { return }
+        guard pending != nil || pendingAlignment != nil, !restoreScheduled else { return }
         restoreScheduled = true
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -154,10 +259,21 @@ final class ConversationViewportController: ObservableObject {
     /// Also runs when a newly inserted WebKit/image row reports its final height.
     /// A real user scroll cancels preservation through native scroll notifications.
     func restore() {
-        guard let pending, let scroll = scrollView, let document = scroll.documentView,
-              let view = views[pending.messageID]?.value else { return }
-        let rect = view.convert(view.bounds, to: document)
-        let desired = rect.minY - pending.offset
+        guard let messageID = pendingAlignment?.messageID ?? pending?.messageID,
+              let scroll = scrollView, let document = scroll.documentView else { return }
+        let rect: CGRect
+        if let measured = measuredFrames[messageID] {
+            rect = measured
+        } else if let view = views[messageID]?.value, view.isDescendant(of: document) {
+            rect = view.convert(view.bounds, to: document)
+        } else {
+            return
+        }
+        let offset = pendingAlignment.map {
+            max(0, scroll.documentVisibleRect.height - rect.height) * $0.fraction
+        } ?? pending!.offset
+        lastCaptured = Anchor(messageID: messageID, offset: offset)
+        let desired = rect.minY - offset
         let current = scroll.documentVisibleRect.minY
         guard abs(desired - current) > 0.5 else { return }
         let clip = scroll.contentView

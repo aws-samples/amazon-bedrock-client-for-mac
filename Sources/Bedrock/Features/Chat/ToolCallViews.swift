@@ -39,41 +39,53 @@ private struct ToolCallRow: View {
     let call: Message.ToolUse
     @State private var isExpanded = false
     @State private var showDetails = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var title: String { call.displayName ?? BuiltInTool(rawValue: call.toolName)?.title ?? call.toolName }
     private var input: String { ToolDetailText.input(call.inputs) }
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 14) {
-                detailBlock("Input", text: input)
-                if let result = call.result { detailBlock(call.status == "error" ? "Error" : "Output", text: ToolDetailText.output(result)) }
-                else { Text("Waiting for the tool to finish…").font(DesignTokens.caption).foregroundStyle(.secondary) }
-                HStack {
-                    Text(call.serverName ?? call.toolName).font(DesignTokens.detail).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer()
-                    Button("Open details") { showDetails = true }.controlSize(.small)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(reduceMotion ? nil : AppMotion.standard) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 10)
+                    Image(systemName: call.status == "error" ? "exclamationmark.circle" : call.result == nil ? "circle.dotted" : "checkmark.circle")
+                        .font(.system(size: 13)).foregroundStyle(call.status == "error" ? Color.orange : Color.secondary)
+                    Text(title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Spacer(minLength: 8)
+                    if let elapsed = call.elapsedSeconds {
+                        Text(elapsed < 0.1 ? "<0.1s" : "\(elapsed.formatted(.number.precision(.fractionLength(1))))s")
+                            .font(DesignTokens.detail).foregroundStyle(.secondary).monospacedDigit()
+                    }
                 }
-            }.padding(.top, 10).padding(.bottom, 4)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: call.status == "error" ? "exclamationmark.circle" : call.result == nil ? "circle.dotted" : "checkmark.circle")
-                    .font(.system(size: 13)).foregroundStyle(call.status == "error" ? Color.orange : Color.secondary)
-                Text(title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                Spacer(minLength: 8)
-                if let elapsed = call.elapsedSeconds {
-                    Text(elapsed < 0.1 ? "<0.1s" : "\(elapsed.formatted(.number.precision(.fractionLength(1))))s")
-                        .font(DesignTokens.detail).foregroundStyle(.secondary).monospacedDigit()
-                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
-            .onTapGesture { isExpanded.toggle() }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityIdentifier("toolCall.\(call.toolId)")
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 14) {
+                    detailBlock("Input", text: input)
+                    if let result = call.result { detailBlock(call.status == "error" ? "Error" : "Output", text: ToolDetailText.output(result)) }
+                    else { Text("Waiting for the tool to finish…").font(DesignTokens.caption).foregroundStyle(.secondary) }
+                    if let images = call.resultImages, !images.isEmpty { ToolResultImagesView(images: images) }
+                    HStack {
+                        Text(call.serverName ?? call.toolName).font(DesignTokens.detail).foregroundStyle(.secondary).lineLimit(1)
+                        Spacer()
+                        Button("Open details") { showDetails = true }.controlSize(.small)
+                    }
+                }.padding(.horizontal, 12).padding(.bottom, 14)
+            }
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
         .background(DesignTokens.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(DesignTokens.border, lineWidth: 0.5))
         .sheet(isPresented: $showDetails) { ToolDetailSheet(call: call) }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
-        .accessibilityIdentifier("toolCall.\(call.toolId)")
     }
     private func detailBlock(_ title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -148,6 +160,9 @@ private struct ToolDetailSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(DesignTokens.canvas, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DesignTokens.border))
+            if !showInput, let images = call.resultImages, !images.isEmpty {
+                ToolResultImagesView(images: images)
+            }
             if !referencedFiles.isEmpty {
                 ScrollView {
                     VStack(spacing: 8) {
@@ -183,6 +198,32 @@ private struct ToolDetailSheet: View {
     }
     private func open(_ url: URL) {
         if !NSWorkspace.shared.open(url) { AppStore.shared.errorMessage = "macOS could not open \(url.lastPathComponent)." }
+    }
+}
+
+private struct ToolResultImagesView: View {
+    let images: [ToolResultImage]
+    @State private var selected: Int?
+    private var showing: Binding<Bool> {
+        Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })
+    }
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                ForEach(Array(images.enumerated()), id: \.offset) { index, image in
+                    MessageImageView(imageData: image.base64, size: 140, onTap: { selected = index })
+                }
+            }
+        }
+        .frame(maxHeight: 150)
+        .sheet(isPresented: showing) {
+            if let selected, images.indices.contains(selected) {
+                let image = images[selected]
+                ImagePreviewModal(
+                    source: .stored(image.base64, directory: AppStore.shared.directory),
+                    filename: "Tool result.\(image.format)", isPresented: showing)
+            }
+        }
     }
 }
 

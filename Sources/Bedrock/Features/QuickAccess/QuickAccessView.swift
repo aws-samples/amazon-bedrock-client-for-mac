@@ -96,7 +96,7 @@ struct QuickAccessView: View {
             QuickAccessWindowController.shared.setFileUploadInProgress(isShowing)
             if !isShowing {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
+                    if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow && $0.isVisible }) {
                         window.makeKeyAndOrderFront(nil)
                     }
                 }
@@ -106,7 +106,7 @@ struct QuickAccessView: View {
             QuickAccessWindowController.shared.setFileUploadInProgress(isShowing)
             if !isShowing {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
+                    if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow && $0.isVisible }) {
                         window.makeKeyAndOrderFront(nil)
                     }
                 }
@@ -294,7 +294,7 @@ struct QuickAccessView: View {
                 handleFileImport(panel.urls)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow }) {
+                if let window = NSApp.windows.first(where: { $0 is QuickAccessWindow && $0.isVisible }) {
                     window.makeKeyAndOrderFront(nil)
                 }
             }
@@ -332,10 +332,7 @@ struct QuickAccessView: View {
         onClose()
 
         DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            if let mainWindow = NSApp.windows.first(where: { $0.title.isEmpty || $0.title.contains("Amazon Bedrock") }) {
-                mainWindow.makeKeyAndOrderFront(nil)
-            }
+            AppWindows.showMain()
 
             if AppCoordinator.shared.quickAccessMessage == nil {
                 AppCoordinator.shared.quickAccessMessage = userMessage
@@ -351,7 +348,7 @@ struct QuickAccessView: View {
     // MARK: - Helpers
     private func setupFocus() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            if let window = NSApp.keyWindow,
+            if let window = NSApp.keyWindow as? QuickAccessWindow, window.isVisible,
                let scrollView = findScrollView(in: window.contentView),
                let textView = scrollView.documentView as? NSTextView {
                 window.makeFirstResponder(textView)

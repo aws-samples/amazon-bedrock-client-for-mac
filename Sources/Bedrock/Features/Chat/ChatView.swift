@@ -22,8 +22,6 @@ struct ChatView: View {
 
     @State private var isAtBottom: Bool = true
     @State private var followsOutput = true
-    @State private var isSearchActive: Bool = false // Add search state tracking
-
     // Font size adjustment state
     @AppStorage("adjustedFontSize") private var adjustedFontSize: Int = -1
 
@@ -36,10 +34,11 @@ struct ChatView: View {
 
     @State private var keyboardMonitor: Any?
     @State private var scrollTask: Task<Void, Never>?
+    @State private var searchScrollTask: Task<Void, Never>?
     @State private var editingMessage: Message?
     @State private var inspectingMessage: MessageData?
+    @State private var searchDetail: ConversationSearchDetail?
     @State private var requestedMatchMessageID: UUID?
-    private let initialPosition: ConversationViewportMemory.Position?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(chatId: String, backendModel: BedrockConnection) {
@@ -47,7 +46,6 @@ struct ChatView: View {
         let position = ConversationViewportMemory.shared.position(for: chatId)
         _viewModel = StateObject(wrappedValue: session)
         _sharedMediaDataSource = StateObject(wrappedValue: session.sharedMediaDataSource)
-        initialPosition = position
         _followsOutput = State(initialValue: position == nil)
         _isAtBottom = State(initialValue: position == nil)
         self._backendModel = ObservedObject(wrappedValue: backendModel)
@@ -91,6 +89,18 @@ struct ChatView: View {
             applyRequestedSearch()
         }
         .onChange(of: workbench.chatSearchRequest) { _, _ in applyRequestedSearch() }
+        .onReceive(workbench.$destination) { destination in
+            if destination != .chats {
+                viewport.prepareForDeparture()
+                rememberReadingPosition()
+            }
+        }
+        .onReceive(workbench.$selectedThreadID) { id in
+            if id != viewModel.chatId {
+                viewport.prepareForDeparture()
+                rememberReadingPosition()
+            }
+        }
         .onChange(of: viewModel.isLoadingHistory) { _, loading in if !loading { applyRequestedSearch() } }
         .onReceive(NotificationCenter.default.publisher(for: .findBedrockConversation)) { notification in
             guard notification.object as? String == viewModel.chatId else { return }
@@ -109,6 +119,7 @@ struct ChatView: View {
             EditorFocusState.shared.isSearchFieldActive = showSearchBar && newValue
         }
         .onChange(of: searchQuery) { _, newQuery in
+            searchScrollTask?.cancel()
             viewport.cancelPreservation()
             performDebouncedSearch(query: newQuery)
         }
@@ -120,6 +131,7 @@ struct ChatView: View {
             if let keyboardMonitor { NSEvent.removeMonitor(keyboardMonitor); self.keyboardMonitor = nil }
             searchDebounceTimer?.invalidate()
             scrollTask?.cancel()
+            searchScrollTask?.cancel()
             viewport.disconnect()
             viewModel.usageHandler = nil
             EditorFocusState.shared.isSearchFieldActive = false
@@ -132,6 +144,7 @@ struct ChatView: View {
         .sheet(item: $inspectingMessage) { message in
             MessageDetails(message: message, fallbackModelID: viewModel.chatModel.id)
         }
+        .sheet(item: $searchDetail) { ConversationSearchDetailView(detail: $0) }
     }
 
     // MARK: - Keyboard Shortcuts
@@ -212,62 +225,60 @@ struct ChatView: View {
 
     private func scrollableMessageList(proxy: ScrollViewProxy) -> some View {
         let rows = ConversationTranscript.rows(in: viewModel.messages)
-        // List keeps the complete transcript in one native scroll view and
-        // reuses offscreen rows. No paging controls or truncated data window.
-        return List {
-            Color.clear.frame(height: 12)
-                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-                .listRowBackground(Color.clear).accessibilityHidden(true)
-            ForEach(rows) { row in
-                let message = row.message
-                VStack(spacing: 12) {
-                    if let change = row.modelTransition {
-                        modelTransitionView(change)
+        // A List's AppKit accessibility cell proxies instantiate offscreen
+        // hosting views when their descriptions are read. Keep the entire
+        // transcript in a lazy scroll container without those table proxies.
+        return ScrollView {
+            LazyVStack(spacing: 0) {
+                Color.clear.frame(height: 12).accessibilityHidden(true)
+                ForEach(rows) { row in
+                    let message = row.message
+                    VStack(spacing: 12) {
+                        if let change = row.modelTransition {
+                            modelTransitionView(change)
+                        }
+                        if viewModel.currentStreamingMessageId == message.id {
+                            StreamingMessageView(stream: viewModel.streamingMessage, fallback: message,
+                                                 searchResult: getSearchResultForMessage(row.sourceIndex),
+                                                 adjustedFontSize: CGFloat(adjustedFontSize),
+                                                 showTimestamp: workbench.preferences.showTimestamps)
+                        } else {
+                            MessageView(message: message, searchResult: getSearchResultForMessage(row.sourceIndex),
+                                        adjustedFontSize: CGFloat(adjustedFontSize),
+                                        showTimestamp: workbench.preferences.showTimestamps,
+                                        canModify: !viewModel.isSending && !viewModel.isLoadingHistory,
+                                        canRetry: message.user != "User" && message.id == rows.last?.id,
+                                        onAction: handleMessageAction)
+                                .equatable()
+                        }
                     }
-                    if viewModel.currentStreamingMessageId == message.id {
-                        StreamingMessageView(stream: viewModel.streamingMessage, fallback: message,
-                                             searchResult: getSearchResultForMessage(row.sourceIndex),
-                                             adjustedFontSize: CGFloat(adjustedFontSize),
-                                             showTimestamp: workbench.preferences.showTimestamps)
-                    } else {
-                        MessageView(message: message, searchResult: getSearchResultForMessage(row.sourceIndex),
-                                    adjustedFontSize: CGFloat(adjustedFontSize),
-                                    showTimestamp: workbench.preferences.showTimestamps,
-                                    canModify: !viewModel.isSending && !viewModel.isLoadingHistory,
-                                    canRetry: message.user != "User" && message.id == rows.last?.id,
-                                    onAction: handleMessageAction)
-                            .equatable()
-                    }
-                }
-                .id(message.id)
-                .frame(maxWidth: DesignTokens.contentWidth)
-                .padding(.horizontal, 24)
-                .frame(maxWidth: .infinity)
-                .background {
-                    ConversationMessageAnchor(messageID: message.id, controller: viewport)
-                        .allowsHitTesting(false).accessibilityHidden(true)
-                }
-                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-                .selectionDisabled()
-            }
-            if let change = ConversationTranscript.pendingTransition(after: rows, to: viewModel.chatModel.id) {
-                modelTransitionView(change)
                     .frame(maxWidth: DesignTokens.contentWidth)
-                    .padding(.horizontal, 24).frame(maxWidth: .infinity)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                    .listRowSeparator(.hidden).listRowBackground(Color.clear)
-                    .selectionDisabled()
-                    .id("PendingModelTransition")
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background {
+                        ConversationMessageAnchor(messageID: message.id, controller: viewport)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                    .onGeometryChange(for: CGRect.self) { geometry in
+                        geometry.frame(in: .named("conversation.content"))
+                    } action: { frame in
+                        viewport.messageDidLayout(message.id, frame: frame)
+                    }
+                }
+                if let change = ConversationTranscript.pendingTransition(after: rows, to: viewModel.chatModel.id) {
+                    modelTransitionView(change)
+                        .frame(maxWidth: DesignTokens.contentWidth)
+                        .padding(.horizontal, 24).padding(.vertical, 6)
+                        .frame(maxWidth: .infinity)
+                        .id("PendingModelTransition")
+                }
+                Color.clear.frame(height: 18).id("Bottom").accessibilityHidden(true)
             }
-            Color.clear.frame(height: 18).id("Bottom")
-                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-                .listRowBackground(Color.clear).accessibilityHidden(true)
+            .frame(maxWidth: .infinity)
+            .coordinateSpace(name: "conversation.content")
         }
-        .listStyle(.plain)
-        .environment(\.defaultMinListRowHeight, 1)
-        .scrollContentBackground(.hidden)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("conversation.transcript")
         .background(SidebarScrollChrome(viewport: viewport))
         .modifier(ScrollEdgeEffectModifier())
@@ -292,15 +303,21 @@ struct ChatView: View {
                     if followsOutput && searchQuery.isEmpty { scheduleFollowing(proxy) }
                 }
             )
-            if let initialPosition,
-               rows.contains(where: { $0.id == initialPosition.anchor.messageID }) {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            if let position = ConversationViewportMemory.shared.position(for: viewModel.chatId),
+               rows.contains(where: { $0.id == position.anchor.messageID }) {
                 isAtBottom = false
                 followsOutput = false
-                proxy.scrollTo(initialPosition.anchor.messageID, anchor: .top)
-                viewport.preserve(initialPosition.anchor)
+                await viewport.restore(position.anchor) {
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        proxy.scrollTo(position.anchor.messageID, anchor: .top)
+                    }
+                }
                 return
             }
-            await Task.yield()
             guard !Task.isCancelled, searchQuery.isEmpty else { return }
             proxy.scrollTo("Bottom", anchor: .bottom)
             isAtBottom = true
@@ -324,6 +341,7 @@ struct ChatView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("Switched to \(ModelCatalog.shared.model(change.toModelID).name)")
         .accessibilityIdentifier("conversation.modelSwitch")
     }
 
@@ -594,6 +612,26 @@ struct ChatView: View {
               !viewModel.isLoadingHistory else { return }
         workbench.chatSearchRequest = nil
         followsOutput = false
+        if let message = viewModel.messages.first(where: { $0.id == request.messageID }) {
+            switch request.target {
+            case .pastedText(let id):
+                if let text = message.pastedTexts?.first(where: { $0.id == id }) {
+                    searchDetail = .init(title: text.filename, text: text.content, query: request.query)
+                    return
+                }
+            case .tool(let id):
+                if let tool = message.toolUses?.first(where: { $0.toolId == id }) {
+                    searchDetail = .init(title: tool.displayName ?? BuiltInTool(rawValue: tool.toolName)?.title ?? tool.toolName,
+                                         text: tool.result ?? "", query: request.query)
+                    return
+                }
+                if let tool = message.toolUse, tool.id == id {
+                    searchDetail = .init(title: tool.name, text: message.toolResult ?? "", query: request.query)
+                    return
+                }
+            case .message: break
+            }
+        }
         showSearchBar = true
         requestedMatchMessageID = request.messageID
         if searchQuery == request.query { performSearch(query: request.query) }
@@ -637,6 +675,7 @@ struct ChatView: View {
 
     private func scrollToMatch(messageIndex: Int, proxy: ScrollViewProxy) {
         guard viewModel.messages.indices.contains(messageIndex) else { return }
+        searchScrollTask?.cancel()
         viewport.cancelPreservation()
         // Search holds its position until the user returns to the bottom.
         isAtBottom = false
@@ -649,7 +688,15 @@ struct ChatView: View {
             // here can run afterward and incorrectly recenter a long response.
             return
         }
-        proxy.scrollTo(message.id, anchor: .center)
+        // The lazy stack initially seeks using estimated offscreen heights.
+        // Seek until the actual row exists, then use its measured coordinates.
+        searchScrollTask = Task {
+            await viewport.align(messageID: message.id, fraction: 0.5) {
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { proxy.scrollTo(message.id, anchor: .center) }
+            }
+        }
     }
 
     private func goToPrevMatch() {

@@ -22,6 +22,20 @@ enum ConversationArchiveCodec {
         var total = 0
         for message in archive.messages {
             try Task.checkCancellation()
+            for tool in (message.toolUses ?? []) + (message.toolUse.map { [$0] } ?? []) {
+                guard (tool.resultImages?.count ?? 0) <= 4 else {
+                    throw LocalOperationError.invalid("A tool result contains too many images.")
+                }
+                for image in tool.resultImages ?? [] {
+                    total += image.base64.utf8.count
+                    guard total <= maximumBytes else { throw LocalOperationError.tooLarge(maximumBytes) }
+                    guard ["jpeg", "png"].contains(image.format),
+                          image.base64.utf8.count <= 4_666_668,
+                          Data(base64Encoded: image.base64) != nil else {
+                        throw LocalOperationError.invalid("The tool image is invalid or exceeds its size limit.")
+                    }
+                }
+            }
             let documents = message.documentBase64Strings?.count ?? 0
             guard message.documentFormats.map({ $0.count == documents }) ?? true,
                   message.documentNames.map({ $0.count == documents }) ?? true else {

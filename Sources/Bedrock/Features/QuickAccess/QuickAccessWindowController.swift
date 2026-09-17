@@ -11,7 +11,7 @@ import Logging
 
 class QuickAccessWindow: NSPanel {
     override var canBecomeKey: Bool { return true }
-    override var canBecomeMain: Bool { return true }
+    override var canBecomeMain: Bool { return false }
 }
 
 @MainActor
@@ -19,6 +19,7 @@ class QuickAccessWindowController: NSObject, ObservableObject {
     static let shared = QuickAccessWindowController()
     
     private var window: QuickAccessWindow?
+    private weak var previousKeyWindow: NSWindow?
     private let logger = Logger(label: "QuickAccessWindowController")
     private var isFileUploadInProgress = false
     
@@ -29,10 +30,11 @@ class QuickAccessWindowController: NSObject, ObservableObject {
     func showWindow() {
         // 기존 윈도우가 있으면 앞으로 가져오기
         if let existingWindow = window {
-            existingWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            existingWindow.makeKeyAndOrderFront(nil)
             return
         }
+        previousKeyWindow = NSApp.keyWindow ?? NSApp.mainWindow
         
         // 새 윈도우 생성
         let contentView = QuickAccessView(
@@ -94,16 +96,22 @@ class QuickAccessWindowController: NSObject, ObservableObject {
         window.standardWindowButton(.zoomButton)?.isHidden = true
         
         // 윈도우 표시
-        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
         
         logger.info("Quick access window shown")
     }
     
     func hideWindow() {
         if let window = window {
-            window.orderOut(nil)
+            let restoreFocus = NSApp.isActive && (window.isKeyWindow || NSApp.keyWindow == nil)
+            let previous = previousKeyWindow
             self.window = nil
+            previousKeyWindow = nil
+            window.orderOut(nil)
+            if restoreFocus, previous?.isVisible == true {
+                previous?.makeKeyAndOrderFront(nil)
+            }
             logger.info("Quick access window hidden")
         }
     }

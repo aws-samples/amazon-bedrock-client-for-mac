@@ -51,6 +51,7 @@ enum MessageContent: Codable {
         let toolUseId: String
         let result: String
         let status: String
+        var images: [ToolResultImage]?
     }
     
     struct ToolUseContent: Codable {
@@ -1325,8 +1326,9 @@ class ChatViewModel: ObservableObject {
                 storedCalls[index].status = result.status
                 storedCalls[index].resultTimestamp = Date()
                 storedCalls[index].elapsedSeconds = Date().timeIntervalSince(started)
+                storedCalls[index].resultImages = result.images
                 toolResults.append(.init(toolUseId: call.toolId, toolName: call.toolName, input: call.inputs, result: result.text, status: result.status))
-                resultContents.append(.toolresult(.init(toolUseId: call.toolId, result: result.text, status: result.status)))
+                resultContents.append(.toolresult(.init(toolUseId: call.toolId, result: result.text, status: result.status, images: result.images)))
                 if let messageIndex = messages.firstIndex(where: { $0.id == messageID }) { messages[messageIndex].toolUses = storedCalls }
             }
             messages.append(MessageData(text: "", user: "ToolResult", sentTime: Date(), toolUses: storedCalls, modelID: chatModel.id))
@@ -1374,6 +1376,7 @@ class ChatViewModel: ObservableObject {
         let status: String
         let text: String
         let error: String?
+        var images: [ToolResultImage]?
     }
     
     // Fixed Sendable MCP tool execution
@@ -1391,9 +1394,23 @@ class ChatViewModel: ObservableObject {
         let result = await mcpManager.executeBedrockTool(id: id, name: name, input: input)
         let status = result["status"] as? String ?? "error"
         let text = MCPToolOutput.text(result)
+        let rawImages = MCPToolOutput.imageStrings(result)
+        let worker = Task.detached(priority: .userInitiated) {
+            var images: [ToolResultImage] = []
+            for encoded in rawImages {
+                try Task.checkCancellation()
+                guard let data = Data(base64Encoded: encoded), data.count <= 15_000_000 else { continue }
+                if let prepared = try? await ClipboardImageProcessor.prepare(.data(data)) {
+                    images.append(ToolResultImage(base64: prepared.data.base64EncodedString(), format: prepared.fileExtension))
+                }
+            }
+            return images
+        }
+        let images = (try? await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }) ?? []
         return SendableToolResult(status: status,
             text: LocalFileTools.bounded(text, limit: AppStore.shared.preferences.validToolOutputLimit),
-            error: status == "error" ? result["error"] as? String ?? text : nil)
+            error: status == "error" ? result["error"] as? String ?? text : nil,
+            images: images.isEmpty ? nil : images)
     }
 
     private func appendThinkingToMessage(_ thinking: String, messageId: UUID, shouldCreateNewMessage: Bool = false) {
@@ -1550,7 +1567,7 @@ class ChatViewModel: ObservableObject {
                 switch content {
                 case .text(let text): return total + text.count
                 case .thinking(let value): return total + value.text.count
-                case .toolresult(let value): return total + value.result.count
+                case .toolresult(let value): return total + value.result.count + (value.images?.count ?? 0) * 4_000
                 case .tooluse(let value): return total + ((try? JSONEncoder().encode(value.input).count) ?? 1_000)
                 case .image: return total + 4_000
                 case .document(let value): return total + min(value.base64Data.count, 100_000)
@@ -1645,7 +1662,8 @@ class ChatViewModel: ObservableObject {
             // Handle tool results specially - they should ONLY contain toolresult, no text
             if role == .user, let toolUses = message.toolUses, !toolUses.isEmpty {
                 contents = toolUses.map { tool in
-                    .toolresult(.init(toolUseId: tool.toolId, result: tool.result ?? "Tool did not complete.", status: tool.status ?? (tool.result == nil ? "error" : "success")))
+                    .toolresult(.init(toolUseId: tool.toolId, result: tool.result ?? "Tool did not complete.",
+                        status: tool.status ?? (tool.result == nil ? "error" : "success"), images: tool.resultImages))
                 }
             } else if role == .user, let toolUse = message.toolUse, let result = toolUse.result {
                 // Tool result message - only add toolresult content
@@ -1809,13 +1827,29 @@ class ChatViewModel: ObservableObject {
                 
             case .toolresult(let toolResultContent):
                 // Convert to AWS tool result format
+                var toolContent: [BedrockRuntimeClientTypes.ToolResultContentBlock] = [.text(toolResultContent.result)]
+                var imageAttachments: [BedrockRuntimeClientTypes.ContentBlock] = []
+                if backendModel.backend.isVisionSupported(modelId) {
+                    let base = BedrockModelID.base(modelId)
+                    let supportsToolImages = base.hasPrefix("amazon.nova") || base.hasPrefix("anthropic.claude-3") ||
+                        (base.hasPrefix("anthropic.claude-") && base.contains("-4"))
+                    for image in (toolResultContent.images ?? []).prefix(4) {
+                        guard let bytes = Data(base64Encoded: image.base64) else { continue }
+                        let block = BedrockRuntimeClientTypes.ImageBlock(format: image.format == "jpeg" ? .jpeg : .png, source: .bytes(bytes))
+                        if supportsToolImages { toolContent.append(.image(block)) }
+                        else { imageAttachments.append(.image(block)) }
+                    }
+                } else if toolResultContent.images?.isEmpty == false {
+                    toolContent.append(.text("The tool's image remains saved locally. This model does not accept image input."))
+                }
                 let toolResultBlock = AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolResultBlock(
-                    content: [.text(toolResultContent.result)],
+                    content: toolContent,
                     status: toolResultContent.status == "success" ? .success : .error,
                     toolUseId: toolResultContent.toolUseId
                 )
                 
                 contentBlocks.append(.toolresult(toolResultBlock))
+                contentBlocks.append(contentsOf: imageAttachments)
                 
             case .tooluse(let toolUseContent):
                 // Convert to AWS tool use format

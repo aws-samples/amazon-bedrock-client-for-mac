@@ -1,6 +1,6 @@
 # User requirements and completion ledger
 
-Last updated: 2026-09-16. This is the authoritative checklist for the requested rebuild. Each checkbox requires both implementation and relevant verification; a code path, screenshot, or passing build alone is not proof that a feature works. The detailed Foxl audit is in [FOXL_CONVENIENCE_TODO.md](foxl-parity.md), every source settings row is mapped in [foxl-settings.md](foxl-settings.md), and measured evidence belongs in [validation-log.md](validation-log.md).
+Last updated: 2026-09-17. This is the authoritative checklist for the requested rebuild. Each checkbox requires both implementation and relevant verification; a code path, screenshot, or passing build alone is not proof that a feature works. The detailed Foxl audit is in [Foxl convenience audit](foxl-parity.md), every source settings row is mapped in [foxl-settings.md](foxl-settings.md), and measured evidence belongs in [validation-log.md](validation-log.md).
 
 ## Final decisions that supersede earlier requests
 
@@ -44,9 +44,9 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] U01 Use one consistent spacing, radius, typography, icon, and control-size system.
 - [ ] U02 Keep the main conversation screen clean, with minimal controls.
 - [x] U03 Support Light, Dark, and System without forcing black. (Light/Dark/System were exercised locally and by the hosted Settings test.)
-- [x] U04 Keep Light surfaces near white, with restrained gray only where useful. (Latest Light main/Settings captures were inspected; see SCREENSHOTS.md.)
-- [x] U05 Retain a clean black Dark theme without inconsistent blue-gray panels. (Latest Dark main/Settings captures were inspected; see SCREENSHOTS.md.)
-- [x] U06 Extend the frosted sidebar vertically through the titlebar to the bottom in both themes. (The actual Light/Dark captures show a full-height sidebar; see SCREENSHOTS.md.)
+- [x] U04 Keep Light surfaces near white, with restrained gray only where useful. (Latest Light main/Settings captures were inspected; see [Media](../media.md).)
+- [x] U05 Retain a clean black Dark theme without inconsistent blue-gray panels. (Latest Dark main/Settings captures were inspected; see [Media](../media.md).)
+- [x] U06 Extend the frosted sidebar vertically through the titlebar to the bottom in both themes. (The actual Light/Dark captures show a full-height sidebar; see [Media](../media.md).)
 - [x] U07 Extend the Settings sidebar through its titlebar in the same way. (Settings lifecycle/appearance checks and actual full-height captures passed; see validation-log.md.)
 - [x] U08 Keep the sidebar divider straight and full height. (The latest actual Light/Dark captures retain the straight full-height divider.)
 - [ ] U09 Set an attractive initial main-window size.
@@ -75,7 +75,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] U32 Consolidate response parameters, image mode, plus, ellipsis, and settings controls.
 - [ ] U33 Keep system-prompt title and chevron close together.
 - [ ] U34 Normalize search-field backgrounds, borders, height, and focus treatment.
-- [x] U35 Make sidebar scrollbars thin and unobtrusive. (Actual sidebar wheel/thumb/keyboard checks passed; see the WS04–WS06 evidence in PILOT_LOCAL_PORT_TODO.md.)
+- [x] U35 Make sidebar scrollbars thin and unobtrusive. (Actual sidebar wheel/thumb/keyboard checks passed; see the WS04–WS06 evidence in [the original port checklist](port-checklist.md).)
 - [x] U36 Remove the opaque transcript scrollbar track. (Latest Dark transcript capture shows the clear track and slim thumb.)
 - [x] U37 Center the welcome heading and composer as a single group. (Actual welcome draft/relaunch and native layout checks passed; see validation-log.md.)
 - [x] U38 Add a faint 1px composer border in both themes without a heavy outline. (Latest actual Light/Dark composer captures were inspected.)
@@ -106,10 +106,10 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 
 ## Chat, rendering, and attachments
 
-- [ ] C41 Remove all manual earlier/newer-message buttons. The full transcript is scrollable immediately; offscreen rendering loads automatically, including after sending a new message.
+- [x] C41 Remove all manual earlier/newer-message buttons. The full transcript is scrollable immediately; offscreen rendering loads automatically, including after sending a new message. (Complete 1,000-message scrolling/search/navigation and stream-completion UI scenarios each passed three times; the full-pipeline gate is D09.)
 - [ ] C42 Show a compact model-switch divider at the transition, preserve it after reopening the chat, and keep it out of inference history.
 - [ ] C43 Tighten the vertical gap between an answer and its Copy/Retry/More actions, including text, code, tables, and generated images.
-- [ ] C44 Copy selected rendered text as semantic HTML with bold, italic, lists, links, and tables; preserve plain-text fallback and keep Copy response as original Markdown.
+- [x] C44 Copy selected rendered text as semantic HTML with bold, italic, lists, links, and tables; preserve plain-text fallback and keep Copy response as original Markdown.
 
 - [x] C01 Keep assistant model headings out of every transcript segment. (Actual tool-loop and response captures have no repeated assistant model headings.)
 - [ ] C02 Make the actual response model/timestamp available through message details.
@@ -176,6 +176,7 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [ ] M20 Validate comparison, embeddings, and other retained demo paths.
 - [x] M21 Keep AWS errors readable with raw details available on demand.
 - [ ] M22 Measure actual request timing/token throughput rather than claiming unmeasured performance superiority.
+- [x] M24 Reuse the conversation model selector in Automations: one row per model, visible provider, searchable IDs and explicit inference-route choices. Preserve an existing schedule's exact model ID until the user changes it. (The optimized UI case passed grouping, provider identity, selection, save, relaunch and editing without changing the saved route.)
 - [x] M23 Hide Nova 2 Pro Preview from available model choices, including cached/live discovery, profiles, favorites, and the default-model picker. Keep the existing recording unchanged. (Core regression covers ACTIVE metadata, restored cache entries, regional/application profiles and favorites. The rebuilt app excludes it in both pickers; the refreshed 180-entry cache contains no preview entries, and an old preview default falls back to an available model.)
 
 ## Local tools, skills, MCP, and automation
@@ -269,9 +270,11 @@ Last updated: 2026-09-16. This is the authoritative checklist for the requested 
 - [x] R09 Document verified setup, model support, shortcuts, tools, skills, MCP, privacy, and local storage.
 - [x] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
 - [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
-- [x] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing, center all five badges, and visually inspect the final README media. (September 16 exports preserve the 2480×1560 native window inside a 2608×1688 frame. The 35-second WebP/MP4, Light/Dark captures, GitHub-sanitized README layout, five centered badges, media hashes, and links were inspected; see [media.md](../media.md).)
+- [x] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing and visually inspect the final README media. (September 16 exports preserve the 2480×1560 native window inside a 2608×1688 frame. The 35-second WebP/MP4, Light/Dark captures, GitHub-sanitized README layout, media hashes, and links were inspected; see [media.md](../media.md).)
 - [x] R13 Make the main demonstration visually engaging: develop a concept with a text model, switch to an image model in the same conversation, generate a real image, and open the result. Do not use clicking List skills as the main demonstration. (The real Nova → Stable Image Ultra conversation, complete 9.22-second image request, preview zoom/Fit/close interactions, and final exported frames were verified.)
-- [x] R14 Re-record the same concept-to-image demonstration in the current Release app using GPT-6 Astra with Low reasoning effort, then Stable Image Ultra 1.0. Replace the README animation, movie, and matching screenshots, retain actual inference timing, and verify the exported media. (Real AWS conversation, Low effort setting, image generation, preview, zoom, and fit verified. Refreshed 35-second Retina media preserves the 8.99-second image request; MP4 frames and animated WebP inspected. GitHub-rendered README has centered badges, no horizontal overflow, and the updated downloads and media. Documentation/media validation passes.)
+- [x] R14 Re-record the same concept-to-image demonstration in the current Release app using GPT-6 Astra with Low reasoning effort, then Stable Image Ultra 1.0. Replace the README animation, movie, and matching screenshots, retain actual inference timing, and verify the exported media. (Real AWS conversation, Low effort setting, image generation, preview, zoom, and fit verified. Refreshed 35-second Retina media preserves the 8.99-second image request; MP4 frames and animated WebP inspected. GitHub-rendered README has no horizontal overflow, and the updated downloads and media. Documentation/media validation passes.)
+
+- [x] R15 Remove all five README header badges (macOS, Swift, Release, Validation, License), retaining the prominent latest-DMG download button. Supersedes the earlier badge-centering request.
 
 The September 16 evidence audit and unresolved implementation gaps are recorded in [todo-audit.md](todo-audit.md).
 
@@ -281,13 +284,13 @@ The current priority is the updated **Bedrock Validation** app, preserving its
 existing identity and data. The current optimized app includes the recent UI and performance
 fixes and has been exercised with actual input, scrolling, shortcuts, model
 switching, attachment restart, generated-image preview, and real inference.
-The latest executed local app integration suite ran 73 cases: 69 passed and four
-opt-in network cases skipped. The older/newer-page reading-position regression
-is fixed and passed native teardown tests plus repeated actual paging and
-Activity → Back checks. First-character latency was measured separately and
-the per-thread draft-observation correction was verified. Evidence and exact limits are recorded in
-[validation-log.md](validation-log.md) and
-[PERFORMANCE_VALIDATION_MATRIX.md](validation-matrix.md).
+Targeted optimized native and UI tests now exercise continuous history, stream
+completion, model switching, rich clipboard data, tool details, and the shared
+automation model selector. The full local/hosted release gate remains separate
+from those targeted passes. The old earlier/newer-page implementation is
+superseded by a complete lazy transcript. Exact run results, performance limits,
+and remaining features are recorded in [the completion audit](todo-audit.md),
+[validation-log.md](validation-log.md) and [the validation matrix](validation-matrix.md).
 
 
 ## GitHub delivery and version 2.0.0

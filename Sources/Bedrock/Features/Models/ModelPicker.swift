@@ -135,13 +135,16 @@ private struct ModelSelectorPopoverContent: View {
                             Text(row.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary).lineLimit(1)
                             if selected { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(DesignTokens.accent) }
                         }
-                        Text(row.preferredID).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                        Text("\(row.provider) · \(row.preferredID)")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
                     }
                     Spacer(minLength: 2)
                 }.padding(.leading, 12).padding(.vertical, 6).contentShape(Rectangle())
             }
             .buttonStyle(.plain).help(row.preferredID)
             .accessibilityLabel("Select \(row.name)")
+            .accessibilityValue("\(row.provider), \(row.preferredID)")
             .accessibilityIdentifier("modelPicker.row.\(row.id)")
             Button {
                 if row.isFavorite {

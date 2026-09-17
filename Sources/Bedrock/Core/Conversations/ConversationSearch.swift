@@ -9,6 +9,13 @@ struct ConversationSearchInput: Sendable {
 struct ConversationSearchHit: Equatable, Sendable {
     var messageID: UUID
     var snippet: String
+    var target: ConversationSearchTarget = .message
+}
+
+enum ConversationSearchTarget: Equatable, Sendable {
+    case message
+    case pastedText(UUID)
+    case tool(String)
 }
 
 struct ConversationSearchResults: Sendable {
@@ -21,6 +28,7 @@ struct ConversationSearchRequest: Equatable {
     var threadID: String
     var query: String
     var messageID: UUID
+    var target: ConversationSearchTarget = .message
 }
 
 /// A bounded, local index. Large attachment payloads are discarded after decode;
@@ -32,7 +40,7 @@ actor ConversationSearchIndex {
         var size: Int
         var fileID: UInt64?
         var textBytes: Int
-        var messages: [(UUID, String)]
+        var messages: [(UUID, ConversationSearchTarget, String)]
     }
     private var cache: [String: Entry] = [:]
     private var recency: [String] = []
@@ -46,13 +54,13 @@ actor ConversationSearchIndex {
             if Task.isCancelled { return results }
             do {
                 let messages = try text(for: input)
-                for (id, body) in messages {
+                for (id, target, body) in messages {
                     try Task.checkCancellation()
                     guard let range = body.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
                     let start = body.index(range.lowerBound, offsetBy: -55, limitedBy: body.startIndex) ?? body.startIndex
                     let end = body.index(range.upperBound, offsetBy: 100, limitedBy: body.endIndex) ?? body.endIndex
                     let preview = body[start..<end].split(whereSeparator: \.isWhitespace).joined(separator: " ")
-                    results.hits[input.id] = .init(messageID: id, snippet: "\(start == body.startIndex ? "" : "…")\(preview)\(end == body.endIndex ? "" : "…")")
+                    results.hits[input.id] = .init(messageID: id, snippet: "\(start == body.startIndex ? "" : "…")\(preview)\(end == body.endIndex ? "" : "…")", target: target)
                     break
                 }
             } catch is CancellationError { return results }
@@ -62,7 +70,7 @@ actor ConversationSearchIndex {
         return results
     }
 
-    private func text(for input: ConversationSearchInput) throws -> [(UUID, String)] {
+    private func text(for input: ConversationSearchInput) throws -> [(UUID, ConversationSearchTarget, String)] {
         let manager = FileManager.default
         let url = manager.fileExists(atPath: input.unifiedURL.path) ? input.unifiedURL : input.legacyURL
         guard manager.fileExists(atPath: url.path) else { return [] }
@@ -77,14 +85,29 @@ actor ConversationSearchIndex {
             touch(url.path)
             return entry.messages
         }
-        let messages: [(UUID, String)]
+        func fragments(_ id: UUID, _ text: String, _ pasted: [PastedTextInfo]?, _ tools: [Message.ToolUse]) -> [(UUID, ConversationSearchTarget, String)] {
+            var values: [(UUID, ConversationSearchTarget, String)] = [(id, .message, text)]
+            values += (pasted ?? []).map { (id, .pastedText($0.id), "\($0.filename)\n\($0.content)") }
+            values += tools.map {
+                (id, .tool($0.toolId), "\($0.displayName ?? $0.toolName)\n\($0.result ?? "")")
+            }
+            return values
+        }
+        let messages: [(UUID, ConversationSearchTarget, String)]
         switch try ConversationFileStore.read(unifiedURL: input.unifiedURL, legacyURL: input.legacyURL, chatID: input.id) {
         case .unified(let history):
-            messages = history.messages.filter { $0.role != .user || ConversationEditing.isUserPrompt($0) }.map { ($0.id, $0.text) }
+            messages = history.messages.filter { $0.role != .user || ConversationEditing.isUserPrompt($0) }.flatMap {
+                fragments($0.id, $0.text, $0.pastedTexts, $0.toolUses ?? $0.toolUse.map { [$0] } ?? [])
+            }
         case .legacy(let history):
-            messages = history.filter { $0.user != "ToolResult" && !($0.user == "User" && $0.toolUses != nil) }.map { ($0.id, $0.text) }
+            messages = history.filter { $0.user != "ToolResult" && !($0.user == "User" && $0.toolUses != nil) }.flatMap {
+                let old = $0.toolUse.map { [Message.ToolUse(toolId: $0.id, toolName: $0.name, inputs: $0.input)] } ?? []
+                var tools = $0.toolUses ?? old
+                if tools.count == 1, tools[0].result == nil { tools[0].result = $0.toolResult }
+                return fragments($0.id, $0.text, $0.pastedTexts, tools)
+            }
         }
-        let textBytes = messages.reduce(0) { $0 + $1.1.utf8.count }
+        let textBytes = messages.reduce(0) { $0 + $1.2.utf8.count }
         cache.removeValue(forKey: url.path)
         recency.removeAll { $0 == url.path }
         if textBytes <= maximumCachedBytes {

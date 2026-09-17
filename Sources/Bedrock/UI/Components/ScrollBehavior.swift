@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Keep AppKit's scrolling, hit testing and accessibility while avoiding a separate
-/// opaque track beside a transparent sidebar. Resolve the List's scroll view once;
+/// opaque track beside a transparent sidebar. Resolve the native scroll view once;
 /// no scroll notifications, custom drag handling or per-frame traversal is needed.
 struct SidebarScrollChrome: NSViewRepresentable {
     var viewport: ConversationViewportController?
@@ -49,7 +49,7 @@ struct SidebarScrollChrome: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.updateScheduled = false
-                guard self.window != nil, let scroll = self.styledScrollView ?? self.findListScrollView() else { return }
+                guard self.window != nil, let scroll = self.styledScrollView ?? self.findScrollView() else { return }
                 self.styledScrollView = scroll
                 self.viewport?.connect(to: scroll)
                 if !(scroll.verticalScroller is SidebarScroller) {
@@ -59,7 +59,10 @@ struct SidebarScrollChrome: NSViewRepresentable {
                     scroller.knobProportion = previous?.knobProportion ?? 1
                     scroll.verticalScroller = scroller
                 }
-                if scroll.scrollerStyle != .overlay { scroll.scrollerStyle = .overlay }
+                // Honor macOS's Always / Automatically / When scrolling choice.
+                // Forcing overlay hides an otherwise accessible drag target.
+                let preferredStyle = NSScroller.preferredScrollerStyle
+                if scroll.scrollerStyle != preferredStyle { scroll.scrollerStyle = preferredStyle }
                 if scroll.drawsBackground { scroll.drawsBackground = false }
                 if scroll.contentView.drawsBackground { scroll.contentView.drawsBackground = false }
                 if scroll.borderType != .noBorder { scroll.borderType = .noBorder }
@@ -70,7 +73,7 @@ struct SidebarScrollChrome: NSViewRepresentable {
             }
         }
 
-        private func findListScrollView() -> NSScrollView? {
+        private func findScrollView() -> NSScrollView? {
             if let enclosingScrollView { return enclosingScrollView }
             guard resolutionAttempts < 3, bounds.width > 1, bounds.height > 1,
                   let root = window?.contentView else { return nil }

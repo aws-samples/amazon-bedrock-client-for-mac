@@ -1,6 +1,30 @@
 import Foundation
 
+struct ToolResultImage: Codable, Equatable, Sendable {
+    var base64: String
+    var format: String
+}
+
 enum MCPToolOutput {
+    /// Decode a bounded number of image blocks; the native image processor
+    /// validates pixels and normalizes them before rendering or inference.
+    static func imageData(_ result: [String: Any]) -> [Data] {
+        imageStrings(result).compactMap {
+            guard let data = Data(base64Encoded: $0), data.count <= 15_000_000 else { return nil }
+            return data
+        }
+    }
+
+    /// Pass only Sendable strings to the image worker. Base64 decoding and
+    /// pixel preparation must not occupy the main actor while a chat scrolls.
+    static func imageStrings(_ result: [String: Any]) -> [String] {
+        Array((result["content"] as? [[String: Any]] ?? []).lazy.compactMap { item -> String? in
+            guard item["type"] as? String == "image", let value = item["data"] as? String,
+                  value.utf8.count <= 20_000_000 else { return nil }
+            return value
+        }.prefix(4))
+    }
+
     /// Use the same extraction for successful and failed tools. Servers often
     /// return several text blocks or structured output instead of one string.
     static func text(_ result: [String: Any]) -> String {

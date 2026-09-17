@@ -6,6 +6,7 @@ import SwiftUI
 struct ToolOutputView: NSViewRepresentable {
     var text: String
     var findRequest: Int
+    var initialQuery = ""
 
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView {
@@ -47,6 +48,17 @@ struct ToolOutputView: NSViewRepresentable {
             editor.string = text
             editor.setSelectedRange(NSRange(location: 0, length: 0))
             editor.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            context.coordinator.query = nil
+        }
+        if context.coordinator.query != initialQuery {
+            context.coordinator.query = initialQuery
+            if !initialQuery.isEmpty {
+                let range = (text as NSString).range(of: initialQuery, options: [.caseInsensitive, .diacriticInsensitive])
+                if range.location != NSNotFound {
+                    editor.setSelectedRange(range)
+                    editor.scrollRangeToVisible(range)
+                }
+            }
         }
         if context.coordinator.findRequest != findRequest {
             context.coordinator.findRequest = findRequest
@@ -58,5 +70,39 @@ struct ToolOutputView: NSViewRepresentable {
     }
     final class Coordinator {
         var findRequest = 0
+        var query: String?
+    }
+}
+
+struct ConversationSearchDetail: Identifiable {
+    var id = UUID()
+    var title: String
+    var text: String
+    var query: String
+}
+
+struct ConversationSearchDetailView: View {
+    let detail: ConversationSearchDetail
+    @Environment(\.dismiss) private var dismiss
+    @State private var findRequest = 0
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text(detail.title).font(.title3.weight(.semibold)).lineLimit(1)
+                Spacer()
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(detail.text, forType: .string)
+                }
+                Button("Find", systemImage: "magnifyingglass") { findRequest += 1 }
+                    .keyboardShortcut("f", modifiers: .command)
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            ToolOutputView(text: detail.text, findRequest: findRequest, initialQuery: detail.query)
+                .background(DesignTokens.field, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(DesignTokens.border))
+        }
+        .padding(24).frame(width: 680, height: 510)
+        .accessibilityIdentifier("conversation.searchDetail")
     }
 }

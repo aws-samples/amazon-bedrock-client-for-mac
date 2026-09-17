@@ -1,6 +1,56 @@
 # Responsiveness investigation
 
-## September 16, 2026: input and scroll regression
+## September 17, 2026: continuous conversation history
+
+The current transcript contains the full conversation. There are no earlier/newer
+page buttons or artificial message-count windows. SwiftUI lazily creates offscreen
+rows; native text and image views still provide selection and previews.
+
+The first continuous-history implementation used a `List`. A main-thread profile
+of an actual 1,000-message UI test showed AppKit's table accessibility proxies
+creating offscreen hosting views while resolving the transcript. The process used
+one full CPU core and approximately 1.2 GB RSS. Replacing that table with
+`ScrollView` and `LazyVStack` removed that accessibility-driven row creation.
+Subsequent native accessibility queries completed without the reproduced hang.
+
+The optimized candidate was measured with the same 1,000 synthetic messages,
+1240×780 window, Light appearance and empty composer, after compilation stopped.
+No model request ran during measurement.
+
+| Pass | Typing median | Typing p95 | Maximum | 360-event scroll probe | Failed probes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 8.66 ms | 13.27 ms | 46.93 ms | 5.984 s | 0 |
+| 2 | 8.96 ms | 14.48 ms | 40.90 ms | 5.987 s | 0 |
+| 3 | 8.93 ms | 15.98 ms | 45.84 ms | 5.984 s | 0 |
+
+Typing measures event-to-accessibility-text-update latency, **not display frame
+time**. Scroll duration includes the scheduled six seconds of wheel input; it is
+not a frame-rate measurement. The executable SHA-256 was
+`9585494528a3806e5bc467f4f0ab5df4080f398bef81045a917c4f4ee08ff108`.
+These samples precede the subsequent scroll-start cancellation correction.
+
+Searching for question 250 and returning through Activity → Back three times
+retained its exact screen coordinate, with a measured difference of 0 pixels.
+Further repeat testing exposed a separate lazy-layout race: SwiftUI corrected
+the target's position by 1,104 points before updating or reattaching its native
+view. Observing document height and converting that stale native frame was not
+sufficient. The viewport now uses actual content-layout coordinates and retains
+the pending target's measured position during temporary detachment.
+
+The corrected optimized app passed the actual full-history scroll/search/return
+scenario three consecutive times, including one thumb drag to the first message.
+Finishing a controlled stream while reading an older passage also passed three
+times. All 11 native viewport regressions passed in each repetition. This run
+uses AWS SDK 1.7.85 and Smithy 0.252.0; temporary diagnostic logging was removed
+before execution. The complete CI gates remain separate from these targeted
+results in the [completion audit](quality/todo-audit.md).
+
+Raw measurements, the window capture and executable identity are under
+`/tmp/bedrock-pilot-validation/release-completion/full-history-scroll-inspection/`.
+The following numbered-build measurements are historical comparisons; their
+former 32/96-message paging implementation is no longer used.
+
+## September 16, 2026: earlier input and scroll regression
 
 The older **Bedrock Validation 50** was a different executable from **Performance 61**. The latter contained newer UI and history changes, but had a reproducible input/scroll regression.
 
@@ -70,11 +120,11 @@ of a particular frame rate across devices or every conversation. Evidence is
 under `/tmp/bedrock-pilot-validation/usability-regression/scroll/`; the updated
 input samples are in `usability-regression/after-fixes/performance/`.
 
-## Paging and returning to a conversation
+## Historical paging experiments, superseded by continuous history
 
 Bounded rendering initially introduced a separate usability regression: prepending an older page moved the passage being read. A single `ScrollViewProxy.scrollTo` lost its pixel offset, and SwiftUI ID-based scroll positioning did not preserve the non-lazy transcript's geometry reliably.
 
-The current controller records native message geometry only when needed, prewarms the bounded Markdown page off the main actor, and restores the message's offset through the native clip view. A real user scroll cancels preservation. Small per-thread snapshots retain the message ID, offset, and rendered range without retaining message views or attachment data.
+That version recorded native message geometry only when needed, prewarmed the bounded Markdown page off the main actor, and restored the message's offset through the native clip view. A real user scroll canceled preservation. Small per-thread snapshots retained the message ID, offset, and rendered range without retaining message views or attachment data. The current lazy transcript retains geometry-based restoration without the page limits or rendered-range state.
 
 Actual 70 checks retained the exact vertical coordinate through:
 

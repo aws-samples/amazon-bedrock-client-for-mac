@@ -118,6 +118,19 @@ enum JSONValue: Codable, Equatable, Sendable {
         }
         return nil
     }
+
+    /// JSON numbers are represented as Double. Do not silently fall back to
+    /// the default when a tool supplies an integer, or accept booleans as 0/1.
+    func integer(_ key: String, default fallback: Int, in range: ClosedRange<Int>) throws -> Int {
+        guard case .object(let values) = self else {
+            throw LocalOperationError.invalid("Tool input must be a JSON object.")
+        }
+        guard let value = values[key] else { return fallback }
+        guard case .number(let number) = value, let integer = Int(exactly: number), range.contains(integer) else {
+            throw LocalOperationError.invalid("\(key) must be an integer between \(range.lowerBound) and \(range.upperBound).")
+        }
+        return integer
+    }
     
     // Helper to convert to Any
     var asAny: Any {
@@ -273,6 +286,7 @@ struct Message: Codable, Identifiable, Equatable, Sendable {
         var elapsedSeconds: Double?
         var displayName: String?
         var serverName: String?
+        var resultImages: [ToolResultImage]?
     }
 }
 

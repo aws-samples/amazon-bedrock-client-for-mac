@@ -1,4 +1,4 @@
-# Dependency refresh — September 16, 2026
+# Dependency refresh — September 17, 2026
 
 Stable releases were checked against the maintainers' release lists. The app's
 three retained direct Swift package requirements and their compatible resolution
@@ -7,7 +7,7 @@ local Xcode builds use the same 30-package graph.
 
 | Dependency | Previous checkout | Updated stable release | Primary source |
 | --- | --- | --- | --- |
-| AWS SDK for Swift | 1.6.97 | 1.7.84 | [AWS release](https://github.com/awslabs/aws-sdk-swift/releases/tag/1.7.84) |
+| AWS SDK for Swift | 1.6.97 | 1.7.85 | [AWS release](https://github.com/awslabs/aws-sdk-swift/releases/tag/1.7.85) |
 | MCP Swift SDK | 0.12.0 | 0.12.1 | [MCP release](https://github.com/modelcontextprotocol/swift-sdk/releases/tag/0.12.1) |
 | MarkdownKit | 1.3.0 | 1.4.1 | [MarkdownKit release](https://github.com/objecthub/swift-markdownkit/releases/tag/1.4.1) |
 | Bundled Highlight.js | 11.5.1 | 11.12.0 | [Maintainer CDN distribution](https://github.com/highlightjs/cdn-release/tree/11.12.0/build) |
@@ -19,15 +19,16 @@ and revision unchanged. The source-membership validator now rejects directly
 linked package products with no app import.
 
 Transitive packages were resolved to compatible stable versions, including
-Smithy 0.251.0, AWS CRT 0.64.1, Swift Collections 1.6.0 and Swift Log 1.15.1.
+Smithy 0.252.0, AWS CRT 0.64.1, Swift Collections 1.6.0 and Swift Log 1.15.1.
 The lockfile records all versions and revisions; a transitive package's next
 incompatible major version is not silently substituted.
 
-A second check on September 16 compared all 30 resolved packages with their
-maintainers' stable tags and regenerated the resolution without the old lockfile.
-The same 30-package graph was selected: 29 packages are at their latest stable
-release, and Swift Crypto is at its latest compatible 4.x release, 4.5.2.
-Highlight.js and all six GitHub Actions are also at their latest stable tags.
+A further check on September 17 compared all 30 resolved packages with their
+maintainers' stable tags. AWS SDK 1.7.85 and its Smithy 0.252.0 dependency were
+newly available and are now resolved in the committed graph. The other 28
+packages were unchanged: 29 packages are at their latest stable release, and
+Swift Crypto is at its latest compatible 4.x release, 4.5.2. Highlight.js and all
+six GitHub Actions were checked again and remain at their latest stable tags.
 
 [Swift Crypto 5.0.0](https://github.com/apple/swift-crypto/releases/tag/5.0.0)
 was released on September 16. Swift Certificates 1.20.0, reached through NIO SSL,
@@ -41,7 +42,7 @@ replace TLS dependencies to bypass the constraint.
 | async-http-client | 1.36.1 |
 | aws-crt-swift | 0.64.1 |
 | eventsource | 1.5.1 |
-| smithy-swift | 0.251.0 |
+| smithy-swift | 0.252.0 |
 | swift-algorithms | 1.2.1 |
 | swift-argument-parser | 1.8.2 |
 | swift-asn1 | 1.7.2 |

@@ -34,9 +34,9 @@
 - **Models within reach.** Search and favorite models from the composer. Switch models in an existing conversation, keeping its context and draft. Settings has one default-model picker with an immutable model ID.
 - **A comfortable native interface.** Light, Dark, and System appearance; a full-height frosted sidebar; restrained controls; adjustable text; and a centered composer for a new conversation.
 - **Attachments that stay with your work.** Paste text, images, and browser content, or attach documents, source code, and configuration files. Inspect attachments before sending. Large text becomes an editable attachment, and unsent attachment drafts survive a restart.
-- **Readable answers.** Native Markdown selection across paragraphs, lists, tables, and code. Copy exact code or the complete Markdown response. Image previews support zoom, copy, and saving the original image.
+- **Readable answers.** Select across paragraphs, lists, tables, and code, and paste with rich formatting. Copy-response and code buttons preserve the original Markdown and code. Image previews support zoom, copy, and saving the original image.
 - **Room for the next thought.** Queue another message during a response, including its model, skills, and attachments. Edit or remove queued work, interrupt and send now, or resume a paused queue.
-- **History without clutter.** Search across local conversations, find within the current chat, edit a prompt, retry a response, or branch from a message. Archive and Trash share one view in Settings.
+- **History without clutter.** Scroll the complete conversation without loading pages. Search across local conversations, find within the current chat, edit a prompt, retry a response, or branch from a message. Archive and Trash share one view in Settings.
 
 <details>
 <summary>Light, Dark, or your system appearance</summary>
@@ -52,7 +52,7 @@
 
 **Local skills** are reusable `SKILL.md` instructions. Import or create them in Settings → Skills, inspect their references, and select one with `/` in the composer. Models can also discover enabled skills and load their instructions when needed.
 
-**Built-in tools** read, search, and write local files; inspect Git; run shell commands; fetch pages; and load skills. Tools are enabled with permissive local access by default. Settings → Tools & MCP lets you change the tool preset, individual tools, approval behavior, working directory, file allowlist, timeouts, and output limits.
+**Built-in tools** read, search, and write local files; inspect images and Git; run shell commands; find saved conversations; manage local automations; fetch pages; and load skills. Tools are enabled with permissive local access by default. Settings → Tools & MCP lets you change the tool preset, individual tools, approval behavior, working directory, file allowlist, timeouts, and output limits.
 
 The file allowlist applies to built-in file operations. Shell commands and Git run with your macOS account's permissions and their own tool enablement, approval, timeout, and cancellation settings.
 

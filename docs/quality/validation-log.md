@@ -1,12 +1,49 @@
 # Local port validation
 
 This file records executed checks. The acceptance inventory is
-`PILOT_LOCAL_PORT_TODO.md`.
+[requirements.md](requirements.md); [the completion audit](todo-audit.md) separates
+verified behavior, remaining implementation gaps and release gates.
 
-## Latest validation — September 16, 2026
+## September 17, 2026
+
+- The actual optimized app's full 1,000-message transcript now uses a lazy scroll
+  container. The former table accessibility proxies had instantiated offscreen
+  hosting views and exhausted the main thread during inspection.
+- A remaining search-position failure was reproduced: SwiftUI moved the target
+  row by 1,104 points while its native view still reported the previous position.
+  The viewport now uses measured content coordinates, retaining them while a
+  pending target is briefly detached. User scrolling cancels restoration before
+  lazy layout starts; navigation captures the position before teardown.
+- `authoritative-layout-restoration.xcresult` passed all 11 native viewport
+  regressions three times. Both actual UI scenarios passed three times each:
+  first/last-message scrolling plus search and Activity → Back, and completion of
+  a controlled response while reading an earlier passage. No manual history
+  loading controls are used.
+- The portable core wrapper passed 115 cases. Targeted app UI cases also passed
+  automation model deduplication/provider/route persistence, skills and shell
+  execution, exact tool details, rich HTML selection/source-Markdown copying,
+  model context switching, Quick Access handoff and long-history typing.
+- The new image/search/automation SDK loop passed: it checked the actual 64×48
+  image bytes, found an earlier conversation's marker, and persisted a paused
+  automation with its timezone and weekdays before locating its visible card.
+- All 30 package versions and the six workflow action versions were rechecked.
+  AWS SDK 1.7.85 and Smithy 0.252.0 are resolved; Crypto 4.5.2 remains the latest
+  version compatible with the certificate dependency. See [dependencies](../dependencies.md).
+- These are targeted results, not a complete-release receipt. The complete local
+  command and hosted workflow must pass on the unchanged release revision before
+  tagging. GitHub Actions and Releases record subsequent execution.
+
+Evidence is retained under
+`/tmp/bedrock-pilot-validation/release-completion/`, including
+`authoritative-layout-restoration.xcresult`, `validated-controls.xcresult`,
+`complete-drag-and-tool-feedback.xcresult`, the viewport diagnostic profiles, and
+the raw performance measurements described in [Performance](../performance.md).
+
+## September 16, 2026 — earlier checkpoint
 
 The entries below this section preserve earlier experiments and build numbers;
-they are not the current release status.
+they are not the current release status. The local UI-automation setup failure
+described here was resolved before the September 17 executions above.
 
 - The ordinary optimized Release app completed a real Nova 2 Lite request
   that listed the installed skills. The reported “AWS requests are disabled”
@@ -52,12 +89,12 @@ Evidence under `/tmp/bedrock-pilot-validation/`:
 `release-preflight/github-35116246289`,
 `ui-review-interactions`, and `ui-review-recovery`.
 
-## Environment
+## Investigation environment
 
 - Source app: `/Users/sanghwa/workspaces/foxl-ai/pilot`.
 - Target: Swift/SwiftUI macOS app in this repository.
 - Initial Xcode: 26.6 (17F113); current installation: Xcode 27 (27A266a).
-- Current native validation compiler: Command Line Tools Swift 6.4 with the macOS 27 SDK.
+- Current native validation compiler: Xcode 27's Swift 6.4 with the macOS 27 SDK.
 - Runtime: macOS 26.6.2. macOS 27 runtime has not been tested.
 - Baseline: clean `main` working tree before this task.
 - Build artifacts: `/tmp/bedrock-pilot-derived`.

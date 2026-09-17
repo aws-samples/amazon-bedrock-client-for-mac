@@ -29,7 +29,7 @@ An unchecked scenario still needs the stated runtime check. Automated suites sup
 ## Chat, attachments, and rendering
 
 - [ ] PV17 Open a long existing chat, scroll repeatedly, resize, and move between threads without hangs or flicker.
-- [x] PV18 Load earlier/newer pages in a large fixture while keeping the viewport bounded and anchors stable.
+- [x] PV18 Scroll a complete large conversation from its latest message to its first and back without manual loading controls; preserve search and navigation anchors. (The optimized 1,000-message UI scenario passed three consecutive executions after the measured-coordinate correction.)
 - [x] PV19 Paste long multilingual text and browser HTML; inspect the exact ending, edit it, and remove it.
 - [ ] PV20 Paste multiple large images and mixed text/image contents; inspect/remove attachments and cancel preparation.
 - [x] PV21 Restore welcome and ordinary-chat text/attachment drafts after graceful restart.

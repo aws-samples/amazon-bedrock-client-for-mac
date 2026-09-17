@@ -59,6 +59,30 @@ enum LocalToolExecutor {
                 string("path", "Absolute, ~/, or working-directory-relative file path.")
                 properties["start_line"] = ["type": "integer", "minimum": 1, "description": "First line to return, starting at 1."]
                 properties["line_count"] = ["type": "integer", "minimum": 1, "maximum": 5000]
+            case .viewImage:
+                string("path", "Absolute, ~/, or working-directory-relative image path.")
+            case .searchConversations:
+                string("query", "Literal text to find in local conversation messages, pasted text, or tool output.")
+                properties["limit"] = ["type": "integer", "minimum": 1, "maximum": 40]
+            case .saveAutomation:
+                string("id", "Existing automation UUID to update. Omit to create.", required: false)
+                string("name", "Automation name; required when creating.", required: false)
+                string("prompt", "Prompt to run; required when creating.", required: false)
+                string("model_id", "Actual Bedrock model/profile ID. Defaults to this conversation's model when creating.", required: false)
+                string("working_directory", "Optional local working directory.", required: false)
+                string("time_zone", "IANA time zone, such as America/Los_Angeles. Empty means system time zone.", required: false)
+                string("run_at", "ISO-8601 timestamp for a one-time run, or the local clock time of a daily run.", required: false)
+                string("active_start", "Interval window start in HH:mm, e.g. 09:00. Supply with active_end.", required: false)
+                string("active_end", "Interval window end in HH:mm. May be earlier than start for an overnight window.", required: false)
+                properties["cadence"] = ["type": "string", "enum": AutomationCadence.allCases.map(\.rawValue)]
+                properties["enabled"] = ["type": "boolean"]
+                properties["interval_minutes"] = ["type": "integer", "minimum": 1, "maximum": 43200]
+                properties["maximum_runtime_seconds"] = ["type": "integer", "minimum": 10, "maximum": 3600]
+                properties["weekdays"] = ["type": "array", "items": ["type": "integer", "minimum": 1, "maximum": 7],
+                                          "description": "1=Sunday through 7=Saturday. Omit for every day."]
+                properties["skill_ids"] = ["type": "array", "items": ["type": "string"]]
+            case .listAutomations:
+                properties["offset"] = ["type": "integer", "minimum": 0]
             case .listFiles:
                 string("directory", "Absolute, ~/, or relative directory; defaults to the working directory.", required: false)
                 properties["recursive"] = ["type": "boolean", "description": "Include nested files; false by default."]
@@ -127,10 +151,50 @@ enum LocalToolExecutor {
             try Task.checkCancellation()
             let output: String
             switch kind {
+            case .viewImage:
+                let path = try string("path")
+                let worker = Task.detached(priority: .userInitiated) {
+                    let location = try access.resolve(path, allowRoot: false)
+                    let image = try await ClipboardImageProcessor.prepare(.file(location.url))
+                    return (location.url.path, image)
+                }
+                let (resolvedPath, image) = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                return .init(status: "success", text: "Image: \(resolvedPath)\n\(image.width) × \(image.height) pixels",
+                             error: nil, images: [.init(base64: image.data.base64EncodedString(), format: image.fileExtension)])
+            case .searchConversations:
+                let query = try string("query")
+                let chats = ConversationStore.shared.chats.filter { store.thread($0.chatId).deletedAt == nil }
+                    .sorted { $0.lastMessageDate > $1.lastMessageDate }
+                let root = URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory)
+                let inputs = chats.map { ConversationSearchInput(id: $0.chatId,
+                    unifiedURL: root.appendingPathComponent("history/\($0.chatId)_unified_history.json"),
+                    legacyURL: root.appendingPathComponent("messages/\($0.chatId)_messages.json")) }
+                let limit = try input.integer("limit", default: 10, in: 1...40)
+                let result = await ConversationSearchIndex.shared.search(query, inputs: inputs, limit: limit)
+                var lines: [String] = []
+                for chat in chats {
+                    if let hit = result.hits[chat.chatId] {
+                        lines.append("Conversation: \(chat.title)\nID: \(chat.chatId)\nMessage: \(hit.messageID)\n\(hit.snippet)")
+                    }
+                }
+                if lines.isEmpty { lines.append("No matching local conversations.") }
+                if result.unreadableCount > 0 { lines.append("\(result.unreadableCount) history files could not be read; their original files were retained.") }
+                output = lines.joined(separator: "\n\n")
+            case .listAutomations:
+                let offset = try input.integer("offset", default: 0, in: 0...Int.max)
+                let items = Array(store.state.automations.dropFirst(offset).prefix(10))
+                output = try AutomationToolInput.describe(items)
+            case .saveAutomation:
+                let definition = try AutomationToolInput.apply(input, to: store.state.automations, defaultModelID: modelID)
+                guard !BedrockModelID.isLegacy(definition.modelID), !BedrockModelID.isExcludedFromSelection(definition.modelID) else {
+                    throw LocalOperationError.invalid("Choose an active model from the model selector.")
+                }
+                try AutomationScheduler.shared.save(definition)
+                output = try AutomationToolInput.describe(store.state.automations.filter { $0.id == definition.id })
             case .readFile:
                 let path = try string("path")
-                let start = values["start_line"] as? Int ?? 1
-                let count = values["line_count"] as? Int ?? 300
+                let start = try input.integer("start_line", default: 1, in: 1...Int.max)
+                let count = try input.integer("line_count", default: 300, in: 1...5_000)
                 output = try await fileWork {
                     let location = try access.resolve(path, allowRoot: false)
                     return try LocalFileTools.read(root: location.root, path: location.url.path, startLine: start, lineCount: count)
@@ -196,8 +260,9 @@ enum LocalToolExecutor {
                     guard let id = UUID(uuidString: try string("id")) else { throw LocalOperationError.invalid("Use a process ID returned by local_start_process.") }
                     if kind == .stopProcess { snapshot = try await registry.stop(id, owner: threadID) }
                     else {
-                        snapshot = try await registry.poll(id, owner: threadID, from: values["offset"] as? Int ?? 0,
-                                                           wait: Double(values["wait_seconds"] as? Int ?? 1))
+                        snapshot = try await registry.poll(id, owner: threadID,
+                            from: input.integer("offset", default: 0, in: 0...Int.max),
+                            wait: Double(input.integer("wait_seconds", default: 1, in: 0...10)))
                     }
                 }
                 // Keep the JSON valid even when stdout has reached its bound.

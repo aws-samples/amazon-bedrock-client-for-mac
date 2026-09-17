@@ -36,6 +36,9 @@ enum ConversationReplay {
                         }
                     } else {
                         append("[Previous tool result: \(name)]\n\(tool.result ?? "The tool did not complete.")", to: &message.text)
+                        if supportsImages, let images = tool.resultImages, !images.isEmpty {
+                            message.imageBase64Strings = (message.imageBase64Strings ?? []) + images.map(\.base64)
+                        }
                     }
                 }
                 message.toolUse = nil

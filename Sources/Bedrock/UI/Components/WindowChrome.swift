@@ -13,11 +13,16 @@ struct WindowChrome: NSViewRepresentable {
         }
         func applyStyle() {
             guard let window else { return }
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = hidesTitle ? .hidden : .visible
-            window.titlebarSeparatorStyle = .none
-            window.styleMask.insert(.fullSizeContentView)
-            window.backgroundColor = NSColor(DesignTokens.canvas)
+            // SwiftUI updates this representable during typing, scrolling and
+            // sidebar animations. Reassigning styleMask rebuilds AppKit's window
+            // frame even when the mask is unchanged, invalidating layout/focus.
+            if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }
+            let visibility: NSWindow.TitleVisibility = hidesTitle ? .hidden : .visible
+            if window.titleVisibility != visibility { window.titleVisibility = visibility }
+            if window.titlebarSeparatorStyle != .none { window.titlebarSeparatorStyle = .none }
+            if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
+            let background = NSColor(DesignTokens.canvas)
+            if window.backgroundColor != background { window.backgroundColor = background }
         }
     }
     func makeNSView(context: Context) -> ChromeView {

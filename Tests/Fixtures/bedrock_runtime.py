@@ -156,6 +156,30 @@ class FixtureHandler(BaseHTTPRequestHandler):
                     return
                 else:
                     content = {"text": "BACKGROUND_TOOLS_COMPLETE: BACKGROUND_READY · stopped"}
+        elif "[local-tools]" in prompt:
+            sequence = [
+                ("local-image", "local_view_image", {"path": prompt.partition("[local-tools]")[2].strip()}),
+                ("local-search", "local_search_conversations", {"query": "CONTEXT_SAVED: BRIDGE_CI"}),
+                ("local-save", "local_save_automation", {
+                    "name": "Local workflow automation", "prompt": "Summarize a fictional day.",
+                    "cadence": "daily", "time_zone": "Asia/Seoul", "weekdays": [2, 6], "enabled": False}),
+                ("local-list", "local_list_automations", {}),
+            ]
+            completed = {result.get("toolUseId") for result in tool_results}
+            pending = next((item for item in sequence if item[0] not in completed), None)
+            if pending:
+                tool_id, name, arguments = pending
+                advertised = {tool.get("toolSpec", {}).get("name") for tool in request.get("toolConfig", {}).get("tools", [])}
+                if name not in advertised:
+                    self.json_response(400, {"message": f"Required tool was not advertised: {name}"})
+                    return
+                content = {"toolUse": {"toolUseId": tool_id, "name": name, "input": arguments}}
+            else:
+                actual_image = any("image" in item for result in tool_results for item in result.get("content", []))
+                if not actual_image or any(result.get("status") != "success" for result in tool_results):
+                    self.json_response(400, {"message": "Local tools did not return their actual successful results"})
+                    return
+                content = {"text": "LOCAL_TOOLS_COMPLETE: image · saved conversation · paused automation"}
         elif "[tools]" in prompt:
             sequence = [
                 ("fixture-list", "local_list_skills", {}),

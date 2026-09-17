@@ -15,7 +15,8 @@ enum ToolProfile: String, CaseIterable, Codable, Sendable {
         switch self {
         case .all: Set(BuiltInTool.allCases)
         case .chat: []
-        case .readOnly: [.listFiles, .readFile, .searchFiles, .gitStatus, .listSkills, .readSkill, .pollProcess]
+        case .readOnly: [.listFiles, .readFile, .viewImage, .searchFiles, .searchConversations,
+                         .listAutomations, .gitStatus, .listSkills, .readSkill, .pollProcess]
         case .developer: Set(BuiltInTool.allCases.filter { !$0.needsNetwork && $0 != .sessionStatus })
         case .custom: []
         }
@@ -37,6 +38,10 @@ enum BuiltInTool: String, CaseIterable, Codable, Identifiable, Sendable {
     case sessionStatus = "local_session_status"
     case listSkills = "local_list_skills"
     case readSkill = "local_read_skill"
+    case viewImage = "local_view_image"
+    case searchConversations = "local_search_conversations"
+    case listAutomations = "local_list_automations"
+    case saveAutomation = "local_save_automation"
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -54,6 +59,10 @@ enum BuiltInTool: String, CaseIterable, Codable, Identifiable, Sendable {
         case .sessionStatus: "Session status"
         case .listSkills: "List skills"
         case .readSkill: "Load skills"
+        case .viewImage: "View local images"
+        case .searchConversations: "Search conversations"
+        case .listAutomations: "List automations"
+        case .saveAutomation: "Save an automation"
         }
     }
     var symbol: String {
@@ -68,11 +77,14 @@ enum BuiltInTool: String, CaseIterable, Codable, Identifiable, Sendable {
         case .openURL: "arrow.up.forward.app"
         case .sessionStatus: "info.circle"
         case .listSkills, .readSkill: "sparkles"
+        case .viewImage: "photo"
+        case .searchConversations: "text.bubble"
+        case .listAutomations, .saveAutomation: "clock"
         }
     }
     var needsNetwork: Bool { self == .fetchURL || self == .openURL }
     var changesState: Bool {
-        [.writeFile, .runCommand, .startProcess, .stopProcess, .openURL].contains(self)
+        [.writeFile, .runCommand, .startProcess, .stopProcess, .openURL, .saveAutomation].contains(self)
     }
     var description: String {
         switch self {
@@ -90,6 +102,10 @@ enum BuiltInTool: String, CaseIterable, Codable, Identifiable, Sendable {
         case .sessionStatus: "Report the current model, local time, working directory, and enabled tools when requested."
         case .listSkills: "List enabled local skills with their exact IDs, English names, and descriptions."
         case .readSkill: "Load an enabled local skill's instructions by ID. Use its reference directory for related files and scripts."
+        case .viewImage: "Inspect a local image using an absolute, ~/ or working-directory-relative path. Returns a bounded image to vision-capable models and an image preview in the conversation."
+        case .searchConversations: "Search saved local conversations, including pasted text and tool output. Returns matching snippets and conversation IDs. Excludes Trash."
+        case .listAutomations: "List local automations and their actual model, enabled state, next run, and last result."
+        case .saveAutomation: "Create or update a local automation using the app's validated scheduler. Omit id to create; include an existing id to update. New schedules start paused unless enabled is explicitly true. Schedules run while this Mac and Bedrock are awake."
         }
     }
 }

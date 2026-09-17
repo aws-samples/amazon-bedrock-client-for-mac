@@ -6,6 +6,53 @@ import XCTest
 
 final class WindowLifecycleTests: XCTestCase {
     @MainActor
+    func testWindowChromeUpdatesPreserveTheEditorWithoutReassigningTheStyleMask() {
+        final class ObservedWindow: NSWindow {
+            var styleChanges = 0
+            override var styleMask: NSWindow.StyleMask { didSet { styleChanges += 1 } }
+        }
+        let window = ObservedWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                                    styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let chrome = WindowChrome.ChromeView()
+        window.contentView?.addSubview(chrome)
+        chrome.applyStyle()
+        let editor = NSTextView(frame: NSRect(x: 10, y: 10, width: 300, height: 80))
+        window.contentView?.addSubview(editor)
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        let changes = window.styleChanges
+        for index in 0..<100 {
+            editor.string = "Typing update \(index)"
+            chrome.applyStyle()
+        }
+        XCTAssertEqual(window.styleChanges, changes)
+        XCTAssertTrue(window.firstResponder === editor)
+        XCTAssertEqual(editor.string, "Typing update 99")
+        XCTAssertTrue(window.styleMask.contains(.fullSizeContentView))
+    }
+
+    @MainActor
+    func testQuickAccessPanelDoesNotReplaceTheMainWindow() throws {
+        // The hosted unit-test process need not own desktop keyboard focus.
+        // Escape/typing/shortcut restoration is exercised by the UI suite.
+        let previous = NSApp.mainWindow
+        let controller = QuickAccessWindowController.shared
+        controller.showWindow()
+        defer { controller.hideWindow() }
+        let panel = try XCTUnwrap(NSApp.windows.first {
+            $0.identifier?.rawValue == "QuickAccessWindow" && $0.isVisible
+        })
+        XCTAssertTrue(panel.canBecomeKey)
+        XCTAssertFalse(panel.canBecomeMain)
+        XCTAssertFalse(panel.isReleasedWhenClosed)
+        XCTAssertFalse(NSApp.mainWindow === panel)
+        if let previous { XCTAssertTrue(NSApp.mainWindow === previous) }
+        controller.hideWindow()
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    @MainActor
     func testDelayedQuickAccessFocusLossCannotCloseAReopenedPanel() async throws {
         let controller = QuickAccessWindowController.shared
         controller.showWindow()

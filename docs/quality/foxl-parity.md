@@ -4,7 +4,7 @@ Audit started 2026-09-16. Reference checkout: `~/workspaces/foxl-ai/pilot/foxl`,
 
 The native app keeps direct AWS inference and local data. Notes, projects, the Files sidebar, organization accounts, relay/sync, billing, social channels and the desktop pet are outside the requested scope. Demo library, Automations and Activity remain. Skills and combined Archive/Trash stay in Settings. Main-window controls remain monochrome, with the model picker in the composer.
 
-An unchecked item means implementation or verification remains. “Existing” means a code path exists, **not** that it passed this audit. Check an item only with the implementation and relevant validation evidence. This checklist supplements, rather than replaces, `PILOT_LOCAL_PORT_TODO.md`.
+An unchecked item means implementation or verification remains. “Existing” means a code path exists, **not** that it passed this audit. Check an item only with the implementation and relevant validation evidence. This checklist supplements, rather than replaces, [the original port checklist](port-checklist.md).
 
 ## Chat and composer
 
@@ -67,9 +67,9 @@ Foxl evidence: `apps/web/src/pages/SkillsPage.tsx`, `ToolsPage.tsx`, `server/ski
 - [ ] FS06 Import/reload large skill folders off the main actor with cancellation and bounded reads.
 - [x] FS07 Inspect bundled references and prerequisites from the skill detail.
 - [x] FS08 Import/export skill folders without executing their contents or overwriting an existing skill.
-- [ ] FT01 Add a local image-view tool so an agent can inspect images created/read with file tools.
-- [ ] FT02 Expose local conversation search to the agent without introducing Notes or cloud search.
-- [ ] FT03 Let the agent list/create/update local automations using the same validated scheduler as Settings.
+- [x] FT01 Add a local image-view tool so an agent can inspect images created/read with file tools. Native restriction/decoding tests and actual SDK feedback of a 64×48 image passed.
+- [x] FT02 Expose local conversation search to the agent without introducing Notes or cloud search. The actual SDK tool loop found a marker in an earlier saved conversation.
+- [x] FT03 Let the agent list/create/update local automations using the same validated scheduler as Settings. Native update/persistence tests and the actual SDK create/list loop passed; the paused schedule appeared in Automations with its timezone and weekdays retained.
 - [x] FT04 Add bounded background-process start/poll/stop if a command outlives a tool turn. Incremental output, per-chat ownership, output/history bounds and process-group cancellation passed six real-process core tests. The actual app's four-request start/poll/stop tool loop passed in hosted run 35116246289 at 6dea03a.
 - [ ] FT05 Keep raw tool IDs, original input/output, timing and errors inspectable. Existing detail sheet; recheck new tools.
 - [ ] FT06 File-producing tool results offer explicit Open/Reveal/Copy path actions.
@@ -135,8 +135,8 @@ User changes received September 16, 2026. Implementation and runtime verificatio
 - [x] UX02 Place Back immediately after the sidebar toggle; skip unavailable/deleted conversations and preserve drafts.
 - [x] UX03 Restore global Search to the original upper-right toolbar location and size; ⌘K opens the same search. The later user correction supersedes placement beside the wordmark.
 - [x] UX04 Keep in-conversation Find on ⌘F without a duplicate toolbar search icon.
-- [x] UX05 Show a bounded recent transcript first; load earlier/newer messages without changing scroll anchors. Actual prepend/trim checks retained the pixel offset with no more than 96 rendered messages.
-- [x] UX06 Search the full conversation, including messages outside the initial rendered page.
+- [x] UX05 Show the full conversation as one continuous lazy transcript, with no manual earlier/newer controls or page limits. This supersedes the former 32/96-message implementation. Actual full-history scrolling/search/return and stream-completion scenarios each passed three times; the complete pipeline remains a separate release gate.
+- [x] UX06 Search the full conversation, including offscreen messages.
 - [ ] UX07 Use one custom button/menu/segmented-control design in Settings and response, image and video controls.
 - [ ] UX08 Verify keyboard navigation, search, selection, Escape and long values in custom dropdowns.
 - [ ] UX09 Use blue selected states for enabled parameters while keeping action icons monochrome.

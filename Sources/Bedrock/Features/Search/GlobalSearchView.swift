@@ -42,7 +42,7 @@ struct GlobalSearchView: View {
             for setting in SettingsItem.all where setting.matches(text) {
                 result.append(.init(id: "setting-\(setting.id)", title: setting.title, detail: "Settings › \(setting.pane.title)", symbol: setting.pane.symbol, target: .setting(setting.id)))
             }
-            for skill in store.skills where "\(skill.name) \(skill.description) \(skill.tags.joined(separator: " "))".localizedStandardContains(text) {
+            for skill in store.skills where "\(skill.id) \(skill.name) \(skill.description) \(skill.tags.joined(separator: " "))".localizedStandardContains(text) {
                 result.append(.init(id: "skill-\(skill.id)", title: skill.name, detail: "Local skill", symbol: "sparkles", target: .skill(skill.id)))
             }
             for demo in store.demos where "\(demo.title) \(demo.summary) \(demo.category.rawValue)".localizedStandardContains(text) {
@@ -155,7 +155,7 @@ struct GlobalSearchView: View {
             case .setting(let id): store.showSettings(row: id)
             case .page(let page): store.destination = page
             case .thread(let id):
-                if let match { store.chatSearchRequest = .init(threadID: id, query: search, messageID: match.messageID) }
+                if let match { store.chatSearchRequest = .init(threadID: id, query: search, messageID: match.messageID, target: match.target) }
                 store.selectThread(id)
             case .demo(let demo): onDemo(demo)
             case .skill(let id): store.requestedSkillID = id; store.showSettings(row: "skills")

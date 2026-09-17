@@ -1,12 +1,13 @@
 # Completion audit
 
-Audited September 16, 2026. The [requirements ledger](requirements.md) is the
+Audited September 17, 2026. The [requirements ledger](requirements.md) is the
 authoritative list. [Foxl parity](foxl-parity.md), [settings mapping](foxl-settings.md)
 and the [original port checklist](port-checklist.md) provide supporting detail.
 They overlap and must not be added together as a unique feature count.
 
-The rebuild is **not yet fully validated or released**. An implemented code path,
-a type-check or a screenshot does not close a behavioral requirement.
+This is the pre-release audit. GitHub Actions receipts and Releases record the
+subsequent release execution. An implemented code path, a type-check or a
+screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
@@ -24,10 +25,10 @@ a type-check or a screenshot does not close a behavioral requirement.
   skipped. All seven local MCP lifecycle cases and four new configuration
   security cases passed. Core (88), standalone renderer/clipboard (37), and
   loopback protocol (3) checks also passed.
-- Local UI execution remains blocked before the first scenario: the correctly
-  ad-hoc-signed runner times out enabling macOS Automation Mode. The system
-  reports that user authentication is required. This is **not a passing local
-  CI run**; the full suite must execute again after normal Xcode authentication.
+- An earlier local runner could not enable macOS Automation Mode. That historical
+  setup failure is no longer the current blocker: the authorized local XCTest
+  session now runs actual app interactions. The readiness report records the
+  automation state without mistaking that flag for a completed UI test.
 - The attachment/background-process changes passed 95 portable core cases and
   78 optimized native cases locally (74 passed, four optional network skips).
   Bulk export checks original bytes, duplicate names, existing-file preservation,
@@ -44,39 +45,65 @@ a type-check or a screenshot does not close a behavioral requirement.
   a long-session memory plateau or prove every conversation size.
 - Actual Light/Dark screenshots and the demonstration are described in
   [Media](../media.md), including their source revision.
+- The current core validation wrapper passed 115 cases. New optimized native
+  tests passed for exact file-line ranges, actual image bytes and configured
+  restrictions, and automation create/update/persistence. Eleven viewport cases
+  cover layout, lazy-row restoration, teardown and cancellation.
+- Targeted optimized UI runs passed automation model grouping/provider identity
+  and save/relaunch/edit with an unchanged route; real skills/shell tool loops
+  and original tool details; Quick Access escape/refocus/submission; rendered
+  HTML selection versus source-Markdown copy; model-switch context; long-history
+  typing/shortcuts; and stream completion without moving the reading position.
+- Repeat testing after the first scroll-start correction exposed another failure:
+  SwiftUI's corrected row position differed from its stale native view by 1,104
+  points. The viewport now uses actual content-layout coordinates and preserves
+  the pending target while its native view is temporarily detached.
+- `authoritative-layout-restoration.xcresult` passed all 11 viewport cases three
+  times. Both the 1,000-message full-scroll/search/return scenario and completion
+  of a controlled stream while reading an earlier passage passed three times.
+  The thumb reaches the first message in one drag. User scrolling cancels
+  restoration at the native scroll-start notification. The run used AWS SDK
+  1.7.85/Smithy 0.252.0 without the temporary diagnostic logging.
+- A separate real interaction restored question 250 to exactly the same screen
+  coordinate on three Activity → Back round trips. Three 61-character typing
+  passes measured 8.66–8.96 ms median and 13.27–15.98 ms p95, with zero failures;
+  all three scheduled six-second scroll probes completed. See the methodology
+  and executable identity in [Performance](../performance.md).
 
 ## Failure follow-up
 
 | Area | Required follow-up |
 | --- | --- |
 | MCP fixture connections | The isolated-manager override now passes locally, including cancellation, reconnect, timeout and output tests. Hosted re-execution remains required. |
-| Global search | Verify the actual centered panel, outside click, Escape and retained draft. |
-| Stream reading position | Fix the file-panel interruption, then execute the stream completion/scroll-anchor assertions. |
-| Error recovery | Preserve the service's actionable message and prove a following request succeeds. |
-| Image preview | Verify Fit after animated zoom, original image copy, repeated close/reopen and app responsiveness. |
-| Quick Access | Exercise the real panel, editor, Escape and main-conversation handoff. |
-| Skill removal | Verify the corrected hit area through an actual click, including small displays. |
-| Initial size | Respect the available display width while preserving the usable sidebar and minimum content size. |
+| Continuous history | Actual scrolling/search/navigation and stream-completion scenarios each passed three consecutive runs after the measured-coordinate correction. Include them in the complete local and hosted suites. |
+| Tool details | The disclosure is now one distinct button instead of competing tap/disclosure handlers. Actual Input/Output inspection passes. |
+| Quick Access | Actual Escape/refocus/submission passes after correcting panel/main-window handoff and avoiding redundant window-style changes. |
+| Rich selection | Actual rich HTML and original Markdown copy passes with the corrected assistant-role fixture. |
+| Automation models | Shared picker deduplicates model families, exposes provider/route, and preserves the exact route through save/relaunch/edit. Actual UI case passes. |
+| Remaining suite | Global search dismissal, error recovery, image preview, skill removal, initial size, queues and attachments still require the final complete-suite execution against unchanged source. |
 
 ## Implementation gaps that remain open
 
 The following are real Foxl convenience gaps, rather than missing checkmarks:
 
 - Explicit summary-based context compaction.
-- Agent tools for local image inspection, conversation search and automations.
 - Custom shell/HTTP tools with safe configuration import/export.
-- Weekday/active-hour automation schedules with timezone and next-run preview.
 - Separate notification outcomes and supported shortcut customization.
 - Configurable model fallback and per-turn budgets distinct from output limits.
+- Eligible read-tool caching with invalidation after writes.
+- Activity aggregation/retry, localization and an issue-report action.
 
 Each has an individual item in [Foxl parity](foxl-parity.md). Existing but
 unverified features—settings controls, automation editing, Activity filtering,
 history management and demo routes—remain open until exercised.
 
-Output-limit continuation now records the actual Converse stop reason and
-preserves an unrelated composer draft. Background start/poll/stop is implemented
-with bounded output, per-chat ownership, process-group termination and shutdown.
-Their dedicated UI tool-loop cases are still awaiting execution, so FC23/FT04
+Local image inspection, conversation search and automation tools are implemented.
+`complete-drag-and-tool-feedback.xcresult` passed their actual SDK loop: a 64×48
+image reached the next model request, a marker from an earlier conversation was
+found, and a paused automation appeared in the app with its timezone and weekdays
+retained. Native/core cases separately verify restrictions and update persistence.
+Weekday/active-hour schedules, timezone selection and next-run preview are also
+implemented, including DST and overnight-window tests. Unverified UI combinations
 remain open.
 
 ## Current repository and release gates
