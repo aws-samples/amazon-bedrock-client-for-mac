@@ -26,21 +26,46 @@ final class UpdateInstallerTests: XCTestCase {
         let python = try XCTUnwrap(Bundle(for: UpdateInstallerTests.self)
             .object(forInfoDictionaryKey: "BedrockTestPython") as? String)
         XCTAssertTrue(python.hasPrefix("/") && !python.contains("$("), "Use the real Python interpreter, not xcrun's shim.")
+        let script = fixtureRoot.appendingPathComponent("update_fixture.py")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: script.path), "Missing download fixture: \(script.path)")
+        let errorLog = directory.appendingPathComponent("server.log")
+        FileManager.default.createFile(atPath: errorLog.path, contents: nil)
+        let errors = try FileHandle(forWritingTo: errorLog)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: python)
-        process.arguments = [fixtureRoot.appendingPathComponent("update_fixture.py").path, port.path]
+        process.arguments = [script.path, port.path]
+        // Keep XCTest/DYLD instrumentation and unrelated app environment
+        // variables out of the standalone Python fixture.
+        process.environment = [
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": NSHomeDirectory(),
+            "TMPDIR": directory.path, "LANG": "en_US.UTF-8",
+            "PYTHONUNBUFFERED": "1", "PYTHONDONTWRITEBYTECODE": "1"
+        ]
+        process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        process.standardError = errors
         try process.run()
         defer {
             if process.isRunning { process.terminate(); process.waitUntilExit() }
+            try? errors.close()
             try? FileManager.default.removeItem(at: directory)
         }
-        for _ in 0..<100 {
-            if FileManager.default.fileExists(atPath: port.path) { break }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        var readyPort: Int?
+        while process.isRunning, ContinuousClock.now < deadline {
+            if let text = try? String(contentsOf: port, encoding: .utf8),
+               let number = Int(text), (1...65535).contains(number) {
+                readyPort = number
+                break
+            }
             try await Task.sleep(for: .milliseconds(20))
         }
-        let number = try String(contentsOf: port, encoding: .utf8)
+        guard let number = readyPort else {
+            let details = (try? String(contentsOf: errorLog, encoding: .utf8)) ?? ""
+            throw NSError(domain: "UpdateDownloadFixture", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "The download fixture did not start. \(details.suffix(2_000))"
+            ])
+        }
         let base = try XCTUnwrap(URL(string: "http://127.0.0.1:\(number)"))
         try await body(base, directory)
     }

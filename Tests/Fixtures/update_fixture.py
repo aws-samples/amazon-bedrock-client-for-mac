@@ -2,6 +2,7 @@
 """Loopback download fixture; never proxies a public release or installs an app."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 import sys
 
 PAYLOAD = b"verified update payload"
@@ -21,7 +22,23 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class DownloadFixture(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self):
+        super().__init__(("127.0.0.1", 0), Handler)
+
+    def server_bind(self):
+        # HTTPServer's reverse DNS lookup can open a macOS local-network
+        # consent dialog. This fixture only serves literal loopback traffic.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 if __name__ == "__main__":
-    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
-        Path(sys.argv[1]).write_text(str(server.server_port))
+    with DownloadFixture() as server:
+        ready = Path(sys.argv[1])
+        pending = ready.with_name(ready.name + ".tmp")
+        pending.write_text(str(server.server_port))
+        pending.replace(ready)
         server.serve_forever()

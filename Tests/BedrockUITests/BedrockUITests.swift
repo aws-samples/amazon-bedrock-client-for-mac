@@ -703,7 +703,9 @@ final class BedrockUITests: XCTestCase {
         _ = response("STREAM_BEGIN", in: app)
         let window = app.windows["MainWindow"]
         let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
-        let anchor = window.staticTexts["Fixture question 492"]
+        // Read the preceding completed turn. Its richer Markdown fixture has
+        // variable height; the behavior under test is preserving this passage.
+        let anchor = window.staticTexts["Fixture question 499"]
         for _ in 0..<10 {
             transcript.scroll(byDeltaX: 0, deltaY: 300)
             if anchor.exists, anchor.frame.minY > window.frame.minY + 80,

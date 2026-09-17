@@ -11,6 +11,17 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Hosted `35190013784` reached the new small-screen layout and exposed a
+  download-fixture startup problem. Python's default HTTP server performed a
+  reverse hostname lookup and opened a macOS network-consent dialog; the
+  recordings show that dialog covering the skills/tool controls and transcript.
+  The fixture now binds literal loopback without name discovery, publishes its
+  port atomically and retains startup errors. Its no-discovery regression passes.
+  All five updater XCTest cases then pass in an optimized standalone bundle
+  compiled from the identical app/test sources, including the three failed
+  download cases. This targeted execution avoids the local IDE-session blocker.
+  The richer stream fixture reads the preceding completed turn before checking
+  that finishing a response preserves its position.
 - Cold searches in the normal 1,000-message conversation exposed premature
   completion: the projected row was centered while its actual native view was
   still 1,065 points away. Completion now requires both native and measured
@@ -42,7 +53,8 @@ screenshot does not close a behavioral requirement.
   `codesign -R` requirement-source prefix. A positive native regression was
   added; its local build passed, but XCTest waited for its IDE session before
   executing either selected test, so that attempt was stopped and retained as
-  runner evidence. The additional case remains part of the hosted gate.
+  runner evidence. The additional case subsequently passed in the targeted
+  standalone bundle and remains part of the final hosted gate.
   A standalone optimized executable compiled from the actual installer and
   process-runner sources then passed all five signature checks, including the
   installed 1.4.10 identity and mismatched-version rejection. The normal Release
