@@ -74,5 +74,8 @@ artifacts/
 __pycache__/
 *.py[cod]
 
+# Local development notes and validation journals
+/docs/quality/
+
 # OMC
 .omc/

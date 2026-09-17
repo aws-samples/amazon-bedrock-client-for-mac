@@ -166,7 +166,7 @@ swiftc -O scripts/measure-ui-responsiveness.swift -o /tmp/bedrock-ui-probe
 
 Open an isolated synthetic conversation and bring the app to the foreground first. Use the same fixture, window dimensions, appearance, and display for both builds. Typing requires an empty composer; the probe restores its own text and never sends a prompt. Scroll injects 360 events over six seconds while checking a single window attribute. Avoid full accessibility-tree snapshots during timing: they can be more expensive than the interaction being measured. Keep raw samples and report median, p95, maximum, failures, and total elapsed time.
 
-The complete scenario list is in [Validation matrix](quality/validation-matrix.md); executed results and limitations belong in [validation-log.md](quality/validation-log.md).
+See the [CI scenario map](testing.md) for regression coverage. Keep raw local measurements in the ignored `artifacts/` directory. When sharing results, include the tested revision, workload and limitations, and remove personal paths, account identifiers and conversation content.
 
 ## Storage and migration
 
@@ -181,7 +181,7 @@ Preserve history IDs, attachment references, drafts, queued work, skills, and ex
 Keep `MARKETING_VERSION` equal in both app configurations, write `docs/releases/<version>.md`, verify the affected local regressions, and run:
 
 ```sh
-python3 scripts/verify-release.py --tag v2.0.0
+python3 scripts/verify-release.py --tag v2.0.1
 ```
 
 After main validation succeeds, push the matching version tag. GitHub validates again, builds an optimized universal app, verifies the production identity and both architectures, signs with Developer ID, notarizes and staples the app and DMG, then publishes the DMG and checksum. Invalid notarization results stop publication. Signing credentials come from repository secrets and are not used in pull-request validation.

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Run a separate app identity and data store so UI validation cannot overwrite
 # the installed app's conversations, API key, preferences, or MCP configuration.
-validation_root="${BEDROCK_PREVIEW_ROOT:-/tmp/bedrock-pilot-validation}"
+validation_root="${BEDROCK_PREVIEW_ROOT:-/tmp/bedrock-preview}"
 preview_name="${BEDROCK_PREVIEW_NAME:-Bedrock Validation}"
 if [[ ! "$preview_name" =~ '^[A-Za-z0-9][A-Za-z0-9 .-]{0,50}$' ]]; then
     print -u2 'Use a short app name containing letters, numbers, spaces, dots or hyphens.'

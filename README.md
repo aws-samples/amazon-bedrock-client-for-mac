@@ -177,7 +177,7 @@ Tests/
   Fixtures/               Deterministic Bedrock protocol and MCP servers
 Configuration/            App Info.plist and entitlements
 scripts/                  Build, validation, packaging, and preview commands
-docs/                     Contributor guides, quality evidence, and media
+docs/                     Contributor guides, release notes, and media
 ```
 
 ## Tested before release
@@ -209,6 +209,6 @@ Release tags must pass the same checks before universal builds, signing, notariz
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Include a reproducible scenario and the checks you ran. Performance changes should include the workload, build configuration, and measurements.
 
-The [performance report](docs/performance.md) records comparable Release measurements, and the [validation matrix](docs/quality/validation-matrix.md) separates executed checks from work that remains.
+See the [performance report](docs/performance.md) for Release measurements and the [CI scenario map](docs/testing.md) for automated coverage and live-test boundaries.
 
 This project uses the [MIT-0 license](LICENSE) and the [Amazon Open Source Code of Conduct](CODE_OF_CONDUCT.md).

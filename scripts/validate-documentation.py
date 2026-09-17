@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import struct
+import subprocess
 from urllib.parse import unquote, urlsplit
 
 
@@ -107,13 +108,32 @@ def local_targets(text):
 
 def main():
     root = Path(__file__).resolve().parents[1]
-    documents = sorted([*root.glob("*.md"), *(root / "docs").rglob("*.md")])
     failures = []
+    if (root / ".git").exists():
+        tracked = subprocess.check_output(
+            ["git", "ls-files", "-z"], cwd=root
+        ).decode().split("\0")
+        paths = [Path(value) for value in tracked if value]
+        if any(path.parts[:2] == ("docs", "quality") for path in paths):
+            failures.append("Local quality notes must remain untracked.")
+        documents = sorted(root / path for path in paths
+                           if path.suffix == ".md"
+                           and (len(path.parts) == 1 or path.parts[0] == "docs")
+                           and path.parts[:2] != ("docs", "quality"))
+    else:
+        # Source archives contain no Git index.
+        documents = sorted(path for path in [*root.glob("*.md"), *(root / "docs").rglob("*.md")]
+                           if path.relative_to(root).parts[:2] != ("docs", "quality"))
     checked = 0
     for document in documents:
-        for target in local_targets(document.read_text()):
+        text = document.read_text()
+        for line, content in enumerate(text.splitlines(), 1):
+            if re.search(r"/(?:Users|home)/[A-Za-z0-9_.-]+", content):
+                failures.append(f"{document.relative_to(root)}:{line}: remove the machine-specific home directory.")
+        for target in local_targets(text):
             destination = (document.parent / target).resolve()
-            if not destination.is_relative_to(root) or not destination.exists():
+            if (not destination.is_relative_to(root) or not destination.exists()
+                    or destination.relative_to(root).parts[:2] == ("docs", "quality")):
                 failures.append(f"{document.relative_to(root)}: missing local target {target}")
             checked += 1
 

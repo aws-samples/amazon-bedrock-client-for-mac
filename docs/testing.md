@@ -65,7 +65,7 @@ Dedicated hardware measurements use `scripts/measure-ui-responsiveness.swift`; t
 
 ## Live checks
 
-Deterministic tests do not prove account-specific model access, all regions, a provider's generated content, microphone permissions or external MCP credentials. Those require live checks against the intended account and hardware. The recorded local runs and their limits are in [validation-log.md](quality/validation-log.md). Optional public MCP diagnostics remain opt-in with `BEDROCK_LIVE_NETWORK_TESTS=1`.
+Deterministic tests do not prove account-specific model access, all regions, a provider's generated content, microphone permissions or external MCP credentials. Those require live checks against the intended account and hardware. Keep local results in `artifacts/`; share only sanitized summaries that identify the tested revision and limitations. Optional public MCP diagnostics remain opt-in with `BEDROCK_LIVE_NETWORK_TESTS=1`.
 
 Validation artifacts contain `ci-result.json`, `summary.json`, logs and
 `Bedrock.xcresult`, including screenshots and UI measurements. A failed test
