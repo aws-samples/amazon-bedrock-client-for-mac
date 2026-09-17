@@ -195,6 +195,16 @@ Every main push and pull request runs the same command in the [validation workfl
 
 Release tags must pass the same checks before universal builds, signing, notarization, and publication. Publication also requires a successful main CI run for the release commit. Test logs, screenshots, request payloads, and performance measurements remain available as workflow artifacts. See the [scenario map](docs/testing.md) for coverage and live-test boundaries.
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=aws-samples%2Famazon-bedrock-client-for-mac&type=date&releases=&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=aws-samples/amazon-bedrock-client-for-mac&type=date&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=aws-samples/amazon-bedrock-client-for-mac&type=date&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=aws-samples/amazon-bedrock-client-for-mac&type=date&legend=bottom-right" />
+ </picture>
+</a>
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Include a reproducible scenario and the checks you ran. Performance changes should include the workload, build configuration, and measurements.
