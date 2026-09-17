@@ -12,17 +12,23 @@ import time
 
 
 def input_hashes(root):
-    """Include new/deleted files, documentation and the pipeline itself."""
+    """Hash source and automation, including new files but excluding ignored local evidence."""
+    folders = {"Sources", "Tests", "Configuration", "scripts", "docs"}
+    files = {
+        "Package.swift", "README.md", "CONTRIBUTING.md",
+        "Bedrock.xcodeproj/project.pbxproj",
+        "Bedrock.xcodeproj/xcshareddata/xcschemes/Bedrock.xcscheme",
+        "Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+    }
+    names = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=root
+    ).decode().split("\0")
     inputs = sorted({
-        *[p for folder in ("Sources", "Tests", "Configuration", "scripts", "docs", ".github/workflows")
-          for p in (root / folder).rglob("*")
-          if p.is_file() and "__pycache__" not in p.parts and p.suffix not in (".pyc", ".log")],
-        *[root / name for name in ("Package.swift", "README.md", "CONTRIBUTING.md",
-                                   "Bedrock.xcodeproj/project.pbxproj",
-                                   "Bedrock.xcodeproj/xcshareddata/xcschemes/Bedrock.xcscheme",
-                                   "Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")],
+        name for name in names if name
+        and (Path(name).parts[0] in folders or name.startswith(".github/workflows/") or name in files)
+        and "__pycache__" not in Path(name).parts and Path(name).suffix not in (".pyc", ".log")
     })
-    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
+    return {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in inputs}
 
 
 def input_executables(root, paths):
@@ -83,17 +89,27 @@ def main():
         receipt.write_text(json.dumps(report, indent=2) + "\n")
 
     def run(name, command, logfile):
+        if os.environ.get("GITHUB_ACTIONS"):
+            print(f"::group::{name}", flush=True)
         print(f"Running {name}…", flush=True)
         start = time.monotonic()
         with (output / logfile).open("w") as log:
-            result = subprocess.run([str(value) for value in command], cwd=root, env=environment,
-                                    stdout=log, stderr=subprocess.STDOUT)
+            process = subprocess.Popen([str(value) for value in command], cwd=root, env=environment,
+                                       stdout=log, stderr=subprocess.STDOUT)
+            while True:
+                try:
+                    return_code = process.wait(timeout=30)
+                    break
+                except subprocess.TimeoutExpired:
+                    print(f"{name}: {time.monotonic() - start:.0f}s elapsed; log: {logfile}", flush=True)
         report["steps"].append({
-            "name": name, "exitCode": result.returncode,
+            "name": name, "exitCode": return_code,
             "seconds": round(time.monotonic() - start, 3), "log": logfile,
         })
         save()
-        if result.returncode:
+        if os.environ.get("GITHUB_ACTIONS"):
+            print("::endgroup::", flush=True)
+        if return_code:
             lines = (output / logfile).read_text(errors="replace").splitlines()
             important = [line for line in lines if "error:" in line or "failed" in line.lower()]
             print("\n".join((important or lines[-25:])[-25:]), file=sys.stderr)
@@ -117,9 +133,11 @@ def main():
             [python, "-m", "py_compile", *sorted((root / "scripts").glob("*.py")),
              *sorted((root / "Tests/Fixtures").glob("*.py"))], "scripts.log")
         run("documentation and media", [python, "scripts/validate-documentation.py"], "documentation.log")
-        run("local core", [python, "scripts/validate-local-core.py", "--output", output / "core"], "core-suite.log")
+        run("pipeline automation",
+            [python, "-m", "unittest", "discover", "-s", "Tests/Pipeline", "-v"], "pipeline.log")
         run("Bedrock protocol fixtures",
             [python, "-m", "unittest", "discover", "-s", "Tests/Fixtures", "-p", "test_*.py", "-v"], "fixtures.log")
+        run("local core", [python, "scripts/validate-local-core.py", "--output", output / "core"], "core-suite.log")
         run("pinned dependencies", [xcodebuild, "-resolvePackageDependencies", *common,
                                     "-onlyUsePackageVersionsFromResolvedFile"], "dependencies.log")
         run("native Markdown and clipboard",
@@ -133,6 +151,7 @@ def main():
              "-disableAutomaticPackageResolution", "-parallel-testing-enabled", "NO",
              "-skipMacroValidation", "-skipPackagePluginValidation",
              "ENABLE_TESTABILITY=YES", "SWIFT_OPTIMIZATION_LEVEL=-O",
+             "ONLY_ACTIVE_ARCH=YES", "COMPILER_INDEX_STORE_ENABLE=NO",
              "SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) WORKBENCH_TESTING",
              "BEDROCK_APP_BUNDLE_IDENTIFIER=AWS.Amazon-Bedrock-Client-for-Mac.UITestHost",
              f"BEDROCK_TEST_PYTHON={python}",

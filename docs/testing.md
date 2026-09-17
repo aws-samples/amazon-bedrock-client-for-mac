@@ -5,7 +5,9 @@ Local validation and GitHub share `python3 scripts/ci.py`. For focused changes,
 run the affected or previously failing suites locally. The final main revision
 must pass the entire GitHub pipeline before release; targeted local results do
 not replace that gate.
-Release tags call the same workflow before signing or publication. The app runs
+Release tags verify and reuse the complete successful main run for their exact
+commit, including source hashes, executable modes and the Xcode case inventory.
+The full suite is not repeated during release. The app runs
 with **Release optimization** and isolated local data; a distinct bundle identity
 protects existing user preferences.
 

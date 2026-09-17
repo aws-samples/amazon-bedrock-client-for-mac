@@ -5,22 +5,21 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing vx.y.z tag with successful main CI
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  validation:
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-
   build:
-    needs: validation
     runs-on: macos-26
     timeout-minutes: 60
     permissions:
@@ -30,23 +29,51 @@ jobs:
       APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Release/Amazon Bedrock.app
       DMG_PATH: Amazon.Bedrock.Client.for.Mac.dmg
       LLVM_PROFILE_FILE: /tmp/bedrock-%p.profraw
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
 
     steps:
-      - name: Check out the tested revision
+      - name: Check out release automation
         uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+      - name: Resolve the immutable release tag
+        id: source
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          cp scripts/verify-main-ci.py "$RUNNER_TEMP/verify-main-ci.py"
+          echo "revision=$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" >> "$GITHUB_OUTPUT"
+      - name: Check out the tested revision
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ steps.source.outputs.revision }}
+          fetch-depth: 0
+      - name: Verify and reuse successful main CI
+        id: validation
+        timeout-minutes: 50
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 "$RUNNER_TEMP/verify-main-ci.py" \
+            --tag "$RELEASE_TAG" --root "$GITHUB_WORKSPACE" --output artifacts
       - uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
-          xcode-version: latest-stable
+          xcode-version: ${{ steps.validation.outputs.xcode }}
       - name: Restore pinned Swift packages
         uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ runner.temp }}/BedrockPackages
           key: swift-packages-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      - name: Restore distribution build intermediates
+        id: distribution-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: DerivedData
+          key: distribution-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.validation.outputs.xcode }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ steps.source.outputs.revision }}
+          restore-keys: |
+            distribution-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.validation.outputs.xcode }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-
       - name: Check version and main ancestry
-        env:
-          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
         run: |
           git merge-base --is-ancestor HEAD origin/main
           python3 scripts/verify-release.py --tag "$RELEASE_TAG"
@@ -57,7 +84,7 @@ jobs:
           p12-file-base64: ${{ secrets.MACOS_CERTS_P12 }}
           p12-password: ${{ secrets.P12_PASSWORD }}
       - name: Install packaging tool
-        run: brew install create-dmg
+        run: brew list --versions create-dmg >/dev/null || brew install create-dmg
       - name: Resolve committed dependencies
         run: |
           mkdir -p artifacts
@@ -150,29 +177,24 @@ jobs:
             "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app/Contents/MacOS/Amazon Bedrock"
           test "$(readlink "$BEDROCK_DMG_VOLUME/Applications")" = /Applications
       - name: Require successful main CI before publication
-        if: startsWith(github.ref, 'refs/tags/v')
-        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
+          TESTED_REVISION: ${{ steps.source.outputs.revision }}
+          MAIN_CI_RUN: ${{ steps.validation.outputs.run_id }}
         run: |
-          gh run list --workflow ci.yml --branch main --commit "$GITHUB_SHA" \
-            --event push --limit 10 \
-            --json databaseId,headSha,headBranch,status,conclusion,url > artifacts/main-ci-runs.json
-          BEDROCK_MAIN_CI_RUN=$(jq -r --arg sha "$GITHUB_SHA" \
-            '[.[] | select(.headSha == $sha and .headBranch == "main")] | sort_by(.databaseId) | last | .databaseId // empty' \
-            artifacts/main-ci-runs.json)
-          test -n "$BEDROCK_MAIN_CI_RUN"
-          gh run watch "$BEDROCK_MAIN_CI_RUN" --interval 20 --exit-status
-          gh run view "$BEDROCK_MAIN_CI_RUN" \
-            --json status,conclusion,headSha,headBranch,url > artifacts/main-ci-result.json
-          jq -e --arg sha "$GITHUB_SHA" \
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$TESTED_REVISION"
+          gh run view "$MAIN_CI_RUN" \
+            --json status,conclusion,headSha,headBranch,url > artifacts/main-ci-publication.json
+          jq -e --arg sha "$TESTED_REVISION" \
             '.status == "completed" and .conclusion == "success" and .headSha == $sha and .headBranch == "main"' \
-            artifacts/main-ci-result.json
+            artifacts/main-ci-publication.json
       - name: Preserve build and notarization evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: release-evidence-${{ github.run_id }}
+          compression-level: 0
           path: |
             artifacts/*.log
             artifacts/*.json
@@ -182,14 +204,15 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: Amazon Bedrock Client for Mac
+          compression-level: 0
           path: |
             Amazon.Bedrock.Client.for.Mac.dmg
             SHA256SUMS.txt
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3.0.3
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
           body_path: docs/releases/${{ env.RELEASE_VERSION }}.md
           fail_on_unmatched_files: true
           files: |
@@ -199,7 +222,6 @@ jobs:
           draft: false
           prerelease: false
       - name: Update Homebrew cask
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.BREW_TOKEN }}
         run: |
@@ -209,3 +231,10 @@ jobs:
             --sha256="$DMG_SHA256" \
             --url="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/download/v$RELEASE_VERSION/Amazon.Bedrock.Client.for.Mac.dmg" \
             didhd/tap/amazon-bedrock-client
+      - name: Save distribution build intermediates for the next release
+        if: success() && steps.distribution-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: DerivedData
+          key: ${{ steps.distribution-cache.outputs.cache-primary-key }}

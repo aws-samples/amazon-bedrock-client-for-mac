@@ -193,7 +193,7 @@ Full Xcode and an unlocked macOS desktop are required for the UI suite. The comm
 
 Every main push and pull request runs the same command in the [validation workflow](https://github.com/aws-samples/amazon-bedrock-client-for-mac/actions/workflows/ci.yml). It checks storage and migrations, native rendering and clipboard behavior, real MCP subprocesses, and UI interactions in an optimized Release app. Streaming, model switching, tools, queues, and attachments run through the actual AWS SDK against a local protocol fixture.
 
-Release tags must pass the same checks before universal builds, signing, notarization, and publication. Publication also requires a successful main CI run for the release commit. Test logs, screenshots, request payloads, and performance measurements remain available as workflow artifacts. See the [scenario map](docs/testing.md) for coverage and live-test boundaries.
+Release tags reuse successful main CI for the exact commit, verifying the recorded source hashes, executable permissions, and complete test results. The distribution then receives its own universal build, signature, notarization, and installation checks. Test logs, screenshots, request payloads, and performance measurements remain available as workflow artifacts. See the [scenario map](docs/testing.md) for coverage and live-test boundaries.
 
 ## Star History
 

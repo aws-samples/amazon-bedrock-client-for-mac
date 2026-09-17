@@ -25,12 +25,25 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
           xcode-version: latest-stable
+      - name: Identify the selected Xcode toolchain
+        id: toolchain
+        run: echo "version=$(xcodebuild -version | awk '/Xcode/{print $2}')" >> "$GITHUB_OUTPUT"
       - name: Restore pinned Swift packages
         id: packages
         uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ runner.temp }}/BedrockPackages
           key: swift-packages-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      - name: Restore optimized test build intermediates
+        id: native-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/BedrockDerived/Build
+            ${{ runner.temp }}/BedrockDerived/ModuleCache.noindex
+          key: native-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.version }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'Bedrock.xcodeproj/project.pbxproj', 'Bedrock.xcodeproj/xcshareddata/xcschemes/Bedrock.xcscheme') }}-${{ github.sha }}
+          restore-keys: |
+            native-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.version }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'Bedrock.xcodeproj/project.pbxproj', 'Bedrock.xcodeproj/xcshareddata/xcschemes/Bedrock.xcscheme') }}-
       - name: Run the complete local CI command
         run: |
           python3 scripts/ci.py \
@@ -43,11 +56,23 @@ jobs:
         with:
           path: ${{ runner.temp }}/BedrockPackages
           key: ${{ steps.packages.outputs.cache-primary-key }}
+      - name: Preserve the compact release verification receipt
+        if: success()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: native-receipt-${{ github.run_id }}
+          path: |
+            artifacts/ci-result.json
+            artifacts/xcode-summary.json
+            artifacts/xcode-tests.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Preserve validation evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: native-validation-${{ github.run_id }}
+          compression-level: 0
           path: |
             artifacts/*.log
             artifacts/*.json
@@ -56,3 +81,12 @@ jobs:
             artifacts/rendering/*.log
             artifacts/Bedrock.xcresult
           retention-days: 14
+      - name: Save optimized test build intermediates
+        if: success() && steps.native-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/BedrockDerived/Build
+            ${{ runner.temp }}/BedrockDerived/ModuleCache.noindex
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}

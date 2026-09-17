@@ -101,7 +101,7 @@ Fixture paths resolve from the test sources, or from `BEDROCK_TEST_FIXTURES`.
 UI tests create fresh storage for each case. Tests cover real local MCP
 subprocesses; optional public MCP diagnostics require `BEDROCK_LIVE_NETWORK_TESTS=1`.
 
-The validation workflow runs on every push to `main` and `release/**`, on pull requests, and on demand. It retains logs, screenshots, actual loopback request payloads, timing results and an `.xcresult`. Pinned package sources are cached by the committed dependency graph; test and distribution executables are rebuilt separately. The release workflow must pass the same suite before building and notarizing the distribution. See [CI coverage](testing.md) for the scenario map and the distinction between deterministic and live AWS checks.
+The validation workflow runs on every push to `main` and `release/**`, on pull requests, and on demand. It retains logs, screenshots, actual loopback request payloads, timing results and an `.xcresult`. Pinned package sources are cached by the committed dependency graph. Release reuses the successful main run for the exact tag commit after matching its source hashes, executable permissions, and complete Xcode inventory. It builds and checks the distribution separately, caching those build intermediates for later releases. See [CI coverage](testing.md) for the scenario map and the distinction between deterministic and live AWS checks.
 
 ## Performance checks
 
@@ -184,4 +184,6 @@ Keep `MARKETING_VERSION` equal in both app configurations, write `docs/releases/
 python3 scripts/verify-release.py --tag v2.0.1
 ```
 
-After main validation succeeds, push the matching version tag. GitHub validates again, builds an optimized universal app, verifies the production identity and both architectures, signs with Developer ID, notarizes and staples the app and DMG, then publishes the DMG and checksum. Invalid notarization results stop publication. Signing credentials come from repository secrets and are not used in pull-request validation.
+After main validation succeeds, push the matching version tag. GitHub verifies the complete main CI receipt for that exact commit, then builds an optimized universal app, verifies the production identity and both architectures, signs with Developer ID, notarizes and staples the app and DMG, and publishes the DMG and checksum. It does not repeat the full test suite. Missing, expired, incomplete, mismatched or failed CI evidence stops the release. Invalid notarization results also stop publication. Signing credentials come from repository secrets and are not used in pull-request validation.
+
+To retry an existing immutable tag using updated release automation, dispatch **Build and Release** from `main` with `release_tag` set to that version. The workflow checks out and builds the tag's commit, pins Xcode to its successful main run, and checks that the remote tag still points to the same commit before publication.
