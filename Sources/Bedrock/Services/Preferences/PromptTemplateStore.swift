@@ -64,8 +64,7 @@ class PromptTemplateStore: ObservableObject {
         didSet {
             if let id = selectedTemplateId,
                let template = templates.first(where: { $0.id == id }) {
-                // Update the system prompt in PreferencesStore
-                PreferencesStore.shared.systemPrompt = template.content
+                applySystemPrompt(template.content)
             }
             saveSelectedTemplate()
         }
@@ -73,10 +72,26 @@ class PromptTemplateStore: ObservableObject {
     
     private let storageKey = "systemPromptTemplates"
     private let selectedTemplateKey = "selectedSystemPromptTemplateId"
-    
-    private init() {
+    private let defaults: UserDefaults
+    private let currentSystemPrompt: () -> String
+    private let updateSystemPrompt: (String) -> Void
+
+    init(defaults: UserDefaults = .standard,
+         currentSystemPrompt: @escaping () -> String = { PreferencesStore.shared.systemPrompt },
+         updateSystemPrompt: @escaping (String) -> Void = { PreferencesStore.shared.systemPrompt = $0 }) {
+        self.defaults = defaults
+        self.currentSystemPrompt = currentSystemPrompt
+        self.updateSystemPrompt = updateSystemPrompt
         loadTemplates()
         loadSelectedTemplate()
+    }
+
+    private func applySystemPrompt(_ content: String) {
+        // Loading the Models pane creates this store during view evaluation.
+        // Reassigning the same AppStorage value invalidates the surrounding
+        // scene while it is rendering, even though no setting changed.
+        guard currentSystemPrompt() != content else { return }
+        updateSystemPrompt(content)
     }
     
     // MARK: - Selected Template
@@ -113,7 +128,7 @@ class PromptTemplateStore: ObservableObject {
             
             // If this is the selected template, update system prompt
             if selectedTemplateId == template.id {
-                PreferencesStore.shared.systemPrompt = updated.content
+                applySystemPrompt(updated.content)
             }
             
             logger.info("Updated template: \(template.name)")
@@ -151,14 +166,14 @@ class PromptTemplateStore: ObservableObject {
     // MARK: - Persistence
     
     private func loadTemplates() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
+        if let data = defaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([SystemPromptTemplate].self, from: data),
            !decoded.isEmpty {
             self.templates = decoded
             logger.info("Loaded \(decoded.count) templates")
         } else {
             // First launch - create default template with current system prompt
-            let currentPrompt = PreferencesStore.shared.systemPrompt
+            let currentPrompt = currentSystemPrompt()
             let defaultTemplate = SystemPromptTemplate(
                 name: "Default",
                 content: currentPrompt
@@ -171,13 +186,13 @@ class PromptTemplateStore: ObservableObject {
     
     private func saveTemplates() {
         if let encoded = try? JSONEncoder().encode(templates) {
-            UserDefaults.standard.set(encoded, forKey: storageKey)
+            defaults.set(encoded, forKey: storageKey)
             logger.debug("Saved \(templates.count) templates")
         }
     }
     
     private func loadSelectedTemplate() {
-        if let idString = UserDefaults.standard.string(forKey: selectedTemplateKey),
+        if let idString = defaults.string(forKey: selectedTemplateKey),
            let id = UUID(uuidString: idString),
            templates.contains(where: { $0.id == id }) {
             self.selectedTemplateId = id
@@ -189,7 +204,7 @@ class PromptTemplateStore: ObservableObject {
     
     private func saveSelectedTemplate() {
         if let id = selectedTemplateId {
-            UserDefaults.standard.set(id.uuidString, forKey: selectedTemplateKey)
+            defaults.set(id.uuidString, forKey: selectedTemplateKey)
         }
     }
     

@@ -49,8 +49,8 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [x] U06 Extend the frosted sidebar vertically through the titlebar to the bottom in both themes. (The actual Light/Dark captures show a full-height sidebar; see [Media](../media.md).)
 - [x] U07 Extend the Settings sidebar through its titlebar in the same way. (Settings lifecycle/appearance checks and actual full-height captures passed; see validation-log.md.)
 - [x] U08 Keep the sidebar divider straight and full height. (The latest actual Light/Dark captures retain the straight full-height divider.)
-- [ ] U09 Set an attractive initial main-window size.
-- [ ] U10 Start the sidebar expanded at a usable default width.
+- [x] U09 Set an attractive initial main-window size. (The full UI suite verifies the initial width against the available display.)
+- [x] U10 Start the sidebar expanded at a usable default width. (The titlebar UI case verifies an expanded sidebar with at least a 200-point New chat target.)
 - [ ] U11 Enforce a minimum sidebar width so “Bedrock”, navigation titles, profile, and region do not wrap.
 - [ ] U12 Preserve a user-resized valid sidebar width between launches.
 - [x] U13 Normalize Bedrock wordmark position, typography, and surrounding padding. (Latest actual main-window captures show the wordmark inset and single-line label.)
@@ -73,7 +73,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [ ] U30 Give Send a consistent enabled/disabled appearance in both themes.
 - [x] U31 Remove redundant chevrons beneath ellipsis buttons.
 - [ ] U32 Consolidate response parameters, image mode, plus, ellipsis, and settings controls.
-- [ ] U33 Keep system-prompt title and chevron close together.
+- [x] U33 Keep system-prompt title and chevron close together. (The actual Models Settings capture shows the compact Default/chevron control.)
 - [ ] U34 Normalize search-field backgrounds, borders, height, and focus treatment.
 - [x] U35 Make sidebar scrollbars thin and unobtrusive. (Actual sidebar wheel/thumb/keyboard checks passed; see the WS04–WS06 evidence in [the original port checklist](port-checklist.md).)
 - [x] U36 Remove the opaque transcript scrollbar track. (Latest Dark transcript capture shows the clear track and slim thumb.)
@@ -107,7 +107,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 ## Chat, rendering, and attachments
 
 - [x] C41 Remove all manual earlier/newer-message buttons. The full transcript is scrollable immediately; offscreen rendering loads automatically, including after sending a new message. (Complete 1,000-message scrolling/search/navigation and stream-completion UI scenarios each passed three times; the full-pipeline gate is D09.)
-- [ ] C42 Show a compact model-switch divider at the transition, preserve it after reopening the chat, and keep it out of inference history.
+- [x] C42 Show a compact model-switch divider at the transition, preserve it after reopening the chat, and keep it out of inference history. (The full UI test verifies one divider after New chat → Back, exactly two SDK requests, and no divider text in request context.)
 - [ ] C43 Tighten the vertical gap between an answer and its Copy/Retry/More actions, including text, code, tables, and generated images.
 - [x] C44 Copy selected rendered text as semantic HTML with bold, italic, lists, links, and tables; preserve plain-text fallback and keep Copy response as original Markdown.
 
@@ -246,13 +246,13 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [x] V08 Update bundled rendering assets and preserve their licenses/provenance.
 - [x] V09 Add meaningful core, integration, renderer, clipboard, migration, and performance regressions.
 - [x] V10 Add deterministic local MCP fixtures and real transport tests.
-- [ ] V11 Add UI tests for navigation, search dismissal, settings, model selection, queueing, and shortcuts. Hosted run 35116246289 at 6dea03a executed all 23 UI scenarios: 20 passed and three failed. Image hit testing, Quick Access window identity/lifecycle, and failure-recovery fixture/accessibility corrections passed targeted local interaction checks; full local and hosted re-execution must still pass.
+- [x] V11 Add UI tests for navigation, search dismissal, settings, model selection, queueing, and shortcuts. All 26 scenarios passed in complete local CI on `765e40e`; hosted delivery remains tracked under D04/D06.
 - [x] V12 Run the relevant local suites and document precise pass/skip/failure counts.
 - [x] V13 Configure PR CI for build/tests and gate release packaging on validation. Workflow syntax passes; hosted execution is tracked separately.
 - [x] V14 Separate offline CI fixtures from optional paid/live-provider tests.
 - [ ] V15 Actually run the latest app and inspect Light/Dark/System and narrow/normal layouts.
 - [ ] V16 Verify the final app with real menus, search, settings, tools, and representative model calls.
-- [ ] V17 Repeat targeted validation after fixes; retain evidence for each checked requirement.
+- [x] V17 Repeat targeted validation after fixes; retain evidence for each checked requirement. (Repeated viewport tests, complete local CI, and the Settings follow-up are recorded in validation-log.md.)
 - [x] V18 Relaunch the updated app with existing conversations and drafts preserved.
 - [ ] V19 Rebuild and exercise the complete scenario matrix in the updated Bedrock Validation app, including sidebar, icon, search, and image-preview corrections. The earlier Performance-app request is superseded by the latest Validation request.
 - [x] V20 Reproduce the newer build's typing/scroll regression against the older Validation app and fix the application-scene invalidation loop. See [performance.md](../performance.md).
@@ -261,7 +261,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [x] R01 Reorganize source, tests, resources, and configuration into a standard public Swift repository.
 - [ ] R02 Remove unused legacy screens, duplicate resources, dead helpers, and stale project entries.
 - [x] R02a Remove the unreferenced Vapor product and its seven unused package-graph entries; reject unused directly linked products during CI source validation.
-- [ ] R03 Preserve Xcode targets, schemes, build configuration, resource membership, and app identity.
+- [x] R03 Preserve Xcode targets, schemes, build configuration, resource membership, and app identity. (Project validation and the complete optimized core/native/UI build pass.)
 - [x] R04 Verify every registered source/resource path and detect duplicate compilation entries.
 - [x] R05 Refresh README to the quality and clarity of the referenced Foxl repository.
 - [x] R06 Capture new Light/Dark screenshots from the actual updated app with dedicated demo data.
@@ -269,7 +269,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 - [x] R08 Replace stale README media and document reproducible capture.
 - [x] R09 Document verified setup, model support, shortcuts, tools, skills, MCP, privacy, and local storage.
 - [x] R10 Update contributor/build/test/troubleshooting instructions for the final structure.
-- [ ] R11 Record every remaining limitation honestly; never check items merely because work stopped.
+- [x] R11 Record every remaining limitation honestly; never check items merely because work stopped. (The completion audit retains the actual implementation gaps and unverified controls.)
 - [x] R12 Replace the low-resolution README animation/video with native-resolution captures; clean the rounded window's outer edges, keep consistent framing and visually inspect the final README media. (September 16 exports preserve the 2480×1560 native window inside a 2608×1688 frame. The 35-second WebP/MP4, Light/Dark captures, GitHub-sanitized README layout, media hashes, and links were inspected; see [media.md](../media.md).)
 - [x] R13 Make the main demonstration visually engaging: develop a concept with a text model, switch to an image model in the same conversation, generate a real image, and open the result. Do not use clicking List skills as the main demonstration. (The real Nova → Stable Image Ultra conversation, complete 9.22-second image request, preview zoom/Fit/close interactions, and final exported frames were verified.)
 - [x] R14 Re-record the same concept-to-image demonstration in the current Release app using GPT-6 Astra with Low reasoning effort, then Stable Image Ultra 1.0. Replace the README animation, movie, and matching screenshots, retain actual inference timing, and verify the exported media. (Real AWS conversation, Low effort setting, image generation, preview, zoom, and fit verified. Refreshed 35-second Retina media preserves the 8.99-second image request; MP4 frames and animated WebP inspected. GitHub-rendered README has no horizontal overflow, and the updated downloads and media. Documentation/media validation passes.)
@@ -297,7 +297,7 @@ and remaining features are recorded in [the completion audit](todo-audit.md),
 
 - [x] D01 Run the regression workflow on every main push, release-branch push and pull request.
 - [x] D02 Gate release packaging and publication on the same optimized-app validation workflow.
-- [ ] D03 Exercise streaming, model switching, tools and queues through the real AWS SDK against an isolated loopback protocol fixture. Hosted run 35105311938 passed the model, tool, queue and attachment cases; streaming reading-position and error-recovery scenarios remain open.
+- [x] D03 Exercise streaming, model switching, tools and queues through the real AWS SDK against an isolated loopback protocol fixture. All 26 local UI scenarios passed on `765e40e`, including stream reading-position preservation and error recovery.
 - [ ] D04 Execute the complete native/UI workflow on GitHub, fix failures and retain logs, screenshots, measurements and request evidence.
 - [x] D05 Replace README screenshots and the animated demonstration with fresh actual-app captures; publish an MP4 and static fallback.
 - [ ] D06 Validate and push the final revision to main, then confirm its workflow succeeds.

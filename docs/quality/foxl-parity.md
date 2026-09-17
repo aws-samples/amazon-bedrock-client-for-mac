@@ -26,14 +26,14 @@ Foxl evidence: `apps/web/src/components/chat/SingleMessage.tsx`, `apps/web/src/p
 - [x] FC14 Restore unsent attachment drafts after relaunch. Ordinary-chat restoration and real image/document inference passed on 64; welcome restoration and inference passed on 70.
 - [x] FC15 Navigate slash suggestions with Up/Down/Return/Escape without breaking Korean/Japanese IME composition.
 - [x] FC16 Select an enabled local skill directly from the composer using its real identifier.
-- [ ] FC17 Show selected skills as removable, compact composer chips. Reopened: hosted UI testing found the remove glyph had an 8×8 hittable area. The 24×24 hit-target correction is implemented; the actual click must pass again.
+- [x] FC17 Show selected skills as removable, compact composer chips. The corrected 24×24 removal target passes the actual selection/removal UI case in complete local CI.
 - [x] FC18 Edit a pasted-text attachment before sending, preserving its stable attachment identity.
 - [ ] FC19 Keep attachment preparation cancelable and display failures without consuming the draft. Existing serial importer; repeat real file-picker/drop checks.
-- [ ] FC20 Preserve scroll position while streaming, switching threads and changing layout. Existing renderer/scroll work; continue targeted regression.
+- [x] FC20 Preserve scroll position while streaming, switching threads and changing layout. Eleven viewport cases and repeated/full UI scroll/search/return and stream-completion scenarios pass.
 - [x] FC21 Restore the previous per-thread scroll position rather than always jumping to the end. Three consecutive Activity → Back round trips retained the exact native anchor offset on 70.
 - [x] FC22 Preserve exact code-copy text and Markdown structure. Existing tests; retain them as regressions.
 - [x] FC23 Offer a clear “continue” action for Converse output-limit truncation, with actual stop-reason evidence. Stop-reason persistence and a draft-preserving action passed core migration tests and the actual app UI scenario in hosted run 35116246289 at 6dea03a. Mantle incomplete-response recovery is tracked separately.
-- [ ] FC23a Offer equivalent incomplete-response recovery for the Mantle Responses route.
+- [x] FC23a Offer equivalent incomplete-response recovery for the Mantle Responses route. All five Mantle response tests pass, covering output limits, filtering, completion, premature EOF and provider failures.
 - [ ] FC24 Keep context reduction visible and offer a real summary-based compaction workflow; current code only bounds history.
 
 ## Search and history
@@ -144,7 +144,7 @@ User changes received September 16, 2026. Implementation and runtime verificatio
 - [x] UX11 Keep contextual selection menus limited to relevant copy/edit operations in native text and HTML responses.
 - [x] UX12 Draw rounded inline-code backgrounds around glyphs without long gray bands.
 - [x] UX13 Keep list markers outside selectable text while preserving multi-item selection and source Markdown copy.
-- [ ] UX14 Match Foxl's compact flat message queue; edit/remove/send-now, pause/recover and retain attachments/model.
+- [ ] UX14 Match Foxl's compact flat message queue; edit/remove/send-now, pause/recover and retain attachments/model. FIFO, retained drafts, stop/restart and explicit resume pass the complete UI suite; the remaining editor actions still require interaction coverage.
 - [x] UX15 Capture fresh Light/Dark hero screenshots from the final running app using dedicated demonstration data.
 - [x] UX16 Capture an animated main demo of actual app interaction, with an accessible static fallback.
 - [x] UX17 Rewrite README around verified workflows, current screenshots, setup, shortcuts and local storage/inference boundaries.

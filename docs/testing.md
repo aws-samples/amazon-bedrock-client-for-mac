@@ -12,6 +12,7 @@ protects existing user preferences.
 | Regression | Automated coverage |
 | --- | --- |
 | First keystroke invalidates the whole scene | `WindowLifecycleTests.testTypingOnlyInvalidatesTheAffectedDraftIndicator`; long-conversation typing metric |
+| Opening Models publishes unchanged preferences during rendering | `WindowLifecycleTests.testLoadingPromptPresetsPreservesInstructionsWithoutPublishingUnchangedSettings`; actual all-panes Settings interaction |
 | Continuous long history, scroll and navigation | `NavigationPerformanceTests`, `ConversationViewportTests`; a complete 1,000-message UI fixture, one scroll-thumb drag to the first message, search through the full history, Activity → Back, and finishing a controlled stream while reading an older passage |
 | Command-N, D, B, F, K and Settings | UI shortcut, centered search, titlebar and Settings lifecycle cases |
 | Quick Access escape and handoff | UI opens the real panel, dismisses it, submits through the composer and verifies the main conversation and SDK request |

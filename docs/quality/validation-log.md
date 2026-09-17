@@ -6,6 +6,24 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Complete local CI passed on clean revision `765e40e`: 115 portable core
+  cases, 43 standalone renderer/clipboard cases, 105 app integration cases
+  (101 passed and four opt-in public MCP diagnostics skipped), and all 26 UI
+  scenarios. No required case failed or skipped, and the input hashes and
+  executable permissions were unchanged throughout the run.
+- The full run includes actual model-switch/reopen boundaries, original rich
+  copy, generated-image zoom/copy/reopen, queues and restart, mixed attachments,
+  tool execution, automation model persistence, and full-history navigation.
+  Screenshots from Models, AWS connection and Dark appearance were inspected:
+  the settings sidebar extends through the titlebar and the fields remain
+  readable without the former clipped popup controls.
+- A runtime warning in the otherwise passing Settings case was symbolicated to
+  `PromptTemplateStore` rewriting an unchanged system prompt while Models was
+  rendering. The store now avoids that write; default-model selection also
+  avoids assigning through both its binding and its callback. A new regression
+  checks unchanged preset initialization/reselection/reload and actual edited
+  instructions. All six window/preset tests and the complete Settings UI case
+  passed afterward, with no publishing-during-view-update warning.
 - The actual optimized app's full 1,000-message transcript now uses a lazy scroll
   container. The former table accessibility proxies had instantiated offscreen
   hosting views and exhausted the main thread during inspection.
@@ -29,14 +47,16 @@ verified behavior, remaining implementation gaps and release gates.
 - All 30 package versions and the six workflow action versions were rechecked.
   AWS SDK 1.7.85 and Smithy 0.252.0 are resolved; Crypto 4.5.2 remains the latest
   version compatible with the certificate dependency. See [dependencies](../dependencies.md).
-- These are targeted results, not a complete-release receipt. The complete local
-  command and hosted workflow must pass on the unchanged release revision before
-  tagging. GitHub Actions and Releases record subsequent execution.
+- `full-ci-765e40e/ci-result.json` is a complete local receipt. The small Settings
+  follow-up above has targeted coverage and must be included in the final
+  unchanged-source local/hosted execution before tagging. GitHub Actions and
+  Releases record subsequent execution.
 
 Evidence is retained under
 `/tmp/bedrock-pilot-validation/release-completion/`, including
 `authoritative-layout-restoration.xcresult`, `validated-controls.xcresult`,
-`complete-drag-and-tool-feedback.xcresult`, the viewport diagnostic profiles, and
+`complete-drag-and-tool-feedback.xcresult`, `full-ci-765e40e/Bedrock.xcresult`,
+`prompt-initialization.xcresult`, the viewport diagnostic profiles, and
 the raw performance measurements described in [Performance](../performance.md).
 
 ## September 16, 2026 — earlier checkpoint

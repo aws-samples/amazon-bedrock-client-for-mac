@@ -232,9 +232,7 @@ struct SettingsView: View {
         case "defaultModel":
             settingsField(row.title) {
                 HStack(spacing: 10) {
-                    ModelPicker(organizedChatModels: catalog.organized, menuSelection: defaultModelSelection) { value in
-                        if case .chat(let model) = value { settings.defaultModelId = model.id }
-                    }
+                    ModelPicker(organizedChatModels: catalog.organized, menuSelection: defaultModelSelection) { _ in }
                     Spacer(minLength: 8)
                     if let model = catalog.defaultModel {
                         InferenceSettings(currentModelId: .constant(model.id), backend: backend.backend)

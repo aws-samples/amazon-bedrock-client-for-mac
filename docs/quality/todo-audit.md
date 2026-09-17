@@ -11,6 +11,14 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Complete local CI passed on clean revision `765e40e`: core 115/115,
+  renderer/clipboard 43/43, native app 101 passed plus four optional network
+  skips, and UI 26/26. The receipt verifies unchanged source hashes and
+  executable permissions. Renderer cases overlap the app suite.
+- A follow-up removes unchanged system-prompt writes during Models rendering
+  and the duplicate default-model assignment. Its six native lifecycle/preset
+  tests and the Settings UI scenario pass without the reproduced SwiftUI
+  publishing warning. The final whole-suite gate must include this follow-up.
 - Local optimized-app integration previously executed 73 cases: 69 passed and
   four optional public-network cases were skipped. That result predates the
   repository reorganization and must be repeated.
@@ -80,7 +88,7 @@ screenshot does not close a behavioral requirement.
 | Quick Access | Actual Escape/refocus/submission passes after correcting panel/main-window handoff and avoiding redundant window-style changes. |
 | Rich selection | Actual rich HTML and original Markdown copy passes with the corrected assistant-role fixture. |
 | Automation models | Shared picker deduplicates model families, exposes provider/route, and preserves the exact route through save/relaunch/edit. Actual UI case passes. |
-| Remaining suite | Global search dismissal, error recovery, image preview, skill removal, initial size, queues and attachments still require the final complete-suite execution against unchanged source. |
+| Complete local suite | Global search dismissal, error recovery, image preview, skill removal, initial size, queues and attachments all passed in `full-ci-765e40e`. The final local and hosted execution must include the subsequent Settings initialization correction. |
 
 ## Implementation gaps that remain open
 

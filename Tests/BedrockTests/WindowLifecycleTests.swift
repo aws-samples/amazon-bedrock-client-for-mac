@@ -6,6 +6,38 @@ import XCTest
 
 final class WindowLifecycleTests: XCTestCase {
     @MainActor
+    func testLoadingPromptPresetsPreservesInstructionsWithoutPublishingUnchangedSettings() throws {
+        let suite = "PromptLifecycle-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var prompt = "Keep the existing instructions."
+        var applied: [String] = []
+        func makeStore() -> PromptTemplateStore {
+            PromptTemplateStore(defaults: defaults, currentSystemPrompt: { prompt },
+                                updateSystemPrompt: { prompt = $0; applied.append($0) })
+        }
+        let store = makeStore()
+        let initial = try XCTUnwrap(store.selectedTemplate)
+        XCTAssertEqual(initial.content, prompt)
+        XCTAssertTrue(applied.isEmpty, "Opening Models must not publish an unchanged setting during layout.")
+        store.selectTemplate(initial)
+        store.updateTemplate(initial)
+        XCTAssertTrue(applied.isEmpty, "Reselecting or saving an unchanged preset must not invalidate the scene.")
+
+        store.addTemplate(name: "Brief", content: "Answer in one sentence.")
+        let selectedID = store.selectedTemplateId
+        XCTAssertEqual(applied, ["Answer in one sentence."])
+        let reopened = makeStore()
+        XCTAssertEqual(reopened.selectedTemplateId, selectedID)
+        XCTAssertEqual(reopened.selectedTemplate?.content, prompt)
+        XCTAssertEqual(applied.count, 1, "Reloading a persisted selection must not rewrite the active prompt.")
+        var edited = try XCTUnwrap(reopened.selectedTemplate)
+        edited.content = "Answer with a short example."
+        reopened.updateTemplate(edited)
+        XCTAssertEqual(applied, ["Answer in one sentence.", "Answer with a short example."])
+    }
+
+    @MainActor
     func testWindowChromeUpdatesPreserveTheEditorWithoutReassigningTheStyleMask() {
         final class ObservedWindow: NSWindow {
             var styleChanges = 0
