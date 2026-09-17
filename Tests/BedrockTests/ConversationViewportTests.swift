@@ -1,8 +1,75 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
 final class ConversationViewportTests: XCTestCase {
+    @MainActor
+    private final class CompletingResponse: ObservableObject {
+        @Published var isStreaming = true
+        @Published var message = MessageData(
+            text: "Keep this **passage** selected.\n\nStill streaming.",
+            user: "Assistant", sentTime: Date())
+        let stream = StreamingMessageState()
+        let attachments = MessageAttachmentPresenter()
+
+        init() { stream.update(message) }
+
+        func finish() {
+            message.text += " COMPLETE"
+            isStreaming = false
+            stream.update(nil)
+        }
+    }
+
+    private struct CompletionRow: View {
+        @ObservedObject var response: CompletingResponse
+
+        var body: some View {
+            ConversationMessageView(
+                message: response.message, stream: response.isStreaming ? response.stream : nil,
+                searchResult: nil, adjustedFontSize: 0, showTimestamp: false,
+                canModify: !response.isStreaming, canRetry: true, attachments: response.attachments,
+                onAction: { _, _ in })
+        }
+    }
+
+    @MainActor
+    func testCompletingResponsePreservesTheSelectedNativeText() async throws {
+        let response = CompletingResponse()
+        let host = NSHostingView(rootView: CompletionRow(response: response))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 300),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+
+        func textView(in view: NSView) -> MarkdownSelectionTextView? {
+            if let text = view as? MarkdownSelectionTextView { return text }
+            return view.subviews.lazy.compactMap { textView(in: $0) }.first
+        }
+        let ready = ContinuousClock.now.advanced(by: .seconds(3))
+        while textView(in: host)?.string.contains("passage") != true, ContinuousClock.now < ready {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let original = try XCTUnwrap(textView(in: host))
+        let selection = (original.string as NSString).range(of: "passage")
+        XCTAssertNotEqual(selection.location, NSNotFound)
+        original.setSelectedRange(selection)
+
+        response.finish()
+        let finished = ContinuousClock.now.advanced(by: .seconds(3))
+        while textView(in: host)?.string.contains("COMPLETE") != true, ContinuousClock.now < finished {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let completed = try XCTUnwrap(textView(in: host))
+        XCTAssertTrue(completed.string.contains("COMPLETE"))
+        XCTAssertTrue(completed === original, "Finishing output must retain the native response view.")
+        XCTAssertEqual(completed.selectedRange(), selection,
+                       "The user must be able to finish copying a passage when streaming ends.")
+    }
+
     @MainActor
     private final class Document: NSView {
         override var isFlipped: Bool { true }
@@ -459,21 +526,20 @@ final class ConversationViewportTests: XCTestCase {
         let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
         let controller = ConversationViewportController()
         let id = UUID()
-        let message = ConversationMessageAnchor.AnchorView(frame: NSRect(x: 0, y: 2_000, width: 800, height: 300))
-        message.messageID = id
-        message.controller = controller
+        let message = NSView(frame: NSRect(x: 0, y: 2_000, width: 800, height: 300))
         document.addSubview(message)
         scroll.documentView = document
         window.contentView = scroll
         controller.connect(to: scroll)
+        controller.register(message, messageID: id)
         scroll.contentView.scroll(to: NSPoint(x: 0, y: 1_920))
         XCTAssertEqual(try XCTUnwrap(controller.capture()).offset, 80, accuracy: 0.5)
 
         // No per-frame publisher is needed. The last scroll must still be
-        // checkpointed before SwiftUI removes the background anchor view.
+        // checkpointed before the native container recycles the row.
         scroll.contentView.scroll(to: NSPoint(x: 0, y: 1_840))
-        message.removeFromSuperview()
         controller.unregister(message, messageID: id)
+        message.removeFromSuperview()
         XCTAssertEqual(try XCTUnwrap(controller.capture()).offset, 160, accuracy: 0.5)
         controller.disconnect()
     }
@@ -489,20 +555,18 @@ final class ConversationViewportTests: XCTestCase {
         let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
         let controller = ConversationViewportController()
         let id = UUID()
-        let message = ConversationMessageAnchor.AnchorView(frame: NSRect(x: 0, y: 2_000, width: 800, height: 300))
-        message.messageID = id
-        message.controller = controller
+        let message = NSView(frame: NSRect(x: 0, y: 2_000, width: 800, height: 300))
         document.addSubview(message)
         scroll.documentView = document
         window.contentView = scroll
         controller.connect(to: scroll)
+        controller.register(message, messageID: id)
 
         let saved = ConversationViewportController.Anchor(messageID: id, offset: 160)
         controller.preserve(saved)
         controller.restore()
         XCTAssertEqual(scroll.documentVisibleRect.minY, 1_840, accuracy: 0.5)
-        // SwiftUI is allowed to dismantle before AppKit's removal callbacks.
-        ConversationMessageAnchor.dismantleNSView(message, coordinator: ())
+        controller.unregister(message, messageID: id)
         message.removeFromSuperview()
         XCTAssertEqual(controller.capture(), saved)
         controller.disconnect()

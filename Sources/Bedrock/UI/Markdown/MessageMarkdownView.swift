@@ -101,6 +101,9 @@ enum MarkdownPreparation {
 private final class MarkdownMessageRenderer: ObservableObject {
     @Published private(set) var html: String?
     let native: MarkdownDocumentState
+    // A fallback for a future native-to-WebKit transition, not native layout
+    // state. Recording the measurement must not invalidate the measured view.
+    var nativeHeight: CGFloat = 80
     private var source: String
     private var isFinal: Bool
 
@@ -143,7 +146,6 @@ struct MessageMarkdownView: View {
     var isStreaming: Bool
     @StateObject private var renderer: MarkdownMessageRenderer
     @State private var height: CGFloat = 0
-    @State private var nativeHeight: CGFloat = 80
 
     private struct Revision: Equatable {
         let text: String
@@ -170,11 +172,11 @@ struct MessageMarkdownView: View {
                     dynamicHeight: $height
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: height > 0 ? height : nativeHeight)
+                .frame(height: height > 0 ? height : renderer.nativeHeight)
             } else {
                 MarkdownRenderer(document: renderer.native, fontSize: fontSize, highlights: searchTerms)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                        if $0 > 0, nativeHeight != $0 { nativeHeight = $0 }
+                        if $0 > 0 { renderer.nativeHeight = $0 }
                     }
             }
         }

@@ -11,6 +11,29 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- The native transcript replacement passes targeted optimized-app checks in
+  Light and Dark: a controlled response completes while the earlier passage
+  stays at exactly the same screen position, typing remains responsive, and
+  the latest-response action works. Full-history thumb scrolling, middle-message
+  search, three Activity → Back returns, sidebar reflow, and ⌘N/⌘D draft behavior
+  also pass. Three 4K-image preview cycles, original tool Input/Output inspection,
+  and selected-text retention through stream completion pass in the same final
+  executable. Nineteen native controller/container tests execute and pass,
+  including 10,000-message access without creating every row. These required
+  suites are now checked explicitly by CI. The final main workflow must still
+  confirm this candidate before V01 and the delivery gates close.
+  [Performance](../performance.md) records the executable hash, measurements,
+  captures and limits of the local evidence.
+- Main CI `35193102534` completed with 138 passing cases, four optional live
+  checks skipped, and one failure:
+  `testFinishingAStreamDoesNotMoveThePassageBeingRead`. That Release app
+  reproduced an unresponsive main thread in SwiftUI/AttributeGraph after
+  scrolling or finishing the stream. This was an application failure, separate
+  from the earlier fixture-consent and local IDE-session problems. All five
+  updater cases pass in that hosted run. The stream failure keeps V01 and the
+  delivery gates open; passing a build or an intermittent local repetition
+  does not close it. Light/Dark completion and native selection regressions
+  have been added for the subsequent verification.
 - Hosted `35190013784` reached the new small-screen layout and exposed a
   download-fixture startup problem. Python's default HTTP server performed a
   reverse hostname lookup and opened a macOS network-consent dialog; the
@@ -190,12 +213,12 @@ screenshot does not close a behavioral requirement.
 | Area | Required follow-up |
 | --- | --- |
 | MCP fixture connections | The isolated-manager override now passes locally, including cancellation, reconnect, timeout and output tests. Hosted re-execution remains required. |
-| Continuous history | Actual scrolling/search/navigation and stream-completion scenarios passed locally. Repeat hosted execution with the scroll-thumb endpoint corrected for the runner's smaller display. |
+| Continuous history | The native container passes scrolling/search/navigation, width reflow and Light/Dark stream-completion checks locally. Confirm the final implementation in the complete main workflow. |
 | Tool details and model switching | Actual Input/Output inspection passes. A subsequent rapid model-switch layout hang was reproduced and corrected; include its new expanded-tool/draft scenario in the complete local and hosted suites. |
 | Quick Access | Actual Escape/refocus/submission passes after correcting panel/main-window handoff and avoiding redundant window-style changes. |
 | Rich selection | Actual rich HTML and original Markdown copy passes with the corrected assistant-role fixture. |
 | Automation models | Shared picker deduplicates model families, exposes provider/route, and preserves the exact route through save/relaunch/edit. Actual UI case passes. |
-| Complete local suite | Global search dismissal, error recovery, image preview, skill removal, initial size, queues and attachments all passed in `full-ci-765e40e`. Repeat with the Settings initialization and model-switch corrections. |
+| Complete local suite | `full-ci-765e40e` is the earlier complete receipt. Later changes use targeted local checks under the latest instruction; the final main workflow provides the complete current receipt. |
 
 ## Implementation gaps that remain open
 
@@ -239,6 +262,8 @@ Local and hosted validation share `python3 scripts/ci.py`. The latest instructio
 replaces mandatory repeated full local runs with targeted checks of changed or
 failing paths. Those regressions have passed; the redundant `9327147` local rerun
 was canceled as requested and is not reported as a passing complete receipt.
-The final main revision must pass the complete GitHub pipeline, followed by
+The later main run exposed a stream-completion hang; the native transcript
+replacement and its targeted verification are described above. The final main
+revision must pass the complete GitHub pipeline, followed by
 universal signing, notarization, DMG verification and published-asset checks.
 No release has been triggered by this audit.

@@ -13,6 +13,12 @@ Verification failures do not replace the installed app. A failed replacement
 restores the previous app; a refused or unfinished quit leaves it untouched.
 Conversations and preferences are stored separately and are not removed by the updater.
 
+If a 1.x installation reports **Failed to prepare update**, install the
+[latest DMG](https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/latest/download/Amazon.Bedrock.Client.for.Mac.dmg)
+through Finder, replacing the app in Applications. Keep the existing data and
+preferences folders. Version 2.0 fixes the temporary-download handoff used by
+the older updater.
+
 ## Connect to AWS
 
 Open **Settings → AWS connection**, choose your profile and region, then select **Test connection & refresh models**. The profile must have access to the selected model and its inference profile.
@@ -37,7 +43,9 @@ For a parameter validation error, open **Response settings** and reset that mode
 
 ## A long conversation or pasted content is slow
 
-History opens in bounded pages. **Load earlier messages** reveals older content; **⌘F** searches the whole conversation, including messages outside the rendered page. Global Search (**⌘K**) searches across conversations.
+Scroll the complete conversation directly. Offscreen content renders as you move
+through the history. **⌘F** searches the whole conversation; Global Search
+(**⌘K**) searches across conversations.
 
 Large pasted text becomes an attachment. Click it to inspect or edit the complete text before sending. Images are prepared in the background; wait for preparation to finish, or cancel it with Escape. A failed attachment does not consume the draft.
 
@@ -75,7 +83,8 @@ Choose **Light**, **Dark**, or **System** in **Settings → Appearance**. The si
 
 The upper-right Search button and **⌘K** open the centered global search panel. Click outside it or press Escape to dismiss it. **⌘F** opens Find inside the current conversation. Sending with Return or **⌘Return** is configurable in **Settings → Keyboard**.
 
-Quick Access is configured in General. If a global shortcut conflicts with another app, choose a different shortcut.
+Configure the Quick Access shortcut in **Settings → Keyboard**. If it conflicts
+with another app, choose a different shortcut.
 
 ## Installation and reports
 

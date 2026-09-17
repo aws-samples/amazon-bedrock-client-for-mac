@@ -34,6 +34,7 @@
 		1D716E39C52CA77403C62C3B /* ContextBudget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79936BAD9F25EC037E1CE500 /* ContextBudget.swift */; };
 		1DEC0DE7EA55CCC219F69701 /* StorageMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54EFB35DD2F1FBBF12D94F06 /* StorageMigration.swift */; };
 		24BE3689552DD48346F74BA6 /* ConversationViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */; };
+		0867C370C64C4B5CB9E2B720 /* NativeTranscriptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74F94B266114FBAAB144173 /* NativeTranscriptTests.swift */; };
 		25B069C1C4BC01BDEE569001 /* BedrockModelChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */; };
 		26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */; };
 		285E7D951A36B4B14518EEB5 /* ConnectionIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */; };
@@ -167,6 +168,7 @@
 		A97275C94282284D134E12F5 /* MCPServerRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 325720665477C0B27D9F2B83 /* MCPServerRow.swift */; };
 		B065D13DCA619D46D6001361 /* BedrockInferenceParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB439879B4E3642B0FB1EF2C /* BedrockInferenceParameters.swift */; };
 		B258B716BBA725FF4A033187 /* ConversationViewportController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194FFD02CEF94F6466F3D01F /* ConversationViewportController.swift */; };
+		0CB5F122142248038717C050 /* ConversationTranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C511F54FCA4CFDBA4E312A /* ConversationTranscriptView.swift */; };
 		B2E59115719B3AD6AF8C3AA5 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68D94D9DF2A35C81866EB71 /* AppStore.swift */; };
 		B494ED9FEB62755947AD8A35 /* ImagePreviewLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EA5EE69DC6A050D5C4E39D /* ImagePreviewLoader.swift */; };
 		B5ACA4CBE9EF3EB4C16BA2FA /* MCPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A03F3AE446EB2587994056A3 /* MCPConfiguration.swift */; };
@@ -240,6 +242,7 @@
 		190222772896F50F76316584 /* MCPIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPIntegrationTests.swift; sourceTree = "<group>"; };
 		E1216CFDB12E46C08B2CF7CD /* LocalToolIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalToolIntegrationTests.swift; sourceTree = "<group>"; };
 		194FFD02CEF94F6466F3D01F /* ConversationViewportController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewportController.swift; sourceTree = "<group>"; };
+		15C511F54FCA4CFDBA4E312A /* ConversationTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTranscriptView.swift; sourceTree = "<group>"; };
 		1C9462C120E7E47C9660B11B /* MessageDisclosureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDisclosureView.swift; sourceTree = "<group>"; };
 		1D4362DFAE879005E9AE630D /* ThreadInspector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThreadInspector.swift; sourceTree = "<group>"; };
 		1F13FF729B3E65E39A188E60 /* SkillLibraryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SkillLibraryTests.swift; sourceTree = "<group>"; };
@@ -360,6 +363,7 @@
 		79FF2B342D925F280075249D /* MCPModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPModels.swift; sourceTree = "<group>"; };
 		79FF2B362D925F300075249D /* MCPOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuthService.swift; sourceTree = "<group>"; };
 		7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewportTests.swift; sourceTree = "<group>"; };
+		A74F94B266114FBAAB144173 /* NativeTranscriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTranscriptTests.swift; sourceTree = "<group>"; };
 		7BC7CDDDE4A3F1D483573F5F /* scroll-stress.json */ = {isa = PBXFileReference; includeInIndex = 1; path = "scroll-stress.json"; sourceTree = "<group>"; };
 		7BDE79D11E27DF1C6F319C15 /* MCPProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPProcess.swift; sourceTree = "<group>"; };
 		7C6F4EC3E18ED329FD06A615 /* JSONFile.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JSONFile.swift; sourceTree = "<group>"; };
@@ -784,6 +788,7 @@
 				797A12C02C2EB9E200494DD9 /* ChatViewModel.swift */,
 				EDAE4CC52B3D943E99083226 /* ConversationFind.swift */,
 				194FFD02CEF94F6466F3D01F /* ConversationViewportController.swift */,
+				15C511F54FCA4CFDBA4E312A /* ConversationTranscriptView.swift */,
 				B78F7C13A09D81ED8A25383A /* MessageActions.swift */,
 				79610DD62AD22A2F00993D09 /* MessageView.swift */,
 				DF57E4D148F6EB1636435666 /* RunFooter.swift */,
@@ -1232,6 +1237,7 @@
 			children = (
 				6B67D160520D5936EE778E6D /* ClipboardRenderingTests.swift */,
 				7AB2D8DEA0B57A9DAD94A103 /* ConversationViewportTests.swift */,
+				A74F94B266114FBAAB144173 /* NativeTranscriptTests.swift */,
 				4A544E82819B7065F2B03BCC /* ImagePreviewTests.swift */,
 				13A132022F10000200A13200 /* InferenceConfigTests.swift */,
 				B02B2369C02381C5DE987288 /* MarkdownRenderingTests.swift */,
@@ -1491,6 +1497,7 @@
 				70A9D1C92E8049AD98516852 /* ConversationTranscript.swift in Sources */,
 				79BFF5102AD342710057BF3A /* ConversationStore.swift in Sources */,
 				B258B716BBA725FF4A033187 /* ConversationViewportController.swift in Sources */,
+				0CB5F122142248038717C050 /* ConversationTranscriptView.swift in Sources */,
 				797A12BC2C2EB4C300494DD9 /* CoreDataStack.swift in Sources */,
 				7AF9F85FC8919C43C59E8486 /* DemoLibraryView.swift in Sources */,
 				CB2623A941859F4C777CA9CE /* DemoModelPolicy.swift in Sources */,
@@ -1615,6 +1622,7 @@
 			files = (
 				DC29EE02939E2E6388F7EFFF /* ClipboardRenderingTests.swift in Sources */,
 				24BE3689552DD48346F74BA6 /* ConversationViewportTests.swift in Sources */,
+				0867C370C64C4B5CB9E2B720 /* NativeTranscriptTests.swift in Sources */,
 				7255D15CCA39EA76693ED94A /* ImagePreviewTests.swift in Sources */,
 				13A132012F10000100A13200 /* InferenceConfigTests.swift in Sources */,
 				6DF4F992EF7668B13FAA4B43 /* MarkdownRenderingTests.swift in Sources */,

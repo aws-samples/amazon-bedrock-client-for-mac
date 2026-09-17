@@ -696,7 +696,17 @@ final class BedrockUITests: XCTestCase {
 
     @MainActor
     func testFinishingAStreamDoesNotMoveThePassageBeingRead() async throws {
-        let (app, directory) = try launch(withRuntime: true)
+        try await assertStreamFinishesWhileReading(appearance: "light")
+    }
+
+    @MainActor
+    func testDarkConversationRemainsResponsiveAfterFinishingAStreamWhileReading() async throws {
+        try await assertStreamFinishesWhileReading(appearance: "dark")
+    }
+
+    @MainActor
+    private func assertStreamFinishesWhileReading(appearance: String) async throws {
+        let (app, directory) = try launch(appearance: appearance, withRuntime: true)
         importThread(try longConversation(in: directory), in: app)
         XCTAssertTrue(app.descendants(matching: .any)["conversation.transcript"].firstMatch.waitForExistence(timeout: 10))
         send("[stream] Keep the previous passage readable while this finishes.", in: app)
@@ -715,7 +725,7 @@ final class BedrockUITests: XCTestCase {
         let before = anchor.frame.minY
         try await XCTUnwrap(runtime).releaseStream()
         let completed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            !app.buttons["Stop response"].exists
+            window.exists && self.composer(app).exists && !app.buttons["Stop response"].exists
         }, object: nil)
         await fulfillment(of: [completed], timeout: 12)
         let preserved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -725,6 +735,11 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Scroll to latest message"].exists)
         app.buttons["Scroll to latest message"].click()
         XCTAssertTrue(response("STREAM_COMPLETE", in: app).isHittable)
+        let draft = "Continue reading after the response finishes."
+        composer(app).click()
+        composer(app).typeText(draft)
+        XCTAssertEqual(composer(app).value as? String, draft,
+                       "The composer must accept input after the transcript and footer settle.")
     }
 
     @MainActor

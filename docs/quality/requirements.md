@@ -236,7 +236,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 
 ## Performance, validation, dependencies, and delivery
 
-- [x] V01 Reproduce and fix “Application not responding” during chat loading and scrolling.
+- [ ] V01 Reproduce and fix “Application not responding” during chat loading and scrolling. Main CI `35193102534` exposed a SwiftUI update loop. The replacement native transcript passes Light/Dark stream completion while reading, full-history scrolling/search/return, width reflow, and 19 native regressions. Final main CI must confirm the corrected implementation before release.
 - [x] V02 Reproduce and fix hangs from long text, HTML, and multiple pasted images.
 - [x] V03 Measure long-chat first display, scrolling/resizing, and large-paste responsiveness.
 - [ ] V04 Remove synchronous heavy parsing, file reads, and repeated layout from the main thread.

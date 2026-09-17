@@ -166,7 +166,7 @@ def main():
         if any(name not in optional_network_cases for name in skipped):
             raise RuntimeError("A required test was skipped. Only the four opt-in public MCP diagnostics may skip.")
         for suite in ("BedrockUITests", "MCPConfigurationTests", "MCPIntegrationTests", "WindowLifecycleTests",
-                      "UpdateInstallerTests"):
+                      "UpdateInstallerTests", "ConversationViewportTests", "NativeTranscriptTests"):
             actual = [case for case in cases if case.get("nodeIdentifier", "").startswith(suite + "/")]
             if not actual or any(case.get("result") != "Passed" for case in actual):
                 raise RuntimeError(f"{suite} did not execute and pass every required case.")

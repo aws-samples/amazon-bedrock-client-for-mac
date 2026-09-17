@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+      actions: read
     env:
       APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Release/Amazon Bedrock.app
       DMG_PATH: Amazon.Bedrock.Client.for.Mac.dmg
@@ -148,6 +149,25 @@ jobs:
           cmp "$APP_PATH/Contents/MacOS/Amazon Bedrock" \
             "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app/Contents/MacOS/Amazon Bedrock"
           test "$(readlink "$BEDROCK_DMG_VOLUME/Applications")" = /Applications
+      - name: Require successful main CI before publication
+        if: startsWith(github.ref, 'refs/tags/v')
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --workflow ci.yml --branch main --commit "$GITHUB_SHA" \
+            --event push --limit 10 \
+            --json databaseId,headSha,headBranch,status,conclusion,url > artifacts/main-ci-runs.json
+          BEDROCK_MAIN_CI_RUN=$(jq -r --arg sha "$GITHUB_SHA" \
+            '[.[] | select(.headSha == $sha and .headBranch == "main")] | sort_by(.databaseId) | last | .databaseId // empty' \
+            artifacts/main-ci-runs.json)
+          test -n "$BEDROCK_MAIN_CI_RUN"
+          gh run watch "$BEDROCK_MAIN_CI_RUN" --interval 20 --exit-status
+          gh run view "$BEDROCK_MAIN_CI_RUN" \
+            --json status,conclusion,headSha,headBranch,url > artifacts/main-ci-result.json
+          jq -e --arg sha "$GITHUB_SHA" \
+            '.status == "completed" and .conclusion == "success" and .headSha == $sha and .headBranch == "main"' \
+            artifacts/main-ci-result.json
       - name: Preserve build and notarization evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1

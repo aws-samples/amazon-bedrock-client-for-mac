@@ -52,6 +52,8 @@ final class ConversationViewportController: ObservableObject {
     private var didEnd: (() -> Void)?
     private var contentDidResize: (() -> Void)?
 
+    var hasPendingRestoration: Bool { pending != nil || pendingAlignment != nil }
+
     var isNearBottom: Bool {
         guard let scroll = scrollView, let document = scroll.documentView else { return true }
         return document.bounds.maxY - scroll.documentVisibleRect.maxY < 65
@@ -90,9 +92,9 @@ final class ConversationViewportController: ObservableObject {
         observations.append(Observation(NotificationCenter.default.addObserver(
             forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main
         ) { [weak self] _ in
-            // Lazy layout can compensate the clip offset after reporting its
-            // final document/row sizes. Preserve the reading position through
-            // that later adjustment too, without publishing scroll geometry.
+            // AppKit can constrain the clip offset after document sizes change.
+            // Preserve the passage through that later adjustment without
+            // publishing scroll geometry.
             MainActor.assumeIsolated { self?.scheduleRestore() }
         }))
         if let document = scrollView.documentView {
@@ -151,9 +153,8 @@ final class ConversationViewportController: ObservableObject {
     }
 
     func messageDidLayout(_ messageID: UUID, frame: CGRect) {
-        // SwiftUI revises lazy row positions before updating or reattaching
-        // their native views. Native conversion can still return the old frame,
-        // even after the total document height changes. Use the actual layout.
+        // Keep document coordinates separate from the content hosted inside
+        // each row. Images and rich text can report their final height later.
         guard frame.minY.isFinite, frame.height.isFinite, frame.height > 0 else { return }
         measuredFrames[messageID] = frame
         // Content coordinates stay unchanged during ordinary scrolling; this
@@ -204,8 +205,8 @@ final class ConversationViewportController: ObservableObject {
     }
 
     func prepareForDeparture() {
-        // Navigation changes are published before SwiftUI dismantles the lazy
-        // stack. Its partially removed rows no longer have useful coordinates.
+        // Navigation changes are published before the transcript is dismantled.
+        // Partially removed rows no longer have useful coordinates.
         guard !isDeparting else { return }
         departureAnchor = capture()
         isDeparting = true
@@ -237,6 +238,18 @@ final class ConversationViewportController: ObservableObject {
         scheduleRestore()
     }
 
+    /// A new scroll destination replaces an older reading checkpoint. A seek
+    /// that materializes the checkpoint's own row must retain its exact offset.
+    func prepareForSeek(messageID: UUID?, fraction: CGFloat) {
+        guard let messageID else {
+            cancelPreservation()
+            return
+        }
+        if messageID != (pendingAlignment?.messageID ?? pending?.messageID) {
+            align(messageID: messageID, fraction: fraction)
+        }
+    }
+
     func align(messageID: UUID, fraction: CGFloat, seek: @MainActor () -> Void) async {
         let generation = interactionGeneration
         align(messageID: messageID, fraction: fraction)
@@ -259,7 +272,7 @@ final class ConversationViewportController: ObservableObject {
         interactionGeneration &+= 1
     }
 
-    /// A lazy stack may not have measured an offscreen destination during its
+    /// The transcript may not have measured an offscreen destination during its
     /// first layout. Seek again only until that row exists at its saved offset.
     /// User input or leaving the conversation cancels this bounded operation.
     func restore(_ anchor: Anchor, seek: @MainActor () -> Void) async {
@@ -361,56 +374,6 @@ final class ConversationViewportController: ObservableObject {
         origin.y += desired - current
         clip.scroll(to: origin)
         scroll.reflectScrolledClipView(clip)
-    }
-}
-
-struct ConversationMessageAnchor: NSViewRepresentable {
-    let messageID: UUID
-    let controller: ConversationViewportController
-
-    final class AnchorView: NSView {
-        var messageID: UUID?
-        weak var controller: ConversationViewportController?
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-        override func viewWillMove(toSuperview newSuperview: NSView?) {
-            // By viewWillMove(toWindow:), AppKit has already detached the
-            // superview, so conversion into document coordinates is too late.
-            if newSuperview == nil, superview != nil { controller?.captureBeforeRemoval() }
-            super.viewWillMove(toSuperview: newSuperview)
-        }
-        override func viewWillMove(toWindow newWindow: NSWindow?) {
-            if newWindow == nil, window != nil { controller?.captureBeforeRemoval() }
-            super.viewWillMove(toWindow: newWindow)
-        }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window != nil, let messageID { controller?.register(self, messageID: messageID) }
-        }
-    }
-
-    func makeNSView(context: Context) -> AnchorView {
-        let view = AnchorView()
-        view.messageID = messageID
-        view.controller = controller
-        controller.register(view, messageID: messageID)
-        return view
-    }
-
-    func updateNSView(_ view: AnchorView, context: Context) {
-        if view.messageID != messageID || view.controller !== controller {
-            if let previous = view.messageID { view.controller?.unregister(view, messageID: previous) }
-            view.messageID = messageID
-            view.controller = controller
-        }
-        controller.register(view, messageID: messageID)
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: AnchorView, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 1, height: proposal.height ?? 1)
-    }
-
-    static func dismantleNSView(_ view: AnchorView, coordinator: ()) {
-        if let messageID = view.messageID { view.controller?.unregister(view, messageID: messageID) }
     }
 }
 

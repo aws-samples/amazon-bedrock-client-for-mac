@@ -2,18 +2,44 @@ import AppKit
 import SwiftUI
 import Combine
 
-/// Only the row receiving output observes token updates. The chat list, composer,
-/// model selector and all completed responses keep their existing view graphs.
-struct StreamingMessageView: View {
-    @ObservedObject var stream: StreamingMessageState
+/// Keep one view identity from the first token through the completed response.
+/// Only the active row observes live output; finished rows use an idle source.
+/// Completing a stream must not recreate native text or disclosure state while
+/// the lazy transcript is preserving the passage above it.
+struct ConversationMessageView: View {
+    private static let idleStream = StreamingMessageState()
+    @ObservedObject private var stream: StreamingMessageState
     let fallback: MessageData
+    let isStreaming: Bool
     let searchResult: SearchMatch?
     let adjustedFontSize: CGFloat
     let showTimestamp: Bool
+    let canModify: Bool
+    let canRetry: Bool
+    let attachments: MessageAttachmentPresenter
+    let onAction: (MessageAction, MessageData) -> Void
+
+    init(message: MessageData, stream: StreamingMessageState?, searchResult: SearchMatch?,
+         adjustedFontSize: CGFloat, showTimestamp: Bool, canModify: Bool, canRetry: Bool,
+         attachments: MessageAttachmentPresenter,
+         onAction: @escaping (MessageAction, MessageData) -> Void) {
+        _stream = ObservedObject(wrappedValue: stream ?? Self.idleStream)
+        fallback = message
+        isStreaming = stream != nil
+        self.searchResult = searchResult
+        self.adjustedFontSize = adjustedFontSize
+        self.showTimestamp = showTimestamp
+        self.canModify = canModify
+        self.canRetry = canRetry
+        self.attachments = attachments
+        self.onAction = onAction
+    }
 
     var body: some View {
-        MessageView(message: stream.message ?? fallback, searchResult: searchResult,
-                    adjustedFontSize: adjustedFontSize, isStreaming: true, showTimestamp: showTimestamp)
+        let message = isStreaming && stream.message?.id == fallback.id ? stream.message! : fallback
+        MessageView(message: message, searchResult: searchResult,
+                    adjustedFontSize: adjustedFontSize, isStreaming: isStreaming, showTimestamp: showTimestamp,
+                    canModify: canModify, canRetry: canRetry, attachments: attachments, onAction: onAction)
             .equatable()
     }
 }
@@ -26,15 +52,16 @@ struct MessageView: View, Equatable {
     var showTimestamp = false
     var canModify = false
     var canRetry = false
+    let attachments: MessageAttachmentPresenter
     var onAction: ((MessageAction, MessageData) -> Void)?
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.message == rhs.message && lhs.searchResult == rhs.searchResult &&
         lhs.adjustedFontSize == rhs.adjustedFontSize && lhs.isStreaming == rhs.isStreaming &&
-        lhs.showTimestamp == rhs.showTimestamp && lhs.canModify == rhs.canModify && lhs.canRetry == rhs.canRetry
+        lhs.showTimestamp == rhs.showTimestamp && lhs.canModify == rhs.canModify && lhs.canRetry == rhs.canRetry &&
+        lhs.attachments === rhs.attachments
     }
 
-    @StateObject private var viewModel = MessagePresentationState()
     @Environment(\.fontSize) private var fontSize: CGFloat
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     private var currentHighlightIndex: Int { searchResult?.selectedRangeIndex ?? -1 }
@@ -111,7 +138,7 @@ struct MessageView: View, Equatable {
             if let imageBase64Strings = message.imageBase64Strings,
                !imageBase64Strings.isEmpty {
                 GeneratedImagesView(imageBase64Strings: imageBase64Strings) { imageData in
-                    viewModel.selectImage(with: imageData)
+                    attachments.showImage(imageData, filename: "Generated image")
                 }
             }
             // Expandable "thinking" section
@@ -163,15 +190,6 @@ struct MessageView: View, Equatable {
                     searchRanges: searchResult?.ranges ?? []
                 )
                 .padding(.vertical, 2)
-            }
-        }
-        .sheet(isPresented: $viewModel.isShowingImageModal) {
-            if let data = viewModel.selectedImageData {
-                ImagePreviewModal(
-                    source: .stored(data, directory: URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory).appendingPathComponent("generated_images")),
-                    filename: "Generated image",
-                    isPresented: $viewModel.isShowingImageModal
-                )
             }
         }
     }
@@ -273,9 +291,9 @@ struct MessageView: View, Equatable {
                     MessageAttachmentsView(
                         imageBase64Strings: message.imageBase64Strings,
                         imageSize: imageSize,
-                        onTapImage: viewModel.selectImage,
+                        onTapImage: { attachments.showImage($0) },
                         onSelectDocument: { data, ext, name in
-                            viewModel.selectDocument(data: data, ext: ext, name: name)
+                            attachments.showDocument(data, format: ext, filename: name)
                         },
                         documentBase64Strings: message.documentBase64Strings,
                         documentFormats: message.documentFormats,
@@ -322,25 +340,6 @@ struct MessageView: View, Equatable {
                 Button("Branch from here") { onAction?(.branch, message) }.disabled(!canModify)
                 Divider()
                 Button("Message details…") { onAction?(.details, message) }
-            }
-        }
-        .sheet(isPresented: $viewModel.isShowingImageModal) {
-            if let imageData = viewModel.selectedImageData {
-                ImagePreviewModal(
-                    source: .stored(imageData, directory: URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory).appendingPathComponent("generated_images")),
-                    filename: "Image",
-                    isPresented: $viewModel.isShowingImageModal
-                )
-            }
-        }
-        .sheet(isPresented: $viewModel.isShowingDocumentModal) {
-            if let docData = viewModel.selectedDocumentData {
-                DocumentPreviewModal(
-                    documentData: docData,
-                    filename: viewModel.selectedDocumentName,
-                    fileExtension: viewModel.selectedDocumentExt,
-                    isPresented: $viewModel.isShowingDocumentModal
-                )
             }
         }
     }
@@ -409,29 +408,33 @@ struct MessageView: View, Equatable {
 }
 
 
-private final class MessagePresentationState: ObservableObject {
-    @Published var selectedImageData: String? = nil
-    @Published var isShowingImageModal: Bool = false
-    @Published var selectedDocumentData: Data? = nil
-    @Published var selectedDocumentExt: String = ""
-    @Published var selectedDocumentName: String = ""
-    @Published var isShowingDocumentModal: Bool = false
-    @Published var currentHighlightedMatch: (messageIndex: Int, matchPositionIndex: Int)? = nil
-
-    func selectImage(with data: String) {
-        self.selectedImageData = data
-        self.isShowingImageModal = true
+/// Presentation belongs to the conversation, outside its recycled message rows.
+/// A preview stays attached to one stable host while the transcript lays out.
+@MainActor
+final class MessageAttachmentPresenter: ObservableObject {
+    struct Preview: Identifiable {
+        enum Content {
+            case image(String)
+            case document(Data, format: String)
+        }
+        let id = UUID()
+        let filename: String
+        let content: Content
     }
 
-    func selectDocument(data: Data, ext: String, name: String) {
-        self.selectedDocumentData = data
-        self.selectedDocumentExt = ext
-        self.selectedDocumentName = name
-        self.isShowingDocumentModal = true
+    @Published var preview: Preview?
+
+    func showImage(_ data: String, filename: String = "Image") {
+        preview = Preview(filename: filename, content: .image(data))
     }
 
-    func clearSelection() {
-        self.selectedImageData = nil
-        self.isShowingImageModal = false
+    func showDocument(_ data: Data, format: String, filename: String) {
+        preview = Preview(filename: filename, content: .document(data, format: format))
+    }
+
+    func isPresented(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { self.preview?.id == id }, set: {
+            if !$0, self.preview?.id == id { self.preview = nil }
+        })
     }
 }

@@ -8,12 +8,26 @@
 import SwiftUI
 import Combine
 
+private enum ChatTranscriptItem: Identifiable {
+    case message(ConversationTranscript.Row)
+    case transition(ConversationTranscript.ModelTransition)
+
+    var id: AnyHashable {
+        switch self {
+        case .message(let row): AnyHashable(row.id)
+        case .transition: AnyHashable("PendingModelTransition")
+        }
+    }
+}
+
 struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sharedMediaDataSource = AttachmentStore()
     @StateObject private var transcribeManager = DictationService()
     @StateObject private var searchEngine = SearchEngine()
     @StateObject private var viewport = ConversationViewportController()
+    @StateObject private var scrollProxy = ConversationScrollProxy()
+    @StateObject private var attachmentPresenter = MessageAttachmentPresenter()
     @ObservedObject var backendModel: BedrockConnection
     @ObservedObject private var workbench = AppStore.shared
 
@@ -145,6 +159,18 @@ struct ChatView: View {
             MessageDetails(message: message, fallbackModelID: viewModel.chatModel.id)
         }
         .sheet(item: $searchDetail) { ConversationSearchDetailView(detail: $0) }
+        .sheet(item: $attachmentPresenter.preview) { preview in
+            switch preview.content {
+            case .image(let data):
+                ImagePreviewModal(
+                    source: .stored(data, directory: URL(fileURLWithPath: PreferencesStore.shared.defaultDirectory)
+                        .appendingPathComponent("generated_images")),
+                    filename: preview.filename, isPresented: attachmentPresenter.isPresented(preview.id))
+            case .document(let data, let format):
+                DocumentPreviewModal(documentData: data, filename: preview.filename, fileExtension: format,
+                                     isPresented: attachmentPresenter.isPresented(preview.id))
+            }
+        }
     }
 
     // MARK: - Keyboard Shortcuts
@@ -209,80 +235,60 @@ struct ChatView: View {
     // MARK: - Message Scroll View
 
     private var messageScrollView: some View {
-        ScrollViewReader { proxy in
-            ZStack {
-                scrollableMessageList(proxy: proxy)
-                enhancedScrollToBottomButton(proxy: proxy)
-            }
-            .onChange(of: searchResult) { _, newResult in
-                jumpToFirstMatch(newResult, proxy: proxy)
-            }
-            .onChange(of: currentMatchIndex) { _, idx in
-                jumpToMatchIndex(idx, proxy: proxy)
-            }
+        ZStack {
+            scrollableMessageList(proxy: scrollProxy)
+            enhancedScrollToBottomButton(proxy: scrollProxy)
+        }
+        .onChange(of: searchResult) { _, newResult in
+            jumpToFirstMatch(newResult, proxy: scrollProxy)
+        }
+        .onChange(of: currentMatchIndex) { _, idx in
+            jumpToMatchIndex(idx, proxy: scrollProxy)
         }
     }
 
-    private func scrollableMessageList(proxy: ScrollViewProxy) -> some View {
+    private func scrollableMessageList(proxy: ConversationScrollProxy) -> some View {
         let rows = ConversationTranscript.rows(in: viewModel.messages)
-        // A List's AppKit accessibility cell proxies instantiate offscreen
-        // hosting views when their descriptions are read. Keep the entire
-        // transcript in a lazy scroll container without those table proxies.
-        return ScrollView {
-            LazyVStack(spacing: 0) {
-                Color.clear.frame(height: 12).accessibilityHidden(true)
-                ForEach(rows) { row in
+        var items = rows.map(ChatTranscriptItem.message)
+        if let change = ConversationTranscript.pendingTransition(after: rows, to: viewModel.chatModel.id) {
+            items.append(.transition(change))
+        }
+        return ConversationTranscriptView(items: items, proxy: proxy, viewport: viewport,
+                                          followsOutput: followsOutput && searchQuery.isEmpty) { item in
+            Group {
+                switch item {
+                case .message(let row):
                     let message = row.message
                     VStack(spacing: 12) {
                         if let change = row.modelTransition {
                             modelTransitionView(change)
                         }
-                        if viewModel.currentStreamingMessageId == message.id {
-                            StreamingMessageView(stream: viewModel.streamingMessage, fallback: message,
-                                                 searchResult: getSearchResultForMessage(row.sourceIndex),
-                                                 adjustedFontSize: CGFloat(adjustedFontSize),
-                                                 showTimestamp: workbench.preferences.showTimestamps)
-                        } else {
-                            MessageView(message: message, searchResult: getSearchResultForMessage(row.sourceIndex),
-                                        adjustedFontSize: CGFloat(adjustedFontSize),
-                                        showTimestamp: workbench.preferences.showTimestamps,
-                                        canModify: !viewModel.isSending && !viewModel.isLoadingHistory,
-                                        canRetry: message.user != "User" && message.id == rows.last?.id,
-                                        onAction: handleMessageAction)
-                                .equatable()
-                        }
+                        ConversationMessageView(
+                            message: message,
+                            stream: viewModel.currentStreamingMessageId == message.id ? viewModel.streamingMessage : nil,
+                            searchResult: getSearchResultForMessage(row.sourceIndex),
+                            adjustedFontSize: CGFloat(adjustedFontSize),
+                            showTimestamp: workbench.preferences.showTimestamps,
+                            canModify: !viewModel.isSending && !viewModel.isLoadingHistory,
+                            canRetry: message.user != "User" && message.id == rows.last?.id,
+                            attachments: attachmentPresenter,
+                            onAction: handleMessageAction
+                        )
                     }
-                    .frame(maxWidth: DesignTokens.contentWidth)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                    .background {
-                        ConversationMessageAnchor(messageID: message.id, controller: viewport)
-                            .allowsHitTesting(false).accessibilityHidden(true)
-                    }
-                    .onGeometryChange(for: CGRect.self) { geometry in
-                        geometry.frame(in: .named("conversation.content"))
-                    } action: { frame in
-                        viewport.messageDidLayout(message.id, frame: frame)
-                    }
-                }
-                if let change = ConversationTranscript.pendingTransition(after: rows, to: viewModel.chatModel.id) {
+                case .transition(let change):
                     modelTransitionView(change)
-                        .frame(maxWidth: DesignTokens.contentWidth)
-                        .padding(.horizontal, 24).padding(.vertical, 6)
-                        .frame(maxWidth: .infinity)
-                        .id("PendingModelTransition")
                 }
-                Color.clear.frame(height: 18).id("Bottom").accessibilityHidden(true)
             }
+            .frame(maxWidth: DesignTokens.contentWidth)
+            .padding(.horizontal, 24).padding(.vertical, 6)
             .frame(maxWidth: .infinity)
-            .coordinateSpace(name: "conversation.content")
+            .environment(\.beginConversationInspection, pauseFollowingForInspection)
+            .buttonStyle(AppButtonStyle())
+            .toggleStyle(AppSwitchStyle())
         }
-        .environment(\.beginConversationInspection, pauseFollowingForInspection)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("conversation.transcript")
         .background(SidebarScrollChrome(viewport: viewport))
-        .modifier(ScrollEdgeEffectModifier())
         .onChange(of: viewModel.messages.last?.id) { _, _ in
             if followsOutput && searchQuery.isEmpty {
                 scheduleFollowing(proxy)
@@ -388,7 +394,7 @@ struct ChatView: View {
         }
     }
 
-    private func scheduleFollowing(_ proxy: ScrollViewProxy) {
+    private func scheduleFollowing(_ proxy: ConversationScrollProxy) {
         // Do not reset the timer on every token: that would postpone the scroll
         // forever while a fast stream or a Markdown height update keeps arriving.
         guard scrollTask == nil else { return }
@@ -400,7 +406,7 @@ struct ChatView: View {
         }
     }
 
-    private func enhancedScrollToBottomButton(proxy: ScrollViewProxy) -> some View {
+    private func enhancedScrollToBottomButton(proxy: ConversationScrollProxy) -> some View {
         Group {
             if !isAtBottom {
                 VStack {
@@ -671,12 +677,12 @@ struct ChatView: View {
         return match
     }
 
-    private func jumpToFirstMatch(_ result: SearchResult, proxy: ScrollViewProxy) {
+    private func jumpToFirstMatch(_ result: SearchResult, proxy: ConversationScrollProxy) {
         guard !result.matches.isEmpty else { return }
         jumpToMatchIndex(currentMatchIndex, proxy: proxy)
     }
 
-    private func jumpToMatchIndex(_ idx: Int, proxy: ScrollViewProxy) {
+    private func jumpToMatchIndex(_ idx: Int, proxy: ConversationScrollProxy) {
         guard searchResult.totalMatches > 0 else { return }
 
         // Find the message and match position for the current match index
@@ -691,7 +697,7 @@ struct ChatView: View {
         }
     }
 
-    private func scrollToMatch(messageIndex: Int, proxy: ScrollViewProxy) {
+    private func scrollToMatch(messageIndex: Int, proxy: ConversationScrollProxy) {
         guard viewModel.messages.indices.contains(messageIndex) else { return }
         searchScrollTask?.cancel()
         viewport.cancelPreservation()

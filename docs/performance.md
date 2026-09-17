@@ -1,10 +1,64 @@
 # Responsiveness investigation
 
-## September 17, 2026: continuous conversation history
+## September 17, 2026: native conversation scrolling
 
-The current transcript contains the full conversation. There are no earlier/newer
-page buttons or artificial message-count windows. SwiftUI lazily creates offscreen
-rows; native text and image views still provide selection and previews.
+The current conversation uses an AppKit scroll document with independently
+hosted visible messages. Lightweight row positions cover the entire history;
+views are created near the viewport and released as they move away. There are
+no manual earlier/newer buttons or fixed message-count pages.
+
+Main CI `35193102534` exposed a remaining SwiftUI update loop in the previous
+lazy stack when a response finished while the reader was scrolled upward.
+Profiling reproduced repeated platform-view updates without corresponding
+text measurement or composer updates. The native container removes that shared
+lazy-stack update path. A message retains its native text identity when
+streaming ends, and image/document sheets belong to the conversation.
+
+The final optimized candidate passed these targeted checks:
+
+- Light and Dark: finish a controlled stream while reading an older passage
+  in a 1,000-message conversation; its screen position remains unchanged.
+  The composer accepts input, and returning to the latest response works.
+- Reach the first message with one native thumb drag; search question 250;
+  retain its position through three Activity → Back round trips and sidebar
+  collapse/expansion; preserve the previous draft with ⌘N/⌘D.
+- Open, zoom, fit and close a 4K image three times; inspect original tool
+  input/output; preserve selected native text when streaming completes.
+- Nineteen optimized native tests pass: fifteen viewport/controller cases
+  and four container cases covering 10,000-message access with bounded views,
+  earlier-row growth, width-driven reflow, and following versus reading.
+  A new seek replaces an older destination while retaining a matching saved
+  offset. Both frame and clip changes update available text width.
+
+The final executable was measured after the navigation checks, at 1240×780,
+Light appearance, with the same 1,000 synthetic messages and an empty composer.
+No compiler or model request ran during the measurement.
+
+| Probe | Events | Median | p95 | Maximum | Failures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Typing | 61 | 6.40 ms | 11.57 ms | 43.96 ms | 0 |
+| Scroll responsiveness | 360 | 1.56 ms | 3.45 ms | 18.36 ms | 0 |
+
+Typing measures event-to-accessibility-text-update latency. Scrolling measures
+small window-accessibility queries during six seconds of wheel input
+(5.985 seconds observed). Neither is a display frame-rate measurement or a
+guarantee for every workload. The final check is one pass; three earlier native
+candidate passes measured 5.94–6.62 ms typing median and 10.66–10.97 ms p95.
+
+Executable SHA-256:
+`c91b50fc206df7ef054be2856aa621f858e22ebebd3122cc980295541a1b2667`.
+Raw interaction captures and measurements are under
+`/tmp/bedrock-pilot-validation/release-completion/native-transcript-final-interactions/`;
+Light/Dark completion receipts use `native-transcript-final-reading-*`, and
+the standalone tests use `native-transcript-unit-tests/native-controller-final-tests.log`.
+These targeted receipts do not replace the final main CI and release gates in
+the [completion audit](quality/todo-audit.md).
+
+## Earlier September 17, 2026: SwiftUI continuous history
+
+The earlier candidate also contained the full conversation without earlier/newer
+buttons. It used SwiftUI to create offscreen rows and retained native text and
+image views. The following results predate the native container above.
 
 The first continuous-history implementation used a `List`. A main-thread profile
 of an actual 1,000-message UI test showed AppKit's table accessibility proxies
