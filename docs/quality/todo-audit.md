@@ -11,6 +11,15 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Cold searches in the normal 1,000-message conversation exposed premature
+  completion: the projected row was centered while its actual native view was
+  still 1,065 points away. Completion now requires both native and measured
+  visibility. The optimized app reaches three previously offscreen results
+  in 0.63–0.72 seconds and retains the reading position within 0.2 points on
+  three Activity → Back returns. Six direct AppKit checks pass against the
+  actual controller source, including delayed placement and user cancellation.
+  Native XCTest coverage was added and the hosted long-history fixture now
+  includes tables, nested lists and code.
 - Hosted `35186121048` exposed an initial-window sizing problem on its
   1,024 × 768 display. The new main-display assertion caught a 1,120-point
   window extending beyond the screen; the recording confirms clipped sidebar
@@ -37,8 +46,9 @@ screenshot does not close a behavioral requirement.
   A standalone optimized executable compiled from the actual installer and
   process-runner sources then passed all five signature checks, including the
   installed 1.4.10 identity and mismatched-version rejection. The normal Release
-  app's General → Check now completed against GitHub, re-enabled the control,
-  and preserved the disabled automatic-check preference.
+  app's General → Check now and its single Check for Updates menu item completed
+  against GitHub, re-enabled the control, and preserved the disabled
+  automatic-check preference.
 - The current local XCTest UI runner timed out while enabling Automation Mode;
   this Mac requires user authentication for that mode. That attempt did not
   execute the three selected UI cases and is not counted as a pass. Normal

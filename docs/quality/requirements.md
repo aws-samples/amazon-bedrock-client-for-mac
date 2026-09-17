@@ -299,7 +299,7 @@ and remaining features are recorded in [the completion audit](todo-audit.md),
 - [x] U01 Preserve the `checkForUpdates` preference and the official GitHub latest-release endpoint; retain the 1.x asset and DMG volume names.
 - [x] U02 Verify release eligibility, download bytes, size/digest and application identity/signature before installation; reject drafts, prereleases, downgrades and unrelated assets. Focused core/native cases executed locally.
 - [x] U03 Wait for the exact old process to exit, replace from the same volume, and restore the old app on failure without touching conversation data. Successful replacement, quit timeout and failed-second-rename cases executed with signed disposable bundles.
-- [ ] U04 Exercise the normal Release app's manual update controls and verify the final signed release/installed-app upgrade contract. General → Check now completes in the normal optimized app while automatic checks are off and preserves that preference; final signed-artifact verification remains pending.
+- [ ] U04 Exercise the normal Release app's manual update controls and verify the final signed release/installed-app upgrade contract. General → Check now and the app menu both complete in the normal optimized app while automatic checks are off and preserve that preference; final signed-artifact verification remains pending.
 
 - [x] D01 Run the regression workflow on every main push, release-branch push and pull request.
 - [x] D02 Gate release packaging and publication on the same optimized-app validation workflow.

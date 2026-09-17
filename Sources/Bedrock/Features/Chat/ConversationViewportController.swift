@@ -282,8 +282,13 @@ final class ConversationViewportController: ObservableObject {
         guard let view = views[messageID]?.value, let scroll = scrollView,
               let document = scroll.documentView, view.window != nil,
               view.isDescendant(of: document) else { return false }
-        let frame = measuredFrames[messageID] ?? view.convert(view.bounds, to: document)
-        return frame.intersects(scroll.documentVisibleRect)
+        let viewport = scroll.documentVisibleRect
+        // Layout coordinates guide the seek, but do not prove that AppKit has
+        // placed the actual row there yet. Ending on the projected frame alone
+        // can leave a cold, complex Markdown result several messages offscreen.
+        let nativeFrame = view.convert(view.bounds, to: document)
+        guard nativeFrame.intersects(viewport) else { return false }
+        return measuredFrames[messageID]?.intersects(viewport) ?? true
     }
 
     func disconnect() {

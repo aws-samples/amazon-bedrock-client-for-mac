@@ -170,7 +170,25 @@ final class BedrockUITests: XCTestCase {
                     "id": UUID().uuidString, "role": role, "modelID": model, "isError": false,
                     "timestamp": Date().timeIntervalSinceReferenceDate,
                     "text": role == "user" ? "Fixture question \(index)" :
-                        "## Fixture answer \(index)\n\n- First **item** with `inline code`.\n- Second item.\n\n> Synthetic content.\n\n```swift\nlet row = \(index)\n```"
+                        """
+                        ## Fixture answer \(index)
+
+                        - First **item** with `inline code`.
+                        - Second item with [a safe link](https://example.com).
+                          - Nested item in 한국어 and English.
+
+                        > Synthetic content with enough layout variation to exercise cold search results.
+
+                        ```swift
+                        let row = \(index)
+                        print("ROW_" + String(row))
+                        ```
+
+                        | Column | Value |
+                        | --- | --- |
+                        | Row | \(index) |
+                        | Status | fixture |
+                        """
                 ])
             }
         }

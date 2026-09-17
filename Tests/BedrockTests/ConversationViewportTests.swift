@@ -255,6 +255,32 @@ final class ConversationViewportTests: XCTestCase {
     }
 
     @MainActor
+    func testSearchDoesNotFinishBeforeTheNativeRowReachesItsMeasuredPosition() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let scroll = NSScrollView(frame: window.contentLayoutRect)
+        let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 40_000))
+        let message = NSView(frame: NSRect(x: 0, y: 20_000, width: 800, height: 100))
+        document.addSubview(message)
+        scroll.documentView = document
+        window.contentView = scroll
+        let controller = ConversationViewportController()
+        defer { controller.disconnect() }
+        let id = UUID()
+        controller.connect(to: scroll)
+        controller.register(message, messageID: id)
+        controller.align(messageID: id, fraction: 0.5)
+        controller.messageDidLayout(id, frame: NSRect(x: 0, y: 21_065, width: 800, height: 100))
+        controller.restore()
+        XCTAssertFalse(controller.isVisible(messageID: id),
+                       "Projected search coordinates are not evidence that the result is onscreen.")
+        message.setFrameOrigin(NSPoint(x: 0, y: 21_065))
+        XCTAssertTrue(controller.isVisible(messageID: id))
+    }
+
+    @MainActor
     func testDepartureCheckpointIgnoresPartiallyDismantledRowCoordinates() throws {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: .borderless, backing: .buffered, defer: false)
