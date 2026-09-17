@@ -75,13 +75,17 @@ struct HTMLMarkdownView: NSViewRepresentable {
     let fontSize: CGFloat
     let searchQuery: String?
     let selectedMatchIndex: Int?
+    var isStreaming = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var dynamicHeight: CGFloat
 
-    init(htmlContent: String, fontSize: CGFloat, searchQuery: String? = nil, selectedMatchIndex: Int? = nil, dynamicHeight: Binding<CGFloat>) {
+    init(htmlContent: String, fontSize: CGFloat, searchQuery: String? = nil, selectedMatchIndex: Int? = nil,
+         isStreaming: Bool = false, dynamicHeight: Binding<CGFloat>) {
         self.htmlContent = htmlContent
         self.fontSize = fontSize
         self.searchQuery = searchQuery
         self.selectedMatchIndex = selectedMatchIndex
+        self.isStreaming = isStreaming
         self._dynamicHeight = dynamicHeight
     }
 
@@ -106,12 +110,16 @@ struct HTMLMarkdownView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {
         context.coordinator.parent = self
         let contentChanged = context.coordinator.sourceHTML != htmlContent ||
-                             context.coordinator.sourceFontSize != fontSize
+                             context.coordinator.sourceFontSize != fontSize ||
+                             context.coordinator.sourceIsStreaming != isStreaming ||
+                             context.coordinator.sourceReduceMotion != reduceMotion
         let selectionChanged = context.coordinator.sourceSearchQuery != searchQuery ||
                                context.coordinator.sourceSelectedIndex != selectedMatchIndex
         guard contentChanged || selectionChanged else { return }
         context.coordinator.sourceHTML = htmlContent
         context.coordinator.sourceFontSize = fontSize
+        context.coordinator.sourceIsStreaming = isStreaming
+        context.coordinator.sourceReduceMotion = reduceMotion
         context.coordinator.sourceSearchQuery = searchQuery
         context.coordinator.sourceSelectedIndex = selectedMatchIndex
         if !context.coordinator.hasStartedLoading {
@@ -164,13 +172,19 @@ struct HTMLMarkdownView: NSViewRepresentable {
         var hasStartedLoading = false
         var sourceHTML: String?
         var sourceFontSize: CGFloat?
+        var sourceIsStreaming = false
+        var sourceReduceMotion = false
         private var isReady = false
         private var isApplyingContent = false
         private var appliedHTML: String?
         private var appliedFontSize: CGFloat?
+        private var appliedIsStreaming = false
+        private var appliedReduceMotion = false
         private var active = true
         private var pendingSearch: (query: String, index: Int)?
         private var searchGeneration = 0
+        private var pendingHeight: (height: CGFloat, width: CGFloat)?
+        private var heightUpdateScheduled = false
 
         init(_ parent: HTMLMarkdownView) {
             self.parent = parent
@@ -179,23 +193,28 @@ struct HTMLMarkdownView: NSViewRepresentable {
         func stop() {
             active = false
             pendingSearch = nil
+            pendingHeight = nil
             searchGeneration += 1
         }
 
         func applyLatestContent(to webView: WKWebView) {
             guard active, isReady, !isApplyingContent,
                   let html = sourceHTML, let size = sourceFontSize,
-                  html != appliedHTML || size != appliedFontSize else { return }
+                  html != appliedHTML || size != appliedFontSize ||
+                    sourceIsStreaming != appliedIsStreaming || sourceReduceMotion != appliedReduceMotion else { return }
             isApplyingContent = true
+            let streaming = sourceIsStreaming
+            let reduced = sourceReduceMotion
             // Arguments are data, never interpolated into executable JavaScript.
-            webView.callAsyncJavaScript("return window.bedrockUpdateContent(html, fontSize);",
-                                        arguments: ["html": html, "fontSize": size], in: nil, in: .page) { [weak self, weak webView] result in
+            webView.callAsyncJavaScript("return window.bedrockUpdateContent(html, fontSize, streaming, reduced);",
+                                        arguments: ["html": html, "fontSize": size, "streaming": streaming, "reduced": reduced], in: nil, in: .page) { [weak self, weak webView] result in
                 guard let self, self.active else { return }
                 self.isApplyingContent = false
-                if case .success(let value) = result {
+                if case .success = result {
                     self.appliedHTML = html
                     self.appliedFontSize = size
-                    if let height = value as? NSNumber { self.updateHeight(CGFloat(height.doubleValue)) }
+                    self.appliedIsStreaming = streaming
+                    self.appliedReduceMotion = reduced
                     if let webView {
                         self.applyLatestContent(to: webView)
                         self.performPendingSearch(in: webView)
@@ -251,9 +270,6 @@ struct HTMLMarkdownView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isReady = true
             applyLatestContent(to: webView)
-            webView.evaluateJavaScript("document.getElementById('bedrock-content').getBoundingClientRect().height") { [weak self] result, _ in
-                if let height = result as? CGFloat { self?.updateHeight(height) }
-            }
             if ProcessInfo.processInfo.environment["BEDROCK_RENDER_DIAGNOSTICS"] == "1" {
                 webView.evaluateJavaScript("JSON.stringify({width:innerWidth,height:document.getElementById('bedrock-content').getBoundingClientRect().height,characters:document.getElementById('bedrock-content').textContent.length})") { value, error in
                     print("Markdown page: \(value ?? "no result")\(error.map { " · \($0.localizedDescription)" } ?? "")")
@@ -261,13 +277,24 @@ struct HTMLMarkdownView: NSViewRepresentable {
             }
         }
 
-        private func updateHeight(_ height: CGFloat) {
-            guard active, height.isFinite, height > 0 else { return }
+        private func updateHeight(_ height: CGFloat, width: CGFloat, in webView: WKWebView) {
+            if ProcessInfo.processInfo.environment["BEDROCK_RENDER_DIAGNOSTICS"] == "1" {
+                print("Markdown extent: \(height) × \(width), view=\(webView.bounds), previous=\(parent.dynamicHeight)")
+            }
+            guard active, height.isFinite, height > 0, width.isFinite,
+                  abs(webView.bounds.width - width) < 1 else { return }
             let measured = min(ceil(height), 2_000_000)
-            guard abs(parent.dynamicHeight - measured) > 0.5 else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.active, abs(self.parent.dynamicHeight - measured) > 0.5 else { return }
-                self.parent.dynamicHeight = measured
+            pendingHeight = (measured, width)
+            guard !heightUpdateScheduled else { return }
+            heightUpdateScheduled = true
+            DispatchQueue.main.async { [weak self, weak webView] in
+                guard let self else { return }
+                self.heightUpdateScheduled = false
+                guard self.active, let pending = self.pendingHeight, let webView else { return }
+                self.pendingHeight = nil
+                guard abs(webView.bounds.width - pending.width) < 1,
+                      abs(self.parent.dynamicHeight - pending.height) > 0.5 else { return }
+                self.parent.dynamicHeight = pending.height
             }
         }
 
@@ -288,8 +315,9 @@ struct HTMLMarkdownView: NSViewRepresentable {
         // Handle messages from JavaScript
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard active, message.frameInfo.isMainFrame else { return }
-            if message.name == "heightHandler", let height = message.body as? NSNumber {
-                updateHeight(CGFloat(height.doubleValue))
+            if message.name == "heightHandler", let size = message.body as? [String: Double],
+               let height = size["height"], let width = size["width"], let webView = message.webView {
+                updateHeight(height, width: width, in: webView)
                 return
             }
             if message.name == "copyHandler", let code = message.body as? String {
@@ -647,14 +675,20 @@ struct HTMLMarkdownView: NSViewRepresentable {
                 \(MarkdownClipboardScript.source)
                 (() => {
                     const content = document.getElementById('bedrock-content');
-                    let previousHeight = 0;
+                    let previousHeight = 0, previousWidth = 0;
                     const measure = () => {
-                        const height = Math.ceil(content.getBoundingClientRect().height);
-                        if (height > 0 && height !== previousHeight) {
+                        const rect = content.getBoundingClientRect();
+                        const height = Math.ceil(rect.height), width = rect.width;
+                        if (height > 0 && (height !== previousHeight || width !== previousWidth)) {
                             previousHeight = height;
-                            window.webkit.messageHandlers.heightHandler.postMessage(height);
+                            previousWidth = width;
+                            window.webkit.messageHandlers.heightHandler.postMessage({height, width});
                         }
                     };
+                    // One ordered channel owns the extent. JS completion
+                    // callbacks and initial-load probes must not apply older
+                    // heights after a newer ResizeObserver measurement.
+                    window.bedrockReportContentSize = measure;
                     new ResizeObserver(measure).observe(content);
                     window.addEventListener('resize', measure);
                     document.fonts.ready.then(measure);

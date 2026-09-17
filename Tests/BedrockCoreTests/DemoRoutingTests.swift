@@ -73,6 +73,21 @@ final class DemoRoutingTests: XCTestCase {
         XCTAssertEqual(BedrockFailureMessage.readable(escaped), #"Use "high" effort."#)
     }
 
+    func testServiceApostrophesDecodeWithoutDamagingPathsOrQuotedText() {
+        for source in [
+            #"This model doesn\'t support documents."#,
+            #"This model doesn\\'t support documents."#,
+            #"ValidationException(properties: Properties(message: Optional("This model doesn\'t support documents.")), httpResponse: details)"#,
+            #"ValidationException(properties: Properties(message: Optional("This model doesn\\'t support documents.")), httpResponse: details)"#
+        ] {
+            XCTAssertEqual(BedrockFailureMessage.readable(source), "This model doesn't support documents.")
+        }
+        let source = #"ValidationException(properties: Properties(message: Optional("Can\'t read \"report\" in C:\\temp\\docs.")), httpResponse: details)"#
+        XCTAssertEqual(BedrockFailureMessage.readable(source), #"Can't read "report" in C:\temp\docs."#)
+        XCTAssertEqual(BedrockFailureMessage.readable(#"File C:\temp\new.txt is missing."#),
+                       #"File C:\temp\new.txt is missing."#)
+    }
+
     func testLumaRequestUsesDocumentedParametersAndKeyframeMediaTypes() throws {
         let config = LumaVideoConfiguration(duration: "9s", loop: true)
         let png = Data([137, 80, 78, 71, 13, 10, 26, 10]).base64EncodedString()

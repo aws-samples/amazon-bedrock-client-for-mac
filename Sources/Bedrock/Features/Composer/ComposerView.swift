@@ -145,7 +145,7 @@ struct ComposerView: View {
     private var fileUploadButton: some View {
         Button(action: {
             let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.pdf, .commaSeparatedText, .html, .plainText, .sourceCode, .jpeg, .png, .gif, .tiff, .webP, .heic, .bmp,
+            panel.allowedContentTypes = [.pdf, .commaSeparatedText, .html, .plainText, .sourceCode, .jpeg, .png, .gif, .tiff, .webP, .heic, .bmp, .svg,
                                           UTType(filenameExtension: "doc")!, UTType(filenameExtension: "docx")!,
                                           UTType(filenameExtension: "xls")!, UTType(filenameExtension: "xlsx")!,
                                           UTType(filenameExtension: "md")!]

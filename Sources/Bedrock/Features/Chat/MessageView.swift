@@ -64,6 +64,7 @@ struct MessageView: View, Equatable {
 
     @Environment(\.fontSize) private var fontSize: CGFloat
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var currentHighlightIndex: Int { searchResult?.selectedRangeIndex ?? -1 }
 
     private let imageSize: CGFloat = 100
@@ -97,7 +98,7 @@ struct MessageView: View, Equatable {
     private var assistantMessageBubble: some View {
         VStack(alignment: .leading, spacing: 4) {
             assistantMessageContent
-            if !isStreaming && !isToolOnly {
+            if !isToolOnly {
                 HStack(spacing: 8) {
                     Button(action: copyMessageToClipboard) { Image(systemName: "doc.on.doc").font(.system(size: 12)).frame(width: 28, height: 28) }
                         .buttonStyle(.plain).foregroundStyle(.secondary)
@@ -120,6 +121,12 @@ struct MessageView: View, Equatable {
                     if showTimestamp { Text(format(date: message.sentTime)).font(DesignTokens.detail).foregroundStyle(.secondary) }
                     Spacer()
                 }
+                // Reserve the compact action row during streaming. Inserting
+                // it at completion moves a bottom-following conversation.
+                .opacity(isStreaming ? 0 : 1)
+                .allowsHitTesting(!isStreaming)
+                .accessibilityHidden(isStreaming)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isStreaming)
             }
         }
         .padding(.vertical, isToolOnly ? 0 : 8)

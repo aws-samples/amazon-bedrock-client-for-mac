@@ -48,7 +48,37 @@ enum MarkdownSanitizerScript {
 enum MarkdownDOMUpdateScript {
     static let source = MarkdownSanitizerScript.source + #"""
     let bedrockSourceBlocks = null;
-    window.bedrockUpdateContent = (html, fontSize) => {
+    const bedrockStreamAnimations = new Set();
+    const bedrockPatchNode = (current, incoming) => {
+        if (current.nodeType !== incoming.nodeType || current.nodeName !== incoming.nodeName) {
+            current.replaceWith(incoming);
+            return incoming;
+        }
+        if (current.nodeType === Node.TEXT_NODE) {
+            if (incoming.data.startsWith(current.data)) current.appendData(incoming.data.slice(current.length));
+            else current.replaceData(0, current.length, incoming.data);
+            return current;
+        }
+        if (current.nodeType !== Node.ELEMENT_NODE) {
+            if (!current.isEqualNode(incoming)) current.replaceWith(incoming);
+            return current;
+        }
+        for (const attribute of Array.from(current.attributes)) {
+            if (!incoming.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
+        }
+        for (const attribute of Array.from(incoming.attributes)) {
+            if (current.getAttribute(attribute.name) !== attribute.value) current.setAttribute(attribute.name, attribute.value);
+        }
+        const oldChildren = Array.from(current.childNodes);
+        const newChildren = Array.from(incoming.childNodes);
+        newChildren.forEach((child, index) => {
+            if (!oldChildren[index]) current.appendChild(child);
+            else if (!oldChildren[index].isEqualNode(child)) bedrockPatchNode(oldChildren[index], child);
+        });
+        oldChildren.slice(newChildren.length).forEach(child => child.remove());
+        return current;
+    };
+    window.bedrockUpdateContent = (html, fontSize, streaming = false, reduceMotion = false) => {
         const content = document.getElementById('bedrock-content');
         const template = document.createElement('template');
         template.innerHTML = html;
@@ -56,18 +86,45 @@ enum MarkdownDOMUpdateScript {
         const incoming = Array.from(template.content.children);
         const sources = incoming.map(node => node.outerHTML);
         const current = Array.from(content.children);
+        const appended = [];
         incoming.forEach((node, index) => {
             if (bedrockSourceBlocks && bedrockSourceBlocks[index] === sources[index]) return;
-            if (current[index]) current[index].replaceWith(node);
-            else content.appendChild(node);
-            if (typeof hljs !== 'undefined') node.querySelectorAll('pre code').forEach(code => {
+            if (current[index]) bedrockPatchNode(current[index], node);
+            else { content.appendChild(node); appended.push(node); }
+        });
+        current.slice(incoming.length).forEach(node => node.remove());
+        const firstContent = bedrockSourceBlocks === null;
+        bedrockSourceBlocks = sources;
+        document.documentElement.style.setProperty('--message-font-size', `${fontSize}px`);
+        if (typeof hljs !== 'undefined') Array.from(content.children).forEach((node, index) => {
+            // Leave an open code block alone. Replacing its highlighted spans
+            // on every token destroys selection and needlessly repaints it.
+            if (streaming && index === incoming.length - 1) return;
+            node.querySelectorAll('pre code:not([data-highlighted])').forEach(code => {
                 const language = Array.from(code.classList).find(value => value.startsWith('language-'));
                 if (language && hljs.getLanguage(language.slice(9))) hljs.highlightElement(code);
             });
         });
-        current.slice(incoming.length).forEach(node => node.remove());
-        bedrockSourceBlocks = sources;
-        document.documentElement.style.setProperty('--message-font-size', `${fontSize}px`);
+        const reduced = reduceMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!streaming || reduced) {
+            bedrockStreamAnimations.forEach(animation => animation.cancel());
+            bedrockStreamAnimations.clear();
+        } else if (!firstContent) {
+            // Content is present immediately. Only newly appended small blocks
+            // get a brief compositor fade; height, position, existing text and
+            // token delivery never animate. Bound simultaneous layer creation.
+            for (const node of appended.slice(-4)) {
+                if (node.getBoundingClientRect().height > 512) continue;
+                while (bedrockStreamAnimations.size >= 4) {
+                    const oldest = bedrockStreamAnimations.values().next().value;
+                    oldest.cancel(); bedrockStreamAnimations.delete(oldest);
+                }
+                const animation = node.animate([{opacity: 0.72}, {opacity: 1}], {duration: 140, easing: 'ease-out'});
+                bedrockStreamAnimations.add(animation);
+                animation.onfinish = animation.oncancel = () => bedrockStreamAnimations.delete(animation);
+            }
+        }
+        window.bedrockReportContentSize?.();
         // A tall WebView can be outside WebKit's visible viewport even while its
         // enclosing chat is visible. Do not depend on an animation frame there:
         // return the new extent with the update so SwiftUI can resize it now.

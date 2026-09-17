@@ -7,7 +7,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 | Topic | Final requested behavior |
 |---|---|
 | Product | Swift macOS client with direct Bedrock inference and local storage; no hosted Foxl backend, relay, cloud sync, Notes, or account/billing system |
-| Main navigation | Keep Demo library, Automations, Activity, and Chats. Remove Files and Projects. Skills belong in Settings. |
+| Main navigation | Keep Demo library, Automations and Activity under a collapsible Library subheader. Chats retains Today, Yesterday and earlier date groups. Remember section disclosure choices. Remove Files and Projects. Skills belong in Settings. |
 | History management | Archive and Trash share one Settings section; neither is a main navigation destination. |
 | Theme | Light, Dark, and System. Light is predominantly white with a slightly gray frosted sidebar. Dark retains the simple black design. |
 | Branding | Bedrock wordmark only in the sidebar; no Bedrock pictogram inside the application. Provider identity may appear in the model picker. |
@@ -299,15 +299,34 @@ and remaining features are recorded in [the completion audit](todo-audit.md),
 - [x] U01 Preserve the `checkForUpdates` preference and the official GitHub latest-release endpoint; retain the 1.x asset and DMG volume names.
 - [x] U02 Verify release eligibility, download bytes, size/digest and application identity/signature before installation; reject drafts, prereleases, downgrades and unrelated assets. Focused core/native cases executed locally.
 - [x] U03 Wait for the exact old process to exit, replace from the same volume, and restore the old app on failure without touching conversation data. Successful replacement, quit timeout and failed-second-rename cases executed with signed disposable bundles.
-- [ ] U04 Exercise the normal Release app's manual update controls and verify the final signed release/installed-app upgrade contract. General → Check now and the app menu both complete in the normal optimized app while automatic checks are off and preserve that preference; final signed-artifact verification remains pending.
+- [x] U04 Exercise the normal Release app's manual update controls and verify the final signed release/installed-app upgrade contract. General → Check now and the app menu preserve the update preference. The published v2.0.0 DMG passed signature/notarization/architecture checks and the actual installer upgraded a disposable copy of 1.4.10, preserving adjacent data and the original installed application. See validation-log.md.
 
 - [x] D01 Run the regression workflow on every main push, release-branch push and pull request.
 - [x] D02 Gate release packaging and publication on the same optimized-app validation workflow.
 - [x] D03 Exercise streaming, model switching, tools and queues through the real AWS SDK against an isolated loopback protocol fixture. All 26 local UI scenarios passed on `765e40e`, including stream reading-position preservation and error recovery.
-- [ ] D04 Execute the complete native/UI workflow on GitHub, fix failures and retain logs, screenshots, measurements and request evidence.
+- [x] D04 Execute the complete native/UI workflow on GitHub, fix failures and retain logs, screenshots, measurements and request evidence. Main CI `35211853618` and release CI `35214571810` passed for v2.0.0.
 - [x] D05 Replace README screenshots and the animated demonstration with fresh actual-app captures; publish an MP4 and static fallback.
-- [ ] D06 Validate and push the final revision to main, then confirm its workflow succeeds.
-- [ ] D07 Tag v2.0.0; build universal Intel/Apple silicon binaries, sign, notarize, staple and publish on GitHub.
-- [ ] D08 Verify the published DMG checksum, release assets, release notes and Homebrew update.
+- [x] D06 Validate and push the final revision to main, then confirm its workflow succeeds. Revision `c64956b` passed main CI.
+- [x] D07 Tag v2.0.0; build universal Intel/Apple silicon binaries, sign, notarize, staple and publish on GitHub. Release `35214571810` published the verified DMG.
+- [x] D08 Verify the published DMG checksum, release assets, release notes and Homebrew update. The public latest-DMG route matched the published SHA-256; Homebrew PR `didhd/homebrew-tap#26` merged.
 - [x] D09 Follow the latest release-validation instruction: run changed or previously failing scenarios locally and retain their evidence; require complete main CI before tagging. Native viewport cases and affected UI scenarios passed repeated targeted runs. The redundant full local rerun was canceled at the user's request; it is not a passing full-CI receipt.
-- [ ] D10 Verify the reorganized `Bedrock.xcodeproj`, `Bedrock` scheme, `BedrockCore` package, feature directories and resource names in local and hosted builds; retain the production bundle identifier, data paths and Core Data schema.
+- [x] D10 Verify the reorganized `Bedrock.xcodeproj`, `Bedrock` scheme, `BedrockCore` package, feature directories and resource names in local and hosted builds; retain the production bundle identifier, data paths and Core Data schema. The final v2.0.0 main and release workflows passed these checks.
+
+## Version 2.0.1 follow-up
+
+Keep this order: resolve rendering and image failures before the sidebar changes.
+Mark behavior complete only after the relevant execution evidence is recorded.
+
+- [x] Correct independently changing response heights so long Markdown never paints over a later message or attachment. Growth/shrinkage, mixed attachments, wheel movement and Light/Dark reflow cases passed.
+- [x] Eliminate upward/downward flicker during streaming at its source: pin the first line during deferred layout, serialize WebKit height reports, and retain visible content through renderer handoff. Tests reproduce and prevent both the 400-point first-line excursion and the scrollbar-width recreation loop.
+- [x] Keep completed text and selection stable while new Markdown arrives. Any streaming effect must respect Reduce Motion and must not animate layout, delay tokens, or fight user scrolling. WebKit node/selection and bounded-effect tests passed.
+- [x] Exercise long streams through real AWS credentials in an optimized app, including reading earlier text, window/sidebar resizing, draft typing, model switching and following attachments. Astra Low and Nova 2 Lite completed long replies; ten live Nova samples retained the reading position at 0-point movement while the response grew 870 points.
+- [x] Automatically downsample valid large images before attachment limits are applied; distinguish unsupported/damaged formats from dimension errors and retain bounded background work. Long screenshots, panoramas, a 108MP source and SVGs passed. Nova's aspect-ratio rejection was reproduced and corrected, including outgoing copies of older images; original bytes and complete historical document bytes were verified separately.
+- [x] Group Demo library, Automations and Activity beneath a collapsible sidebar subheader styled consistently with Chats. Light/Dark UI checks cover the disclosure, navigation and persisted state.
+- [x] Restore date groups in Chats, preserving selection, navigation, startup width and sidebar responsiveness. Calendar grouping, imported dates and disclosure state across relaunch passed.
+- [x] Prevent the single blink at stream completion, including deferred transcript updates and the response action bar; verify retained content, selection, height and renderer identity. The first-token fallback and action-bar height change were reproduced; the full message handoff, native suffix updates and Light/Dark completion UI cases now pass.
+- [x] Match Pilot's working GPT-5.6 Luna document transport, preserving file extensions, historical attachments, images and tools; verify an actual AWS document request. The normal Release app read PDF/TXT markers, described the image and executed a local file tool in 3.01 seconds. A Chat only follow-up read previously unquoted document content in 2.03 seconds; stored document bytes were unchanged.
+- [x] Display escaped service errors as readable text without stray apostrophe backslashes. Direct and SDK-wrapped errors preserve quoted text and path backslashes in the focused core regressions.
+- [x] Refine Chats/date hierarchy, consistent left alignment and compact header spacing in both themes. The optimized UI checks measure the header/date gap and title alignment; actual Light/Dark captures were inspected.
+- [ ] Run the changed native, Markdown, image and UI regressions locally; require the complete main workflow before tagging.
+- [ ] Publish v2.0.1 and verify its signed/notarized universal DMG, public download, update installation and Homebrew route.

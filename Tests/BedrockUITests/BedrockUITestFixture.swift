@@ -72,7 +72,15 @@ final class BedrockUITestFixture {
     }
 
     func releaseStream() async throws {
-        var request = URLRequest(url: try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/release")))
+        try await controlStream("release")
+    }
+
+    func growStream() async throws {
+        try await controlStream("grow")
+    }
+
+    private func controlStream(_ action: String) async throws {
+        var request = URLRequest(url: try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/\(action)")))
         request.timeoutInterval = 5
         let (_, response) = try await URLSession.shared.data(for: request)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)

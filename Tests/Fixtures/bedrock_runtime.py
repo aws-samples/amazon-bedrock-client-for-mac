@@ -47,6 +47,7 @@ class FixtureServer(ThreadingHTTPServer):
         self.requests_path = Path(requests_path)
         self.request_lock = threading.Lock()
         self.release_stream = threading.Event()
+        self.grow_stream = threading.Event()
 
     def record(self, value):
         with self.request_lock, self.requests_path.open("a") as output:
@@ -72,8 +73,11 @@ class FixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/release":
             self.server.release_stream.set()
+        elif self.path == "/grow":
+            self.server.grow_stream.set()
         elif self.path == "/reset":
             self.server.release_stream.clear()
+            self.server.grow_stream.clear()
         elif self.path != "/health":
             self.json_response(404, {"message": "Unknown fixture endpoint"})
             return
@@ -94,12 +98,68 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            self.converse(json.loads(self.body()))
+            request = json.loads(self.body())
+            if self.path == "/openai/v1/responses":
+                self.handle_responses(request)
+            else:
+                self.converse(request)
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             # Stop response deliberately closes a stream before its last frame.
             self.close_connection = True
         except (ValueError, KeyError) as error:
             self.json_response(400, {"message": f"Invalid fixture request: {error}"})
+
+    def handle_responses(self, request):
+        model = request.get("model", "")
+        if model != "us.openai.gpt-5.6-luna" or request.get("store") is not False:
+            raise ValueError("Expected stateless Luna on its selected US profile")
+        items = request.get("input", [])
+        user_parts = [
+            part for item in items if item.get("role") == "user"
+            for part in item.get("content", []) if isinstance(part, dict)
+        ]
+        documents = [part for part in user_parts if part.get("type") == "input_file"]
+        if not documents or any(not part.get("filename", "").endswith(".txt") for part in documents):
+            raise ValueError("Expected the document and its required filename extension")
+        self.server.record({"model": model, "path": self.path, "body": request})
+        prompts = [part.get("text", "") for part in user_parts if part.get("type") == "input_text"]
+        latest_prompt = prompts[-1] if prompts else ""
+        tool_prompt = latest_prompt if "[responses-document-tool]" in latest_prompt else None
+        results = [item for item in items if item.get("type") == "function_call_output"]
+        output = []
+        text = ""
+        if tool_prompt and not results:
+            names = [tool.get("name") for tool in request.get("tools", [])]
+            if "local_read_file" not in names:
+                raise ValueError("The document route must retain the actual local tools")
+            path = tool_prompt.partition("[responses-document-tool]")[2].strip()
+            output = [
+                {"type": "reasoning", "id": "reasoning-fixture", "summary": [],
+                 "encrypted_content": "FIXTURE_REASONING"},
+                {"type": "function_call", "call_id": "responses-file-read", "name": "local_read_file",
+                 "arguments": json.dumps({"path": path}), "status": "completed"},
+            ]
+        else:
+            if tool_prompt:
+                if not any(item.get("encrypted_content") == "FIXTURE_REASONING" for item in items):
+                    raise ValueError("The stateless tool continuation lost its reasoning item")
+                if not any("RESPONSES_FILE_MARKER" in str(item.get("output", "")) for item in results):
+                    raise ValueError("The real local file read did not return its contents")
+            text = "RESPONSES_DOCUMENT_TOOL_COMPLETE" if tool_prompt else "RESPONSES_DOCUMENT_FOLLOWUP_COMPLETE"
+            output = [{"type": "message", "role": "assistant",
+                       "content": [{"type": "output_text", "text": text, "annotations": []}],
+                       "status": "completed"}]
+        events = []
+        if text:
+            events.append({"type": "response.output_text.delta", "delta": text})
+        events.append({"type": "response.completed", "response": {
+            "output": output, "usage": {"input_tokens": 128, "output_tokens": 32}}})
+        body = "".join("data: " + json.dumps(event) + "\n\n" for event in events).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def converse(self, request):
         path = urllib.parse.unquote(self.path)
@@ -252,7 +312,32 @@ class FixtureHandler(BaseHTTPRequestHandler):
             for chunk in (arguments[:len(arguments)//2], arguments[len(arguments)//2:]):
                 emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"toolUse": {"input": chunk}}})
         else:
-            if "[stream]" in prompt:
+            if "[layout-stream]" in prompt:
+                # Deterministic native → WebKit transition. Keep both the short
+                # response and the long live response available until the UI
+                # test has measured and scrolled them; no race against a timer.
+                def wait_for(signal):
+                    deadline = time.monotonic() + 120
+                    while not signal.wait(0.25) and time.monotonic() < deadline:
+                        emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": ""}})
+
+                emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "LAYOUT_STREAM_BEGIN\n\n"}})
+                wait_for(self.server.grow_stream)
+                for index in range(24):
+                    section = (
+                        f"## Streaming section {index}\n\n"
+                        "A response grows independently of the conversation's message array. "
+                        "The whole conversation must scroll together while this paragraph wraps. "
+                        "한국어와 English, **bold text**, and `inline code` remain readable.\n\n"
+                        "- First list item with a complete sentence.\n"
+                        "- Second item must stay inside this response.\n\n"
+                    )
+                    emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": section}})
+                    time.sleep(0.04)
+                emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "LAYOUT_STREAM_GROWN\n\n"}})
+                wait_for(self.server.release_stream)
+                content = {"text": "LAYOUT_STREAM_COMPLETE"}
+            elif "[stream]" in prompt:
                 emit("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "STREAM_BEGIN\n"}})
                 deadline = time.monotonic() + 120
                 while not self.server.release_stream.wait(0.25) and time.monotonic() < deadline:

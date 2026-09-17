@@ -202,6 +202,131 @@ final class BedrockUITests: XCTestCase {
     }
 
     @MainActor
+    func testSidebarSectionsKeepTheirStateAndChatsRestoreCalendarDateGroups() throws {
+        let (app, directory) = try launch()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        for (title, days) in [("Today conversation", 0), ("Yesterday conversation", -1), ("Older conversation", -10)] {
+            let date = try XCTUnwrap(calendar.date(byAdding: .day, value: days, to: today))
+            let model = "us.amazon.nova-2-lite-v1:0"
+            let file = directory.appendingPathComponent("\(days)-sidebar.json")
+            try JSONSerialization.data(withJSONObject: [
+                "version": 1, "title": title, "modelID": model, "modelName": "Nova 2 Lite",
+                "provider": "Amazon", "messages": [
+                    ["id": UUID().uuidString, "role": "user", "text": "An imported question.",
+                     "modelID": model, "isError": false, "timestamp": date.timeIntervalSinceReferenceDate],
+                    ["id": UUID().uuidString, "role": "assistant", "text": "The imported reply remains available.",
+                     "modelID": model, "isError": false, "timestamp": date.timeIntervalSinceReferenceDate + 1]
+                ]
+            ]).write(to: file)
+            importThread(file, in: app)
+            XCTAssertTrue(app.staticTexts[title].firstMatch.waitForExistence(timeout: 5))
+        }
+        let todayHeader = app.staticTexts["sidebar.date.Today"]
+        let yesterdayHeader = app.staticTexts["sidebar.date.Yesterday"]
+        XCTAssertTrue(todayHeader.waitForExistence(timeout: 3))
+        XCTAssertTrue(yesterdayHeader.exists)
+        let dateHeaders = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'sidebar.date.'"))
+        XCTAssertEqual(dateHeaders.count, 3, "Imported chats must retain their original calendar dates.")
+        XCTAssertLessThan(todayHeader.frame.minY, app.staticTexts["Today conversation"].firstMatch.frame.minY)
+        XCTAssertLessThan(app.staticTexts["Today conversation"].firstMatch.frame.minY, yesterdayHeader.frame.minY)
+        XCTAssertLessThan(yesterdayHeader.frame.minY, app.staticTexts["Yesterday conversation"].firstMatch.frame.minY)
+        XCTAssertLessThanOrEqual(todayHeader.frame.minY - app.buttons["sidebar.chats.toggle"].frame.maxY, 16,
+                                 "The first date belongs to Chats; it must not look like another separated section.")
+        let todayRow = app.outlineRows.containing(.staticText, identifier: "Today conversation").firstMatch
+        XCTAssertTrue(todayRow.exists)
+        XCTAssertLessThanOrEqual(todayRow.frame.minY - todayHeader.frame.maxY, 12,
+                                 "A date should stay attached to the conversation row's selection area.")
+        XCTAssertEqual(todayHeader.frame.minX, app.staticTexts["Today conversation"].firstMatch.frame.minX, accuracy: 1,
+                       "Date labels and conversation titles should share their text inset.")
+        let dateLayout = XCTAttachment(screenshot: app.windows["MainWindow"].screenshot())
+        dateLayout.name = "Sidebar – compact date hierarchy"
+        dateLayout.lifetime = .keepAlways
+        add(dateLayout)
+
+        app.staticTexts["Today conversation"].firstMatch.rightClick()
+        app.menuItems["Pin thread"].click()
+        let pinned = app.buttons["sidebar.pinned.toggle"]
+        XCTAssertTrue(pinned.waitForExistence(timeout: 3))
+        let pinnedTitle = app.staticTexts.matching(NSPredicate(
+            format: "label == %@ OR value == %@", "Today conversation", "Today conversation"))
+        let movedToPinned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            pinnedTitle.count == 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [movedToPinned], timeout: 3), .completed)
+        pinned.click()
+        XCTAssertEqual(pinned.value as? String, "Collapsed")
+        XCTAssertFalse(app.staticTexts["Today conversation"].exists)
+        let library = app.buttons["sidebar.library.toggle"]
+        let chats = app.buttons["sidebar.chats.toggle"]
+        app.buttons["Activity"].click()
+        library.click()
+        XCTAssertEqual(library.value as? String, "Collapsed")
+        XCTAssertFalse(app.buttons["Demo library"].exists)
+        XCTAssertFalse(app.buttons["Automations"].exists)
+        XCTAssertFalse(app.buttons["Activity"].exists)
+        XCTAssertTrue(app.staticTexts["Activity"].exists, "Collapsing navigation must leave the active page open.")
+        chats.click()
+        XCTAssertEqual(chats.value as? String, "Collapsed")
+        XCTAssertFalse(yesterdayHeader.exists)
+        XCTAssertFalse(app.staticTexts["Older conversation"].exists)
+        XCTAssertTrue(app.buttons["New chat"].exists)
+        XCTAssertTrue(app.buttons["AWS connection and settings"].exists)
+
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            guard let data = try? Data(contentsOf: directory.appendingPathComponent("workbench/workspace.json")),
+                  let state = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let preferences = state["preferences"] as? [String: Any],
+                  let collapsed = preferences["collapsedSidebarSections"] as? [String] else { return false }
+            return Set(collapsed) == ["library", "pinned", "chats"]
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 3), .completed)
+        app.terminate()
+        app.launch()
+        app.activate()
+        XCTAssertTrue(library.waitForExistence(timeout: 10))
+        for id in ["library", "pinned", "chats"] {
+            XCTAssertEqual(app.buttons["sidebar.\(id).toggle"].value as? String, "Collapsed", id)
+            app.buttons["sidebar.\(id).toggle"].click()
+        }
+        XCTAssertTrue(app.staticTexts["Today conversation"].firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(yesterdayHeader.exists)
+        XCTAssertTrue(app.staticTexts["Older conversation"].exists)
+        for destination in ["Demo library", "Automations", "Activity"] {
+            app.buttons[destination].click()
+            XCTAssertTrue(app.staticTexts[destination].firstMatch.waitForExistence(timeout: 3))
+        }
+        app.staticTexts["Older conversation"].firstMatch.click()
+        _ = response("The imported reply remains available.", in: app)
+        let screenshot = XCTAttachment(screenshot: app.windows["MainWindow"].screenshot())
+        screenshot.name = "Sidebar – restored sections and dates"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
+    func testDarkSidebarLibraryDisclosureKeepsNavigationAvailable() throws {
+        let (app, _) = try launch(appearance: "dark")
+        let library = app.buttons["sidebar.library.toggle"]
+        XCTAssertTrue(library.waitForExistence(timeout: 3))
+        XCTAssertEqual(library.value as? String, "Expanded")
+        library.click()
+        XCTAssertFalse(app.buttons["Demo library"].exists)
+        XCTAssertEqual(library.value as? String, "Collapsed")
+        library.click()
+        for destination in ["Demo library", "Automations", "Activity"] {
+            let button = app.buttons[destination]
+            XCTAssertTrue(button.waitForExistence(timeout: 3))
+            button.click()
+            XCTAssertTrue(app.staticTexts[destination].firstMatch.waitForExistence(timeout: 3))
+        }
+        let screenshot = XCTAttachment(screenshot: app.windows["MainWindow"].screenshot())
+        screenshot.name = "Sidebar – dark Library hierarchy"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     func testNewChatDraftAndTrashShortcutsPreservePreviousDraft() throws {
         let (app, _) = try launch()
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == 'New chat'")).count, 1)
@@ -473,6 +598,191 @@ final class BedrockUITests: XCTestCase {
         app.typeKey("d", modifierFlags: .command)
         XCTAssertEqual(composer(app).value as? String, text)
         XCTAssertNotEqual(app.state, .notRunning)
+    }
+
+    @MainActor
+    func testLongMarkdownScrollsWithItsNeighborsAfterLoadResizeAndReopen() throws {
+        try assertLongMarkdownScrollsWithItsNeighbors(appearance: "light")
+    }
+
+    @MainActor
+    func testDarkLongMarkdownScrollsWithItsNeighborsAfterLoadResizeAndReopen() throws {
+        try assertLongMarkdownScrollsWithItsNeighbors(appearance: "dark")
+    }
+
+    @MainActor
+    private func assertLongMarkdownScrollsWithItsNeighbors(appearance: String) throws {
+        let (app, directory) = try launch(appearance: appearance)
+        let model = "us.amazon.nova-2-lite-v1:0"
+        let longReply = "LONG_RESPONSE_START\n\n" + (0..<24).map { index in
+            """
+            ## Layout section \(index)
+
+            A long response must remain inside its own message as the conversation scrolls.
+            This paragraph wraps at different widths and includes **bold**, *italic*, `inline code`, and 한국어.
+
+            - The first item belongs to this response.
+            - The second item must not overlap the following message.
+
+            """
+        }.joined(separator: "\n") + "\nLONG_RESPONSE_END"
+        var messages: [[String: Any]] = [
+            ("user", "BEFORE_LONG_RESPONSE"), ("assistant", longReply),
+            ("user", "AFTER_LONG_RESPONSE"), ("assistant", "FINAL_ASSISTANT_RESPONSE")
+        ].map { role, text in
+            ["id": UUID().uuidString, "role": role, "text": text, "modelID": model,
+             "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate]
+        }
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 480,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSColor.systemTeal.setFill()
+        NSRect(x: 0, y: 0, width: 640, height: 480).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        messages[2]["imageBase64Strings"] = [png.base64EncodedString()]
+        messages[2]["pastedTexts"] = [
+            ["id": UUID().uuidString, "filename": "layout.txt",
+             "content": "A complete pasted text attachment beside an image."]
+        ]
+        let file = directory.appendingPathComponent("long-response-layout.json")
+        try JSONSerialization.data(withJSONObject: [
+            "version": 1, "title": "Long response layout regression", "modelID": model,
+            "modelName": "Nova 2 Lite", "provider": "Amazon", "messages": messages
+        ]).write(to: file)
+        importThread(file, in: app)
+
+        let window = app.windows["MainWindow"]
+        let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
+        let web = transcript.webViews.firstMatch
+        let following = window.staticTexts["AFTER_LONG_RESPONSE"]
+        let image = window.buttons["Open image attachment"]
+        let attachment = window.buttons["Open attachment layout.txt"]
+        XCTAssertTrue(web.waitForExistence(timeout: 10))
+
+        func assertLayout() {
+            let laidOut = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                web.exists && web.frame.height > 2_000 && following.exists
+                    && web.frame.maxY <= following.frame.minY
+                    && image.exists && attachment.exists
+                    && web.frame.maxY <= min(image.frame.minY, attachment.frame.minY)
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [laidOut], timeout: 8), .completed,
+                           "The asynchronously rendered body must move the next message down, not overlap it.")
+        }
+
+        func assertWheelMovesBothMessages() {
+            assertLayout()
+            if web.frame.intersection(transcript.frame).height < 40 {
+                transcript.scroll(byDeltaX: 0, deltaY: 240)
+            }
+            let webBefore = web.frame
+            let followingBefore = following.frame
+            let editorBefore = composer(app).frame
+            // Target the visible WebKit body, even when the following prompt's
+            // attachments occupy the center of the conversation viewport.
+            let visible = webBefore.intersection(transcript.frame)
+            XCTAssertGreaterThan(visible.height, 30)
+            let point = window.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+                dx: visible.midX - window.frame.minX, dy: visible.midY - window.frame.minY))
+            point.scroll(byDeltaX: 0, deltaY: 240)
+            let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                web.exists && following.exists && abs(following.frame.minY - followingBefore.minY) > 40
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 5), .completed,
+                           "Wheel input over the response must move the conversation.")
+            XCTAssertEqual(web.frame.minY - webBefore.minY, following.frame.minY - followingBefore.minY,
+                           accuracy: 2, "The response and its neighbor must share one scroll offset.")
+            XCTAssertEqual(web.frame.height, webBefore.height, accuracy: 2)
+            XCTAssertEqual(composer(app).frame.minY, editorBefore.minY, accuracy: 1)
+            assertLayout()
+            app.buttons["Scroll to latest message"].click()
+            XCTAssertTrue(response("FINAL_ASSISTANT_RESPONSE", in: app).isHittable)
+        }
+
+        assertWheelMovesBothMessages()
+        for _ in 0..<2 {
+            app.typeKey("b", modifierFlags: .command)
+            assertWheelMovesBothMessages()
+        }
+        let originalWidth = web.frame.width
+        let initialFrame = window.frame
+        // AppKit can restore the narrow size left by the preceding appearance
+        // scenario. Always change the actual width; dragging 900 → 900 did not
+        // exercise reflow and made this regression test dependent on run order.
+        let targetWidth: CGFloat = initialFrame.width > 980 ? 900 : 1120
+        let origin = window.coordinate(withNormalizedOffset: .zero)
+        let corner = origin.withOffset(CGVector(dx: initialFrame.width - 6, dy: initialFrame.height - 6))
+        corner.press(forDuration: 0.1,
+                     thenDragTo: origin.withOffset(CGVector(dx: targetWidth - 6, dy: min(initialFrame.height, 674) - 6)),
+                     withVelocity: .slow, thenHoldForDuration: 0.1)
+        let reflowed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            abs(window.frame.width - targetWidth) < 2 && web.exists && abs(web.frame.width - originalWidth) > 20
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [reflowed], timeout: 8), .completed,
+                       "Exercise actual Markdown reflow, not only moving the sidebar at a capped text width.")
+        assertWheelMovesBothMessages()
+        image.click()
+        XCTAssertTrue(app.buttons["Zoom in"].waitForExistence(timeout: 5))
+        app.buttons["Close image preview"].click()
+        assertLayout()
+        window.buttons["Activity"].click()
+        window.buttons["Back"].click()
+        assertWheelMovesBothMessages()
+        let screenshot = XCTAttachment(screenshot: window.screenshot())
+        screenshot.name = "\(appearance) – long response and following messages share one layout"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
+    func testStreamingNativeToWebMarkdownKeepsFollowingMessagesOutsideTheResponse() async throws {
+        let (app, _) = try launch(withRuntime: true)
+        send("[layout-stream] Grow this reply past the native Markdown threshold.", in: app)
+        _ = response("LAYOUT_STREAM_BEGIN", in: app)
+        let window = app.windows["MainWindow"]
+        let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
+        XCTAssertFalse(transcript.webViews.firstMatch.exists, "The short reply starts in the native text renderer.")
+        try await XCTUnwrap(runtime).growStream()
+        let web = transcript.webViews.firstMatch
+        let grown = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            web.exists && web.frame.height > 2_000 && app.buttons["Stop response"].exists
+        }, object: nil)
+        await fulfillment(of: [grown], timeout: 12)
+        let scrollBefore = web.frame.minY
+        transcript.scroll(byDeltaX: 0, deltaY: 240)
+        let scrolled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            web.exists && web.frame.minY - scrollBefore > 40
+        }, object: nil)
+        await fulfillment(of: [scrolled], timeout: 5)
+        let readingY = web.frame.minY
+        try await XCTUnwrap(runtime).releaseStream()
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !app.buttons["Stop response"].exists && web.exists
+                && web.staticTexts.matching(NSPredicate(
+                    format: "label CONTAINS %@ OR value CONTAINS %@",
+                    "LAYOUT_STREAM_COMPLETE", "LAYOUT_STREAM_COMPLETE")).firstMatch.exists
+        }, object: nil)
+        await fulfillment(of: [finished], timeout: 12)
+        XCTAssertEqual(web.frame.minY, readingY, accuracy: 2,
+                       "Finalizing the response must retain the passage the user scrolled to.")
+        app.buttons["Scroll to latest message"].click()
+        chooseModel("GPT-6 Astra", in: app)
+        send("[queue-one] AFTER_STREAMED_RESPONSE", in: app)
+        let following = window.staticTexts["[queue-one] AFTER_STREAMED_RESPONSE"]
+        _ = response("QUEUE_ONE_COMPLETE", in: app)
+        let separated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            web.exists && following.exists && web.frame.maxY <= following.frame.minY
+        }, object: nil)
+        await fulfillment(of: [separated], timeout: 8)
+        XCTAssertTrue(app.descendants(matching: .any)["conversation.modelSwitch"].firstMatch.exists)
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 2)
+        let screenshot = XCTAttachment(screenshot: window.screenshot())
+        screenshot.name = "Streamed long response, model switch and next message remain separate"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     @MainActor
@@ -1048,6 +1358,125 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(actual.contains(longText))
         XCTAssertFalse(actual.contains("<script>wrong content</script>"))
         XCTAssertEqual(content.filter { $0["image"] != nil }.count, 3)
+    }
+
+    @MainActor
+    func testLegacyImageHistoryIsFittedOnTheWireWithoutChangingStoredAttachments() throws {
+        let (app, directory) = try launch(withRuntime: true)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 400,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSColor.systemTeal.setFill()
+        NSRect(x: 0, y: 0, width: 8, height: 400).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let original = png.base64EncodedString()
+        let document = Data((String(repeating: "A complete earlier document. 한국어\n", count: 1_500)
+                             + "LEGACY_DOCUMENT_LAST_LINE").utf8)
+        let model = "us.amazon.nova-2-lite-v1:0"
+        let file = directory.appendingPathComponent("legacy-image.json")
+        try JSONSerialization.data(withJSONObject: [
+            "version": 1, "title": "Legacy image normalization", "modelID": model,
+            "modelName": "Nova 2 Lite", "provider": "Amazon", "messages": [
+                ["id": UUID().uuidString, "role": "user", "text": "An earlier long screenshot.",
+                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate,
+                 "imageBase64Strings": [original], "documentBase64Strings": [document.base64EncodedString()],
+                 "documentFormats": ["txt"], "documentNames": ["Earlier document"]],
+                ["id": UUID().uuidString, "role": "assistant", "text": "Keep this image for the next turn.",
+                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate]
+            ]
+        ]).write(to: file)
+        importThread(file, in: app)
+        send("[attachments] Continue with the earlier screenshot.", in: app)
+        _ = response("ATTACHMENTS_RECEIVED", in: app)
+        let request = try XCTUnwrap(try runtime?.requests().last)
+        let body = try XCTUnwrap(request["body"] as? [String: Any])
+        let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        let images = messages.flatMap { $0["content"] as? [[String: Any]] ?? [] }
+            .compactMap { $0["image"] as? [String: Any] }
+        XCTAssertEqual(images.count, 1, "The earlier image must reach the actual SDK request.")
+        let source = try XCTUnwrap(images.first?["source"] as? [String: Any])
+        let bytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(source["bytes"] as? String)))
+        let fitted = try XCTUnwrap(NSBitmapImageRep(data: bytes))
+        XCTAssertEqual(fitted.pixelsWide, 20)
+        XCTAssertEqual(fitted.pixelsHigh, 400)
+        let documents = messages.flatMap { $0["content"] as? [[String: Any]] ?? [] }
+            .compactMap { $0["document"] as? [String: Any] }
+        XCTAssertEqual(documents.count, 1)
+        let documentSource = try XCTUnwrap(documents.first?["source"] as? [String: Any])
+        let documentBytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(documentSource["bytes"] as? String)))
+        XCTAssertEqual(documentBytes, document, "Normalizing earlier images must keep every byte of the accompanying document.")
+        let historyFiles = try FileManager.default.contentsOfDirectory(
+            at: directory.appendingPathComponent("history"), includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasSuffix("_unified_history.json") }
+        let stored = try historyFiles.flatMap { url -> [[String: Any]] in
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            return object["messages"] as? [[String: Any]] ?? []
+        }.flatMap { $0["imageBase64Strings"] as? [String] ?? [] }
+        XCTAssertEqual(stored, [original], "Resending old images must preserve their original stored bytes.")
+    }
+
+    @MainActor
+    func testLunaDocumentHistoryUsesResponsesAndKeepsRealLocalToolsAndFollowups() throws {
+        let (app, directory) = try launch(withRuntime: true)
+        let localFile = directory.appendingPathComponent("responses-tool.txt")
+        try Data("RESPONSES_FILE_MARKER".utf8).write(to: localFile)
+        let document = Data((String(repeating: "An earlier document. 한국어\n", count: 1_000)
+                             + "LUNA_DOCUMENT_LAST_LINE").utf8).base64EncodedString()
+        let model = "us.openai.gpt-5.6-luna"
+        let file = directory.appendingPathComponent("luna-history.json")
+        try JSONSerialization.data(withJSONObject: [
+            "version": 1, "title": "Luna document continuation", "modelID": model,
+            "modelName": "GPT-5.6 Luna", "provider": "OpenAI", "messages": [
+                ["id": UUID().uuidString, "role": "user", "text": "Keep the complete attached document.",
+                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate,
+                 "documentBase64Strings": [document], "documentFormats": ["txt"],
+                 "documentNames": ["Earlier report"]],
+                ["id": UUID().uuidString, "role": "assistant", "text": "Ready for the next request.",
+                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate]
+            ]
+        ]).write(to: file)
+        importThread(file, in: app)
+        send("[responses-document-tool] " + localFile.path, in: app)
+        _ = response("RESPONSES_DOCUMENT_TOOL_COMPLETE", in: app)
+        send("Continue with the earlier document.", in: app)
+        _ = response("RESPONSES_DOCUMENT_FOLLOWUP_COMPLETE", in: app)
+
+        let requests = try XCTUnwrap(runtime).requests()
+        XCTAssertEqual(requests.count, 3, "One local tool cycle followed by a separate user turn.")
+        for request in requests {
+            XCTAssertEqual(request["path"] as? String, "/openai/v1/responses")
+            let body = try XCTUnwrap(request["body"] as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, model)
+            XCTAssertEqual(body["store"] as? Bool, false)
+            let input = try XCTUnwrap(body["input"] as? [[String: Any]])
+            let documents = input.flatMap { $0["content"] as? [[String: Any]] ?? [] }
+                .filter { $0["type"] as? String == "input_file" }
+            XCTAssertEqual(documents.count, 1)
+            XCTAssertEqual(documents[0]["filename"] as? String, "Earlier report.txt")
+            XCTAssertEqual(documents[0]["file_data"] as? String, "data:text/plain;base64," + document)
+        }
+        let continuation = try XCTUnwrap(requests[1]["body"] as? [String: Any])
+        let input = try XCTUnwrap(continuation["input"] as? [[String: Any]])
+        XCTAssertTrue(input.contains { $0["encrypted_content"] as? String == "FIXTURE_REASONING" },
+                      "The stateless continuation must return the reasoning item without rendering it.")
+        let result = try XCTUnwrap(input.first { $0["type"] as? String == "function_call_output" })
+        XCTAssertEqual(result["call_id"] as? String, "responses-file-read")
+        XCTAssertTrue((result["output"] as? String ?? "").contains("RESPONSES_FILE_MARKER"),
+                      "The app must run the real local file tool rather than synthesizing its result.")
+
+        let historyFiles = try FileManager.default.contentsOfDirectory(
+            at: directory.appendingPathComponent("history"), includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasSuffix("_unified_history.json") }
+        let stored = try historyFiles.flatMap { url -> [[String: Any]] in
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            return object["messages"] as? [[String: Any]] ?? []
+        }
+        XCTAssertEqual(stored.flatMap { $0["documentNames"] as? [String] ?? [] }, ["Earlier report"])
+        XCTAssertEqual(stored.flatMap { $0["documentBase64Strings"] as? [String] ?? [] }, [document])
+        XCTAssertFalse(stored.contains { $0["isError"] as? Bool == true })
     }
 
     @MainActor

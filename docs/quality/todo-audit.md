@@ -5,8 +5,12 @@ authoritative list. [Foxl parity](foxl-parity.md), [settings mapping](foxl-setti
 and the [original port checklist](port-checklist.md) provide supporting detail.
 They overlap and must not be added together as a unique feature count.
 
-This is the pre-release audit. GitHub Actions receipts and Releases record the
-subsequent release execution. An implemented code path, a type-check or a
+This retains the original audit and its historical failures. Version 2.0.0 was
+subsequently published from `c64956b` after main CI `35211853618` and release
+workflow `35214571810` passed. Its signed universal DMG and update installation
+were also verified. Version 2.0.1 addresses the independently reported streaming
+overlap/flicker and image failures; its separate gate is tracked in
+[requirements.md](requirements.md). An implemented code path, a type-check or a
 screenshot does not close a behavioral requirement.
 
 ## Executed evidence
@@ -267,3 +271,11 @@ replacement and its targeted verification are described above. The final main
 revision must pass the complete GitHub pipeline, followed by
 universal signing, notarization, DMG verification and published-asset checks.
 No release has been triggered by this audit.
+
+## Later CI performance work
+
+- [ ] Measure time spent resolving dependencies, compiling and running each
+  suite. Investigate cache reuse, independent job parallelism and using the
+  verified main commit's artifacts during release without weakening source,
+  signing or test verification. This is deferred until after v2.0.1; do not
+  repeat full local CI when the changed-path checks have already passed.

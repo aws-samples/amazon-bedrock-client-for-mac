@@ -1,5 +1,101 @@
 # Responsiveness investigation
 
+## Version 2.0.1: streaming layout and large images
+
+Four reproduced layout failures explained the overlap and flicker in 2.0.0:
+
+1. An independently hosted message could grow after Markdown loaded without
+   updating its parent row. The transcript now receives the measured height
+   and updates neighboring rows; cells also clip pending content to their bounds.
+2. During deferred layout, `NSHostingView` centered a taller new body inside its
+   previous frame. A first-line test reproduced a 400-point upward excursion.
+   The hosting root now permits compression to its current height and explicitly
+   pins its content to the top.
+3. A legacy scrollbar changed the content width by 13 points. Clearing all row
+   heights on that change shrank the estimated document, removed the visible
+   long response, and repeatedly recreated its WebView. Retaining old heights
+   as estimates until the affected rows remeasure breaks that loop.
+4. Completion cleared the streaming source before its replacement reached the
+   transcript. The complete message briefly shrank from 4,420 to 48 points.
+   Retaining the final text through that handoff and reserving the action bar's
+   height removes the intermediate empty view.
+
+WebKit height updates use one coalesced channel with width validation.
+Incremental Markdown patches retain existing text and list nodes rather than
+replacing the growing paragraph. New-block opacity effects do not animate
+height, position or transforms, delay tokens, or override manual scrolling.
+Reduce Motion disables those effects.
+
+The targeted optimized native transcript harness passed 24 cases, including
+10,000 rows, independent growth/shrinkage, first-line stability and scrollbar
+width changes. The Light/Dark long-response UI cases and controlled
+native-to-WebKit streaming case passed. Actual AWS requests in a normal
+optimized app, with no offline or runtime-fixture flags, recorded:
+
+| Live scenario | Result |
+| --- | --- |
+| GPT-6 Astra, Low effort | 26,878-character reply, 4,987 output tokens, completed in 123.43 seconds; reading anchor stayed fixed while the response grew |
+| Nova 2 Lite, earlier four-image/document history | 15,987-character reply, 4,381 output tokens, completed in 45.00 seconds; live window resizing, two sidebar toggles and draft typing succeeded |
+| Nova reading-position samples | 10 samples during streaming; response grew 870 points; maximum anchor movement 0 points |
+| Older image preservation | All four stored image SHA-256 values remained unchanged after successful retransmission |
+
+The image run initially reproduced Nova's 20:1 aspect-ratio rejection.
+Downsampling alone cannot change that ratio. The corrected path adds neutral
+margins and normalizes outgoing copies of old images off the main thread.
+The model's optional document-trailer quotation was inconsistent; exact
+document transport is checked byte-for-byte in the SDK fixture, independently
+of generated text.
+
+After those live checks, the same normal app at 1240×780 in Light appearance
+completed the following probes with no compiler or inference running:
+
+| Probe | Events | Median | p95 | Maximum | Failures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Typing | 61 | 5.50 ms | 10.04 ms | 34.77 ms | 0 |
+| Scroll responsiveness | 360 | 0.30 ms | 0.47 ms | 18.32 ms | 0 |
+
+These measurements use the live long-response/image history, not the earlier
+1,000-message fixture, and are not a direct before/after comparison. Typing
+measures input-to-accessibility-text latency; scrolling measures small
+accessibility queries during wheel input. Neither measures display frame rate.
+Raw evidence is in `/tmp/bedrock-pilot-validation/v2.0.1/`, including
+`live-streaming-fixed/image-retry-validation.json`, the preserved model-output
+observation, request records, optimized test receipts and window captures.
+
+### Final candidate: completion and unchanged-row reuse
+
+The final normal Release build completed another real Astra Low response:
+16,556 characters and 3,232 output tokens in 86.95 seconds. Across 205 samples,
+including completion, the visible reading anchor moved 0 points and the
+response never decreased in height. It grew 6,190 points while the reader
+remained above the bottom; the draft and final marker were retained. The first
+measurement attempt had used an abbreviated accessibility value as an exact
+text selector. Its failed receipt is preserved; the successful repeat checks
+an exact short text node before taking samples.
+
+Separately, 20 small scroll movements reproduced 40 unnecessary constructions
+of unchanged visible rows. The transcript now builds their SwiftUI roots only
+when a cell is created or its content changes. The regression checks both reuse
+and subsequent content/height edits.
+
+After the final live stream, the updated optimized app opened the same
+1,000-message fixture used for the earlier Validation baseline. At 1240×780
+in Light appearance, with no builds, inference or recording running:
+
+| Probe | Events | Median | p95 | Maximum | Failures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| First scroll after opening the history | 360 | 0.43 ms | 3.18 ms | 17.25 ms | 0 |
+| Warm scroll | 360 | 0.28 ms | 0.96 ms | 18.02 ms | 0 |
+| Typing | 61 | 6.15 ms | 11.03 ms | 38.38 ms | 0 |
+
+The prior candidate's first-scroll maximum was 94.08 ms; that receipt is
+retained. These are individual input/accessibility measurements, not frame-rate
+claims or guarantees for every machine. Final evidence is under
+`v2.0.1/live-streaming-fixed/final-performance-confirmed/` and
+`v2.0.1/live-streaming-fixed/final-live-completion-confirmed/`. The latter
+contains samples and PNGs; the interrupted movie capture did not produce a
+usable movie and is not presented as evidence.
+
 ## September 17, 2026: native conversation scrolling
 
 The current conversation uses an AppKit scroll document with independently

@@ -130,6 +130,99 @@ class BedrockFixtureTests(unittest.TestCase):
                 server.server_close()
                 worker.join(timeout=3)
 
+    def test_responses_preserves_documents_and_stateless_tool_continuation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "requests.jsonl"
+            server = FixtureServer(log)
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            try:
+                endpoint = f"http://127.0.0.1:{server.server_port}/openai/v1/responses"
+                parts = [
+                    {"type": "input_file", "filename": "Earlier report.txt",
+                     "file_data": "data:text/plain;base64,U1lOVEhFVElDX0RPQ1VNRU5U"},
+                    {"type": "input_text", "text": "[responses-document-tool] /tmp/synthetic.txt"},
+                ]
+                body = {"model": "us.openai.gpt-5.6-luna", "store": False, "stream": True,
+                        "input": [{"role": "user", "content": parts}],
+                        "tools": [{"type": "function", "name": "local_read_file"}]}
+
+                def send():
+                    with urllib.request.urlopen(urllib.request.Request(
+                        endpoint, data=json.dumps(body).encode(),
+                        headers={"Content-Type": "application/json"}), timeout=5) as response:
+                        self.assertEqual(response.headers["Content-Type"], "text/event-stream")
+                        return [json.loads(line.removeprefix("data: "))
+                                for line in response.read().decode().splitlines() if line.startswith("data: ")]
+
+                first = send()
+                output = first[-1]["response"]["output"]
+                self.assertEqual(output[-1]["name"], "local_read_file")
+                self.assertEqual(json.loads(output[-1]["arguments"])["path"], "/tmp/synthetic.txt")
+                body["input"] += output + [{"type": "function_call_output", "call_id": "responses-file-read",
+                                           "output": "RESPONSES_FILE_MARKER"}]
+                second = send()
+                self.assertEqual(second[0]["delta"], "RESPONSES_DOCUMENT_TOOL_COMPLETE")
+                body["input"].append({"role": "user", "content": [
+                    {"type": "input_text", "text": "Continue with the earlier document."}]})
+                self.assertEqual(send()[0]["delta"], "RESPONSES_DOCUMENT_FOLLOWUP_COMPLETE")
+                records = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual(len(records), 3)
+                self.assertTrue(all(record["path"] == "/openai/v1/responses" for record in records))
+                self.assertTrue(all(record["body"]["input"][0]["content"][0] == parts[0] for record in records))
+            finally:
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=3)
+
+    def test_layout_stream_waits_for_measurement_before_growth_and_completion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            server = FixtureServer(Path(directory) / "requests.jsonl")
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            base = f"http://127.0.0.1:{server.server_port}"
+            try:
+                request = urllib.request.Request(
+                    base + "/model/us.amazon.nova-2-lite-v1:0/converse-stream",
+                    data=json.dumps({"messages": [
+                        {"role": "user", "content": [{"text": "[layout-stream]"}]}
+                    ]}).encode(), headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    def event():
+                        prelude = response.read(12)
+                        length, header_size, _ = struct.unpack(">III", prelude)
+                        remainder = response.read(length - 12)
+                        self.assertEqual(len(remainder), length - 12)
+                        return json.loads(remainder[header_size:-4])
+
+                    self.assertEqual(event()["role"], "assistant")
+                    text = event()["delta"]["text"]
+                    self.assertIn("LAYOUT_STREAM_BEGIN", text)
+                    self.assertEqual(event()["delta"]["text"], "",
+                                     "The short native response must remain measurable before growth.")
+                    with urllib.request.urlopen(base + "/grow", timeout=5):
+                        pass
+                    while "LAYOUT_STREAM_GROWN" not in text:
+                        text += event().get("delta", {}).get("text", "")
+                    self.assertGreater(len(text.encode()), 4_000)
+                    self.assertEqual(event()["delta"]["text"], "",
+                                     "The WebKit response must remain streaming until the UI releases it.")
+                    with urllib.request.urlopen(base + "/release", timeout=5):
+                        pass
+                    payload = {}
+                    while "stopReason" not in payload:
+                        payload = event()
+                        text += payload.get("delta", {}).get("text", "")
+                    self.assertEqual(payload["stopReason"], "end_turn")
+                    self.assertTrue(text.endswith("LAYOUT_STREAM_COMPLETE"))
+                    self.assertIn("Streaming section 23", text)
+            finally:
+                server.grow_stream.set()
+                server.release_stream.set()
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=3)
+
 
 if __name__ == "__main__":
     unittest.main()

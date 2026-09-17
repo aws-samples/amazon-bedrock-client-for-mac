@@ -66,20 +66,20 @@ private struct MarkdownSnapshot: Sendable {
     let document: MarkdownRenderCache.Document
     let html: String?
 
-    init(source: String, cache: Bool) {
+    init(source: String, cache: Bool, useWeb: Bool = false) {
         self.source = source
         document = MarkdownRenderCache.shared.document(source, cache: cache)
-        html = document.isNative ? nil : MarkdownRenderCache.shared.html(source, document: document, cache: cache)
+        html = document.isNative && !useWeb ? nil : MarkdownRenderCache.shared.html(source, document: document, cache: cache)
     }
 }
 
 private actor MarkdownParsingWorker {
     static let shared = MarkdownParsingWorker()
 
-    func parse(_ text: String, cache: Bool) -> MarkdownSnapshot? {
+    func parse(_ text: String, cache: Bool, useWeb: Bool = false) -> MarkdownSnapshot? {
         // A superseded stream update must not build up a queue of old parses.
         guard !Task.isCancelled else { return nil }
-        return MarkdownSnapshot(source: text, cache: cache)
+        return MarkdownSnapshot(source: text, cache: cache, useWeb: useWeb)
     }
 }
 
@@ -125,9 +125,9 @@ private final class MarkdownMessageRenderer: ObservableObject {
 
     func update(text: String, isStreaming: Bool) async {
         guard source != text || isFinal == isStreaming else { return }
-        guard let next = await MarkdownParsingWorker.shared.parse(text, cache: !isStreaming),
+        guard let next = await MarkdownParsingWorker.shared.parse(text, cache: !isStreaming, useWeb: html != nil),
               !Task.isCancelled else { return }
-        if next.document.isNative {
+        if next.html == nil {
             native.update(rows: next.document.rows, isStreaming: isStreaming)
         }
         // Updating native text must not invalidate the entire document view.
@@ -164,15 +164,26 @@ struct MessageMarkdownView: View {
     var body: some View {
         Group {
             if let html = renderer.html {
-                HTMLMarkdownView(
-                    htmlContent: html,
-                    fontSize: fontSize,
-                    searchQuery: searchTerms.first,
-                    selectedMatchIndex: selectedSearchIndex,
-                    dynamicHeight: $height
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: height > 0 ? height : renderer.nativeHeight)
+                ZStack(alignment: .topLeading) {
+                    HTMLMarkdownView(
+                        htmlContent: html,
+                        fontSize: fontSize,
+                        searchQuery: searchTerms.first,
+                        selectedMatchIndex: selectedSearchIndex,
+                        isStreaming: isStreaming,
+                        dynamicHeight: $height
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: height > 0 ? height : renderer.nativeHeight)
+                    .opacity(height > 0 ? 1 : 0)
+                    .accessibilityHidden(height == 0)
+                    if height == 0 {
+                        // Keep the last native frame until WebKit has content
+                        // and an extent. Replacing it with an unloaded page
+                        // otherwise flashes blank at the streaming threshold.
+                        MarkdownRenderer(document: renderer.native, fontSize: fontSize, highlights: searchTerms)
+                    }
+                }
             } else {
                 MarkdownRenderer(document: renderer.native, fontSize: fontSize, highlights: searchTerms)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
@@ -183,6 +194,7 @@ struct MessageMarkdownView: View {
         .task(id: Revision(text: text, isStreaming: isStreaming)) {
             await renderer.update(text: text, isStreaming: isStreaming)
         }
+        .transaction { $0.animation = nil }
     }
 
     private var searchTerms: [String] {

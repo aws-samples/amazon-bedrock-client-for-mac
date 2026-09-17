@@ -169,9 +169,21 @@ struct ToolResultInfo: Identifiable {
 @MainActor
 final class StreamingMessageState: ObservableObject {
     @Published private(set) var message: MessageData?
+    private var committed = false
+    var pendingMessage: MessageData? { committed ? nil : message }
 
     func update(_ value: MessageData?) {
+        guard !committed else { return }
         if message != value { message = value }
+    }
+
+    func finish() -> MessageData? {
+        guard !committed else { return nil }
+        committed = true
+        // Independent transcript cells receive their new root on the next
+        // layout pass. Keep their final snapshot until that handoff, rather
+        // than briefly repainting the first-token fallback.
+        return message
     }
 }
 
@@ -190,12 +202,12 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [MessageData] = []
     @Published private(set) var isLoadingHistory = false
     private var initialLoadTask: Task<Void, Never>?
-    let streamingMessage = StreamingMessageState()
+    private(set) var streamingMessage = StreamingMessageState()
 
     /// Checkpoints and search include the live reply without publishing a new
     /// chat array for every token and rebuilding the surrounding controls.
     var messagesIncludingStream: [MessageData] {
-        guard let live = streamingMessage.message,
+        guard let live = streamingMessage.pendingMessage,
               let index = messages.firstIndex(where: { $0.id == live.id }) else { return messages }
         var snapshot = messages
         snapshot[index] = live
@@ -716,10 +728,6 @@ class ChatViewModel: ObservableObject {
                 guard validation.isValid else { throw LocalOperationError.invalid("Choose an output S3 bucket in response settings before generating a video.") }
                 guard (message.imageBase64Strings?.count ?? 0) <= 2 else { throw LocalOperationError.invalid("Attach at most two video keyframes: the start image and the end image.") }
             }
-            if backendModel.backend.isMantleResponsesModel(chatModel.id) &&
-                (message.imageBase64Strings?.isEmpty == false || message.documentBase64Strings?.isEmpty == false) {
-                throw LocalOperationError.invalid("This model currently accepts text only in this app. Choose a vision/document model or remove the attachments.")
-            }
             if message.documentBase64Strings?.isEmpty == false && !backendModel.backend.isDocumentChatSupported(chatModel.id) {
                 throw LocalOperationError.invalid("This model does not accept document attachments. Choose a document-capable model.")
             }
@@ -915,9 +923,6 @@ class ChatViewModel: ObservableObject {
                 try await handleImageGenerationModel(userMessage, attachedImages: attachedImages)
             } else if backendModel.backend.isEmbeddingModel(chatModel.id) {
                 try await handleEmbeddingModel(userMessage)
-            } else if backendModel.backend.isMantleResponsesModel(chatModel.id) {
-                // OpenAI frontier models (GPT-5.5/5.4) are served only via the bedrock-mantle Responses API
-                try await handleMantleResponsesModel(userMessage)
             } else {
                 // The backend emits the same events for a full response and a
                 // streamed response, so tool execution works with either setting.
@@ -1088,70 +1093,9 @@ class ChatViewModel: ObservableObject {
     // MARK: - handleTextLLMWithConverseStream
     
     private func handleTextLLMWithConverseStream(_ userMessage: MessageData) async throws {
-        // Create message content from user message
-        var messageContents: [MessageContent] = []
-        
-        // Build full text including pasted texts for API transmission
-        var fullText = userMessage.text
-        if let pastedTexts = userMessage.pastedTexts, !pastedTexts.isEmpty {
-            for pastedText in pastedTexts {
-                if !fullText.isEmpty {
-                    fullText += "\n\n---\n\n"
-                }
-                fullText += "[\(pastedText.filename)]:\n\(pastedText.content)"
-            }
-            logger.debug("[API] Added \(pastedTexts.count) pasted text(s) to message")
-        }
-        
-        // Always include a text prompt as required when sending documents/images/pasted texts
-        var textToSend = fullText
-        if textToSend.isEmpty {
-            if userMessage.documentBase64Strings?.isEmpty == false {
-                textToSend = "Please analyze this document."
-            } else if userMessage.imageBase64Strings?.isEmpty == false {
-                textToSend = "Please analyze this image."
-            } else if userMessage.pastedTexts?.isEmpty == false {
-                textToSend = "Please analyze this text."
-            }
-        }
-        messageContents.append(.text(textToSend))
-        
-        // Add images if present
-        if let imageBase64Strings = userMessage.imageBase64Strings, !imageBase64Strings.isEmpty {
-            for base64String in imageBase64Strings {
-                let format = ImageFormat.detectFromBase64(base64String)
-                messageContents.append(.image(MessageContent.ImageContent(
-                    format: format,
-                    base64Data: base64String
-                )))
-            }
-        }
-        
-        // Add documents if present
-        if let documentBase64Strings = userMessage.documentBase64Strings,
-           let documentFormats = userMessage.documentFormats,
-           let documentNames = userMessage.documentNames,
-           !documentBase64Strings.isEmpty {
-            
-            for (index, base64String) in documentBase64Strings.enumerated() {
-                guard index < documentFormats.count && index < documentNames.count else {
-                    continue
-                }
-                
-                let fileExt = documentFormats[index].lowercased()
-                let fileName = documentNames[index]
-                
-                let docFormat = MessageContent.DocumentFormat.fromExtension(fileExt)
-                messageContents.append(.document(MessageContent.DocumentContent(
-                    format: docFormat,
-                    base64Data: base64String,
-                    name: fileName
-                )))
-            }
-        }
-
-        // Save current messages first, then get conversation history
-        // This ensures the new user message (with pastedTexts) is included
+        // Normalize the saved conversation once, including this user message,
+        // pasted text and historical attachments. Do not build a second,
+        // unused payload before preparing that same history.
         await saveFromUIMessages()
         let conversationHistory = try await getConversationHistory()
         
@@ -1192,7 +1136,16 @@ class ChatViewModel: ObservableObject {
         
         let maxTurns = settingManager.maxToolUseTurns
         let turn_count = 0
-        
+
+        let hasDocuments = conversationHistory.contains { message in
+            message.content.contains { if case .document = $0 { return true }; return false }
+        }
+        if BedrockResponsesEndpoint.usesResponses(chatModel.id, hasDocuments: hasDocuments) {
+            try await processResponsesToolCycles(history: conversationHistory, systemPrompt: systemPrompt,
+                                                toolConfig: toolConfig, maxTurns: maxTurns)
+            return
+        }
+
         // Get Bedrock messages in AWS SDK format
         let bedrockMessages = try conversationHistory.map { try convertToBedrockMessage($0, modelId: chatModel.id) }
         
@@ -1230,7 +1183,7 @@ class ChatViewModel: ObservableObject {
             defer {
                 // Stop and transport errors must retain the final buffered
                 // characters even when they arrived between display updates.
-                if !didCommitResponse {
+                if !didCommitResponse && (!text.isEmpty || !thinking.isEmpty) {
                     displayStream(id: messageID, text: text, thinking: thinking, signature: signature)
                     commitStreamingMessage()
                 }
@@ -1299,50 +1252,62 @@ class ChatViewModel: ObservableObject {
                 assistantContents.append(.thinking(.init(text: thinking, signature: signature)))
             }
             if !text.isEmpty { assistantContents.append(.text(text)) }
-            var storedCalls: [Message.ToolUse] = try calls.map { call in
-                let input = try JSONDecoder().decode(JSONValue.self, from: Data(call.inputJSON.utf8))
-                assistantContents.append(.tooluse(.init(toolUseId: call.id, name: call.name, input: input)))
-                let info = mcpManager.toolInfo(named: call.name)
-                return Message.ToolUse(toolId: call.id, toolName: call.name, inputs: input,
-                                       displayName: info?.toolName, serverName: info?.serverName)
-            }
-            if let index = messages.firstIndex(where: { $0.id == messageID }) {
-                messages[index].toolUses = storedCalls
-            }
-            var resultContents: [MessageContent] = []
-            for index in storedCalls.indices {
-                let call = storedCalls[index]
-                let started = Date()
-                let result: SendableToolResult
-                if Task.isCancelled {
-                    // Keep every tool use paired with a result in persisted
-                    // history, including tools that Stop prevented from starting.
-                    result = .init(status: "error", text: "Tool stopped before execution.", error: "Cancelled")
-                } else {
-                    result = await executeSendableMCPTool(id: call.toolId, name: call.toolName, input: call.inputs.asDictionary ?? [:])
-                    if let runID { AppStore.shared.updateRun(runID) { $0.toolCalls += 1 } }
-                }
-                storedCalls[index].result = result.text
-                storedCalls[index].status = result.status
-                storedCalls[index].resultTimestamp = Date()
-                storedCalls[index].elapsedSeconds = Date().timeIntervalSince(started)
-                storedCalls[index].resultImages = result.images
-                toolResults.append(.init(toolUseId: call.toolId, toolName: call.toolName, input: call.inputs, result: result.text, status: result.status))
-                resultContents.append(.toolresult(.init(toolUseId: call.toolId, result: result.text, status: result.status, images: result.images)))
-                if let messageIndex = messages.firstIndex(where: { $0.id == messageID }) { messages[messageIndex].toolUses = storedCalls }
-            }
-            messages.append(MessageData(text: "", user: "ToolResult", sentTime: Date(), toolUses: storedCalls, modelID: chatModel.id))
-            await saveFromUIMessages()
-            try Task.checkCancellation()
+            let execution = try await executeToolCalls(calls, messageID: messageID, runID: runID)
+            assistantContents += execution.calls
             history.append(try convertToBedrockMessage(.init(role: .assistant, content: assistantContents), modelId: chatModel.id))
-            history.append(try convertToBedrockMessage(.init(role: .user, content: resultContents), modelId: chatModel.id))
+            history.append(try convertToBedrockMessage(.init(role: .user, content: execution.results), modelId: chatModel.id))
             if cycle + 1 >= max(1, maxTurns) {
                 throw LocalOperationError.invalid("Stopped after \(maxTurns) tool turns. The results are saved. Send a follow-up to continue or change the limit in Tools & MCP.")
             }
         }
     }
 
+    /// Both transports share authorization, execution, cancellation, UI details
+    /// and persisted tool/result pairing.
+    private func executeToolCalls(_ calls: [StreamedToolCall], messageID: UUID, runID: UUID?) async throws
+        -> (calls: [MessageContent], results: [MessageContent]) {
+        var callContents: [MessageContent] = []
+        var storedCalls: [Message.ToolUse] = try calls.map { call in
+            let input = try JSONDecoder().decode(JSONValue.self, from: Data(call.inputJSON.utf8))
+            callContents.append(.tooluse(.init(toolUseId: call.id, name: call.name, input: input)))
+            let info = mcpManager.toolInfo(named: call.name)
+            return Message.ToolUse(toolId: call.id, toolName: call.name, inputs: input,
+                                   displayName: info?.toolName, serverName: info?.serverName)
+        }
+        if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].toolUses = storedCalls }
+        var results: [MessageContent] = []
+        for index in storedCalls.indices {
+            let call = storedCalls[index]
+            let started = Date()
+            let result: SendableToolResult
+            if Task.isCancelled {
+                // Pair calls which Stop prevented from starting, too.
+                result = .init(status: "error", text: "Tool stopped before execution.", error: "Cancelled")
+            } else {
+                result = await executeSendableMCPTool(id: call.toolId, name: call.toolName, input: call.inputs.asDictionary ?? [:])
+                if let runID { AppStore.shared.updateRun(runID) { $0.toolCalls += 1 } }
+            }
+            storedCalls[index].result = result.text
+            storedCalls[index].status = result.status
+            storedCalls[index].resultTimestamp = Date()
+            storedCalls[index].elapsedSeconds = Date().timeIntervalSince(started)
+            storedCalls[index].resultImages = result.images
+            toolResults.append(.init(toolUseId: call.toolId, toolName: call.toolName, input: call.inputs, result: result.text, status: result.status))
+            results.append(.toolresult(.init(toolUseId: call.toolId, result: result.text, status: result.status, images: result.images)))
+            if let messageIndex = messages.firstIndex(where: { $0.id == messageID }) { messages[messageIndex].toolUses = storedCalls }
+        }
+        messages.append(MessageData(text: "", user: "ToolResult", sentTime: Date(), toolUses: storedCalls, modelID: chatModel.id))
+        await saveFromUIMessages()
+        try Task.checkCancellation()
+        return (callContents, results)
+    }
+
     private func displayStream(id: UUID, text: String, thinking: String, signature: String) {
+        if streamingMessage.message?.id != id {
+            // A tool turn or queued response gets its own source. Existing
+            // cells may still be displaying the previous completed snapshot.
+            streamingMessage = StreamingMessageState()
+        }
         if let index = messages.firstIndex(where: { $0.id == id }) {
             var message = streamingMessage.message?.id == id ? streamingMessage.message! : messages[index]
             message.text = text
@@ -1364,11 +1329,11 @@ class ChatViewModel: ObservableObject {
     }
 
     private func commitStreamingMessage() {
-        guard let live = streamingMessage.message else { return }
+        guard let live = streamingMessage.finish() else { return }
         if let index = messages.firstIndex(where: { $0.id == live.id }), messages[index] != live {
             messages[index] = live
         }
-        streamingMessage.update(nil)
+        if currentStreamingMessageId == live.id { currentStreamingMessageId = nil }
     }
 
     // Sendable tool result struct
@@ -1543,18 +1508,42 @@ class ChatViewModel: ObservableObject {
     
     /// Gets conversation history
     private func getConversationHistory() async throws -> [BedrockMessage] {
+        let messages: [BedrockMessage]
         // Build conversation history from local storage
         if let history = chatManager.getConversationHistory(for: chatId) {
-            return try boundedHistory(convertConversationHistoryToBedrockMessages(history))
+            messages = try boundedHistory(convertConversationHistoryToBedrockMessages(history))
+        } else if chatManager.getMessages(for: chatId).count > 0 {
+            messages = try boundedHistory(await migrateAndGetConversationHistory())
+        } else {
+            return []
         }
-        
-        // Migrate from legacy formats if needed
-        if chatManager.getMessages(for: chatId).count > 0 {
-            return try boundedHistory(await migrateAndGetConversationHistory())
+        let images = messages.flatMap(\.content).flatMap { content -> [String] in
+            switch content {
+            case .image(let image): return [image.base64Data]
+            case .toolresult(let result): return result.images?.map(\.base64) ?? []
+            default: return []
+            }
         }
-        
-        // No history exists
-        return []
+        guard !images.isEmpty else { return messages }
+        var normalized = ArraySlice(try await BedrockImageNormalizer.shared.normalize(images))
+        return messages.map { message in
+            var output = message
+            output.content = message.content.map { content in
+                switch content {
+                case .image:
+                    let image = normalized.removeFirst()
+                    return .image(.init(format: image.format == "jpeg" ? .jpeg : .png, base64Data: image.base64))
+                case .toolresult(var result):
+                    result.images = result.images?.map { _ in
+                        let image = normalized.removeFirst()
+                        return ToolResultImage(base64: image.base64, format: image.format)
+                    }
+                    return .toolresult(result)
+                default: return content
+                }
+            }
+            return output
+        }
     }
 
     private func boundedHistory(_ history: [BedrockMessage]) throws -> [BedrockMessage] {
@@ -1611,9 +1600,9 @@ class ChatViewModel: ObservableObject {
         let replay = ConversationReplay.prepare(
             history, targetModelID: chatModel.id,
             supportsReasoning: !isResponses && !isOpenAIModel(chatModel.id) && backend.isReasoningSupported(chatModel.id),
-            supportsTools: !isResponses && backend.isStreamingToolUseSupported(chatModel.id) && (hasMCPTools || hasLocalTools),
-            supportsImages: !isResponses && backend.isVisionSupported(chatModel.id),
-            supportsDocuments: !isResponses && backend.isDocumentChatSupported(chatModel.id),
+            supportsTools: backend.isStreamingToolUseSupported(chatModel.id) && (hasMCPTools || hasLocalTools),
+            supportsImages: backend.isVisionSupported(chatModel.id),
+            supportsDocuments: backend.isDocumentChatSupported(chatModel.id),
             foundationID: { BedrockCapabilityRegistry.shared.foundationID($0, region: backend.region) }
         )
         for message in replay.messages where !message.isError {
@@ -1931,89 +1920,74 @@ class ChatViewModel: ObservableObject {
         BedrockCapabilityRegistry.shared.foundationID(modelId, region: backendModel.backend.region).hasPrefix("openai.")
     }
     
-    // MARK: - Mantle Responses API (OpenAI GPT-5.5/5.4)
+    // MARK: - Bedrock Responses API
 
-    /// Handles OpenAI frontier models served via the bedrock-mantle Responses API.
-    /// Text-only at launch: tool use and attachments are not wired through this path.
-    private func handleMantleResponsesModel(_ userMessage: MessageData) async throws {
-        // Persist the new user message, then rebuild history for the API
-        await saveFromUIMessages()
-        let conversationHistory = try await getConversationHistory()
-
-        var input: [[String: Any]] = []
-
-        // System prompt maps to the "developer" role in the Responses API
-        let systemPrompt = try AppStore.shared.effectiveSystemPrompt(for: chatId, availableToolNames: [])
-        if !systemPrompt.isEmpty {
-            input.append(["role": "developer", "content": systemPrompt])
-        }
-
-        for message in conversationHistory {
-            // Flatten text content; images/documents/tool blocks are not supported on this path
-            let text = message.content.compactMap { content -> String? in
-                if case .text(let textContent) = content { return textContent }
-                return nil
-            }.joined(separator: "\n\n")
-
-            guard !text.isEmpty else { continue }
-            input.append([
-                "role": message.role == .user ? "user" : "assistant",
-                "content": text
-            ])
-        }
-
-        let messageId = UUID()
-        currentStreamingMessageId = messageId
-        var streamedText = ""
-        var lastDisplayUpdate = Date.distantPast
-        var lastCheckpoint = Date()
-        var didCommitResponse = false
+    private func processResponsesToolCycles(
+        history: [BedrockMessage], systemPrompt: String,
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration?, maxTurns: Int
+    ) async throws {
+        var input = try BedrockResponsesRequest.input(history, systemPrompt: systemPrompt)
         let runID = activeRunID
-        defer {
-            if !didCommitResponse {
-                displayStream(id: messageId, text: streamedText, thinking: "", signature: "")
-                commitStreamingMessage()
-            }
-        }
-
-        let backend = await MainActor.run { backendModel.backend }
-
-        let stream = await backend.mantleResponsesStream(
-            modelId: chatModel.id,
-            input: input
-        )
-
-        for try await event in stream {
+        for cycle in 0..<max(1, maxTurns) {
             try Task.checkCancellation()
-            switch event {
-            case .text(let text):
-                streamedText += text
-            case .finished(let reason, let usage, let fallbackText):
-                if streamedText.isEmpty { streamedText = fallbackText }
-                if let runID { AppStore.shared.updateRun(runID) { $0.stopReason = reason } }
-                if let usage {
-                    usageHandler?(formatUsageString(usage))
-                    if let runID { AppStore.shared.recordUsage(usage, runID: runID) }
+            let messageID = UUID()
+            currentStreamingMessageId = messageID
+            var text = ""
+            var output: [JSONValue] = []
+            var lastDisplayUpdate = Date.distantPast
+            var lastCheckpoint = Date()
+            var committed = false
+            defer {
+                if !committed && !text.isEmpty {
+                    displayStream(id: messageID, text: text, thinking: "", signature: "")
+                    commitStreamingMessage()
                 }
             }
-            let displayInterval = streamedText.utf8.count > 24_000 ? 0.12 : 0.08
-            if Date().timeIntervalSince(lastDisplayUpdate) >= displayInterval {
-                displayStream(id: messageId, text: streamedText, thinking: "", signature: "")
-                lastDisplayUpdate = Date()
+            let stream = try await backendModel.backend.mantleResponsesStream(
+                modelId: chatModel.id, input: input.map(JSONValue.from), toolConfig: toolConfig)
+            for try await event in stream {
+                try Task.checkCancellation()
+                switch event {
+                case .text(let delta): text += delta
+                case .output(let items): output = items
+                case .finished(let reason, let usage, let fallback):
+                    if text.isEmpty { text = fallback }
+                    if let runID { AppStore.shared.updateRun(runID) { $0.stopReason = reason } }
+                    if let usage {
+                        usageHandler?(formatUsageString(usage))
+                        if let runID { AppStore.shared.recordUsage(usage, runID: runID) }
+                    }
+                }
+                let displayInterval = text.utf8.count > 24_000 ? 0.12 : 0.08
+                if !text.isEmpty && Date().timeIntervalSince(lastDisplayUpdate) >= displayInterval {
+                    displayStream(id: messageID, text: text, thinking: "", signature: "")
+                    lastDisplayUpdate = Date()
+                }
+                if Date().timeIntervalSince(lastCheckpoint) >= 2 {
+                    await saveFromUIMessages()
+                    lastCheckpoint = Date()
+                }
             }
-            if Date().timeIntervalSince(lastCheckpoint) >= 2 {
+            let calls = try BedrockResponsesRequest.toolCalls(in: output)
+            if text.isEmpty && calls.isEmpty { text = "(No response)" }
+            // Keep the exact delivered text at completion; trimming or swapping
+            // the body here would introduce another last-frame layout change.
+            displayStream(id: messageID, text: text, thinking: "", signature: "")
+            commitStreamingMessage()
+            committed = true
+            if calls.isEmpty {
                 await saveFromUIMessages()
-                lastCheckpoint = Date()
+                return
+            }
+            let execution = try await executeToolCalls(calls, messageID: messageID, runID: runID)
+            // Preserve returned reasoning/function items throughout this tool
+            // loop without creating server-side conversation storage.
+            input += output.compactMap(\.asDictionary)
+            input += try BedrockResponsesRequest.input([.init(role: .user, content: execution.results)])
+            if cycle + 1 >= max(1, maxTurns) {
+                throw LocalOperationError.invalid("Stopped after \(maxTurns) tool turns. The results are saved. Send a follow-up to continue or change the limit in Tools & MCP.")
             }
         }
-
-        let assistantText = streamedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        displayStream(id: messageId, text: assistantText.isEmpty ? "(No response)" : assistantText, thinking: "", signature: "")
-        commitStreamingMessage()
-        didCommitResponse = true
-
-        await saveFromUIMessages()
-        currentStreamingMessageId = nil
     }
 
     /// Handles image generation models that don't use converseStream

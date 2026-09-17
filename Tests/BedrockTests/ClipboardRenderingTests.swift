@@ -226,6 +226,157 @@ final class ClipboardRenderingTests: XCTestCase {
         XCTAssertThrowsError(try ClipboardImageProcessor.decode(Data(repeating: 0, count: ClipboardImageProcessor.maximumInputBytes + 1)))
     }
 
+    func testLongScreenshotsAndPanoramasResizeBeforeAttachmentDimensionChecks() async throws {
+        for (width, height) in [(64, 42_000), (42_000, 64)] {
+            let data = try png(width: width, height: height)
+            let prepared = try await Task.detached {
+                try await ClipboardImageProcessor.prepare(.data(data))
+            }.value
+            XCTAssertEqual(max(prepared.width, prepared.height), 2560)
+            XCTAssertEqual(min(prepared.width, prepared.height), 128)
+            XCTAssertLessThanOrEqual(Double(max(prepared.width, prepared.height)) /
+                                     Double(min(prepared.width, prepared.height)), 20)
+            XCTAssertLessThanOrEqual(prepared.data.count, ClipboardImageProcessor.maximumOutputBytes)
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(prepared.data as CFData, nil))
+            let decoded = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+            XCTAssertEqual(decoded.width, prepared.width)
+            XCTAssertEqual(decoded.height, prepared.height)
+            let preview = try XCTUnwrap(CGImageSourceCreateWithData(prepared.preview as CFData, nil))
+            let thumbnail = try XCTUnwrap(CGImageSourceCreateImageAtIndex(preview, 0, nil))
+            XCTAssertLessThanOrEqual(max(thumbnail.width, thumbnail.height), 480)
+        }
+    }
+
+    func testExtremeImageMarginsPreservePixelsWithoutStretchingOrCropping() throws {
+        for (width, height) in [(8, 400), (400, 8)] {
+            let source = try png(width: width, height: height)
+            let original = try XCTUnwrap(NSBitmapImageRep(data: source))
+            let prepared = try ClipboardImageProcessor.decode(source)
+            let image = try XCTUnwrap(NSBitmapImageRep(data: prepared.data))
+            XCTAssertEqual(max(image.pixelsWide, image.pixelsHigh), 400)
+            XCTAssertEqual(min(image.pixelsWide, image.pixelsHigh), 20)
+            let x = (image.pixelsWide - width) / 2
+            let y = (image.pixelsHigh - height) / 2
+            for point in [(0, 0), (width - 1, height - 1), (width / 2, height / 2)] {
+                let before = try XCTUnwrap(original.colorAt(x: point.0, y: point.1)?.usingColorSpace(.deviceRGB))
+                let after = try XCTUnwrap(image.colorAt(x: x + point.0, y: y + point.1)?.usingColorSpace(.deviceRGB))
+                XCTAssertEqual(before.redComponent, after.redComponent, accuracy: 0.01)
+                XCTAssertEqual(before.greenComponent, after.greenComponent, accuracy: 0.01)
+                XCTAssertEqual(before.blueComponent, after.blueComponent, accuracy: 0.01)
+            }
+            let margin = try XCTUnwrap(image.colorAt(x: 0, y: 0)?.usingColorSpace(.deviceRGB))
+            XCTAssertGreaterThan(margin.redComponent, 0.99)
+            XCTAssertGreaterThan(margin.greenComponent, 0.99)
+            XCTAssertGreaterThan(margin.blueComponent, 0.99)
+        }
+    }
+
+    func testRequestNormalizationFitsLegacyImagesAndRetainsCompatibleBytes() async throws {
+        let legacy = try png(width: 8, height: 400).base64EncodedString()
+        let compatible = try png(width: 120, height: 90).base64EncodedString()
+        let normalizer = BedrockImageNormalizer()
+        let result = try await normalizer.normalize([legacy, compatible])
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[1].base64, compatible, "Compatible images must not be decoded and re-encoded for every turn.")
+        XCTAssertEqual(result.map(\.format), ["png", "png"])
+        let fitted = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(Data(base64Encoded: result[0].base64))))
+        XCTAssertEqual(fitted.pixelsWide, 20)
+        XCTAssertEqual(fitted.pixelsHigh, 400)
+        let original = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(Data(base64Encoded: legacy))))
+        XCTAssertEqual(original.pixelsWide, 8, "Normalizing a request must preserve the stored image.")
+        do {
+            _ = try await normalizer.normalize(["not an image"])
+            XCTFail("Malformed historical image data must fail before the request.")
+        } catch {}
+    }
+
+    func testLargeCameraImageIsSubsampledAboveTheOldMegapixelCutoff() async throws {
+        let data = try png(width: 12_000, height: 9_000)
+        let prepared = try await Task.detached {
+            try await ClipboardImageProcessor.prepare(.data(data))
+        }.value
+        XCTAssertEqual(prepared.width, 2560)
+        XCTAssertEqual(prepared.height, 1920)
+        XCTAssertLessThanOrEqual(prepared.data.count, ClipboardImageProcessor.maximumOutputBytes)
+    }
+
+    func testBrowserSVGWithoutPixelMetadataBecomesABoundedPNGOffTheMainThread() async throws {
+        let data = Data("""
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6000 3000">
+        <defs><linearGradient id="color"><stop stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient></defs>
+        <rect width="6000" height="3000" fill="url(#color)"/>
+        </svg>
+        """.utf8)
+        let result = try await Task.detached {
+            let image = try await ClipboardImageProcessor.prepare(.data(data))
+            return ImagePreparation(image: image, onMainThread: ClipboardRenderingTests.isOnMainThread())
+        }.value
+        XCTAssertFalse(result.onMainThread)
+        XCTAssertEqual(result.image.fileExtension, "png")
+        XCTAssertEqual(result.image.width, 2560)
+        XCTAssertEqual(result.image.height, 1280)
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(result.image.data as CFData, nil))
+        XCTAssertEqual(CGImageSourceGetType(source) as String?, UTType.png.identifier)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: result.image.data))
+        let center = try XCTUnwrap(bitmap.colorAt(x: 1280, y: 640)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(center.alphaComponent, 0.95, "A decoded SVG must contain painted pixels, not a blank PNG.")
+        XCTAssertGreaterThan(center.redComponent, 0.2)
+        XCTAssertGreaterThan(center.blueComponent, 0.2)
+    }
+
+    func testSVGPreparationRejectsExternalResourcesAndEntityExpansion() {
+        for unsafe in [
+            #"<image href="file:///tmp/private.png"/>"#,
+            #"<image href="https://example.com/track.png"/>"#,
+            #"<style><![CDATA[path { fill: url(https://example.com/paint.svg); }]]></style>"#,
+            #"<style>@import "https://example.com/font.css";</style>"#,
+            #"<rect width="10" height="10" style="fill:url(https://example.com/paint.svg"/>"#,
+            #"<script>alert(1)</script>"#,
+            #"<foreignObject><div>HTML</div></foreignObject>"#
+        ] {
+            let svg = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\">\(unsafe)</svg>".utf8)
+            XCTAssertThrowsError(try ClipboardImageProcessor.decode(svg), unsafe)
+        }
+        let entity = Data("""
+        <!DOCTYPE svg [<!ENTITY payload SYSTEM "file:///tmp/private.txt">]>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text>&payload;</text></svg>
+        """.utf8)
+        XCTAssertThrowsError(try ClipboardImageProcessor.decode(entity))
+        XCTAssertThrowsError(try ImageDownsampling.validateSourceDimensions(width: .max, height: .max))
+    }
+
+    @MainActor
+    func testSVGPastesFromBrowserHTMLAndTheImagePasteboardType() async throws {
+        let data = Data("""
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6000 3000">
+        <rect width="6000" height="3000" fill="purple"/>
+        </svg>
+        """.utf8)
+        for html in [false, true] {
+            let board = NSPasteboard(name: .init("bedrock-svg-paste-\(UUID())"))
+            defer { board.releaseGlobally() }
+            if html {
+                board.setString("<p>Diagram</p><img src='data:image/svg+xml;base64,\(data.base64EncodedString())'>", forType: .html)
+            } else {
+                board.setData(data, forType: .init(UTType.svg.identifier))
+            }
+            let view = ComposerTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 120))
+            view.isRichText = false
+            let completed = expectation(description: "SVG paste completed")
+            var image: PreparedClipboardImage?
+            var errors: [String] = []
+            view.onPastePreparedImage = { image = $0 }
+            view.onPasteError = { errors.append($0) }
+            view.onPasteCompleted = { completed.fulfill() }
+            XCTAssertTrue(view.handlePasteboard(board))
+            await fulfillment(of: [completed], timeout: 5)
+            XCTAssertTrue(errors.isEmpty, errors.joined(separator: "\n"))
+            XCTAssertEqual(image?.width, 2560)
+            XCTAssertEqual(image?.height, 1280)
+            if html { XCTAssertEqual(view.string, "Diagram") }
+        }
+    }
+
     @MainActor
     func testMixedHTMLTextAndMultipleImagesPasteWithoutHTMLImporter() async throws {
         _ = NSApplication.shared

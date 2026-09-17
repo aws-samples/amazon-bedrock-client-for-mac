@@ -84,7 +84,8 @@ enum ClipboardHTMLParser {
             guard let comma = value.firstIndex(of: ",") else { return false }
             let header = value[..<comma].lowercased()
             return ["data:image/png;base64", "data:image/jpeg;base64", "data:image/gif;base64",
-                    "data:image/webp;base64", "data:image/heic;base64", "data:image/tiff;base64"].contains(header)
+                    "data:image/webp;base64", "data:image/heic;base64", "data:image/tiff;base64",
+                    "data:image/svg+xml;base64"].contains(header)
         }
         return (try? LocalPath.validatedWebURL(value, allowedDomains: "")) != nil
     }

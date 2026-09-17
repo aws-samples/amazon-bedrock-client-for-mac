@@ -6,6 +6,110 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Version 2.0.0 delivery is complete: main CI `35211853618` and release
+  `35214571810` passed at `c64956b`. The 42,443,607-byte public DMG matched
+  SHA-256 `cb27558a7326eda26b2dd642ebaef38b4bbf7fa590d3454893c08c9b0914f66e`.
+  Both architectures, Developer ID identity, strict signatures, Gatekeeper
+  and stapled notarization passed. The real update downloader and installer
+  upgraded a disposable 1.4.10 copy to 2.0.0, waited for the exact old process,
+  preserved adjacent data, and verified the replacement signature. It did not
+  replace or launch the original `/Applications` app. Homebrew PR 26 merged.
+- The v2.0.1 overlap reproduction showed a 9,421-point response painting past
+  its stale parent cell into the next prompt. After the fix, the response,
+  following prompt and attachments move by the same wheel delta; the composer
+  stays fixed. Light/Dark optimized UI cases cover cold load, actual wheel
+  input, resize, image preview and Activity → Back.
+- A separate streaming regression reproduced a first line moving upward by
+  400 points while its hosting view still had the previous height. A compressed,
+  top-aligned hosting root fixes it. Another cold-load reproduction repeatedly
+  recreated a long WebView after the legacy scrollbar changed width by
+  13 points. Retaining prior height estimates through reflow fixes that loop.
+  The optimized native harness passed all 24 viewport/container cases.
+- WebKit regression cases preserve the same paragraph, list and text nodes and
+  selected text through incremental updates; new-block opacity effects have
+  bounded concurrency, no geometry animation, and a Reduce Motion check.
+  The actual Markdown wrapper also passes a cold native/WebKit handoff test.
+- Real AWS validation used normal optimized copies with direct default-profile
+  credentials and no offline or fixture flags. Astra Low produced 26,878
+  characters and Nova 2 Lite produced 15,987 characters. Nova's live resize,
+  sidebar toggle and draft checks passed; ten reading-position samples stayed
+  at exactly the same Y coordinate while the reply grew 870 points. The
+  detailed measurements and their interpretation are in [performance.md](../performance.md).
+- Real Nova image validation initially failed its 20:1 aspect-ratio limit on
+  resized panoramas. The fix pads extreme images without cropping/stretching
+  and normalizes outgoing historical images off the main thread. The same four
+  stored images then completed inference; all four original hashes stayed
+  unchanged. Thirty-three image/preview cases and the actual-SDK legacy-image
+  UI case passed. The model's document-trailer quotation was inconsistent, so
+  the extended SDK regression independently compares every byte of the earlier
+  document; that case also passed.
+- Sidebar date tests passed all 17 focused date/compatibility cases, including
+  both daylight-saving changes, time-zone changes, stable group identities at
+  midnight and missing preferences from older workspaces. The first UI pass
+  confirmed visible pinned rows but exposed a test query that assumed text
+  lived in AXLabel rather than AXValue. A subsequent relaunch test found a
+  distinct disclosure-state mismatch. Sidebar headers now use ordinary
+  non-selectable rows with one persisted state, and the regression checks
+  immediate button values, on-disk choices and the restored UI.
+- Completion-specific testing reproduced a different blink: a 4,420-point
+  response briefly reverted to its 48-point first-token snapshot, then gained
+  another 34 points when response actions appeared. The completed stream now
+  retains its snapshot until the transcript commits, and the action bar
+  reserves its height while streaming. The regression checks the final line,
+  height, WebView identity, DOM identity and selection throughout that handoff.
+  Native text also updates only its changed suffix and does not rewrite an
+  identical completed document. Unicode, formatting, selection and the bounded
+  glyph fade pass alongside the WebKit checks.
+- `v2.0.1/luna-completion-ui-regressions` passed 39 native renderer/transport
+  cases and six optimized UI scenarios: Light/Dark completion while reading,
+  native-to-WebKit growth, queued messages, the existing skills/shell loop and
+  Luna document/tool continuation. The Luna fixture receives the original
+  document bytes on each request, with the required filename extension; it
+  requires an actual local file result and retained stateless reasoning before
+  returning the final response. A separate follow-up retains the document and
+  leaves stored attachment names and bytes unchanged.
+- The normal optimized app then completed a real AWS Luna request with a PDF,
+  a 22,393-byte TXT and a PNG in 3.01 seconds. Both final document markers,
+  the image description and the result of `local_read_file` were correct.
+  A subsequent Chat only request quoted previously unreported PDF and TXT
+  content in 2.03 seconds with zero tool calls. The intervening all-tools
+  follow-up had invoked two local tools despite the prompt, so it is not used
+  as evidence of a read without tools. Both original document byte sequences
+  remained identical; All tools was restored. The three actual run records,
+  replies and SHA-256 comparisons are retained in
+  `v2.0.1/live-streaming-fixed/v201-final-ui/luna-aws-result.json`.
+- The final optimized candidate completed a real Astra Low stream in 86.95
+  seconds (16,556 characters, 3,232 output tokens). In 205 samples through
+  completion, the reading anchor moved 0 points, no response-height decrease
+  occurred, and content grew 6,190 points. The draft and final marker remained
+  intact. The first attempt's exact-text query used an abbreviated accessibility
+  value and failed; the corrected repeat first verifies a short exact anchor.
+  Samples and PNGs are in `live-streaming-fixed/final-live-completion-confirmed`;
+  the interrupted movie recorder did not produce usable footage.
+- Final 1,000-message measurements, with no build, inference or recorder
+  running: first scroll median/p95/max 0.43/3.18/17.25 ms; warm scroll
+  0.28/0.96/18.02 ms; typing 6.15/11.03/38.38 ms. Each scroll used 360 wheel
+  events, typing used 61 events, and all reported zero failures. The earlier
+  candidate's 94.08 ms first-scroll maximum remains recorded. These are
+  accessibility/input response measurements, not display frame rates.
+- The independent CI renderer/clipboard suite passed all 54 cases in
+  `v2.0.1/standalone-rendering-v201`. Full-app message/state integration cases
+  belong to `NativeTranscriptTests`; they are not stubbed into the isolated
+  renderer package. Fifteen focused endpoint/date/error core cases and seven
+  loopback-fixture cases also passed. Escaped apostrophes decode without
+  damaging quoted text or path backslashes.
+- A scroll-work regression counted 40 unnecessary reconstructions of the same
+  visible message during 20 small scroll movements. Reusing unchanged rows
+  removes those reconstructions while still applying content/height edits.
+  All 13 native transcript cases and the 1,000-message typing/scroll UI case
+  passed in `v2.0.1/scroll-reuse-sidebar-layout-regressions`. Its new sidebar
+  spacing assertion independently caught a remaining 21.5-point first-date
+  gap. Native sidebar row insets added space below the header as well as above
+  it. Moving the spacing inside the header corrected that gap without changing
+  conversation click targets. Both Light/Dark sidebar scenarios then passed in
+  `v2.0.1/sidebar-content-insets-ui`, including measured date/title alignment,
+  section persistence after relaunch and navigation. The retained screenshots
+  were inspected at full size.
 - The normal universal Release app built successfully from `f12a687` in 253.2
   seconds. Packaging identity, hardened runtime and ad-hoc signature verification
   passed. This toolchain's `lipo -verify_arch` failed when both architectures

@@ -115,6 +115,16 @@ struct ConversationTranscriptView<Item: Identifiable, Row: View>: NSViewRepresen
             }
         }
 
+        private func contentHeightDidChange(_ height: CGFloat, id: AnyHashable, width: CGFloat) {
+            guard connected, height.isFinite, height > 0,
+                  abs(self.width - width) < 0.5, cells[id] != nil,
+                  abs((heights[id] ?? 160) - ceil(height)) > 0.5 else { return }
+            // Child state (streaming, Markdown parsing, WebKit and images) can
+            // change without updating the transcript's item array. Hosting-view
+            // intrinsic-size invalidation alone does not notify us of that layout.
+            scheduleRender()
+        }
+
         private func rebuildOffsets() {
             offsets = [12]
             offsets.reserveCapacity(ids.count + 1)
@@ -161,8 +171,10 @@ struct ConversationTranscriptView<Item: Identifiable, Row: View>: NSViewRepresen
             let resized = abs(width - nextWidth) > 0.5
             if resized {
                 width = nextWidth
-                heights.removeAll()
-                rebuildOffsets()
+                // Keep the old extents as estimates until each row reflows.
+                // Clearing them moves the viewport into an unrelated row and
+                // recycles the loaded WebView. An auto-hiding legacy scrollbar
+                // then changes the width again, creating a load/resize loop.
                 updateContent = true
             }
             var visible = scroll.documentVisibleRect
@@ -184,13 +196,21 @@ struct ConversationTranscriptView<Item: Identifiable, Row: View>: NSViewRepresen
             var changedHeight = false
             for index in visibleRange {
                 let id = ids[index]
-                let root = TranscriptCellContent(content: parent.row(parent.items[index]), width: width)
+                let cellWidth = width
+                func makeRoot() -> TranscriptCellContent<Row> {
+                    TranscriptCellContent(content: parent.row(parent.items[index]), width: cellWidth) {
+                        [weak self] height in
+                        self?.contentHeightDidChange(height, id: id, width: cellWidth)
+                    }
+                }
                 let cell: TranscriptCell<Row>
                 if let existing = cells[id] {
                     cell = existing
-                    if updateContent { cell.rootView = root }
+                    // Scrolling alone changes neither the message nor its
+                    // presentation. Keep the existing SwiftUI row and state.
+                    if updateContent { cell.rootView = makeRoot() }
                 } else {
-                    cell = TranscriptCell(rootView: root)
+                    cell = TranscriptCell(rootView: makeRoot())
                     cell.onSizeChange = { [weak self] in self?.scheduleRender() }
                     cells[id] = cell
                     document.addSubview(cell)
@@ -251,6 +271,9 @@ struct ConversationTranscriptView<Item: Identifiable, Row: View>: NSViewRepresen
 
         private func removeCell(_ id: AnyHashable) {
             guard let cell = cells.removeValue(forKey: id) else { return }
+            if ProcessInfo.processInfo.environment["BEDROCK_RENDER_DIAGNOSTICS"] == "1" {
+                print("Transcript recycle: \(id), frame=\(cell.frame), viewport=\(scroll?.documentVisibleRect ?? .zero)")
+            }
             cell.onSizeChange = nil
             if let messageID = id.base as? UUID { parent.viewport.unregister(cell, messageID: messageID) }
             cell.removeFromSuperview()
@@ -288,7 +311,20 @@ private final class TranscriptDocument: NSView {
 private struct TranscriptCellContent<Content: View>: View {
     let content: Content
     let width: CGFloat
-    var body: some View { content.frame(width: width) }
+    let onHeightChange: @MainActor (CGFloat) -> Void
+
+    var body: some View {
+        content
+            .frame(width: width)
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                onHeightChange($0)
+            }
+            // The host still has the previous frame for one layout pass after
+            // an independently observed stream grows. Keep its first line at
+            // the top instead of centering the new body in that smaller frame.
+            .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
+    }
 }
 
 private final class TranscriptCell<Content: View>: NSHostingView<TranscriptCellContent<Content>> {
@@ -296,6 +332,9 @@ private final class TranscriptCell<Content: View>: NSHostingView<TranscriptCellC
     required init(rootView: TranscriptCellContent<Content>) {
         super.init(rootView: rootView)
         sizingOptions = [.intrinsicContentSize]
+        // NSView no longer clips by default on macOS 14+. Keep asynchronous
+        // child layout inside its own row until the document applies its size.
+        clipsToBounds = true
     }
     required init?(coder: NSCoder) { nil }
     override func invalidateIntrinsicContentSize() {

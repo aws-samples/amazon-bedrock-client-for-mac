@@ -6,14 +6,10 @@ struct SidebarView: View {
     @ObservedObject private var store = AppStore.shared
     @ObservedObject private var chats = ConversationStore.shared
     @ObservedObject private var settings = PreferencesStore.shared
+    @State private var referenceDate = Date()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var visibleChats: [ChatModel] {
         chats.chats.filter { !store.thread($0.chatId).archived && store.thread($0.chatId).deletedAt == nil }
-            .sorted {
-                let a = store.thread($0.chatId), b = store.thread($1.chatId)
-                if let ap = a.pinnedAt, let bp = b.pinnedAt { return ap < bp }
-                if a.isPinned != b.isPinned { return a.isPinned }
-                return $0.lastMessageDate > $1.lastMessageDate
-            }
     }
     private var selectedItem: String {
         store.destination == .chats ? store.selectedThreadID.map { "thread:\($0)" } ?? "new" : "page:\(store.destination.rawValue)"
@@ -28,35 +24,56 @@ struct SidebarView: View {
     }
     var body: some View {
         let visible = visibleChats
-        let pinned = visible.filter { store.thread($0.chatId).isPinned }
+        let pinned = visible.filter { store.thread($0.chatId).isPinned }.sorted {
+            (store.thread($0.chatId).pinnedAt ?? .distantPast) < (store.thread($1.chatId).pinnedAt ?? .distantPast)
+        }
         let recent = visible.filter { !store.thread($0.chatId).isPinned }
+        let groups = ConversationDateGroup.group(recent, date: \.lastMessageDate, now: referenceDate)
         VStack(spacing: 0) {
             HStack {
                 Text("Bedrock").font(.system(size: 16, weight: .semibold)).tracking(-0.3).lineLimit(1)
                 Spacer()
             }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
-            VStack(spacing: 2) {
-                navigationRow("New chat", symbol: "plus.bubble", selected: selectedItem == "new", action: onNew)
-                    .padding(.bottom, 12)
-                ForEach([NavigationDestination.demos, .automations, .activity]) { destination in
-                    navigationRow(destination.title, symbol: destination.symbol,
-                                  selected: store.destination == destination) {
-                        store.destination = destination
+            navigationRow("New chat", symbol: "plus.bubble", selected: selectedItem == "new", action: onNew)
+                .padding(.horizontal, 10).padding(.bottom, 8)
+            List(selection: selection) {
+                sectionHeader("Library", id: "library")
+                if store.preferences.isSidebarSectionExpanded("library") {
+                    ForEach([NavigationDestination.demos, .automations, .activity]) { destination in
+                        navigationRow(destination.title, symbol: destination.symbol,
+                                      selected: store.destination == destination) {
+                            store.destination = destination
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                        .selectionDisabled()
                     }
                 }
-            }
-            .padding(.horizontal, 10).padding(.bottom, 10)
-            List(selection: selection) {
                 if !pinned.isEmpty {
-                    Section("Pinned") {
+                    sectionHeader("Pinned", id: "pinned")
+                    if store.preferences.isSidebarSectionExpanded("pinned") {
                         ForEach(pinned, id: \.chatId) { chat in
                             SidebarThreadRow(chat: chat).tag("thread:\(chat.chatId)")
+                                .listRowInsets(EdgeInsets())
                         }
                     }
                 }
-                Section("Chats") {
-                    ForEach(recent, id: \.chatId) { chat in
-                        SidebarThreadRow(chat: chat).tag("thread:\(chat.chatId)")
+                sectionHeader("Chats", id: "chats")
+                if store.preferences.isSidebarSectionExpanded("chats") {
+                    ForEach(groups) { group in
+                        Text(group.title)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+                            .padding(.leading, 16)
+                            .padding(.top, group.id == groups.first?.id ? 0 : 10)
+                            .listRowInsets(EdgeInsets())
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("sidebar.date.\(group.title)")
+                            .selectionDisabled()
+                        ForEach(group.items, id: \.chatId) { chat in
+                            SidebarThreadRow(chat: chat).tag("thread:\(chat.chatId)")
+                                .listRowInsets(EdgeInsets())
+                        }
                     }
                     if visible.isEmpty { Text("No conversations yet").font(DesignTokens.caption).foregroundStyle(.secondary) }
                 }
@@ -66,7 +83,9 @@ struct SidebarView: View {
             .background(SidebarScrollChrome())
             .font(DesignTokens.body)
             .symbolRenderingMode(.monochrome)
-            .environment(\.defaultMinListRowHeight, store.preferences.compactSidebar ? 26 : 32)
+            // Keep each row's content height explicit. Header spacing belongs
+            // inside its view; native sidebar row insets also add space below.
+            .environment(\.defaultMinListRowHeight, 0)
             Divider().padding(.horizontal, 14)
             Button { store.showSettings(row: "profile") } label: {
                 HStack(spacing: 10) {
@@ -82,6 +101,41 @@ struct SidebarView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workbench.sidebar")
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in referenceDate = Date() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in referenceDate = Date() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in referenceDate = Date() }
+    }
+
+    // These are ordinary, non-selectable rows rather than outline sections.
+    // AppKit must not maintain a second disclosure state beside the persisted
+    // preference, or the visible rows and the relaunch state can disagree.
+    private func sectionHeader(_ title: String, id: String) -> some View {
+        let expanded = store.preferences.isSidebarSectionExpanded(id)
+        return Button {
+            // Keep large chat lists immediate; animate only the small library.
+            withAnimation(id == "library" && !reduceMotion ? .easeInOut(duration: 0.16) : nil) {
+                store.preferences.setSidebarSection(id, expanded: !expanded)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(title).font(.system(size: 11, weight: .semibold))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .frame(height: 26)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+        .accessibilityIdentifier("sidebar.\(id).toggle")
+        .padding(.top, id == "library" ? 0 : 12)
+        .listRowInsets(EdgeInsets())
+        .selectionDisabled()
     }
 
     private func navigationRow(_ title: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -124,6 +178,7 @@ struct SidebarThreadRow: View {
                 Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(.tertiary)
             }
         }
+        .frame(minHeight: store.preferences.compactSidebar ? 26 : 32)
         .padding(.leading, 16)
         .padding(.trailing, 4)
         .help("\(chat.name) · \(chat.lastMessageDate.formatted(date: .abbreviated, time: .shortened))")

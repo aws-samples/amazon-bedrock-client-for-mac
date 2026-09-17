@@ -132,10 +132,13 @@ final class LocalAccessAndClipboardTests: XCTestCase {
     }
 
     func testClipboardCannotReadLocalFilesOrUseActiveImageSchemesFromHTML() throws {
-        let sources = ["file:///etc/passwd", "javascript:alert(1)", "data:image/svg+xml;base64,PHN2Zz4=",
+        let sources = ["file:///etc/passwd", "javascript:alert(1)", "data:image/svg+xml,<svg/>", "data:text/html;base64,PHN2Zz4=",
                        "https://user:secret@example.com/image.png", "/private/file.png", "blob:https://example.com/id"]
         for source in sources { XCTAssertFalse(ClipboardHTMLParser.isImageSourceAllowed(source), source) }
         XCTAssertTrue(ClipboardHTMLParser.isImageSourceAllowed("data:image/png;base64,aGVsbG8="))
+        // The attachment processor validates and rasterizes these bytes; SVG
+        // is never navigated to or inserted into the message's HTML document.
+        XCTAssertTrue(ClipboardHTMLParser.isImageSourceAllowed("data:image/svg+xml;base64,PHN2Zy8+"))
         let html = sources.map { "<img src='\($0)'>" }.joined()
         XCTAssertTrue(try ClipboardHTMLParser.parse(html).imageSources.isEmpty)
     }

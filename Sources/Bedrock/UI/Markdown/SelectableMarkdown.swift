@@ -10,13 +10,86 @@ struct SelectableMarkdown: NSViewRepresentable {
     let highlights: [String]
     var isStreaming = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeNSView(context: Context) -> MarkdownSelectionTextView { MarkdownSelectionTextView() }
     func updateNSView(_ view: MarkdownSelectionTextView, context: Context) {
-        view.install(rows: rows, fontSize: fontSize, highlights: highlights, dark: colorScheme == .dark, isStreaming: isStreaming)
+        view.install(rows: rows, fontSize: fontSize, highlights: highlights, dark: colorScheme == .dark,
+                     isStreaming: isStreaming, reduceMotion: reduceMotion)
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: MarkdownSelectionTextView, context: Context) -> CGSize? {
         nsView.measuredSize(width: proposal.width ?? 760)
+    }
+}
+
+/// Fade only newly received glyphs. Existing text, line metrics and token
+/// delivery stay untouched, and at most four short paint effects are active.
+// NSTextView creates and uses this non-Sendable layout manager only on the
+// main thread, including its timer. NSLayoutManager's drawing override is not
+// actor isolated; do not transfer the manager into a task from that callback.
+final class MarkdownRevealLayoutManager: NSLayoutManager {
+    private struct Reveal {
+        let range: NSRange
+        let started: TimeInterval
+    }
+    private var reveals: [Reveal] = []
+    private var timer: Timer?
+    private let duration: TimeInterval = 0.14
+    var activeRevealCount: Int { reveals.count }
+
+    func reveal(_ range: NSRange) {
+        guard range.length > 0, NSMaxRange(range) <= (textStorage?.length ?? 0) else { return }
+        if reveals.count == 4 {
+            invalidateDisplay(forCharacterRange: reveals.removeFirst().range)
+        }
+        reveals.append(Reveal(range: range, started: ProcessInfo.processInfo.systemUptime))
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, target: self, selector: #selector(advanceReveals),
+                          userInfo: nil, repeats: true)
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    @objc private func advanceReveals(_ timer: Timer) {
+        let now = ProcessInfo.processInfo.systemUptime
+        for reveal in reveals where NSMaxRange(reveal.range) <= (textStorage?.length ?? 0) {
+            invalidateDisplay(forCharacterRange: reveal.range)
+        }
+        reveals.removeAll { now - $0.started >= duration }
+        if reveals.isEmpty {
+            timer.invalidate()
+            self.timer = nil
+        }
+    }
+
+    func finishReveals() {
+        for reveal in reveals where NSMaxRange(reveal.range) <= (textStorage?.length ?? 0) {
+            invalidateDisplay(forCharacterRange: reveal.range)
+        }
+        reveals.removeAll(keepingCapacity: true)
+        timer?.invalidate()
+        timer = nil
+    }
+
+    override func drawGlyphs(forGlyphRange glyphs: NSRange, at origin: NSPoint) {
+        guard !reveals.isEmpty else { super.drawGlyphs(forGlyphRange: glyphs, at: origin); return }
+        let now = ProcessInfo.processInfo.systemUptime
+        var cursor = glyphs.location
+        for reveal in reveals where NSMaxRange(reveal.range) <= (textStorage?.length ?? 0) {
+            let range = NSIntersectionRange(glyphs, glyphRange(forCharacterRange: reveal.range, actualCharacterRange: nil))
+            let start = max(cursor, range.location)
+            guard NSMaxRange(range) > start else { continue }
+            if start > cursor { super.drawGlyphs(forGlyphRange: NSRange(location: cursor, length: start - cursor), at: origin) }
+            NSGraphicsContext.saveGraphicsState()
+            let progress = min(1, max(0, (now - reveal.started) / duration))
+            NSGraphicsContext.current?.cgContext.setAlpha(0.72 + 0.28 * (1 - pow(1 - progress, 2)))
+            super.drawGlyphs(forGlyphRange: NSRange(location: start, length: NSMaxRange(range) - start), at: origin)
+            NSGraphicsContext.restoreGraphicsState()
+            cursor = NSMaxRange(range)
+        }
+        if cursor < NSMaxRange(glyphs) {
+            super.drawGlyphs(forGlyphRange: NSRange(location: cursor, length: NSMaxRange(glyphs) - cursor), at: origin)
+        }
     }
 }
 
@@ -38,6 +111,7 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
         var indent: CGFloat
     }
     private var signature: Int?
+    private var renderedText: NSAttributedString?
     private(set) var codeBlocks: [CodeBlock] = []
     private(set) var listMarkers: [ListMarker] = []
     private(set) var quoteBlocks: [QuoteBlock] = []
@@ -47,7 +121,7 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
 
     init() {
         let storage = NSTextStorage()
-        let layout = NSLayoutManager()
+        let layout = MarkdownRevealLayoutManager()
         let container = NSTextContainer(size: NSSize(width: 760, height: CGFloat.greatestFiniteMagnitude))
         storage.addLayoutManager(layout)
         layout.addTextContainer(container)
@@ -72,7 +146,10 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
     required init?(coder: NSCoder) { nil }
     override func menu(for event: NSEvent) -> NSMenu? { TextContextMenu.make(for: self) }
 
-    func install(rows: [MarkdownLayoutRow], fontSize: CGFloat, highlights: [String], dark: Bool, isStreaming: Bool = false) {
+    func install(rows: [MarkdownLayoutRow], fontSize: CGFloat, highlights: [String], dark: Bool,
+                 isStreaming: Bool = false, reduceMotion: Bool = false) {
+        let reveal = layoutManager as? MarkdownRevealLayoutManager
+        if !isStreaming || reduceMotion { reveal?.finishReveals() }
         var hasher = Hasher()
         rows.forEach { hasher.combine($0.revision) }
         hasher.combine(fontSize); hasher.combine(highlights); hasher.combine(dark); hasher.combine(isStreaming)
@@ -85,7 +162,18 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
             return (range, (string as NSString).substring(with: range))
         }
         let result = MarkdownNativeAttributedDocument.render(rows, fontSize: fontSize, highlights: highlights, dark: dark, isStreaming: isStreaming)
-        textStorage?.setAttributedString(result.text)
+        // Each rendered paragraph ends in a structural newline. Appended words
+        // appear before that newline, not after the old attributed string.
+        let previous = string.hasSuffix("\n") ? String(string.dropLast()) : string
+        if let textStorage { Self.updateText(textStorage, previous: renderedText, with: result.text) }
+        renderedText = result.text
+        if isStreaming && !reduceMotion && !previous.isEmpty && result.text.string.hasPrefix(previous) {
+            let start = (previous as NSString).length
+            let end = result.text.length - (result.text.string.hasSuffix("\n") ? 1 : 0)
+            reveal?.reveal(NSRange(location: start, length: max(0, end - start)))
+        } else if !result.text.string.hasPrefix(previous) {
+            reveal?.finishReveals()
+        }
         codeBlocks = result.codeBlocks
         listMarkers = result.listMarkers
         quoteBlocks = result.quoteBlocks
@@ -114,6 +202,35 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
         for index in copyButtons.indices { copyButtons[index].tag = index }
         needsLayout = true
         needsDisplay = true
+    }
+
+    /// Leave the unchanged prefix in TextKit, including its attributes and
+    /// selection. A final streaming flag must not replace identical text.
+    private static func updateText(_ storage: NSTextStorage, previous: NSAttributedString?, with text: NSAttributedString) {
+        // TextKit substitutes fallback fonts for emoji. Compare our previous
+        // document, not those platform substitutions, to find the unchanged
+        // prefix and avoid rewriting a completed emoji on every later token.
+        let baseline = previous ?? storage
+        guard !baseline.isEqual(to: text) else { return }
+        let old = baseline.string as NSString
+        let next = text.string as NSString
+        var prefix = old.commonPrefix(with: text.string, options: .literal).utf16.count
+        if prefix < next.length { prefix = min(prefix, next.rangeOfComposedCharacterSequence(at: prefix).location) }
+        if prefix < old.length { prefix = min(prefix, old.rangeOfComposedCharacterSequence(at: prefix).location) }
+        var cursor = 0
+        while cursor < prefix {
+            var oldRange = NSRange(), newRange = NSRange()
+            let oldAttributes = baseline.attributes(at: cursor, longestEffectiveRange: &oldRange,
+                                                   in: NSRange(location: 0, length: prefix))
+            let newAttributes = text.attributes(at: cursor, longestEffectiveRange: &newRange,
+                                                in: NSRange(location: 0, length: prefix))
+            if !NSDictionary(dictionary: oldAttributes).isEqual(to: newAttributes) { prefix = cursor; break }
+            cursor = min(NSMaxRange(oldRange), NSMaxRange(newRange))
+        }
+        storage.beginEditing()
+        storage.replaceCharacters(in: NSRange(location: prefix, length: storage.length - prefix),
+                                  with: text.attributedSubstring(from: NSRange(location: prefix, length: text.length - prefix)))
+        storage.endEditing()
     }
 
     func measuredSize(width: CGFloat) -> NSSize {

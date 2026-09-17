@@ -334,6 +334,65 @@ final class MarkdownRenderingTests: XCTestCase {
     }
 
     @MainActor
+    func testNativeStreamingUpdatesOnlyTheNewTextAndCompletionDoesNotRewriteIt() throws {
+        let view = MarkdownSelectionTextView()
+        let parser = ExtendedMarkdownParser()
+        func install(_ text: String, streaming: Bool, reduceMotion: Bool = false) {
+            view.install(rows: MarkdownLayoutRow.flatten(parser.parse(text)), fontSize: 14, highlights: [],
+                         dark: false, isStreaming: streaming, reduceMotion: reduceMotion)
+        }
+        install("A stable paragraph.\n\n- First item\n- Second item", streaming: true)
+        let storage = try XCTUnwrap(view.textStorage)
+        let original = view.string
+        let selected = (original as NSString).range(of: "First item")
+        view.setSelectedRange(selected)
+        var edits: [NSRange] = []
+        let token = NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification, object: storage, queue: .main
+        ) { notification in
+            guard let range = (notification.object as? NSTextStorage)?.editedRange else { return }
+            MainActor.assumeIsolated { edits.append(range) }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        let completed = "A stable paragraph.\n\n- First item\n- Second item with more text"
+        install(completed, streaming: true)
+        XCTAssertTrue(view.string.hasPrefix(String(original.dropLast())))
+        XCTAssertEqual(view.selectedRange(), selected)
+        XCTAssertFalse(edits.isEmpty)
+        XCTAssertTrue(edits.allSatisfy { $0.location > NSMaxRange(selected) },
+                      "Receiving another word must not rewrite the selected, completed paragraph.")
+        let layout = try XCTUnwrap(view.layoutManager as? MarkdownRevealLayoutManager)
+        XCTAssertGreaterThan(layout.activeRevealCount, 0)
+        let size = view.measuredSize(width: 500)
+        edits.removeAll()
+        install(completed, streaming: false)
+        XCTAssertTrue(edits.isEmpty, "A final status change must not replace identical attributed text.")
+        XCTAssertEqual(layout.activeRevealCount, 0)
+        XCTAssertEqual(view.measuredSize(width: 500), size)
+        XCTAssertEqual(view.selectedRange(), selected)
+        for index in 1...10 { install(completed + String(repeating: " next", count: index), streaming: true) }
+        XCTAssertLessThanOrEqual(layout.activeRevealCount, 4)
+        install(completed + String(repeating: " next", count: 11), streaming: true, reduceMotion: true)
+        XCTAssertEqual(layout.activeRevealCount, 0)
+    }
+
+    @MainActor
+    func testNativeStreamingKeepsComposedCharactersAndFormattingAtTheChangedBoundary() throws {
+        let view = MarkdownSelectionTextView()
+        let parser = ExtendedMarkdownParser()
+        for source in ["Keep **bold**.\n\nCafe", "Keep **bold**.\n\nCafe\u{301} 👩",
+                       "Keep **bold**.\n\nCafe\u{301} 👩‍💻 한국어", "Keep **bold**.\n\nCafe\u{301} 👩‍💻 한국어 **done**"] {
+            let rows = MarkdownLayoutRow.flatten(parser.parse(source))
+            view.install(rows: rows, fontSize: 14, highlights: [], dark: false, isStreaming: true)
+            let expected = MarkdownNativeAttributedDocument.render(rows, fontSize: 14, highlights: [], dark: false, isStreaming: true)
+            XCTAssertEqual(view.string, expected.text.string)
+            let bold = (view.string as NSString).range(of: "bold")
+            let font = try XCTUnwrap(view.textStorage?.attribute(.font, at: bold.location, effectiveRange: nil) as? NSFont)
+            XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+        }
+    }
+
+    @MainActor
     func testNativeMarkdownLinksKeepReadableLabelsWithoutUnsafeTargets() {
         let rows = MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(
             "[Safe](https://example.com) [Unsafe](javascript:alert) [Local](file:///tmp/private)"))
@@ -531,6 +590,91 @@ final class MarkdownRenderingTests: XCTestCase {
         let count = try await webView.callAsyncJavaScript("bedrockUpdateContent(html, 18); return document.getElementById('bedrock-content').children.length;",
                                                          arguments: ["html": prefix], in: nil, contentWorld: .page)
         XCTAssertEqual(count as? Int, 2)
+        webView.stopLoading()
+        withExtendedLifetime(delegate) {}
+    }
+
+    @MainActor
+    func testStreamingPatchesTheGrowingParagraphAndListWithoutReplacingSelectedNodes() async throws {
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 720, height: 600))
+        let ready = expectation(description: "Incremental Markdown page loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+        <html><head><style>body{margin:0}p{margin:0 0 12px}main{display:flow-root}</style></head>
+        <body><main id="bedrock-content"></main><script>\(MarkdownDOMUpdateScript.source)</script></body></html>
+        """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        let result = try await webView.callAsyncJavaScript("""
+            const prefix = '<p id="lead">First paragraph stays in place.</p><ul id="list"><li id="selected">Selected list item.</li>';
+            bedrockUpdateContent(prefix + '<li id="growing">Next</li></ul>', 15, true);
+            const lead = document.getElementById('lead'), list = document.getElementById('list');
+            const selected = document.getElementById('selected'), growing = document.getElementById('growing');
+            const text = growing.firstChild, firstY = lead.getBoundingClientRect().top;
+            const selection = document.createRange(); selection.selectNodeContents(selected);
+            getSelection().addRange(selection);
+            for (let index = 1; index <= 80; index++) {
+                bedrockUpdateContent(prefix + `<li id="growing">Next${' word'.repeat(index)}</li></ul>`, 15, true);
+            }
+            const retainedText = text === growing.firstChild;
+            bedrockUpdateContent(prefix + '<li id="growing"><strong>Finished</strong> tail</li><li>New item</li></ul><p>Following paragraph.</p>', 15, true);
+            return {lead: lead === document.getElementById('lead'), list: list === document.getElementById('list'),
+                    item: growing === document.getElementById('growing'), retainedText,
+                    selection: getSelection().toString(), movement: lead.getBoundingClientRect().top - firstY,
+                    finalItem: growing.textContent, items: list.children.length,
+                    tail: document.getElementById('bedrock-content').lastChild.textContent,
+                    innerScroll: scrollY};
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let values = try XCTUnwrap(result as? [String: Any])
+        for key in ["lead", "list", "item", "retainedText"] { XCTAssertEqual(values[key] as? Bool, true, key) }
+        XCTAssertEqual(values["selection"] as? String, "Selected list item.")
+        XCTAssertEqual(values["movement"] as? Double, 0)
+        XCTAssertEqual(values["innerScroll"] as? Double, 0)
+        XCTAssertEqual(values["finalItem"] as? String, "Finished tail")
+        XCTAssertEqual(values["items"] as? Int, 3)
+        XCTAssertEqual(values["tail"] as? String, "Following paragraph.")
+        webView.stopLoading()
+        withExtendedLifetime(delegate) {}
+    }
+
+    @MainActor
+    func testStreamingFadeIsBoundedDoesNotChangeLayoutAndStopsForReducedMotionOrCompletion() async throws {
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 720, height: 600))
+        let ready = expectation(description: "Stream appearance page loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+        <html><body><main id="bedrock-content"></main>
+        <script>\(MarkdownDOMUpdateScript.source)</script></body></html>
+        """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        let result = try await webView.callAsyncJavaScript("""
+            const initial = '<p>Already readable.</p>';
+            bedrockUpdateContent(initial, 15, true);
+            const initialAnimations = document.getAnimations().length;
+            const html = initial + Array.from({length: 10}, (_, i) => `<p>Appended block ${i}</p>`).join('');
+            const height = bedrockUpdateContent(html, 15, true);
+            const animations = document.getAnimations();
+            const paintOnly = animations.every(animation => animation.effect.getKeyframes().every(frame =>
+                !['height','transform','top','margin','maxHeight'].some(key => key in frame)));
+            const during = document.getElementById('bedrock-content').getBoundingClientRect().height;
+            bedrockUpdateContent(html, 15, true, true);
+            const reduced = document.getAnimations().length;
+            const finalHTML = html + '<p>Last block.</p>';
+            bedrockUpdateContent(finalHTML, 15, true);
+            bedrockUpdateContent(finalHTML, 15, false);
+            return {initialAnimations, count: animations.length, paintOnly, height, during, reduced,
+                    completed: document.getAnimations().length,
+                    text: document.getElementById('bedrock-content').lastChild.textContent};
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let values = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(values["initialAnimations"] as? Int, 0)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(values["count"] as? Int), 4)
+        XCTAssertEqual(values["paintOnly"] as? Bool, true)
+        XCTAssertEqual(values["height"] as? Double, values["during"] as? Double)
+        XCTAssertEqual(values["reduced"] as? Int, 0)
+        XCTAssertEqual(values["completed"] as? Int, 0)
+        XCTAssertEqual(values["text"] as? String, "Last block.")
         webView.stopLoading()
         withExtendedLifetime(delegate) {}
     }

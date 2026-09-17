@@ -34,6 +34,18 @@ final class ImagePreviewTests: XCTestCase {
         XCTAssertTrue(again === image, "Reopening should reuse the decoded preview.")
     }
 
+    func testLongScreenshotPreviewKeepsItsOriginalAndBoundsDecodedPixels() async throws {
+        let data = try png(width: 64, height: 42_000)
+        let worker = ImagePreviewLoader()
+        let image = try await worker.load(.encoded(data))
+        XCTAssertEqual(image.original, data)
+        XCTAssertEqual(image.width, 64)
+        XCTAssertEqual(image.height, 42_000)
+        XCTAssertEqual(image.preview.height, 2560)
+        XCTAssertGreaterThan(image.preview.width, 0)
+        XCTAssertLessThan(image.memoryCost, 2_000_000)
+    }
+
     func testImageConversionAndSaveRetainFullResolution() async throws {
         let data = try png(width: 1_200, height: 900)
         let worker = ImagePreviewLoader()

@@ -192,10 +192,10 @@ class ConversationStore: ObservableObject {
     /// Import and branch preparation must finish before the new chat appears.
     /// Encoding large attachment histories happens away from AppKit's event loop.
     func createConversation(modelID: String, modelName: String, provider: String, title: String,
-                            messages: [Message], systemPrompt: String?) async throws -> ChatModel {
+                            messages: [Message], systemPrompt: String?, lastMessageDate: Date? = nil) async throws -> ChatModel {
         let id = UUID().uuidString
         let model = ChatModel(id: modelID, chatId: id, name: modelName, title: title,
-                              description: modelID, provider: provider, lastMessageDate: Date(),
+                              description: modelID, provider: provider, lastMessageDate: lastMessageDate ?? Date(),
                               isManuallyRenamed: true)
         let history = ConversationHistory(chatId: id, modelId: modelID, messages: messages, systemPrompt: systemPrompt)
         let url = getConversationHistoryFileURL(chatId: id)

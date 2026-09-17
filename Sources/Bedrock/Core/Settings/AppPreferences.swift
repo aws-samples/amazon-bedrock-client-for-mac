@@ -27,6 +27,16 @@ struct AppPreferences: Codable, Equatable, Sendable {
     var showMenuBarItem = false
     var defaultProjectID: UUID?
     var lastThreadID: String?
+    // Optional so workspaces from earlier versions keep every section open.
+    var collapsedSidebarSections: Set<String>?
+    func isSidebarSectionExpanded(_ section: String) -> Bool {
+        collapsedSidebarSections?.contains(section) != true
+    }
+    mutating func setSidebarSection(_ section: String, expanded: Bool) {
+        var collapsed = collapsedSidebarSections ?? []
+        if expanded { collapsed.remove(section) } else { collapsed.insert(section) }
+        collapsedSidebarSections = collapsed.isEmpty ? nil : collapsed
+    }
     var enabledTools: Set<BuiltInTool> {
         (toolProfile == .custom ? customTools : toolProfile.tools).subtracting(disabledTools)
     }

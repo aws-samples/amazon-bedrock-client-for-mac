@@ -27,7 +27,7 @@ final class ComposerTextView: NSTextView {
     override func menu(for event: NSEvent) -> NSMenu? { TextContextMenu.make(for: self) }
     private static let imagePasteboardTypes: [NSPasteboard.PasteboardType] = [
         .png, .init("public.jpeg"), .init("public.heic"), .init("org.webmproject.webp"),
-        .init("com.compuserve.gif"), .tiff, .init("com.microsoft.bmp")
+        .init("com.compuserve.gif"), .tiff, .init("com.microsoft.bmp"), .init(UTType.svg.identifier)
     ]
     override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
         // AppKit validates Command-V before invoking our paste handler. A plain

@@ -82,19 +82,13 @@ actor ImagePreviewLoader {
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              width > 0, height > 0, width <= 32_768, height <= 32_768,
-              Int64(width) * Int64(height) <= 100_000_000,
               let type = CGImageSourceGetType(source) else {
-            throw LocalOperationError.invalid("This image is damaged or exceeds the supported dimensions.")
+            throw LocalOperationError.invalid("This image is damaged or its format could not be opened.")
         }
+        try ImageDownsampling.validateSourceDimensions(width: width, height: height)
         try Task.checkCancellation()
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: min(4_096, max(64, maximumPixelSize)),
-            kCGImageSourceShouldCacheImmediately: true
-        ]
-        guard let preview = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+        let options = ImageDownsampling.options(maximumPixelSize: min(4_096, max(64, maximumPixelSize)), width: width, height: height)
+        guard let preview = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
             throw LocalOperationError.invalid("The image preview could not be decoded.")
         }
         let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1

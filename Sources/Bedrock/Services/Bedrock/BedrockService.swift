@@ -1626,11 +1626,12 @@ class BedrockService: Equatable, @unchecked Sendable {
     
     // MARK: - Bedrock Mantle (Responses API)
 
-    /// Streams a model routed to the Bedrock Mantle Responses API.
+    /// Streams Responses on the selected runtime profile or Mantle model.
     func mantleResponsesStream(
         modelId: String,
-        input: [[String: Any]]
-    ) async -> AsyncThrowingStream<MantleResponseEvent, Error> {
+        input: [JSONValue],
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil
+    ) async throws -> AsyncThrowingStream<MantleResponseEvent, Error> {
         // Guard the region before signing anything. A saved chat keeps pointing at its model
         // after the user switches regions, so without this the request goes to a bedrock-mantle
         // endpoint that doesn't serve the model and surfaces an opaque HTTP failure.
@@ -1647,25 +1648,46 @@ class BedrockService: Equatable, @unchecked Sendable {
         }
 
         let modelConfig = await MainActor.run { PreferencesStore.shared.getInferenceConfig(for: modelId) }
-        let apiKey = await MainActor.run { PreferencesStore.shared.bedrockApiKey }
+        let apiKey = ValidationMode.isOffline ? "" : await MainActor.run { PreferencesStore.shared.bedrockApiKey }
         // Fall back to the model's own defaults rather than a fixed 8192/medium, so each
         // GPT-5.6 tier gets its own token budget and effort baseline.
         let range = ModelInferenceRange.getRangeForModel(modelId)
         let maxTokens = modelConfig.overrideDefault ? modelConfig.maxTokens : range.defaultMaxTokens
         let effort = modelConfig.reasoningEffort.isEmpty ? range.defaultReasoningEffort : modelConfig.reasoningEffort
+        let tools: [[String: Any]] = try (toolConfig?.tools ?? []).compactMap { tool in
+            guard case .toolspec(let specification) = tool, let name = specification.name,
+                  case .json(let schema)? = specification.inputSchema else { return nil }
+            return ["type": "function", "name": name, "description": specification.description ?? name,
+                    "parameters": try Self.jsonValue(schema), "strict": false]
+        }
+        var endpointOverride: URL?
+        if ValidationMode.isOffline {
+            guard ValidationMode.permitsInference(modelID: modelId, runtimeEndpoint: runtimeEndpoint),
+                  let local = ValidationMode.localRuntimeEndpoint else {
+                throw LocalOperationError.invalid("AWS requests are disabled in this isolated UI test run.")
+            }
+            endpointOverride = URL(string: local + "/openai/v1/responses")
+        } else if BedrockResponsesEndpoint.supportsRuntimeDocuments(modelId), !runtimeEndpoint.isEmpty {
+            guard let base = URL(string: runtimeEndpoint), base.host != nil else {
+                throw LocalOperationError.invalid("The custom Bedrock Runtime endpoint is not a valid URL.")
+            }
+            endpointOverride = base.appendingPathComponent("openai/v1/responses")
+        }
 
         // Bearer token takes precedence when set; otherwise SigV4 with the app's credential chain
         let service = MantleResponsesService(
             region: region,
             apiKey: apiKey,
-            credentialResolver: awsCredentialIdentityResolver
+            credentialResolver: awsCredentialIdentityResolver,
+            endpointOverride: endpointOverride
         )
         logger.info("Mantle Responses API stream request for model: \(modelId) (effort: \(effort))")
         return service.streamResponse(
-            modelId: modelId,
-            input: input,
+            modelId: BedrockCapabilityRegistry.shared.invocationID(modelId, region: region),
+            input: input.compactMap(\.asDictionary),
             maxOutputTokens: maxTokens,
-            reasoningEffort: effort
+            reasoningEffort: effort,
+            tools: tools
         )
     }
 

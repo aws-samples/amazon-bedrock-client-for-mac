@@ -117,7 +117,8 @@ enum AppActions {
                     }.value
                     let chat = try await ConversationStore.shared.createConversation(
                         modelID: archive.modelID, modelName: archive.modelName, provider: archive.provider,
-                        title: archive.title, messages: archive.messages, systemPrompt: archive.systemPrompt)
+                        title: archive.title, messages: archive.messages, systemPrompt: archive.systemPrompt,
+                        lastMessageDate: archive.messages.map(\.timestamp).max())
                     let store = AppStore.shared
                     store.updateThread(chat.chatId) { $0.systemPrompt = archive.systemPrompt ?? "" }
                     store.selectThread(chat.chatId)
