@@ -712,7 +712,10 @@ final class BedrockUITests: XCTestCase {
         // AppKit can restore the narrow size left by the preceding appearance
         // scenario. Always change the actual width; dragging 900 → 900 did not
         // exercise reflow and made this regression test dependent on run order.
-        let targetWidth: CGFloat = initialFrame.width > 980 ? 900 : 1120
+        let availableWidth = CGDisplayBounds(CGMainDisplayID()).maxX - initialFrame.minX
+        let targetWidth: CGFloat = initialFrame.width > 980 ? 900 : min(1120, availableWidth)
+        XCTAssertGreaterThan(abs(targetWidth - initialFrame.width), 20,
+                             "The resize gesture must change width within the display's reachable coordinates.")
         let origin = window.coordinate(withNormalizedOffset: .zero)
         let corner = origin.withOffset(CGVector(dx: initialFrame.width - 6, dy: initialFrame.height - 6))
         corner.press(forDuration: 0.1,
@@ -740,9 +743,23 @@ final class BedrockUITests: XCTestCase {
     @MainActor
     func testStreamingNativeToWebMarkdownKeepsFollowingMessagesOutsideTheResponse() async throws {
         let (app, _) = try launch(withRuntime: true)
+        let window = app.windows["MainWindow"]
+        // Match the hosted display locally. Offscreen WebKit text is not a
+        // reliable accessibility target while the reader is above the bottom.
+        let initialFrame = window.frame
+        let width = min(initialFrame.width, 1024)
+        let height = min(initialFrame.height, 634)
+        if initialFrame.width > width || initialFrame.height > height {
+            let origin = window.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: initialFrame.width - 6, dy: initialFrame.height - 6))
+                .press(forDuration: 0.1,
+                       thenDragTo: origin.withOffset(CGVector(dx: width - 6, dy: height - 6)),
+                       withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        XCTAssertLessThanOrEqual(window.frame.width, 1026)
+        XCTAssertLessThanOrEqual(window.frame.height, 636)
         send("[layout-stream] Grow this reply past the native Markdown threshold.", in: app)
         _ = response("LAYOUT_STREAM_BEGIN", in: app)
-        let window = app.windows["MainWindow"]
         let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
         XCTAssertFalse(transcript.webViews.firstMatch.exists, "The short reply starts in the native text renderer.")
         try await XCTUnwrap(runtime).growStream()
@@ -760,15 +777,19 @@ final class BedrockUITests: XCTestCase {
         let readingY = web.frame.minY
         try await XCTUnwrap(runtime).releaseStream()
         let finished = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            !app.buttons["Stop response"].exists && web.exists
-                && web.staticTexts.matching(NSPredicate(
-                    format: "label CONTAINS %@ OR value CONTAINS %@",
-                    "LAYOUT_STREAM_COMPLETE", "LAYOUT_STREAM_COMPLETE")).firstMatch.exists
+            !app.buttons["Stop response"].exists && web.exists && web.frame.height > 2_000
         }, object: nil)
-        await fulfillment(of: [finished], timeout: 12)
+        let finishResult = await XCTWaiter.fulfillment(of: [finished], timeout: 12)
+        XCTAssertEqual(finishResult, .completed)
+        guard finishResult == .completed else { return }
         XCTAssertEqual(web.frame.minY, readingY, accuracy: 2,
                        "Finalizing the response must retain the passage the user scrolled to.")
         app.buttons["Scroll to latest message"].click()
+        let finalMarker = web.staticTexts.matching(NSPredicate(
+            format: "label CONTAINS %@ OR value CONTAINS %@",
+            "LAYOUT_STREAM_COMPLETE", "LAYOUT_STREAM_COMPLETE")).firstMatch
+        XCTAssertTrue(finalMarker.waitForExistence(timeout: 8))
+        XCTAssertTrue(finalMarker.isHittable, "The full completed response must be visible after returning to the bottom.")
         chooseModel("GPT-6 Astra", in: app)
         send("[queue-one] AFTER_STREAMED_RESPONSE", in: app)
         let following = window.staticTexts["[queue-one] AFTER_STREAMED_RESPONSE"]

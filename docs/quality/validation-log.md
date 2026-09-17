@@ -6,6 +6,19 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Main CI `35260024696` at `0ae1c2f` passed the core, renderer and app
+  integration suites, but two of 35 UI scenarios failed. Its 1,024-point
+  display could not reach a requested 1,120-point window width, and WebKit did
+  not expose the offscreen final response marker while the reader was above
+  the bottom. Resize targets now stay within reachable display coordinates.
+  Stream completion first checks retained height and reading position, then
+  checks the visible final marker after returning to the bottom. No overlap,
+  reflow or anchor assertions were removed. Both failed scenarios passed in
+  the optimized local app in `v2.0.1/ci-viewport-regressions`; the streaming
+  case used a 900×634-point window and retained the following model switch and
+  reply. The screenshots in `v2.0.1/ci-viewport-captures` were inspected.
+  Main CI must still pass this correction before publication. Release titles
+  now use the tag alone, such as `v2.0.1`.
 - Version 2.0.0 delivery is complete: main CI `35211853618` and release
   `35214571810` passed at `c64956b`. The 42,443,607-byte public DMG matched
   SHA-256 `cb27558a7326eda26b2dd642ebaef38b4bbf7fa590d3454893c08c9b0914f66e`.
