@@ -38,9 +38,16 @@ struct ModelPicker: View {
             ModelSelectorPopoverContent(models: organizedChatModels.values.flatMap { $0 }, selectedID: selectedModel?.id) { id in
                 let model = organizedChatModels.values.lazy.flatMap { $0 }.first { $0.id == id } ?? ModelCatalog.shared.model(id)
                 let selection = SidebarSelection.chat(model)
-                menuSelection = selection
-                handleSelectionChange(selection)
-                isShowingPopover = false
+                // A model change can insert a transcript boundary and replace
+                // the composer's controls. Do not animate that layout inside an
+                // open popover's transaction, especially after expanding a tool.
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    isShowingPopover = false
+                    menuSelection = selection
+                    handleSelectionChange(selection)
+                }
             } close: { isShowingPopover = false }
         }
     }

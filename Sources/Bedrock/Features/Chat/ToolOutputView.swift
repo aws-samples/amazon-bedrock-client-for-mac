@@ -7,6 +7,7 @@ struct ToolOutputView: NSViewRepresentable {
     var text: String
     var findRequest: Int
     var initialQuery = ""
+    var accessibilityLabel = "Tool detail text"
 
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView {
@@ -38,12 +39,15 @@ struct ToolOutputView: NSViewRepresentable {
         editor.isIncrementalSearchingEnabled = true
         editor.isAutomaticLinkDetectionEnabled = false
         editor.allowsUndo = false
-        editor.setAccessibilityLabel("Tool detail text")
+        editor.setAccessibilityLabel(accessibilityLabel)
         scroll.documentView = editor
         return scroll
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let editor = scroll.documentView as? NSTextView else { return }
+        if editor.accessibilityLabel() != accessibilityLabel {
+            editor.setAccessibilityLabel(accessibilityLabel)
+        }
         if editor.string != text {
             editor.string = text
             editor.setSelectedRange(NSRange(location: 0, length: 0))

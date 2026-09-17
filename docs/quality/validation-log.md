@@ -6,6 +6,30 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- A normal, online Release build at `71a428c` reproduced a new hang after
+  inspecting a completed shell tool and rapidly switching between Astra and
+  Stable Image Ultra. Two main-thread samples show an unending SwiftUI
+  animation/layout transaction; one run reached roughly 1.5 GB RSS. This was
+  not an AWS timeout. Model selection now closes the picker before applying
+  the new model in a transaction that does not animate transcript layout.
+- The same public-Accessibility reproduction completed 12 rapid switches in
+  the corrected normal Release build, preserving the expanded tool and composer.
+  Afterward, an actual Stable Image Ultra request completed in about 10 seconds.
+  Its image opened, zoomed, fitted and closed three times; switching back to
+  Astra and sending a follow-up also completed without an SDK error. These
+  are live account-specific checks, separate from the loopback tests. Private
+  sidebar history in their screenshots is retained locally, not published.
+- Hosted CI `35176696548` at `765e40e` passed the core, renderer and native app
+  suites, and 25 of 26 UI cases. Its full-history thumb drag stopped just short
+  of the first question on the runner's smaller display. The test now drags
+  beyond the top of the native scroll slot instead of four points inside it;
+  the requirement that the first question be visible remains unchanged.
+- `model-switch-and-native-thumb.xcresult` passed both the expanded-tool model
+  switch scenario and complete-history scroll/search/return scenario three
+  times each. Inline tool previews subsequently moved to the existing native
+  text view with bounded height and leading alignment; their exact text and
+  placement are now asserted by the tool-details UI case. The final whole-suite
+  run must include that presentation change.
 - Complete local CI passed on clean revision `765e40e`: 115 portable core
   cases, 43 standalone renderer/clipboard cases, 105 app integration cases
   (101 passed and four opt-in public MCP diagnostics skipped), and all 26 UI
@@ -48,7 +72,7 @@ verified behavior, remaining implementation gaps and release gates.
   AWS SDK 1.7.85 and Smithy 0.252.0 are resolved; Crypto 4.5.2 remains the latest
   version compatible with the certificate dependency. See [dependencies](../dependencies.md).
 - `full-ci-765e40e/ci-result.json` is a complete local receipt. The small Settings
-  follow-up above has targeted coverage and must be included in the final
+  follow-up and subsequent model-switch correction must be included in the final
   unchanged-source local/hosted execution before tagging. GitHub Actions and
   Releases record subsequent execution.
 
@@ -56,7 +80,10 @@ Evidence is retained under
 `/tmp/bedrock-pilot-validation/release-completion/`, including
 `authoritative-layout-restoration.xcresult`, `validated-controls.xcresult`,
 `complete-drag-and-tool-feedback.xcresult`, `full-ci-765e40e/Bedrock.xcresult`,
-`prompt-initialization.xcresult`, the viewport diagnostic profiles, and
+`prompt-initialization.xcresult`, `live-validation-71a428c`,
+`live-reproduce-71a428c`, `rapid-switch-transaction-2`,
+`model-switch-and-native-thumb.xcresult`,
+the viewport diagnostic profiles, and
 the raw performance measurements described in [Performance](../performance.md).
 
 ## September 16, 2026 — earlier checkpoint

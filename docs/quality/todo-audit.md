@@ -19,6 +19,18 @@ screenshot does not close a behavioral requirement.
   and the duplicate default-model assignment. Its six native lifecycle/preset
   tests and the Settings UI scenario pass without the reproduced SwiftUI
   publishing warning. The final whole-suite gate must include this follow-up.
+- Hosted CI `35176696548` passed all non-UI suites and 25/26 UI cases. On its
+  smaller display, the full-history thumb drag stopped below the first prompt.
+  Its endpoint now clears the top of the native scroll slot; the first-message
+  visibility assertion is retained.
+- Real online testing found a separate SwiftUI layout hang when models were
+  rapidly changed after inspecting an expanded tool. The corrected normal
+  Release build completed 12 changes, actual image generation, three
+  zoom/Fit/close cycles, and an Astra follow-up. A new UI regression keeps the
+  tool expanded and an unsent draft intact across chat/image model changes.
+  That scenario and full-history scroll/search/return each passed three
+  consecutive runs. Native, leading-aligned inline tool previews were added
+  afterward and remain part of the final whole-suite gate.
 - Local optimized-app integration previously executed 73 cases: 69 passed and
   four optional public-network cases were skipped. That result predates the
   repository reorganization and must be repeated.
@@ -83,12 +95,12 @@ screenshot does not close a behavioral requirement.
 | Area | Required follow-up |
 | --- | --- |
 | MCP fixture connections | The isolated-manager override now passes locally, including cancellation, reconnect, timeout and output tests. Hosted re-execution remains required. |
-| Continuous history | Actual scrolling/search/navigation and stream-completion scenarios each passed three consecutive runs after the measured-coordinate correction. Include them in the complete local and hosted suites. |
-| Tool details | The disclosure is now one distinct button instead of competing tap/disclosure handlers. Actual Input/Output inspection passes. |
+| Continuous history | Actual scrolling/search/navigation and stream-completion scenarios passed locally. Repeat hosted execution with the scroll-thumb endpoint corrected for the runner's smaller display. |
+| Tool details and model switching | Actual Input/Output inspection passes. A subsequent rapid model-switch layout hang was reproduced and corrected; include its new expanded-tool/draft scenario in the complete local and hosted suites. |
 | Quick Access | Actual Escape/refocus/submission passes after correcting panel/main-window handoff and avoiding redundant window-style changes. |
 | Rich selection | Actual rich HTML and original Markdown copy passes with the corrected assistant-role fixture. |
 | Automation models | Shared picker deduplicates model families, exposes provider/route, and preserves the exact route through save/relaunch/edit. Actual UI case passes. |
-| Complete local suite | Global search dismissal, error recovery, image preview, skill removal, initial size, queues and attachments all passed in `full-ci-765e40e`. The final local and hosted execution must include the subsequent Settings initialization correction. |
+| Complete local suite | Global search dismissal, error recovery, image preview, skill removal, initial size, queues and attachments all passed in `full-ci-765e40e`. Repeat with the Settings initialization and model-switch corrections. |
 
 ## Implementation gaps that remain open
 
@@ -124,8 +136,9 @@ names change.
 
 The message presentation code is now split into transcript attachments,
 disclosures, Markdown, images and video. Unused synchronous image conversion
-helpers have been removed. This split compiled with the optimized native suite;
-it still needs actual transcript, attachment and image-preview UI regression.
+helpers have been removed. Actual transcript, attachment and image-preview
+regressions passed in the complete local suite; the final hosted run must
+include the subsequent corrections.
 
 Local and hosted validation use one entry point, `python3 scripts/ci.py`.
 Before a release, a complete local run must pass against unchanged source and

@@ -460,8 +460,11 @@ final class BedrockUITests: XCTestCase {
         let frame = thumb.frame
         let start = origin.withOffset(CGVector(dx: frame.midX - window.frame.minX,
                                                dy: frame.midY - window.frame.minY))
+        // Drag past the slot's top, not four points into it. The minimum
+        // thumb size and Retina scale otherwise leave a small nonzero offset
+        // that can hide the first prompt in a very long conversation.
         let end = origin.withOffset(CGVector(dx: frame.midX - window.frame.minX,
-                                             dy: scrollbar.frame.minY + 4 - window.frame.minY))
+                                             dy: scrollbar.frame.minY - 10 - window.frame.minY))
         start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
         let image = XCTAttachment(screenshot: window.screenshot())
         image.name = "First message of the complete transcript after one thumb drag"
@@ -534,6 +537,9 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Copy tool input"].exists)
         XCTAssertTrue(app.buttons["Copy tool output"].exists)
+        XCTAssertEqual(app.textViews["Tool input preview"].value as? String, "{}")
+        XCTAssertEqual(app.textViews["Tool output preview"].value as? String, output)
+        XCTAssertLessThan(app.textViews["Tool input preview"].frame.minX - row.frame.minX, 24)
         for _ in 0..<3 where !open.isHittable {
             app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
         }
@@ -803,6 +809,48 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(detail.waitForExistence(timeout: 3))
         XCTAssertTrue((detail.value as? String)?.contains("EXEC_FROM_REAL_TOOL") == true)
         app.buttons["Done"].click()
+    }
+
+    @MainActor
+    func testExpandedToolRemainsResponsiveAcrossChatAndImageModelChanges() throws {
+        let (app, _) = try launch(withRuntime: true)
+        chooseModel("GPT-6 Astra", in: app)
+        send("[tools] List skills, load code-review, then run the fixture command.", in: app)
+        _ = response("TOOLS_COMPLETE: code-review · EXEC_FROM_REAL_TOOL", in: app, timeout: 20)
+        let row = app.buttons["toolCall.fixture-exec"]
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        row.click()
+        let open = app.buttons["Open details"]
+        XCTAssertTrue(open.waitForExistence(timeout: 3))
+        for _ in 0..<3 where !open.isHittable {
+            app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
+        }
+        open.click()
+        let detail = app.textViews["Tool detail text"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 3))
+        XCTAssertTrue((detail.value as? String)?.contains("EXEC_FROM_REAL_TOOL") == true)
+        app.buttons["Input"].click()
+        app.buttons["Done"].click()
+
+        let draft = "Keep this unsent draft while changing the model."
+        composer(app).click()
+        composer(app).typeText(draft)
+        for _ in 0..<3 {
+            for model in ["Stable Image Ultra 1.0", "GPT-6 Astra"] {
+                chooseModel(model, in: app)
+                XCTAssertEqual(app.buttons["modelPicker.button"].label, "Model: \(model)")
+                XCTAssertEqual(composer(app).value as? String, draft)
+                XCTAssertTrue(row.exists)
+                XCTAssertEqual(row.value as? String, "Expanded")
+                XCTAssertFalse(app.textFields["modelPicker.search"].exists)
+            }
+        }
+        XCTAssertEqual(try XCTUnwrap(runtime).requests().count, 4,
+                       "Changing a model must not send the draft or rerun the tools.")
+        let image = XCTAttachment(screenshot: app.windows["MainWindow"].screenshot())
+        image.name = "Expanded tool after repeated chat and image model changes"
+        image.lifetime = .keepAlways
+        add(image)
     }
 
     @MainActor

@@ -19,12 +19,13 @@ protects existing user preferences.
 | Streaming and durable queues | UI verifies sequential requests, keeps an unsent draft, stops a partial response, restarts, checks no automatic replay and resumes |
 | Queue editing, outbox corruption and recovery | `ConversationConvenienceTests`, `AttachmentDraftTests`; on-disk snapshots and exact attachment identity |
 | In-chat model switch | UI sends through Nova, selects GPT-6 Astra, then verifies the new request model and retained context |
+| Model switch after inspecting tools | UI runs real local tools, opens their original Input/Output, leaves the disclosure expanded, and repeatedly switches between Astra and Stable Image Ultra while preserving an unsent draft |
 | Local skills and shell | UI exercises three real tool cycles: list skills, read `code-review`, run harmless `printf`; asserts the actual output and exit status |
 | Image, conversation search and automation tools | UI verifies the actual image bytes in the next SDK request, finds a marker in an earlier saved conversation, creates a paused automation, and checks its persisted timezone/weekdays and visible card |
 | Automation model identity | UI chooses a provider group and model through the shared picker, verifies deduplication and the inference route, then saves, relaunches and edits without changing that route |
 | Background commands | Real-process core tests cover output offsets, bounded tails, per-chat ownership, capacity, polling cancellation and child-process termination; UI starts, polls and stops through the actual tool loop |
 | Output-limit continuation | Core tests distinguish truncation from filtering/cancellation and decode older run records; UI continues the actual response while retaining an unrelated draft |
-| Tool disclosure and original details | UI expands the named tool, verifies separate actions, opens the exact original output and input |
+| Tool disclosure and original details | UI expands the named tool, verifies separate actions and leading-aligned native previews with exact text, then opens the original output and input |
 | MCP lifecycle and mixed content | Real Python stdio servers: duplicate tool names, nested arguments, stderr pressure, cancellation, timeout, reconnect, media and resources |
 | Source file clipboard regression | UI pastes a `.swift` file URL, retains its draft, sends through the real SDK and checks exact UTF-8 bytes; native test covers multiple source types |
 | Long text, HTML and mixed images | UI first pastes a PNG-only clipboard, then long text and two images, sends them, and checks exact text plus all three images in the SDK request. Native tests cover Paste-menu validation, Unicode, plain-text priority, sanitized HTML, ordering, cancellation and bounded decoding. |

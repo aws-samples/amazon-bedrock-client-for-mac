@@ -88,20 +88,24 @@ private struct ToolCallRow: View {
         .accessibilityElement(children: .contain)
     }
     private func detailBlock(_ title: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let preview = text.count > 4_000
+            ? String(text.prefix(4_000)) + "\n\nOpen details to read the full output."
+            : text
+        let lines = preview.reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title).font(DesignTokens.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Copy") { ToolDetailText.copy(text) }
                     .buttonStyle(.borderless).font(DesignTokens.detail).accessibilityLabel("Copy tool \(title.lowercased())")
             }
-            ScrollView([.vertical, .horizontal]) {
-                Text(text.count > 4_000 ? String(text.prefix(4_000)) + "\n\nOpen details to read the full output." : text)
-                    .font(.system(size: 12, design: .monospaced)).lineSpacing(3)
-                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .frame(maxHeight: 220).padding(12)
+            // Keep short output aligned to the leading edge and give the
+            // transcript a bounded height, independent of nested scroll layout.
+            ToolOutputView(text: preview, findRequest: 0,
+                           accessibilityLabel: "Tool \(title.lowercased()) preview")
+            .frame(height: min(220, CGFloat(lines) * 16 + 28))
             .background(DesignTokens.canvas, in: RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }
