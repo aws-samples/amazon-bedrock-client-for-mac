@@ -537,7 +537,10 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Copy tool input"].exists)
         XCTAssertTrue(app.buttons["Copy tool output"].exists)
-        XCTAssertEqual(app.textViews["Tool input preview"].value as? String, "{}")
+        let inputPreview = try XCTUnwrap(app.textViews["Tool input preview"].value as? String)
+        let previewObject = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(inputPreview.utf8)) as? [String: Any])
+        XCTAssertTrue(previewObject.isEmpty)
         XCTAssertEqual(app.textViews["Tool output preview"].value as? String, output)
         XCTAssertLessThan(app.textViews["Tool input preview"].frame.minX - row.frame.minX, 24)
         for _ in 0..<3 where !open.isHittable {
@@ -548,6 +551,7 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(detail.waitForExistence(timeout: 3))
         XCTAssertEqual(detail.value as? String, output)
         app.buttons["Input"].click()
+        XCTAssertEqual(detail.value as? String, inputPreview)
         let input = try XCTUnwrap((detail.value as? String)?.data(using: .utf8))
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: input) as? [String: Any])
         XCTAssertTrue(object.isEmpty)

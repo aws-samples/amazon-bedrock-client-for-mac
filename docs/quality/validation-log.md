@@ -30,6 +30,13 @@ verified behavior, remaining implementation gaps and release gates.
   text view with bounded height and leading alignment; their exact text and
   placement are now asserted by the tool-details UI case. The final whole-suite
   run must include that presentation change.
+- Full local CI at `92dd023` passed core 115, renderer/clipboard 43 and native
+  app 102 cases (plus four optional network skips), with 26/27 UI cases passing.
+  The new preview test incorrectly required `{}` rather than accepting the JSON
+  encoder's whitespace. It now checks the parsed input and exact agreement
+  between preview and detail text, retaining the output and alignment assertions.
+  The corrected original-input/output UI scenario passed in
+  `native-tool-preview-input.xcresult`; a new complete execution is still required.
 - Complete local CI passed on clean revision `765e40e`: 115 portable core
   cases, 43 standalone renderer/clipboard cases, 105 app integration cases
   (101 passed and four opt-in public MCP diagnostics skipped), and all 26 UI
@@ -83,6 +90,7 @@ Evidence is retained under
 `prompt-initialization.xcresult`, `live-validation-71a428c`,
 `live-reproduce-71a428c`, `rapid-switch-transaction-2`,
 `model-switch-and-native-thumb.xcresult`,
+`full-ci-92dd023/Bedrock.xcresult`, `native-tool-preview-input.xcresult`,
 the viewport diagnostic profiles, and
 the raw performance measurements described in [Performance](../performance.md).
 

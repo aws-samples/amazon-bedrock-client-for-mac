@@ -31,6 +31,11 @@ screenshot does not close a behavioral requirement.
   That scenario and full-history scroll/search/return each passed three
   consecutive runs. Native, leading-aligned inline tool previews were added
   afterward and remain part of the final whole-suite gate.
+- Full local CI at `92dd023` passed all non-UI cases and 26/27 UI scenarios. The
+  remaining failure was a new test expecting compact empty JSON from a pretty
+  printer. The corrected check verifies parsed input, exact preview/detail
+  agreement, original output and leading alignment; its actual UI run passes.
+  This targeted result does not replace a complete CI receipt.
 - Local optimized-app integration previously executed 73 cases: 69 passed and
   four optional public-network cases were skipped. That result predates the
   repository reorganization and must be repeated.
