@@ -785,11 +785,19 @@ final class BedrockUITests: XCTestCase {
         XCTAssertEqual(web.frame.minY, readingY, accuracy: 2,
                        "Finalizing the response must retain the passage the user scrolled to.")
         app.buttons["Scroll to latest message"].click()
-        let finalMarker = web.staticTexts.matching(NSPredicate(
-            format: "label CONTAINS %@ OR value CONTAINS %@",
-            "LAYOUT_STREAM_COMPLETE", "LAYOUT_STREAM_COMPLETE")).firstMatch
-        XCTAssertTrue(finalMarker.waitForExistence(timeout: 8))
-        XCTAssertTrue(finalMarker.isHittable, "The full completed response must be visible after returning to the bottom.")
+        let finalMarker = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            // WebKit also exposes numeric heading levels as StaticText AXValues.
+            // An untyped `value CONTAINS` query throws an Objective-C exception.
+            // Search backwards from the end and compare only actual strings.
+            web.staticTexts.allElementsBoundByIndex.reversed().contains { element in
+                (element.label.contains("LAYOUT_STREAM_COMPLETE")
+                    || (element.value as? String)?.contains("LAYOUT_STREAM_COMPLETE") == true)
+                    && element.isHittable
+            }
+        }, object: nil)
+        let markerResult = await XCTWaiter.fulfillment(of: [finalMarker], timeout: 8)
+        XCTAssertEqual(markerResult, .completed, "The full completed response must be visible after returning to the bottom.")
+        guard markerResult == .completed else { return }
         chooseModel("GPT-6 Astra", in: app)
         send("[queue-one] AFTER_STREAMED_RESPONSE", in: app)
         let following = window.staticTexts["[queue-one] AFTER_STREAMED_RESPONSE"]

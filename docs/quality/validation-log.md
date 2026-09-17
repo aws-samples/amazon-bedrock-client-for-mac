@@ -6,6 +6,17 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Main CI `35265276118` at `d49fb2c` passed all non-UI suites and 34 of
+  35 UI scenarios, including the corrected window-resize case. The remaining
+  streaming assertion threw `NSInvalidArgumentException` because its
+  `value CONTAINS` predicate compared a numeric WebKit heading level (`2`)
+  with a string. The retained accessibility hierarchy already contained the
+  completed response. The assertion now checks only string values and still
+  requires the final marker to be visible after returning to the bottom.
+  That single failed scenario passed in 30.56 seconds against the optimized
+  app at 1,024×634 points in `v2.0.1/ci-text-value-regression`. The reading
+  anchor, response height, model switch, following message and actual SDK
+  request assertions remain intact. Complete main CI is still required.
 - Main CI `35260024696` at `0ae1c2f` passed the core, renderer and app
   integration suites, but two of 35 UI scenarios failed. Its 1,024-point
   display could not reach a requested 1,120-point window width, and WebKit did
