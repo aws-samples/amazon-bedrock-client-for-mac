@@ -6,6 +6,24 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Combined candidate `6dc3cca` passed 134 core, 54 renderer, 146 app
+  integration cases (four optional network skips), and 36 of 37 UI scenarios
+  in main CI `35271048902`. Archive migration, restore, permanent deletion and
+  paused-queue recovery passed there. The remaining streaming check spent
+  nearly nine seconds fetching individual accessibility values before finding
+  its final marker, exceeding its eight-second deadline. The retained video
+  shows that marker already visible. An exact equality query now resolves the
+  marker in one snapshot and safely ignores numeric heading levels.
+- The corresponding local combined run passed the native Archive lifecycle
+  and streaming/queue recovery checks, but a separate window-setup drag only
+  reached 1,061 points instead of 1,024. The streaming test now resizes from
+  straight edges and waits for the required small-window bounds. Its assertions
+  still require the retained reading anchor, visible final text and separation
+  from the following message. The updated test build and a Foundation
+  numeric-value comparison check passed. Two attempted local UI repetitions
+  did not execute: XCTest timed out enabling Automation Mode, which currently
+  requires user authentication on this Mac. `direct-marker-repetitions`
+  records that environment failure; it is not a passing UI receipt.
 - Main CI `35265276118` at `d49fb2c` passed all non-UI suites and 34 of
   35 UI scenarios, including the corrected window-resize case. The remaining
   streaming assertion threw `NSInvalidArgumentException` because its

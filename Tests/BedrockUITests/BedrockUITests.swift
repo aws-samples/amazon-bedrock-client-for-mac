@@ -916,15 +916,29 @@ final class BedrockUITests: XCTestCase {
         let initialFrame = window.frame
         let width = min(initialFrame.width, 1024)
         let height = min(initialFrame.height, 634)
-        if initialFrame.width > width || initialFrame.height > height {
-            let origin = window.coordinate(withNormalizedOffset: .zero)
-            origin.withOffset(CGVector(dx: initialFrame.width - 6, dy: initialFrame.height - 6))
-                .press(forDuration: 0.1,
-                       thenDragTo: origin.withOffset(CGVector(dx: width - 6, dy: height - 6)),
+        // Resize from the straight edges. The rounded bottom-right corner can
+        // miss AppKit's resize region and leave a partially resized window.
+        if initialFrame.width > width {
+            let edge = window.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: initialFrame.width - 1, dy: initialFrame.height / 2))
+            edge.press(forDuration: 0.1,
+                       thenDragTo: edge.withOffset(CGVector(dx: width - initialFrame.width, dy: 0)),
                        withVelocity: .slow, thenHoldForDuration: 0.1)
         }
-        XCTAssertLessThanOrEqual(window.frame.width, 1026)
-        XCTAssertLessThanOrEqual(window.frame.height, 636)
+        if window.frame.height > height {
+            let frame = window.frame
+            let edge = window.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: frame.width / 2, dy: frame.height - 1))
+            edge.press(forDuration: 0.1,
+                       thenDragTo: edge.withOffset(CGVector(dx: 0, dy: height - frame.height)),
+                       withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        let fitted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            window.frame.width <= 1026 && window.frame.height <= 636
+        }, object: nil)
+        let fitResult = await XCTWaiter.fulfillment(of: [fitted], timeout: 5)
+        XCTAssertEqual(fitResult, .completed, "Exercise the streaming handoff at the small hosted window size.")
+        guard fitResult == .completed else { return }
         send("[layout-stream] Grow this reply past the native Markdown threshold.", in: app)
         _ = response("LAYOUT_STREAM_BEGIN", in: app)
         let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
@@ -952,15 +966,14 @@ final class BedrockUITests: XCTestCase {
         XCTAssertEqual(web.frame.minY, readingY, accuracy: 2,
                        "Finalizing the response must retain the passage the user scrolled to.")
         app.buttons["Scroll to latest message"].click()
+        // Equality safely ignores numeric heading values. Resolve the exact
+        // marker in one accessibility query instead of fetching hundreds of
+        // individual elements across processes on the hosted runner.
+        let finalText = web.staticTexts.matching(NSPredicate(
+            format: "label == %@ OR value == %@",
+            "LAYOUT_STREAM_COMPLETE", "LAYOUT_STREAM_COMPLETE")).firstMatch
         let finalMarker = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            // WebKit also exposes numeric heading levels as StaticText AXValues.
-            // An untyped `value CONTAINS` query throws an Objective-C exception.
-            // Search backwards from the end and compare only actual strings.
-            web.staticTexts.allElementsBoundByIndex.reversed().contains { element in
-                (element.label.contains("LAYOUT_STREAM_COMPLETE")
-                    || (element.value as? String)?.contains("LAYOUT_STREAM_COMPLETE") == true)
-                    && element.isHittable
-            }
+            finalText.exists && finalText.isHittable
         }, object: nil)
         let markerResult = await XCTWaiter.fulfillment(of: [finalMarker], timeout: 8)
         XCTAssertEqual(markerResult, .completed, "The full completed response must be visible after returning to the bottom.")
