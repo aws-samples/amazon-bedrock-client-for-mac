@@ -11,6 +11,10 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- The normal universal Release build passes identity, hardened-runtime and
+  ad-hoc signature checks. Separate selected-Xcode architecture checks pass for
+  arm64 and x86_64 and reject a missing Intel slice. That verified command form
+  replaces the failing combined invocation in the release workflow.
 - Local `833f9d3` passed all non-UI suites and 26/27 UI scenarios. Its remaining
   default-window-size assertion inherited saved geometry from the small-window
   scenario. The UI fixture now ignores that saved frame at launch and moves its

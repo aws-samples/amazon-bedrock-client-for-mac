@@ -95,7 +95,8 @@ jobs:
           python3 scripts/verify-release.py --app "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           codesign -dv --verbose=4 "$APP_PATH" 2> artifacts/signature.log
-          lipo -verify_arch arm64 x86_64 "$APP_PATH/Contents/MacOS/Amazon Bedrock"
+          xcrun lipo "$APP_PATH/Contents/MacOS/Amazon Bedrock" -verify_arch arm64
+          xcrun lipo "$APP_PATH/Contents/MacOS/Amazon Bedrock" -verify_arch x86_64
           grep -q 'flags=.*runtime' artifacts/signature.log
       - name: Store notarization credentials in the runner keychain
         env:

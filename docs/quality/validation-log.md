@@ -6,6 +6,14 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- The normal universal Release app built successfully from `f12a687` in 253.2
+  seconds. Packaging identity, hardened runtime and ad-hoc signature verification
+  passed. This toolchain's `lipo -verify_arch` failed when both architectures
+  were supplied together, even though `-archs` reported both. The release
+  workflow now invokes the selected Xcode tool separately for arm64 and x86_64.
+  Both checks pass on the universal binary; an extracted arm64-only binary
+  correctly fails the Intel check. Workflow lint passes. No application-source
+  change or rebuild was needed for this packaging-command correction.
 - The user updated the release gate: rerun changed or previously failing paths
   locally, then require complete CI on main before release. The redundant local
   run at `9327147` was canceled during dependency resolution; its incomplete
