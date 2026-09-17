@@ -3,6 +3,7 @@ import SwiftUI
 struct MessageDisclosureView: View {
     @State private var isExpanded = false
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @Environment(\.beginConversationInspection) private var beginInspection
 
     let header: String
     let text: String
@@ -33,6 +34,7 @@ struct MessageDisclosureView: View {
         VStack(alignment: .leading, spacing: 4) {
             // Toggle button with summary
             Button(action: {
+                beginInspection()
                 isExpanded.toggle()
             }) {
                 HStack(spacing: 6) {

@@ -40,11 +40,13 @@ private struct ToolCallRow: View {
     @State private var isExpanded = false
     @State private var showDetails = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.beginConversationInspection) private var beginInspection
     private var title: String { call.displayName ?? BuiltInTool(rawValue: call.toolName)?.title ?? call.toolName }
     private var input: String { ToolDetailText.input(call.inputs) }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
+                beginInspection()
                 withAnimation(reduceMotion ? nil : AppMotion.standard) { isExpanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
@@ -77,7 +79,10 @@ private struct ToolCallRow: View {
                     HStack {
                         Text(call.serverName ?? call.toolName).font(DesignTokens.detail).foregroundStyle(.secondary).lineLimit(1)
                         Spacer()
-                        Button("Open details") { showDetails = true }.controlSize(.small)
+                        Button("Open details") {
+                            beginInspection()
+                            showDetails = true
+                        }.controlSize(.small)
                     }
                 }.padding(.horizontal, 12).padding(.bottom, 14)
             }

@@ -1,6 +1,17 @@
 import AppKit
 import SwiftUI
 
+private struct ConversationInspectionKey: EnvironmentKey {
+    static let defaultValue: @MainActor () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var beginConversationInspection: @MainActor () -> Void {
+        get { self[ConversationInspectionKey.self] }
+        set { self[ConversationInspectionKey.self] = newValue }
+    }
+}
+
 /// Observes the native transcript scroll view. Row reuse and height changes
 /// preserve reading position without publishing per-frame SwiftUI geometry.
 @MainActor
@@ -37,6 +48,11 @@ final class ConversationViewportController: ObservableObject {
     private var didScroll: ((Bool) -> Void)?
     private var didEnd: (() -> Void)?
     private var contentDidResize: (() -> Void)?
+
+    var isNearBottom: Bool {
+        guard let scroll = scrollView, let document = scroll.documentView else { return true }
+        return document.bounds.maxY - scroll.documentVisibleRect.maxY < 65
+    }
 
     func observeScrolling(didScroll: @escaping (Bool) -> Void, didEnd: @escaping () -> Void,
                           contentDidResize: @escaping () -> Void) {
@@ -75,10 +91,9 @@ final class ConversationViewportController: ObservableObject {
                 forName: name, object: scrollView, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let scroll = self.scrollView, let document = scroll.documentView else { return }
+                    guard let self, self.scrollView?.documentView != nil else { return }
                     self.cancelPreservation()
-                    let nearBottom = document.bounds.maxY - scroll.documentVisibleRect.maxY < 65
-                    self.didScroll?(nearBottom)
+                    self.didScroll?(self.isNearBottom)
                     if ended { self.didEnd?() }
                 }
             }))

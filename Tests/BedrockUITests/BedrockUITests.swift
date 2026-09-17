@@ -802,9 +802,12 @@ final class BedrockUITests: XCTestCase {
         XCTAssertTrue(wire.contains("Exit code: 0"))
         let call = app.descendants(matching: .any).matching(identifier: "toolCall.fixture-exec").firstMatch
         XCTAssertTrue(call.exists)
+        let headerY = call.frame.minY
         call.click()
         let open = app.buttons["Open details"]
         XCTAssertTrue(open.waitForExistence(timeout: 3))
+        XCTAssertEqual(call.frame.minY, headerY, accuracy: 2,
+                       "Inspecting a tool must preserve its position instead of following the expanded document to the bottom.")
         for _ in 0..<3 where !open.isHittable {
             app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
         }

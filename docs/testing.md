@@ -20,7 +20,7 @@ protects existing user preferences.
 | Queue editing, outbox corruption and recovery | `ConversationConvenienceTests`, `AttachmentDraftTests`; on-disk snapshots and exact attachment identity |
 | In-chat model switch | UI sends through Nova, selects GPT-6 Astra, then verifies the new request model and retained context |
 | Model switch after inspecting tools | UI runs real local tools, opens their original Input/Output, leaves the disclosure expanded, and repeatedly switches between Astra and Stable Image Ultra while preserving an unsent draft |
-| Local skills and shell | UI exercises three real tool cycles: list skills, read `code-review`, run harmless `printf`; asserts the actual output and exit status |
+| Local skills and shell | UI exercises three real tool cycles: list skills, read `code-review`, run harmless `printf`; asserts the actual output, exit status, stable disclosure position and one-click access to original output |
 | Image, conversation search and automation tools | UI verifies the actual image bytes in the next SDK request, finds a marker in an earlier saved conversation, creates a paused automation, and checks its persisted timezone/weekdays and visible card |
 | Automation model identity | UI chooses a provider group and model through the shared picker, verifies deduplication and the inference route, then saves, relaunches and edits without changing that route |
 | Background commands | Real-process core tests cover output offsets, bounded tails, per-chat ownership, capacity, polling cancellation and child-process termination; UI starts, polls and stops through the actual tool loop |

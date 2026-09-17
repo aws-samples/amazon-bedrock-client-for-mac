@@ -6,6 +6,18 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Full local CI at `9fc1597` passed all non-UI suites and 26/27 UI scenarios.
+  The skills/shell scenario exposed a different intermittent defect: after
+  expanding a completed tool, automatic following moved its Open details button
+  between coordinate resolution and the click. The recording shows the pointer
+  landing below the moved control. Tool and reasoning inspection now cancels
+  queued following and preserves the reading position before expansion.
+  The regression also checks that the tool header does not move; it does not
+  add a sleep or retry a missed click.
+- `tool-inspection-position.xcresult` then passed both the real skills/shell
+  details scenario and expanded-tool chat/image model-switch scenario three
+  consecutive times each. The new header-position assertion passed in every
+  repetition. A complete unchanged-source CI run remains the release gate.
 - A normal, online Release build at `71a428c` reproduced a new hang after
   inspecting a completed shell tool and rapidly switching between Astra and
   Stable Image Ultra. Two main-thread samples show an unending SwiftUI
@@ -91,6 +103,7 @@ Evidence is retained under
 `live-reproduce-71a428c`, `rapid-switch-transaction-2`,
 `model-switch-and-native-thumb.xcresult`,
 `full-ci-92dd023/Bedrock.xcresult`, `native-tool-preview-input.xcresult`,
+`full-ci-9fc1597/Bedrock.xcresult`, `tool-inspection-position.xcresult`,
 the viewport diagnostic profiles, and
 the raw performance measurements described in [Performance](../performance.md).
 

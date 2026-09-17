@@ -278,6 +278,7 @@ struct ChatView: View {
             .frame(maxWidth: .infinity)
             .coordinateSpace(name: "conversation.content")
         }
+        .environment(\.beginConversationInspection, pauseFollowingForInspection)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("conversation.transcript")
         .background(SidebarScrollChrome(viewport: viewport))
@@ -300,7 +301,11 @@ struct ChatView: View {
                 },
                 didEnd: rememberReadingPosition,
                 contentDidResize: {
-                    if followsOutput && searchQuery.isEmpty { scheduleFollowing(proxy) }
+                    if followsOutput && searchQuery.isEmpty {
+                        scheduleFollowing(proxy)
+                    } else {
+                        isAtBottom = viewport.isNearBottom
+                    }
                 }
             )
             await Task.yield()
@@ -352,6 +357,18 @@ struct ChatView: View {
         } : nil
         ConversationViewportMemory.shared.remember(position, for: viewModel.chatId)
         if let position { viewport.preserve(position.anchor) }
+    }
+
+    private func pauseFollowingForInspection() {
+        // Expanding a tool or reasoning is an explicit reading interaction.
+        // Preserve its position before its height changes, including while an
+        // answer is still streaming. A queued follow must not move the next
+        // control out from underneath the pointer.
+        scrollTask?.cancel()
+        searchScrollTask?.cancel()
+        followsOutput = false
+        viewport.cancelPreservation()
+        rememberReadingPosition()
     }
 
     private func handleMessageAction(_ action: MessageAction, message: MessageData) {

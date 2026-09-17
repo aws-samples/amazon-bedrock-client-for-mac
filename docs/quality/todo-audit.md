@@ -11,6 +11,14 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Complete CI at `9fc1597` passed all non-UI checks and 26/27 UI scenarios.
+  The remaining tool-details click failure was reproduced in the recording:
+  automatic following moved the expanded card just before the click. Explicit
+  tool/reasoning inspection now preserves the current reading position and
+  cancels queued following. The UI regression retains a single details click
+  and additionally checks that the disclosure header remains in place.
+  Both this scenario and the expanded-tool model-switch scenario subsequently
+  passed three consecutive runs in `tool-inspection-position.xcresult`.
 - Complete local CI passed on clean revision `765e40e`: core 115/115,
   renderer/clipboard 43/43, native app 101 passed plus four optional network
   skips, and UI 26/26. The receipt verifies unchanged source hashes and
