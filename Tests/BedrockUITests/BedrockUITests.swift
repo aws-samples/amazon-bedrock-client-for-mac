@@ -441,8 +441,22 @@ final class BedrockUITests: XCTestCase {
     @MainActor
     func testFullConversationScrollSearchAndReturnKeepTheReadingPosition() throws {
         let (app, directory) = try launch(scrollbars: "Always")
-        importThread(try longConversation(in: directory), in: app)
         let window = app.windows["MainWindow"]
+        // Match the small hosted display locally too. Use the actual native
+        // resize gesture so the test exercises the same safe areas and layout.
+        let initialFrame = window.frame
+        let width = min(initialFrame.width, 1_024)
+        let height = min(initialFrame.height, 674)
+        if initialFrame.width > width || initialFrame.height > height {
+            let origin = window.coordinate(withNormalizedOffset: .zero)
+            let corner = origin.withOffset(CGVector(dx: initialFrame.width - 6, dy: initialFrame.height - 6))
+            corner.press(forDuration: 0.1,
+                         thenDragTo: origin.withOffset(CGVector(dx: width - 6, dy: height - 6)),
+                         withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        XCTAssertLessThanOrEqual(window.frame.width, 1_026)
+        XCTAssertLessThanOrEqual(window.frame.height, 676)
+        importThread(try longConversation(in: directory), in: app)
         let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
         XCTAssertTrue(transcript.waitForExistence(timeout: 10))
         XCTAssertTrue(response("Fixture answer 499", in: app).isHittable)
@@ -544,7 +558,7 @@ final class BedrockUITests: XCTestCase {
         XCTAssertEqual(app.textViews["Tool output preview"].value as? String, output)
         XCTAssertLessThan(app.textViews["Tool input preview"].frame.minX - row.frame.minX, 24)
         for _ in 0..<3 where !open.isHittable {
-            app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
+            app.textViews["Tool input preview"].scroll(byDeltaX: 0, deltaY: -240)
         }
         open.click()
         let detail = app.textViews["Tool detail text"]
@@ -809,7 +823,7 @@ final class BedrockUITests: XCTestCase {
         XCTAssertEqual(call.frame.minY, headerY, accuracy: 2,
                        "Inspecting a tool must preserve its position instead of following the expanded document to the bottom.")
         for _ in 0..<3 where !open.isHittable {
-            app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
+            app.textViews["Tool input preview"].scroll(byDeltaX: 0, deltaY: -240)
         }
         open.click()
         let detail = app.textViews["Tool detail text"]
@@ -830,7 +844,7 @@ final class BedrockUITests: XCTestCase {
         let open = app.buttons["Open details"]
         XCTAssertTrue(open.waitForExistence(timeout: 3))
         for _ in 0..<3 where !open.isHittable {
-            app.windows["MainWindow"].scroll(byDeltaX: 0, deltaY: -240)
+            app.textViews["Tool input preview"].scroll(byDeltaX: 0, deltaY: -240)
         }
         open.click()
         let detail = app.textViews["Tool detail text"]

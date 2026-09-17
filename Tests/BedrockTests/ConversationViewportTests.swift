@@ -9,6 +9,149 @@ final class ConversationViewportTests: XCTestCase {
     }
 
     @MainActor
+    private final class WheelRecorder: NSScrollView {
+        var events: [NSEvent] = []
+        override func scrollWheel(with event: NSEvent) { events.append(event) }
+    }
+
+    @MainActor
+    func testShortToolPreviewScrollsItsParentWhileLongOutputScrollsItself() async throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let parent = WheelRecorder(frame: window.contentLayoutRect)
+        let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
+        parent.documentView = document
+        window.contentView = parent
+        let preview = ToolOutputScrollView(frame: NSRect(x: 20, y: 100, width: 600, height: 120))
+        preview.hasVerticalScroller = true
+        preview.scrollerStyle = .overlay
+        let output = Document(frame: NSRect(x: 0, y: 0, width: 600, height: 40))
+        preview.documentView = output
+        document.addSubview(preview)
+        let cgEvent = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
+                                           wheelCount: 1, wheel1: -80, wheel2: 0, wheel3: 0))
+        let event = try XCTUnwrap(NSEvent(cgEvent: cgEvent))
+
+        preview.scrollWheel(with: event)
+        XCTAssertTrue(parent.events.isEmpty, "Standalone detail output must keep its own scrolling.")
+        preview.scrollsWithConversation = true
+        preview.scrollWheel(with: event)
+        XCTAssertEqual(parent.events.count, 1)
+        XCTAssertTrue(parent.events.first === event)
+
+        output.setFrameSize(NSSize(width: 600, height: 600))
+        let before = preview.documentVisibleRect.minY
+        preview.scrollWheel(with: event)
+        // AppKit applies wheel input on a subsequent animation frame.
+        // Observe actual movement rather than asserting before that frame.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(1))
+        while preview.documentVisibleRect.minY <= before, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(parent.events.count, 1, "A long preview must remain scrollable inside its bounded pane.")
+        XCTAssertGreaterThan(preview.documentVisibleRect.minY, before)
+    }
+
+    @MainActor
+    func testTopBoundaryKeepsTheNativeTitlebarInset() throws {
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 40, left: 0, bottom: 0, right: 0)
+        scroll.documentView = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
+        let controller = ConversationViewportController()
+        let id = UUID()
+        controller.observeScrolling(didScroll: { _ in }, didEnd: {}, contentDidResize: {}, firstMessageID: id)
+        controller.connect(to: scroll)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: -40))
+        XCTAssertEqual(scroll.documentVisibleRect.minY, -40, accuracy: 0.5)
+        controller.preserve(try XCTUnwrap(controller.capture()))
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 0))
+        controller.restore()
+        XCTAssertEqual(scroll.documentVisibleRect.minY, -40, accuracy: 0.5,
+                       "Preserving the top must not move content up by the titlebar height.")
+        controller.disconnect()
+    }
+
+    @MainActor
+    func testTopScrollIntentSurvivesLayoutCompensationBeforeAndAfterTheGestureEnds() async throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let scroll = NSScrollView(frame: window.contentLayoutRect)
+        let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 40_000))
+        let first = NSView(frame: NSRect(x: 0, y: 12, width: 800, height: 300))
+        let next = NSView(frame: NSRect(x: 0, y: 600, width: 800, height: 300))
+        document.addSubview(first)
+        document.addSubview(next)
+        scroll.documentView = document
+        window.contentView = scroll
+        let controller = ConversationViewportController()
+        let firstID = UUID()
+        controller.observeScrolling(didScroll: { _ in }, didEnd: {
+            if let anchor = controller.capture() { controller.preserve(anchor) }
+        }, contentDidResize: {}, firstMessageID: firstID)
+        controller.connect(to: scroll)
+        controller.register(first, messageID: firstID)
+        controller.register(next, messageID: UUID())
+
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 20_000))
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        scroll.contentView.scroll(to: .zero)
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+        // The hosted UI recording reached question 0, then jumped to question
+        // 32 as lazy rows acquired their real heights around mouse-up.
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 12_000))
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        XCTAssertEqual(scroll.documentVisibleRect.minY, 0, accuracy: 0.5)
+        XCTAssertEqual(controller.capture(), .init(messageID: firstID, offset: 0, isAtTop: true))
+
+        // Offset compensation can happen after the final size notification.
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 11_600))
+        let corrected = expectation(description: "Late clip adjustment corrected")
+        DispatchQueue.main.async { corrected.fulfill() }
+        await fulfillment(of: [corrected], timeout: 1)
+        XCTAssertEqual(scroll.documentVisibleRect.minY, 0, accuracy: 0.5)
+
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 600))
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        controller.restore()
+        XCTAssertEqual(scroll.documentVisibleRect.minY, 600, accuracy: 0.5,
+                       "A new user gesture must release the top boundary.")
+        XCTAssertFalse(try XCTUnwrap(controller.capture()).isAtTop)
+        controller.disconnect()
+    }
+
+    @MainActor
+    func testLateClipAdjustmentPreservesAnInteriorPassageWithoutPublishingUserScroll() async throws {
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let document = Document(frame: NSRect(x: 0, y: 0, width: 800, height: 4_000))
+        let message = NSView(frame: NSRect(x: 0, y: 2_000, width: 800, height: 300))
+        document.addSubview(message)
+        scroll.documentView = document
+        let controller = ConversationViewportController()
+        let id = UUID()
+        var userScrolls = 0
+        controller.observeScrolling(didScroll: { _ in userScrolls += 1 }, didEnd: {}, contentDidResize: {})
+        controller.connect(to: scroll)
+        controller.register(message, messageID: id)
+        controller.preserve(.init(messageID: id, offset: 80))
+        controller.restore()
+
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 2_120))
+        let corrected = expectation(description: "Interior reading position corrected")
+        DispatchQueue.main.async { corrected.fulfill() }
+        await fulfillment(of: [corrected], timeout: 1)
+        XCTAssertEqual(scroll.documentVisibleRect.minY, 1_920, accuracy: 0.5)
+        XCTAssertEqual(userScrolls, 0, "Layout compensation is not a user gesture.")
+        controller.disconnect()
+    }
+
+    @MainActor
     func testRestorationWaitsForALazyRowAndStopsSeekingOnceItIsPositioned() async throws {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: .borderless, backing: .buffered, defer: false)

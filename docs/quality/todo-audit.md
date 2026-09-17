@@ -11,6 +11,23 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Actual small-window inspection isolated a wheel-input trap in short native
+  tool previews. Scrolling outside the preview worked; scrolling inside it
+  could leave Open details out of reach. Fitting inline previews now pass wheel
+  input to the conversation. Long outputs and standalone details retain their
+  own scrolling. The expanded-tool model-switch, small-window full-history and
+  skills/shell original-details UI scenarios each passed three times. All 15
+  native viewport cases also passed three times after correcting an assertion
+  that ran before AppKit applied its wheel animation.
+- Hosted `35180323291` showed the first conversation message briefly appearing
+  and then jumping to question 32 during late layout at the end of a thumb
+  drag. The earlier drag-endpoint adjustment was insufficient. Explicit
+  top-boundary preservation and observation of late native clip adjustments
+  now address that path. The local `4f50cee` suite was canceled to incorporate
+  this correction; its partial passing result is not a complete CI receipt.
+  Subsequent testing caught a 40-point titlebar-inset shift during tool
+  inspection. The boundary now comes from AppKit's constrained clip bounds,
+  with a separate inset regression, rather than a hardcoded zero offset.
 - Complete CI at `9fc1597` passed all non-UI checks and 26/27 UI scenarios.
   The remaining tool-details click failure was reproduced in the recording:
   automatic following moved the expanded card just before the click. Explicit

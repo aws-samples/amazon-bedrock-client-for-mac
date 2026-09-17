@@ -13,7 +13,7 @@ protects existing user preferences.
 | --- | --- |
 | First keystroke invalidates the whole scene | `WindowLifecycleTests.testTypingOnlyInvalidatesTheAffectedDraftIndicator`; long-conversation typing metric |
 | Opening Models publishes unchanged preferences during rendering | `WindowLifecycleTests.testLoadingPromptPresetsPreservesInstructionsWithoutPublishingUnchangedSettings`; actual all-panes Settings interaction |
-| Continuous long history, scroll and navigation | `NavigationPerformanceTests`, `ConversationViewportTests`; a complete 1,000-message UI fixture, one scroll-thumb drag to the first message, search through the full history, Activity → Back, and finishing a controlled stream while reading an older passage |
+| Continuous long history, scroll and navigation | `NavigationPerformanceTests`, `ConversationViewportTests`; a complete 1,000-message UI fixture in a 1024×674 window, one scroll-thumb drag to the first message, search through the full history, Activity → Back, and finishing a controlled stream while reading an older passage. Native cases cover late clip-offset compensation and top-boundary intent without suppressing the next user gesture. |
 | Command-N, D, B, F, K and Settings | UI shortcut, centered search, titlebar and Settings lifecycle cases |
 | Quick Access escape and handoff | UI opens the real panel, dismisses it, submits through the composer and verifies the main conversation and SDK request |
 | Streaming and durable queues | UI verifies sequential requests, keeps an unsent draft, stops a partial response, restarts, checks no automatic replay and resumes |
@@ -25,7 +25,7 @@ protects existing user preferences.
 | Automation model identity | UI chooses a provider group and model through the shared picker, verifies deduplication and the inference route, then saves, relaunches and edits without changing that route |
 | Background commands | Real-process core tests cover output offsets, bounded tails, per-chat ownership, capacity, polling cancellation and child-process termination; UI starts, polls and stops through the actual tool loop |
 | Output-limit continuation | Core tests distinguish truncation from filtering/cancellation and decode older run records; UI continues the actual response while retaining an unrelated draft |
-| Tool disclosure and original details | UI expands the named tool, verifies separate actions and leading-aligned native previews with exact text, then opens the original output and input |
+| Tool disclosure and original details | UI expands the named tool, verifies stable position and leading-aligned native previews with exact text, scrolls over a fitting preview to reach Open details, then opens the original output and input. Native cases verify that long output keeps its own scrolling. |
 | MCP lifecycle and mixed content | Real Python stdio servers: duplicate tool names, nested arguments, stderr pressure, cancellation, timeout, reconnect, media and resources |
 | Source file clipboard regression | UI pastes a `.swift` file URL, retains its draft, sends through the real SDK and checks exact UTF-8 bytes; native test covers multiple source types |
 | Long text, HTML and mixed images | UI first pastes a PNG-only clipboard, then long text and two images, sends them, and checks exact text plus all three images in the SDK request. Native tests cover Paste-menu validation, Unicode, plain-text priority, sanitized HTML, ordering, cancellation and bounded decoding. |

@@ -306,7 +306,8 @@ struct ChatView: View {
                     } else {
                         isAtBottom = viewport.isNearBottom
                     }
-                }
+                },
+                firstMessageID: rows.first?.id
             )
             await Task.yield()
             guard !Task.isCancelled else { return }

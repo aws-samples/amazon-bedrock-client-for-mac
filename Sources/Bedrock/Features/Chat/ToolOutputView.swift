@@ -8,10 +8,12 @@ struct ToolOutputView: NSViewRepresentable {
     var findRequest: Int
     var initialQuery = ""
     var accessibilityLabel = "Tool detail text"
+    var scrollsWithConversation = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
+        let scroll = ToolOutputScrollView()
+        scroll.scrollsWithConversation = scrollsWithConversation
         scroll.hasVerticalScroller = true
         scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false
@@ -45,6 +47,7 @@ struct ToolOutputView: NSViewRepresentable {
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let editor = scroll.documentView as? NSTextView else { return }
+        (scroll as? ToolOutputScrollView)?.scrollsWithConversation = scrollsWithConversation
         if editor.accessibilityLabel() != accessibilityLabel {
             editor.setAccessibilityLabel(accessibilityLabel)
         }
@@ -75,6 +78,23 @@ struct ToolOutputView: NSViewRepresentable {
     final class Coordinator {
         var findRequest = 0
         var query: String?
+    }
+}
+
+/// Short inline previews must not trap the conversation's wheel input. A long
+/// output keeps its own native scrolling; detail sheets use that behavior too.
+final class ToolOutputScrollView: NSScrollView {
+    var scrollsWithConversation = false
+
+    override func scrollWheel(with event: NSEvent) {
+        if scrollsWithConversation,
+           let document = documentView,
+           document.frame.height <= contentSize.height + 1,
+           let parent = superview?.enclosingScrollView, parent !== self {
+            parent.scrollWheel(with: event)
+        } else {
+            super.scrollWheel(with: event)
+        }
     }
 }
 

@@ -107,7 +107,8 @@ private struct ToolCallRow: View {
             // Keep short output aligned to the leading edge and give the
             // transcript a bounded height, independent of nested scroll layout.
             ToolOutputView(text: preview, findRequest: 0,
-                           accessibilityLabel: "Tool \(title.lowercased()) preview")
+                           accessibilityLabel: "Tool \(title.lowercased()) preview",
+                           scrollsWithConversation: true)
             .frame(height: min(220, CGFloat(lines) * 16 + 28))
             .background(DesignTokens.canvas, in: RoundedRectangle(cornerRadius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8))

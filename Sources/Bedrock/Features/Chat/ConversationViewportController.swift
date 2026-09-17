@@ -19,6 +19,7 @@ final class ConversationViewportController: ObservableObject {
     struct Anchor: Equatable {
         let messageID: UUID
         let offset: CGFloat
+        var isAtTop = false
     }
 
     private final class WeakView {
@@ -45,6 +46,8 @@ final class ConversationViewportController: ObservableObject {
     private var isDeparting = false
     private var interactionGeneration = 0
     private var capturingRemoval = false
+    private var firstMessageID: UUID?
+    private var lastLiveScrollWasAtTop = false
     private var didScroll: ((Bool) -> Void)?
     private var didEnd: (() -> Void)?
     private var contentDidResize: (() -> Void)?
@@ -54,11 +57,27 @@ final class ConversationViewportController: ObservableObject {
         return document.bounds.maxY - scroll.documentVisibleRect.maxY < 65
     }
 
+    private var isAtTop: Bool {
+        guard let scroll = scrollView else { return false }
+        return scroll.documentVisibleRect.minY <= topOffset + 0.5
+    }
+
+    private var topOffset: CGFloat {
+        guard let scroll = scrollView, let document = scroll.documentView else { return 0 }
+        let clip = scroll.contentView
+        var proposed = clip.bounds
+        proposed.origin.y = -max(1_000, document.bounds.height + clip.bounds.height)
+        // A full-size-content window can have a negative top offset for its
+        // titlebar inset. Ask AppKit for the boundary instead of assuming zero.
+        return clip.convert(clip.constrainBoundsRect(proposed), to: document).minY
+    }
+
     func observeScrolling(didScroll: @escaping (Bool) -> Void, didEnd: @escaping () -> Void,
-                          contentDidResize: @escaping () -> Void) {
+                          contentDidResize: @escaping () -> Void, firstMessageID: UUID? = nil) {
         self.didScroll = didScroll
         self.didEnd = didEnd
         self.contentDidResize = contentDidResize
+        self.firstMessageID = firstMessageID
     }
 
     func connect(to scrollView: NSScrollView) {
@@ -67,6 +86,15 @@ final class ConversationViewportController: ObservableObject {
         self.scrollView = scrollView
         departureAnchor = nil
         resizeCallbackScheduled = false
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        observations.append(Observation(NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main
+        ) { [weak self] _ in
+            // Lazy layout can compensate the clip offset after reporting its
+            // final document/row sizes. Preserve the reading position through
+            // that later adjustment too, without publishing scroll geometry.
+            MainActor.assumeIsolated { self?.scheduleRestore() }
+        }))
         if let document = scrollView.documentView {
             document.postsFrameChangedNotifications = true
             observations.append(Observation(NotificationCenter.default.addObserver(
@@ -83,7 +111,10 @@ final class ConversationViewportController: ObservableObject {
         ) { [weak self] _ in
             // Thumb tracking can resize a lazy document before didLiveScroll.
             // Stop restoring the old passage as soon as the gesture starts.
-            MainActor.assumeIsolated { self?.cancelPreservation() }
+            MainActor.assumeIsolated {
+                self?.lastLiveScrollWasAtTop = false
+                self?.cancelPreservation()
+            }
         }))
         for name in [NSScrollView.didLiveScrollNotification, NSScrollView.didEndLiveScrollNotification] {
             let ended = name == NSScrollView.didEndLiveScrollNotification
@@ -92,9 +123,21 @@ final class ConversationViewportController: ObservableObject {
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self, self.scrollView?.documentView != nil else { return }
+                    let endedAtTop = ended && (self.lastLiveScrollWasAtTop || self.isAtTop)
                     self.cancelPreservation()
+                    if !ended { self.lastLiveScrollWasAtTop = self.isAtTop }
+                    if endedAtTop, let first = self.firstMessageID {
+                        // The thumb can reach zero, then lazy measurement can
+                        // shift the offset before didEndLiveScroll arrives.
+                        // Retain the user's boundary intent, not that shift.
+                        self.preserve(Anchor(messageID: first, offset: 0, isAtTop: true))
+                        self.restore()
+                    }
                     self.didScroll?(self.isNearBottom)
-                    if ended { self.didEnd?() }
+                    if ended {
+                        self.didEnd?()
+                        self.lastLiveScrollWasAtTop = false
+                    }
                 }
             }))
         }
@@ -132,7 +175,13 @@ final class ConversationViewportController: ObservableObject {
 
     func capture(preferredID: UUID? = nil) -> Anchor? {
         if let departureAnchor { return departureAnchor }
+        if let pending, pending.isAtTop { return pending }
         guard let scroll = scrollView, let document = scroll.documentView else { return lastCaptured }
+        if preferredID == nil, isAtTop, let firstMessageID {
+            let anchor = Anchor(messageID: firstMessageID, offset: 0, isAtTop: true)
+            lastCaptured = anchor
+            return anchor
+        }
         let viewport = scroll.documentVisibleRect
         func anchor(_ id: UUID, _ view: NSView) -> Anchor {
             let frame = measuredFrames[id] ?? view.convert(view.bounds, to: document)
@@ -222,6 +271,7 @@ final class ConversationViewportController: ObservableObject {
             do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
             guard !Task.isCancelled, !isDeparting, generation == interactionGeneration else { return }
             restore()
+            if anchor.isAtTop, isAtTop { return }
             if isVisible(messageID: anchor.messageID),
                let actual = capture(preferredID: anchor.messageID),
                abs(actual.offset - anchor.offset) < 0.5 { return }
@@ -247,6 +297,8 @@ final class ConversationViewportController: ObservableObject {
         didScroll = nil
         didEnd = nil
         contentDidResize = nil
+        firstMessageID = nil
+        lastLiveScrollWasAtTop = false
     }
 
     private func scheduleResizeCallback() {
@@ -274,6 +326,10 @@ final class ConversationViewportController: ObservableObject {
     /// Also runs when a newly inserted WebKit/image row reports its final height.
     /// A real user scroll cancels preservation through native scroll notifications.
     func restore() {
+        if pending?.isAtTop == true {
+            restoreOffset(topOffset)
+            return
+        }
         guard let messageID = pendingAlignment?.messageID ?? pending?.messageID,
               let scroll = scrollView, let document = scroll.documentView else { return }
         let rect: CGRect
@@ -288,7 +344,11 @@ final class ConversationViewportController: ObservableObject {
             max(0, scroll.documentVisibleRect.height - rect.height) * $0.fraction
         } ?? pending!.offset
         lastCaptured = Anchor(messageID: messageID, offset: offset)
-        let desired = rect.minY - offset
+        restoreOffset(rect.minY - offset)
+    }
+
+    private func restoreOffset(_ desired: CGFloat) {
+        guard let scroll = scrollView else { return }
         let current = scroll.documentVisibleRect.minY
         guard abs(desired - current) > 0.5 else { return }
         let clip = scroll.contentView

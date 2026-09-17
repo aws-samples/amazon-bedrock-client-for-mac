@@ -6,6 +6,43 @@ verified behavior, remaining implementation gaps and release gates.
 
 ## September 17, 2026
 
+- Small-window tool inspection revealed a separate nested-scrolling problem:
+  wheel input over a short native input preview stayed inside that preview,
+  leaving Open details below the conversation viewport. Actual wheel input
+  outside the preview scrolled normally and canceled position preservation.
+  Inline previews now forward wheel input to the conversation when their full
+  content fits; long output panes and detail sheets retain native scrolling.
+  The UI scenarios scroll directly over the input preview before opening the
+  original details. All three targeted UI scenarios passed three consecutive
+  runs in `inline-preview-scroll-routing.xcresult`: expanded-tool model switches,
+  small-window full-history navigation and skills/shell original details.
+- The initial native wheel assertion ran before AppKit's next animation frame
+  and failed despite successful UI scrolling. An isolated native reproduction
+  measured zero immediate movement followed by the correct 80-point movement.
+  The test now observes movement within a bounded deadline and matches the
+  app's vertical-scroller configuration. `native-wheel-and-viewport-final.xcresult`
+  passed all 15 viewport cases three times, including independent long-output
+  scrolling, top-boundary intent, native insets and late clip compensation.
+  These targeted results precede the complete local and hosted release gates.
+- Hosted CI `35180323291` exposed another continuous-history defect on its
+  1024×674 window. The recording shows question 0 appearing at the end of a
+  thumb drag, followed by a jump to question 32 as lazy layout corrected the
+  document. This disproves the earlier conclusion that extending the drag
+  endpoint was sufficient. The viewport now retains an explicit top-boundary
+  intent from the live gesture and observes later clip-offset adjustments,
+  while a new user gesture cancels preservation immediately.
+- The local `4f50cee` run was deliberately canceled after this hosted failure
+  was inspected. All executed cases passed (115 core, 43 renderer, 102 native
+  plus four optional skips, and 17 UI cases), but it is not a complete CI
+  receipt. The full-history UI scenario now resizes to the small hosted window
+  locally; native regressions reproduce offset compensation both before and
+  after the end-of-scroll notification.
+- The first boundary run passed 13 native viewport cases and the small-window
+  history and stream-completion UI scenarios three times each, but exposed a
+  40-point shift during tool inspection. A full-size-content window's native
+  top boundary can be negative because of its titlebar inset. Restoration now
+  uses AppKit's constrained bounds instead of zero; a dedicated native case
+  checks preservation of that inset.
 - Full local CI at `9fc1597` passed all non-UI suites and 26/27 UI scenarios.
   The skills/shell scenario exposed a different intermittent defect: after
   expanding a completed tool, automatic following moved its Open details button
