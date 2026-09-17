@@ -1,6 +1,6 @@
 # CI regression coverage
 
-`CI` runs for every main push, release branch push, pull request and manual dispatch.
+`CI` runs for every main push, pull request and manual dispatch.
 Local validation and GitHub share `python3 scripts/ci.py`. For focused changes,
 run the affected or previously failing suites locally. The final main revision
 must pass the entire GitHub pipeline before release; targeted local results do
@@ -10,6 +10,11 @@ commit, including source hashes, executable modes and the Xcode case inventory.
 The full suite is not repeated during release. The app runs
 with **Release optimization** and isolated local data; a distinct bundle identity
 protects existing user preferences.
+
+The full pipeline executes renderer and clipboard cases once, inside the optimized
+app suite, and compares the executed inventory with every test declared in their
+source files. The standalone rendering harness remains available for focused local
+checks. Release-branch pushes do not duplicate pull-request validation.
 
 ## Tests and scenarios
 

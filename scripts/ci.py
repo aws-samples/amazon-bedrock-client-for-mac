@@ -140,9 +140,6 @@ def main():
         run("local core", [python, "scripts/validate-local-core.py", "--output", output / "core"], "core-suite.log")
         run("pinned dependencies", [xcodebuild, "-resolvePackageDependencies", *common,
                                     "-onlyUsePackageVersionsFromResolvedFile"], "dependencies.log")
-        run("native Markdown and clipboard",
-            [python, "scripts/validate-markdown-rendering.py", "--markdown-package",
-             args.packages.resolve() / "checkouts/swift-markdownkit", "--output", output / "rendering"], "rendering-suite.log")
         run("UI automation readiness",
             [python, "scripts/check-ui-test-environment.py"], "ui-environment.log")
         run("optimized app integration and UI",
@@ -163,6 +160,11 @@ def main():
         run("Xcode suite inventory",
             ["xcrun", "xcresulttool", "get", "test-results", "tests", "--path", result_bundle, "--compact"],
             "xcode-tests.json")
+        # These same rendering cases are compiled into and executed by the app suite.
+        # Verify every source-declared case instead of building and running them twice.
+        run("native Markdown and clipboard",
+            [python, "scripts/verify-rendering-results.py", "--inventory", output / "xcode-tests.json"],
+            "rendering-suite.log")
         execution = json.loads((output / "xcode-summary.json").read_text())
         inventory = json.loads((output / "xcode-tests.json").read_text())
 

@@ -101,7 +101,9 @@ Fixture paths resolve from the test sources, or from `BEDROCK_TEST_FIXTURES`.
 UI tests create fresh storage for each case. Tests cover real local MCP
 subprocesses; optional public MCP diagnostics require `BEDROCK_LIVE_NETWORK_TESTS=1`.
 
-The validation workflow runs on every push to `main` and `release/**`, on pull requests, and on demand. It retains logs, screenshots, actual loopback request payloads, timing results and an `.xcresult`. Pinned package sources are cached by the committed dependency graph. Release reuses the successful main run for the exact tag commit after matching its source hashes, executable permissions, and complete Xcode inventory. It builds and checks the distribution separately, caching those build intermediates for later releases. See [CI coverage](testing.md) for the scenario map and the distinction between deterministic and live AWS checks.
+The validation workflow runs on every push to `main`, on pull requests, and on demand. Release branches use pull-request validation instead of also starting a duplicate push run. It retains logs, screenshots, actual loopback request payloads, timing results and an `.xcresult`. Renderer and clipboard cases run once in the optimized app suite; CI verifies that every case declared in those source files passed. The standalone harness remains available for focused local work.
+
+Pinned package sources and optimized build intermediates are cached by toolchain and dependency graph. CI compiles for the runner's architecture and disables editor indexing; distribution builds still include both architectures. Release reuses the successful main run for the exact tag commit after matching its source hashes, executable permissions, and complete Xcode inventory. It builds and checks the distribution separately. Stage timings appear in the workflow summary, and long stages report progress every 30 seconds. See [CI coverage](testing.md) for the scenario map and the distinction between deterministic and live AWS checks.
 
 ## Performance checks
 

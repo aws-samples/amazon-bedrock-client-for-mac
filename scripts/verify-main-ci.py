@@ -25,6 +25,7 @@ OPTIONAL_TESTS = {
 REQUIRED_SUITES = {
     "BedrockUITests", "MCPConfigurationTests", "MCPIntegrationTests", "WindowLifecycleTests",
     "UpdateInstallerTests", "ConversationViewportTests", "NativeTranscriptTests",
+    "MarkdownRenderingTests", "ClipboardRenderingTests",
 }
 
 
