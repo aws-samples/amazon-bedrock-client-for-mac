@@ -86,6 +86,14 @@ struct BedrockApp: App {
         }
     }
 
+    private var initialWindowSize: CGSize {
+        let available = NSScreen.screens.first?.visibleFrame.size ?? CGSize(width: 1120, height: 800)
+        // defaultSize describes content. Leave room for the native titlebar on
+        // small displays; a 1,120-point window otherwise opens offscreen at 1,024.
+        return CGSize(width: min(1120, available.width),
+                      height: min(760, max(580, available.height - 40)))
+    }
+
     var body: some Scene {
         Window("Amazon Bedrock Client", id: "MainWindow") {
             MainWindowView()
@@ -98,7 +106,7 @@ struct BedrockApp: App {
         }
         .windowStyle(DefaultWindowStyle())
         .windowToolbarStyle(.unifiedCompact)
-        .defaultSize(width: 1120, height: 760)
+        .defaultSize(width: initialWindowSize.width, height: initialWindowSize.height)
         .commands {
             AppCommands()
         }

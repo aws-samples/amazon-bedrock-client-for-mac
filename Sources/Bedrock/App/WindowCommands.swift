@@ -56,8 +56,13 @@ extension FocusedValues {
 /// new command closures and invalidates the scene again during input/scrolling.
 struct AppCommands: Commands {
     @FocusedValue(\.workbenchCommands) private var windowCommands: WindowCommands?
+    @ObservedObject private var updater = UpdateService.shared
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { updater.checkForUpdates(manual: true) }
+                .disabled(updater.isBusy)
+        }
         CommandGroup(replacing: .newItem) {
             Button("New Thread") {
                 NSApp.sendAction(#selector(AppDelegate.newChat(_:)), to: nil, from: nil)

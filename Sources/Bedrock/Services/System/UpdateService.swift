@@ -1,513 +1,178 @@
-//
-//  UpdateService.swift
-//  Amazon Bedrock Client for Mac
-//
-//  Created by Na, Sanghwa on 2024/01/04.
-//
-
-import Foundation
 import AppKit
 import Combine
+import Foundation
 import Logging
 
 @MainActor
-class UpdateService {
-    // Singleton instance
-    static let shared: UpdateService = {
-        let instance = UpdateService()
-        return instance
-    }()
-    
-    private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0" 
-    private let updateCheckURL = URL(string: "https://api.github.com/repos/aws-samples/amazon-bedrock-client-for-mac/releases/latest")!
-    
-    // The name used for display purposes
-    private let appDisplayName = "Amazon Bedrock Client for Mac"
-    // The actual name of the .app file (important for the update process)
-    private let appFileName = "Amazon Bedrock"
-    
-    private var cancellables = Set<AnyCancellable>()
-    private var logger: Logger
-    
-    // Strong references to prevent premature deallocation
-    private var updateTask: URLSessionTask?
-    private var downloadTask: URLSessionDownloadTask?
+final class UpdateService: NSObject, ObservableObject {
+    static let shared = UpdateService()
+
+    @Published private(set) var isBusy = false
+    @Published private(set) var status: String?
+    private let logger = Logger(label: "UpdateService")
+    private var operation: Task<Void, Never>?
     private var progressWindow: NSWindow?
-    
-    // Private initializer for singleton
-    private init() {
-        logger = Logger(label: "UpdateService")
-        logger.info("UpdateService initialized with current version: \(self.currentVersion)")
+    private var progressLabel: NSTextField?
+    private var installer: Process?
+
+    func checkForUpdates(manual: Bool = false) {
+        guard !isBusy, !ValidationMode.isOffline,
+              manual || PreferencesStore.shared.checkForUpdates else { return }
+        isBusy = true
+        status = "Checking for updates…"
+        operation = Task { await check(manual: manual) }
     }
-    
-    func cleanup() {
-        updateTask?.cancel()
-        downloadTask?.cancel()
-        
-        DispatchQueue.main.async {
-            self.progressWindow?.close()
-            self.progressWindow = nil
-        }
-    }
-    
-    func checkForUpdates() {
-        guard PreferencesStore.shared.checkForUpdates else {
-            logger.debug("Auto-update is disabled in settings")
-            return
-        }
-        
-        logger.info("Checking for updates. Current version: \(currentVersion)")
-        
-        // Cancel existing task if any
-        updateTask?.cancel()
-        
-        let request = URLRequest(url: updateCheckURL, timeoutInterval: 30)
-        updateTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self else { return }
-            
-            Task { @MainActor in
-                if let error = error {
-                    self.logger.error("Update check failed: \(error.localizedDescription)")
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    self.logger.error("Invalid response from update server")
-                    return
-                }
-                
-                guard let data = data else {
-                    self.logger.error("No data received from update server")
-                    return
-                }
-                
-                await self.processReleaseData(data)
+
+    private func check(manual: Bool) async {
+        var workspace: URL?
+        var prepared: UpdateInstallationPlan?
+        var handedOff = false
+        var preserveDownload = false
+        defer {
+            progressWindow?.close()
+            progressWindow = nil
+            progressLabel = nil
+            isBusy = handedOff
+            operation = nil
+            if !handedOff {
+                if let prepared { try? FileManager.default.removeItem(at: prepared.stagingDirectory) }
+                if let workspace, !preserveDownload { try? FileManager.default.removeItem(at: workspace) }
             }
         }
-        
-        updateTask?.resume()
-    }
-    
-    private func processReleaseData(_ data: Data) async {
         do {
-            let decoder = JSONDecoder()
-            let releaseInfo = try decoder.decode(ReleaseInfo.self, from: data)
-            
-            guard let tagName = releaseInfo.tagName, !tagName.isEmpty else {
-                logger.error("Invalid release info - missing tag name")
+            var request = URLRequest(url: SoftwareUpdateRelease.latestURL, timeoutInterval: 30)
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
+                throw SoftwareUpdateError.invalidRelease
+            }
+            let release = try JSONDecoder().decode(SoftwareUpdateRelease.self, from: data)
+            let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+            guard let asset = try release.update(after: current) else {
+                status = "You’re up to date · \(current)"
+                if manual { await inform("You’re up to date", "Bedrock \(current) is the latest available version.") }
                 return
             }
-            
-            guard let assets = releaseInfo.assets, !assets.isEmpty else {
-                logger.error("No assets found in release")
-                return
-            }
-            
-            // Find DMG asset
-            for asset in assets {
-                if asset.name.hasSuffix(".dmg"), let downloadURL = asset.browserDownloadURL {
-                    logger.info("Found update: \(tagName), download: \(downloadURL)")
-                    
-                    let updateAvailable = isNewVersionAvailable(
-                        currentVersion: self.currentVersion,
-                        latestVersion: tagName
-                    )
-                    
-                    if updateAvailable {
-                        DispatchQueue.main.async {
-                            self.showUpdateAlert(latestVersion: tagName, downloadURL: downloadURL)
-                        }
-                    }
-                    
-                    break
-                }
-            }
-        } catch {
-            logger.error("Failed to parse release data: \(error.localizedDescription)")
-        }
-    }
-    
-    private func isNewVersionAvailable(currentVersion: String, latestVersion: String) -> Bool {
-        let cleanedLatestVersion = latestVersion.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
-        return currentVersion.compare(cleanedLatestVersion, options: .numeric) == .orderedAscending
-    }
-    
-    private func showUpdateAlert(latestVersion: String, downloadURL: URL) {
-        Task { @MainActor in
+            try Task.checkCancellation()
+            status = "Version \(release.version) is available"
             let alert = NSAlert()
-            alert.messageText = "Update Available"
-            alert.informativeText = "A new version (\(latestVersion)) is available. Would you like to update now?"
+            alert.messageText = "Bedrock \(release.version) is available"
+            alert.informativeText = "Download and install the update? Your conversations and settings will stay on this Mac."
             alert.addButton(withTitle: "Update Now")
             alert.addButton(withTitle: "Later")
-            alert.addButton(withTitle: "Disable Auto Updates")
-            
-            let response = alert.runModal()
-            
-            switch response {
-            case .alertFirstButtonReturn:
-                // User chose "Update Now"
-                downloadAndInstallUpdate(latestVersion: latestVersion, downloadURL: downloadURL)
-            case .alertThirdButtonReturn:
-                // User chose "Disable Auto Updates"
-                PreferencesStore.shared.checkForUpdates = false
-                
-                let disabledAlert = NSAlert()
-                disabledAlert.messageText = "Auto Updates Disabled"
-                disabledAlert.informativeText = "Automatic updates have been disabled. You can re-enable them in the application settings."
-                disabledAlert.addButton(withTitle: "OK")
-                disabledAlert.runModal()
-            default:
-                // User chose "Later"
-                logger.debug("Update deferred by user")
-            }
-        }
-    }
-    
-    private func downloadAndInstallUpdate(latestVersion: String, downloadURL: URL) {
-        logger.info("Starting download for version \(latestVersion)")
-        
-        // Create updates directory
-        let defaultDirPath = PreferencesStore.shared.defaultDirectory
-        let updatesDir = URL(fileURLWithPath: defaultDirPath).appendingPathComponent("Updates")
-        
-        do {
-            if !FileManager.default.fileExists(atPath: updatesDir.path) {
-                try FileManager.default.createDirectory(at: updatesDir, withIntermediateDirectories: true, attributes: nil)
-            }
-        } catch {
-            logger.error("Failed to create updates directory: \(error.localizedDescription)")
-            showError(message: "Failed to create updates directory")
-            return
-        }
-        
-        let dmgPath = updatesDir.appendingPathComponent("AmazonBedrockClientUpdate.dmg")
-        
-        // Create progress window
-        Task { @MainActor in
-            progressWindow = createProgressWindow()
-        }
-        
-        // Download DMG file
-        downloadTask = URLSession.shared.downloadTask(with: downloadURL) { [weak self] localURL, response, error in
-            guard let self = self else { return }
-            
-            DispatchQueue.main.async {
-                self.progressWindow?.close()
-                self.progressWindow = nil
-                
-                if let error = error {
-                    self.logger.error("Download failed: \(error.localizedDescription)")
-                    self.showError(message: "Download failed. Please try again later.")
-                    return
-                }
-                
-                guard let localURL = localURL else {
-                    self.logger.error("Download failed: No file returned")
-                    self.showError(message: "Download failed. No file was received.")
-                    return
-                }
-                
-                do {
-                    // Remove existing file if it exists
-                    if FileManager.default.fileExists(atPath: dmgPath.path) {
-                        try FileManager.default.removeItem(at: dmgPath)
-                    }
-                    
-                    // Move downloaded file to updates directory
-                    try FileManager.default.moveItem(at: localURL, to: dmgPath)
-                    
-                    Task { @MainActor in
-                        await self.installUpdate(dmgPath: dmgPath)
-                    }
-                    
-                } catch {
-                    self.logger.error("Failed to prepare update: \(error.localizedDescription)")
-                    self.showError(message: "Failed to prepare update")
-                }
-            }
-        }
-        
-        downloadTask?.resume()
-    }
-    
-    @MainActor
-    private func createProgressWindow() -> NSWindow {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 100),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        
-        window.title = "Downloading Update"
-        window.center()
-        window.isReleasedWhenClosed = false
-        
-        let progressIndicator = NSProgressIndicator(frame: NSRect(x: 50, y: 50, width: 200, height: 20))
-        progressIndicator.style = .bar
-        progressIndicator.isIndeterminate = true
-        progressIndicator.startAnimation(nil)
-        
-        let label = NSTextField(labelWithString: "Downloading the latest version...")
-        label.frame = NSRect(x: 50, y: 30, width: 200, height: 20)
-        label.alignment = .center
-        
-        window.contentView?.addSubview(progressIndicator)
-        window.contentView?.addSubview(label)
-        
-        Task { @MainActor in
-            window.makeKeyAndOrderFront(nil)
-        }
-        
-        return window
-    }
-    
-    private func installUpdate(dmgPath: URL) async {
-        logger.info("Preparing installation script")
-        
-        // Create script in the updates directory
-        let defaultDirPath = PreferencesStore.shared.defaultDirectory
-        let scriptDir = URL(fileURLWithPath: defaultDirPath).appendingPathComponent("Updates")
-        let installScriptPath = scriptDir.appendingPathComponent("install_update.sh")
-        
-        // Simplified script with cleaner quoting
-        let scriptContent = """
-        #!/bin/bash
-        
-        # Log file for debugging
-        LOG_FILE="\(scriptDir.path)/update_log.txt"
-        
-        # Make sure the log directory exists and is writable
-        mkdir -p "\(scriptDir.path)"
-        touch "$LOG_FILE"
-        
-        # Redirect both stdout and stderr to the log file
-        exec > "$LOG_FILE" 2>&1
-        
-        echo "Starting update process at $(date)"
-        
-        # Define expected volume name and app name
-        EXPECTED_VOLUME_NAME="Amazon Bedrock Client for Mac"
-        EXPECTED_APP_NAME="Amazon Bedrock.app"
-        
-        echo "DMG path: \(dmgPath.path)"
-        echo "Expected volume: $EXPECTED_VOLUME_NAME"
-        echo "Expected app: $EXPECTED_APP_NAME"
-        
-        # Mount DMG using a simple approach
-        echo "Mounting DMG..."
-        hdiutil attach "\(dmgPath.path)"
-        
-        # Wait for mounting to complete
-        sleep 3
-        
-        # Check if our expected volume exists
-        if [ -d "/Volumes/$EXPECTED_VOLUME_NAME" ]; then
-            echo "Found expected volume: /Volumes/$EXPECTED_VOLUME_NAME"
-            VOLUME_PATH="/Volumes/$EXPECTED_VOLUME_NAME"
-        else
-            echo "Expected volume not found, looking for recently mounted volumes..."
-            RECENT_VOLUMES=$(ls -td /Volumes/* | head -3)
-            echo "Recent volumes: $RECENT_VOLUMES"
-            
-            # Take the first one as a best guess
-            VOLUME_PATH=$(echo "$RECENT_VOLUMES" | head -1)
-            echo "Using volume: $VOLUME_PATH"
-        fi
-        
-        # Verify the volume exists
-        if [ ! -d "$VOLUME_PATH" ]; then
-            echo "Error: Could not locate a valid mounted volume"
-            osascript -e 'display dialog "Failed to locate the update volume." buttons {"OK"} default button "OK" with title "Update Error"'
-            exit 1
-        fi
-        
-        # Check for the app in the volume - first try the expected name
-        if [ -d "$VOLUME_PATH/$EXPECTED_APP_NAME" ]; then
-            echo "Found expected app: $VOLUME_PATH/$EXPECTED_APP_NAME"
-            APP_PATH="$VOLUME_PATH/$EXPECTED_APP_NAME"
-        else
-            echo "Expected app not found, searching for any .app file..."
-            # Find any .app in the volume
-            FOUND_APP=$(find "$VOLUME_PATH" -maxdepth 1 -name "*.app" | head -1)
-            
-            if [ -n "$FOUND_APP" ]; then
-                APP_PATH="$FOUND_APP"
-                echo "Found app: $APP_PATH"
-            else
-                echo "Error: No application found in the mounted volume"
-                osascript -e 'display dialog "No application found in the update package." buttons {"OK"} default button "OK" with title "Update Error"'
-                # Try to unmount
-                diskutil unmount "$VOLUME_PATH" > /dev/null 2>&1 || true
-                exit 1
-            fi
-        fi
-        
-        # Extract just the app name from the path
-        APP_NAME=$(basename "$APP_PATH")
-        echo "App name: $APP_NAME"
-        
-        # Destination in Applications folder
-        DEST_PATH="/Applications/$APP_NAME"
-        echo "Will install to: $DEST_PATH"
-        
-        # Close app if running
-        echo "Checking if app is running..."
-        pkill -f "$APP_NAME" > /dev/null 2>&1 || true
-        sleep 2
-        
-        # Copy to Applications folder with simplified admin privileges approach
-        echo "Installing to Applications folder..."
-        
-        # Remove old app if it exists
-        if [ -d "$DEST_PATH" ]; then
-            echo "Removing previous version..."
-            rm -rf "$DEST_PATH"
-            
-            # If removal failed, use admin privileges via a simpler approach
-            if [ -d "$DEST_PATH" ]; then
-                echo "Using admin privileges to remove old app..."
-                osascript -e "do shell script \\\"rm -rf $DEST_PATH\\\" with administrator privileges"
-            fi
-        fi
-        
-        # Copy new version
-        echo "Copying new version..."
-        cp -R "$APP_PATH" "/Applications/"
-        
-        # If copy failed, use admin privileges
-        if [ ! -d "$DEST_PATH" ]; then
-            echo "Using admin privileges to copy new app..."
-            osascript -e "do shell script \\\"cp -R \\\\\\\"$APP_PATH\\\\\\\" /Applications/\\\" with administrator privileges"
-        fi
-        
-        # Verify installation succeeded
-        if [ ! -d "$DEST_PATH" ]; then
-            echo "Error: Failed to install app to Applications folder"
-            osascript -e 'display dialog "Failed to install the update." buttons {"OK"} default button "OK" with title "Update Error"'
-            diskutil unmount "$VOLUME_PATH" > /dev/null 2>&1 || true
-            exit 1
-        fi
-        
-        echo "App installed successfully"
-        
-        # Remove quarantine attribute
-        echo "Removing quarantine attribute..."
-        xattr -d com.apple.quarantine "$DEST_PATH" > /dev/null 2>&1 || true
-        
-        # Unmount the volume
-        echo "Unmounting update volume..."
-        diskutil unmount "$VOLUME_PATH" > /dev/null 2>&1 || hdiutil detach "$VOLUME_PATH" -force > /dev/null 2>&1 || true
-        
-        # Clean up
-        echo "Cleaning up..."
-        rm -f "\(dmgPath.path)" > /dev/null 2>&1 || true
-        
-        # Show success notification
-        echo "Update completed successfully"
-        osascript -e 'display notification "Update installed successfully!" with title "Update Complete"'
-        
-        # Launch the updated app
-        echo "Launching updated application..."
-        open "$DEST_PATH"
-        
-        echo "Update process completed at $(date)"
-        """
-        
-        do {
-            // Create scripts directory if needed
-            if !FileManager.default.fileExists(atPath: scriptDir.path) {
-                try FileManager.default.createDirectory(at: scriptDir, withIntermediateDirectories: true, attributes: nil)
-            }
-            
-            // Write script
-            try scriptContent.write(to: installScriptPath, atomically: true, encoding: .utf8)
-            
-            // Make script executable
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: installScriptPath.path)
-            
-            // Create a simpler launcher script (avoiding complex escaping)
-            let launcherScriptPath = scriptDir.appendingPathComponent("launch_update.sh")
-            let launcherScript = """
-            #!/bin/bash
-            
-            # Simple delay to allow the app to quit
-            sleep 2
-            
-            # Run the install script and ensure it runs in the background
-            bash "\(installScriptPath.path)" &
-            
-            # Exit launcher
-            exit 0
-            """
-            
-            try launcherScript.write(to: launcherScriptPath, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcherScriptPath.path)
-            
-            // Show user notification before updating
-            let shouldInstall = await MainActor.run {
+            alert.addButton(withTitle: "Disable Automatic Checks")
+            let choice = await present(alert)
+            if choice == .alertThirdButtonReturn { PreferencesStore.shared.checkForUpdates = false }
+            guard choice == .alertFirstButtonReturn else { return }
+            try Task.checkCancellation()
+
+            let folder = try UpdateInstaller.workspace()
+            workspace = folder
+            showProgress("Downloading the update…")
+            let dmg = try await UpdateInstaller.download(asset, into: folder)
+            status = "Verifying the update…"
+            progressLabel?.stringValue = "Verifying and preparing the update…"
+            do {
+                prepared = try await UpdateInstaller.prepare(dmg: dmg, version: release.version,
+                                                             currentApp: Bundle.main.bundleURL)
+            } catch {
+                if error is CancellationError { throw error }
+                guard let reason = error as? SoftwareUpdateError,
+                      case .manualInstallationRequired = reason else { throw error }
+                progressWindow?.close()
+                preserveDownload = true
                 let alert = NSAlert()
-                alert.messageText = "Ready to Update"
-                alert.informativeText = "The application will now restart to install the update."
-                alert.addButton(withTitle: "Install")
-                
-                return alert.runModal() == .alertFirstButtonReturn
+                alert.messageText = "The update is downloaded"
+                alert.informativeText = error.localizedDescription
+                alert.addButton(withTitle: "Open Downloaded DMG")
+                alert.addButton(withTitle: "Later")
+                if await present(alert) == .alertFirstButtonReturn { NSWorkspace.shared.open(dmg) }
+                status = "Update downloaded · install from the DMG"
+                return
             }
-            
-            if shouldInstall {
-                // Use NSTask for more reliable script execution
-                let task = Process()
-                task.launchPath = "/bin/bash"
-                task.arguments = [launcherScriptPath.path]
-                
-                do {
-                    try task.run()
-                    
-                    // Give the script time to start before quitting
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        // Terminate app gracefully
-                        NSApplication.shared.terminate(nil)
-                    }
-                } catch {
-                    self.logger.error("Failed to launch update script: \(error.localizedDescription)")
-                    self.showError(message: "Failed to start the update process")
+            guard let prepared else { return }
+            progressWindow?.close()
+            let confirmation = NSAlert()
+            confirmation.messageText = "Restart to update Bedrock"
+            confirmation.informativeText = "The update has been verified. Bedrock will save your work, install the new version, and reopen."
+            confirmation.addButton(withTitle: "Install and Restart")
+            confirmation.addButton(withTitle: "Later")
+            guard await present(confirmation) == .alertFirstButtonReturn else { return }
+            try Task.checkCancellation()
+            installer = try await UpdateInstaller.handOff(prepared)
+            installer?.terminationHandler = { [weak self] process in
+                let succeeded = process.terminationStatus == 0
+                Task { @MainActor in
+                    // This is reached only if the app stayed open (for example,
+                    // its data could not be saved and graceful quit was refused).
+                    self?.installer = nil
+                    self?.isBusy = false
+                    self?.status = succeeded ? "Update installed" : "Update not installed · your previous app was kept"
                 }
             }
+            handedOff = true
+            status = "Restarting to install…"
+            NSApp.terminate(nil)
+        } catch is CancellationError {
+            status = "Update canceled"
         } catch {
-            logger.error("Failed to prepare update script: \(error.localizedDescription)")
-            showError(message: "Failed to prepare update script")
+            if Task.isCancelled { status = "Update canceled"; return }
+            logger.error("Update failed: \(error.localizedDescription)")
+            status = "Could not complete the update"
+            if manual || workspace != nil { await inform("Unable to update Bedrock", error.localizedDescription) }
         }
     }
-    
-    
-    private func showError(message: String) {
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "Update Error"
-            alert.informativeText = message
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
+
+    func cleanup() {
+        operation?.cancel()
+        progressWindow?.close()
+        progressWindow = nil
+        // The installation helper deliberately outlives this app. It waits for
+        // applicationShouldTerminate to finish saving before replacing anything.
+    }
+
+    @objc private func cancelUpdate(_ sender: Any?) { operation?.cancel() }
+
+    private func showProgress(_ message: String) {
+        status = message
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 140),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.title = "Updating Bedrock"
+        window.isReleasedWhenClosed = false
+        let progress = NSProgressIndicator(frame: NSRect(x: 24, y: 74, width: 332, height: 16))
+        progress.style = .bar
+        progress.isIndeterminate = true
+        progress.startAnimation(nil)
+        let label = NSTextField(labelWithString: message)
+        label.frame = NSRect(x: 24, y: 98, width: 332, height: 20)
+        label.font = .systemFont(ofSize: 13)
+        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelUpdate))
+        cancel.bezelStyle = .rounded
+        cancel.frame = NSRect(x: 270, y: 20, width: 88, height: 30)
+        window.contentView?.addSubview(label)
+        window.contentView?.addSubview(progress)
+        window.contentView?.addSubview(cancel)
+        progressLabel = label
+        progressWindow = window
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func inform(_ title: String, _ message: String) async {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        _ = await present(alert)
+    }
+
+    private func present(_ alert: NSAlert) async -> NSApplication.ModalResponse {
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow, window.isVisible, window.attachedSheet == nil {
+            return await withCheckedContinuation { continuation in
+                alert.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+            }
         }
-    }
-}
-
-// Improved Codable structs for parsing GitHub API response
-struct Asset: Codable {
-    let name: String
-    let browserDownloadURL: URL?
-    
-    enum CodingKeys: String, CodingKey {
-        case name
-        case browserDownloadURL = "browser_download_url"
-    }
-}
-
-struct ReleaseInfo: Codable {
-    let tagName: String?
-    let assets: [Asset]?
-    
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"
-        case assets
+        return alert.runModal()
     }
 }

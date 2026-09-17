@@ -21,6 +21,7 @@ Last updated: 2026-09-17. This is the authoritative checklist for the requested 
 | Current priority | Speed, responsiveness, and usability come first. Compare the fast older Bedrock Validation with the latest changes using identical workloads, fix measured regressions, and put the verified updates back into Bedrock Validation. Do not call a successful build the final result. |
 | Release gate | Latest instruction: run changed or previously failing scenarios locally, then require the final main revision and release workflow to pass the complete GitHub CI. A redundant full local rerun is not required. |
 | Repository | Organize Swift sources by responsibility, use descriptive filenames, remove verified dead files/resources, and update the Xcode project, scripts and documentation together. Preserve stored data and production identity. |
+| Updates | Preserve automatic checks or improve the existing upgrade route. Keep 1.x release/DMG compatibility, retain the update preference and user data, and verify download, replacement, rollback and restart behavior before publication. |
 
 ## Scope and source comparison
 
@@ -294,6 +295,11 @@ and remaining features are recorded in [the completion audit](todo-audit.md),
 
 
 ## GitHub delivery and version 2.0.0
+
+- [x] U01 Preserve the `checkForUpdates` preference and the official GitHub latest-release endpoint; retain the 1.x asset and DMG volume names.
+- [x] U02 Verify release eligibility, download bytes, size/digest and application identity/signature before installation; reject drafts, prereleases, downgrades and unrelated assets. Focused core/native cases executed locally.
+- [x] U03 Wait for the exact old process to exit, replace from the same volume, and restore the old app on failure without touching conversation data. Successful replacement, quit timeout and failed-second-rename cases executed with signed disposable bundles.
+- [ ] U04 Exercise the normal Release app's manual update controls and verify the final signed release/installed-app upgrade contract. General → Check now completes in the normal optimized app while automatic checks are off and preserves that preference; final signed-artifact verification remains pending.
 
 - [x] D01 Run the regression workflow on every main push, release-branch push and pull request.
 - [x] D02 Gate release packaging and publication on the same optimized-app validation workflow.

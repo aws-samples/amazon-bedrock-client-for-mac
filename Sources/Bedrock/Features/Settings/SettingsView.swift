@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject private var store = AppStore.shared
     @ObservedObject private var catalog = ModelCatalog.shared
     @ObservedObject private var mcp = MCPClientManager.shared
+    @ObservedObject private var updater = UpdateService.shared
     @StateObject private var backend = BedrockConnection()
     @State private var pane: SettingsPane? = .general
     @State private var query = ""
@@ -146,7 +147,17 @@ struct SettingsView: View {
     }
     @ViewBuilder private func control(_ row: SettingsItem) -> some View {
         switch row.id {
-        case "updates": Toggle(row.title, isOn: $settings.checkForUpdates)
+        case "updates":
+            Toggle(row.title, isOn: $settings.checkForUpdates)
+            HStack(spacing: 10) {
+                Button("Check now") { updater.checkForUpdates(manual: true) }
+                    .disabled(updater.isBusy)
+                    .accessibilityLabel("Check for updates now")
+                if let status = updater.status {
+                    Text(status).font(DesignTokens.detail).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         case "login":
             Toggle(row.title, isOn: Binding(get: { loginEnabled }, set: { setLogin($0) }))
             if let loginMessage { Text(loginMessage).font(.caption).foregroundStyle(.orange) }

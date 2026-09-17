@@ -75,7 +75,7 @@ final class BedrockUITests: XCTestCase {
             titlebar.press(forDuration: 0.1, thenDragTo: destination,
                            withVelocity: .fast, thenHoldForDuration: 0.1)
             XCTAssertTrue(display.insetBy(dx: -1, dy: -1).contains(window.frame),
-                          "Keep UI captures on the main display without resizing the app's default window.")
+                          "The initial window \(window.frame) must fit the main display \(display).")
         }
         return (app, directory)
     }

@@ -118,7 +118,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/BedrockDistribution"
           ditto "$APP_PATH" "$RUNNER_TEMP/BedrockDistribution/Amazon Bedrock.app"
-          create-dmg --volname "Amazon Bedrock" --window-pos 200 120 \
+          # The 1.x updater locates this exact volume name.
+          create-dmg --volname "Amazon Bedrock Client for Mac" --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
             --icon "Amazon Bedrock.app" 200 190 \
@@ -140,6 +141,7 @@ jobs:
           mkdir -p "$BEDROCK_DMG_VOLUME"
           hdiutil attach -readonly -nobrowse -mountpoint "$BEDROCK_DMG_VOLUME" "$DMG_PATH"
           trap 'hdiutil detach "$BEDROCK_DMG_VOLUME"' EXIT
+          test "$(diskutil info -plist "$BEDROCK_DMG_VOLUME" | plutil -extract VolumeName raw -o - -)" = "Amazon Bedrock Client for Mac"
           python3 scripts/verify-release.py --app "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app"
           codesign --verify --deep --strict --verbose=2 "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app"
           xcrun stapler validate "$BEDROCK_DMG_VOLUME/Amazon Bedrock.app"

@@ -13,6 +13,7 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--developer-dir", type=Path)
     parser.add_argument("--xcode", type=Path)
+    parser.add_argument("--filter", help="XCTest class or class/method to run locally; omit for the complete core suite.")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     output = args.output or Path(tempfile.mkdtemp(prefix="bedrock-local-tests-"))
@@ -39,7 +40,8 @@ def main():
     if not bundles:
         raise SystemExit("No XCTest bundle found; no tests were executed.")
     with (output / "tests.log").open("w") as log:
-        result = subprocess.run([str(runner), str(bundles[0])],
+        selection = ["-XCTest", args.filter] if args.filter else []
+        result = subprocess.run([str(runner), *selection, str(bundles[0])],
                                 env=environment, stdout=log, stderr=subprocess.STDOUT)
     text = (output / "tests.log").read_text()
     print(text)

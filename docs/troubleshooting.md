@@ -1,5 +1,18 @@
 # Troubleshooting
 
+## Updates
+
+Automatic checks use the existing **Settings → General** preference. A manual
+check is available there and in **Bedrock → Check for Updates…**, even when
+automatic checks are off. Bedrock does not install an update until you approve it.
+
+Automatic replacement requires a writable application location and a Developer
+ID–signed installation. A copy running from a DMG, a read-only location, or an
+unsigned source build can use **Open Downloaded DMG** and install through Finder.
+Verification failures do not replace the installed app. A failed replacement
+restores the previous app; a refused or unfinished quit leaves it untouched.
+Conversations and preferences are stored separately and are not removed by the updater.
+
 ## Connect to AWS
 
 Open **Settings → AWS connection**, choose your profile and region, then select **Test connection & refresh models**. The profile must have access to the selected model and its inference profile.

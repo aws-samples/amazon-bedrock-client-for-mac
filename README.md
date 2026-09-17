@@ -98,6 +98,11 @@ brew install amazon-bedrock-client
 
 The DMG contains a universal app for Apple silicon and Intel, signed with Developer ID and notarized by Apple.
 
+Bedrock keeps the existing automatic update preference. Use **Bedrock → Check for Updates…**
+or **Settings → General → Check now** to check manually. An approved update is downloaded
+and verified before the app saves your work, replaces itself, and reopens. If replacement
+fails, the previous app is restored. Conversations and settings stay in their existing location.
+
 ### Connect
 
 1. Configure an AWS profile with Bedrock access. Profiles can use credentials, SSO, or `credential_process`.

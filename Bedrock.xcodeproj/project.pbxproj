@@ -195,6 +195,9 @@
 		EF205482624733FFB0B1A3FA /* ClipboardContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDEB9A610DECFCB2A15BB08 /* ClipboardContent.swift */; };
 		EFCDE9B5AA9E429FA4A9C28C /* BedrockBundledCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE86D10DE2CB04A86876FF8 /* BedrockBundledCatalog.swift */; };
 		F55B25DE57E8D3BAC244ACDD /* LumaVideoConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E004007F02B2AB23045680 /* LumaVideoConfiguration.swift */; };
+		3EC7D0752EDE58D9F7D6DC97 /* SoftwareUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F896C20EE601DE36FA40FD36 /* SoftwareUpdate.swift */; };
+		3ED5864CF360687AA33BD7E0 /* UpdateInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E2499E0C504CCD2A118FC5B /* UpdateInstaller.swift */; };
+		CA01AAB3F0D69C933ABB7602 /* UpdateInstallerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9CAEAD49E5E353150ACBF9 /* UpdateInstallerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -446,6 +449,11 @@
 		FE112DE4CF961434B08ECD07 /* RunRecord.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RunRecord.swift; sourceTree = "<group>"; };
 		FE29BB51A723776C1832544E /* AutomationToolInput.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AutomationToolInput.swift; sourceTree = "<group>"; };
 		FF8382C5045EF3FD3CD8465D /* DemoPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPreset.swift; sourceTree = "<group>"; };
+		F896C20EE601DE36FA40FD36 /* SoftwareUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareUpdate.swift; sourceTree = "<group>"; };
+		2E2499E0C504CCD2A118FC5B /* UpdateInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateInstaller.swift; sourceTree = "<group>"; };
+		DF9CAEAD49E5E353150ACBF9 /* UpdateInstallerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateInstallerTests.swift; sourceTree = "<group>"; };
+		17BB6B85FD5A732460834CF0 /* SoftwareUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareUpdateTests.swift; sourceTree = "<group>"; };
+		88046C39AB3E883A8FE2CCA1 /* update_fixture.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = update_fixture.py; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -531,6 +539,7 @@
 				6CF2C6BD140C26148D25A72F /* BedrockRegionalModel.swift */,
 				849C2276106F917BA088910C /* DemoModelPolicy.swift */,
 				46E004007F02B2AB23045680 /* LumaVideoConfiguration.swift */,
+				F896C20EE601DE36FA40FD36 /* SoftwareUpdate.swift */,
 			);
 			name = Models;
 			path = Models;
@@ -748,6 +757,7 @@
 				36978C7DDC088B50CE07A988 /* model-switch.txt */,
 				7BC7CDDDE4A3F1D483573F5F /* scroll-stress.json */,
 				93F7FC438E22AC1E6F0D4BCE /* test_bedrock_runtime.py */,
+				88046C39AB3E883A8FE2CCA1 /* update_fixture.py */,
 			);
 			name = Fixtures;
 			path = Fixtures;
@@ -1100,6 +1110,7 @@
 				79F53C842E7B08AA00F129F4 /* GlobalHotkeyService.swift */,
 				F1BF947D05E06A0E677EE44F /* NotificationService.swift */,
 				7937953C2B46CAF1000C94A5 /* UpdateService.swift */,
+				2E2499E0C504CCD2A118FC5B /* UpdateInstaller.swift */,
 			);
 			name = System;
 			path = System;
@@ -1231,6 +1242,7 @@
 				2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */,
 				117D90469B04258DA8794C02 /* ConnectionIsolationTests.swift */,
 				A5BE8F33FA4B925ACB37F18C /* MantleResponsesTests.swift */,
+				DF9CAEAD49E5E353150ACBF9 /* UpdateInstallerTests.swift */,
 			);
 			name = BedrockTests;
 			path = BedrockTests;
@@ -1257,6 +1269,7 @@
 				99087D0D2FE2275E17011642 /* NavigationPerformanceTests.swift */,
 				1F13FF729B3E65E39A188E60 /* SkillLibraryTests.swift */,
 				4ABBDA7523F774B9E273F8C0 /* ToolOutputTests.swift */,
+				17BB6B85FD5A732460834CF0 /* SoftwareUpdateTests.swift */,
 			);
 			name = BedrockCoreTests;
 			path = BedrockCoreTests;
@@ -1591,6 +1604,8 @@
 				40C14D31B143FB4B731A78C3 /* FlowLayout.swift in Sources */,
 				0354249235EA16694ADC6201 /* AttachmentExporter.swift in Sources */,
 				1B1B318B4D04584D2A9220B5 /* AutomationToolInput.swift in Sources */,
+				3EC7D0752EDE58D9F7D6DC97 /* SoftwareUpdate.swift in Sources */,
+				3ED5864CF360687AA33BD7E0 /* UpdateInstaller.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1610,6 +1625,7 @@
 				26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */,
 				285E7D951A36B4B14518EEB5 /* ConnectionIsolationTests.swift in Sources */,
 				0F3B089D2E91BC386189A85D /* MantleResponsesTests.swift in Sources */,
+				CA01AAB3F0D69C933ABB7602 /* UpdateInstallerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -11,6 +11,38 @@ screenshot does not close a behavioral requirement.
 
 ## Executed evidence
 
+- Hosted `35186121048` exposed an initial-window sizing problem on its
+  1,024 × 768 display. The new main-display assertion caught a 1,120-point
+  window extending beyond the screen; the recording confirms clipped sidebar
+  content. Fresh-window sizing now uses the display's available width and
+  reserves titlebar height. Existing saved window geometry remains unchanged.
+- Automatic-update review found a changed DMG volume name, temporary-download
+  lifetime risk, volume guessing and deletion of the old app before copying.
+  The release volume name is restored for 1.x compatibility. The new updater
+  retains the existing preference, checks the official release/asset, verifies
+  the download and signing identity, stages on the target volume and waits for
+  graceful quit. Disposable signed-bundle tests cover successful replacement,
+  quit timeout, altered code and restoration after a failed second rename.
+  Native loopback tests cover actual download bytes/lifetime and rejected
+  HTTP, size, digest, identity and signature failures. Two test-fixture mistakes
+  (the `chflags` executable path and URL directory-bit equality) were corrected
+  and only those failed cases were repeated. All eight core and four native
+  update scenarios have passing local executions.
+  Read-only signature checks against the installed 1.4.10 app accept its
+  Developer ID and reject a different team. This caught and corrected the
+  `codesign -R` requirement-source prefix. A positive native regression was
+  added; its local build passed, but XCTest waited for its IDE session before
+  executing either selected test, so that attempt was stopped and retained as
+  runner evidence. The additional case remains part of the hosted gate.
+  A standalone optimized executable compiled from the actual installer and
+  process-runner sources then passed all five signature checks, including the
+  installed 1.4.10 identity and mismatched-version rejection. The normal Release
+  app's General → Check now completed against GitHub, re-enabled the control,
+  and preserved the disabled automatic-check preference.
+- The current local XCTest UI runner timed out while enabling Automation Mode;
+  this Mac requires user authentication for that mode. That attempt did not
+  execute the three selected UI cases and is not counted as a pass. Normal
+  Release app interaction and the full hosted main workflow remain the UI gates.
 - The normal universal Release build passes identity, hardened-runtime and
   ad-hoc signature checks. Separate selected-Xcode architecture checks pass for
   arm64 and x86_64 and reject a missing Intel slice. That verified command form
