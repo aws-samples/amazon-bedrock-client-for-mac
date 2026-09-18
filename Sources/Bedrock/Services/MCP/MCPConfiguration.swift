@@ -42,6 +42,7 @@ enum MCPConfiguration {
             server.command = redact(original.command, using: original)
             server.args = sanitizedArguments(original.args, using: original)
             server.url = original.url.map { sanitizedURL(redact($0, using: original)) }
+            server.onboardingMarkdown = original.onboardingMarkdown.map { redact($0, using: original) }
             return server
         }
         var root = try JSONSerialization.jsonObject(with: encode(sanitized)) as! [String: Any]
@@ -135,6 +136,11 @@ enum MCPConfiguration {
     static func validate(_ server: MCPServerConfig) throws {
         guard !server.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, server.name.count <= 100,
               !server.name.contains("\0") else { throw LocalOperationError.invalid("Use a nonempty server name of at most 100 characters.") }
+        guard (server.activationKeywords ?? []).count <= 32,
+              (server.activationKeywords ?? []).allSatisfy({ $0.count <= 80 && !$0.contains("\0") }),
+              (server.onboardingMarkdown?.count ?? 0) <= 32_000 else {
+            throw LocalOperationError.invalid("Use at most 32 activation keywords (80 characters each) and 32,000 characters of MCP documentation.")
+        }
         switch server.transportType {
         case .http: _ = try LocalPath.validatedWebURL(server.url ?? "", allowedDomains: "")
         case .stdio:

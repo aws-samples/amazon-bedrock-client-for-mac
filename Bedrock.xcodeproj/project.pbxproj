@@ -11,6 +11,7 @@
 		77AA38FBC42F5A19ADB81FF1 /* BedrockInferenceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */; };
 		2CD1C93483DDBEA748F7F469 /* MCPOAuthCallbackListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3361DD48FEF045557CD5EC6C /* MCPOAuthCallbackListener.swift */; };
 		D80468E5169DF62E32FC9404 /* MCPOAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F112693F51FE526482BDE60B /* MCPOAuthTests.swift */; };
+		4987B85C4374D427EAE42D15 /* MCPContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E2ED47D9F174157E772B22 /* MCPContextPolicy.swift */; };
 		C18A096342B9418AA90E40E1 /* BedrockResponsesEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */; };
 		C18A096342B9418AA90E40E3 /* BedrockResponsesRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */; };
 		C18A096342B9418AA90E40D1 /* ConversationDateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */; };
@@ -232,6 +233,7 @@
 		EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockInferenceProfile.swift; sourceTree = "<group>"; };
 		3361DD48FEF045557CD5EC6C /* MCPOAuthCallbackListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuthCallbackListener.swift; sourceTree = "<group>"; };
 		F112693F51FE526482BDE60B /* MCPOAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuthTests.swift; sourceTree = "<group>"; };
+		51E2ED47D9F174157E772B22 /* MCPContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPContextPolicy.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesEndpoint.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesRequest.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDateGroup.swift; sourceTree = "<group>"; };
@@ -659,6 +661,7 @@
 			isa = PBXGroup;
 			children = (
 				1230F92CA09B52944B24F8C0 /* MCPToolIdentity.swift */,
+				51E2ED47D9F174157E772B22 /* MCPContextPolicy.swift */,
 				9F357A1F1DB79590E3C031A1 /* MCPToolOutput.swift */,
 			);
 			name = MCP;
@@ -1556,6 +1559,7 @@
 				A97275C94282284D134E12F5 /* MCPServerRow.swift in Sources */,
 				755F0A3F6BEF86BADDE30740 /* MCPToolDefinitionView.swift in Sources */,
 				071C607EEF55C72E89FFC2A2 /* MCPToolIdentity.swift in Sources */,
+				4987B85C4374D427EAE42D15 /* MCPContextPolicy.swift in Sources */,
 				7B8E115ED68C75B61C37FD1A /* MCPToolOutput.swift in Sources */,
 				39D44D82F9A64EA17C3BD86F /* MessageActions.swift in Sources */,
 				79610DEB2AD22A2F00993D09 /* MessageView.swift in Sources */,

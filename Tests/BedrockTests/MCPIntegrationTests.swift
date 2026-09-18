@@ -4,6 +4,75 @@ import XCTest
 
 final class MCPIntegrationTests: XCTestCase {
     @MainActor
+    func testDynamicContextStartsOnlyMatchingServersAndKeepsConcurrentConversationsIsolated() async throws {
+        let manager = try makeManager()
+        manager.idleDisconnectDelay = 0.05
+        var payments = server("payments")
+        payments.activationKeywords = ["payment"]
+        payments.onboardingMarkdown = "PAYMENT_GUIDELINES"
+        var database = server("database")
+        database.activationKeywords = ["database"]
+        database.onboardingMarkdown = "DATABASE_GUIDELINES"
+        manager.addServer(payments)
+        manager.addServer(database)
+        manager.connectToAllServers()
+        XCTAssertTrue(manager.activeProcessIDs.isEmpty, "Lazy servers must not start at app launch.")
+
+        let first = try await manager.prepareContext(prompt: "Inspect payment processing")
+        XCTAssertEqual(first.tools.map(\.serverName), ["payments"])
+        XCTAssertTrue(first.onboarding.contains("PAYMENT_GUIDELINES"))
+        XCTAssertFalse(first.onboarding.contains("DATABASE_GUIDELINES"))
+        XCTAssertNil(manager.activeProcessIDs["database"])
+        let paymentsPID = try XCTUnwrap(manager.activeProcessIDs["payments"])
+
+        let second = try await manager.prepareContext(prompt: "Inspect the database schema")
+        XCTAssertEqual(second.tools.map(\.serverName), ["database"])
+        XCTAssertFalse(second.onboarding.contains("PAYMENT_GUIDELINES"))
+        XCTAssertEqual(manager.activeProcessIDs["payments"], paymentsPID,
+                       "Another conversation's active tool cycle must remain connected.")
+        manager.releaseContext(second.id)
+        try await awaitDisconnection(manager, name: "database")
+        XCTAssertNil(manager.activeProcessIDs["database"])
+        XCTAssertEqual(manager.activeProcessIDs["payments"], paymentsPID)
+        manager.releaseContext(first.id)
+        try await awaitDisconnection(manager, name: "payments")
+        XCTAssertNil(manager.activeProcessIDs["payments"])
+    }
+
+    @MainActor
+    func testReleasingContextDoesNotInterruptAnInFlightTool() async throws {
+        let manager = try makeManager()
+        manager.idleDisconnectDelay = 0.01
+        var config = server("delayed")
+        config.activationKeywords = ["delay"]
+        manager.addServer(config)
+        let context = try await manager.prepareContext(prompt: "delay")
+        let tool = try XCTUnwrap(context.tools.first)
+        // The fixture delays this call until cancellation. Removing context must not stop it.
+        var arguments = payload
+        arguments["mode"] = "wait"
+        manager.toolTimeout = 4
+        let operation = Task { await manager.executeBedrockTool(id: "running", name: tool.invocationName, input: arguments) }
+        try await Task.sleep(for: .milliseconds(100))
+        manager.releaseContext(context.id)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNotNil(manager.activeProcessIDs["delayed"])
+        operation.cancel()
+        _ = await operation.value
+        try await awaitDisconnection(manager, name: "delayed")
+        XCTAssertNil(manager.activeProcessIDs["delayed"])
+    }
+
+    @MainActor
+    private func awaitDisconnection(_ manager: MCPClientManager, name: String) async throws {
+        let deadline = Date().addingTimeInterval(3)
+        while manager.activeProcessIDs[name] != nil, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertNil(manager.activeProcessIDs[name], "Unused dynamic server must disconnect.")
+    }
+
+    @MainActor
     private func makeManager() throws -> MCPClientManager {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("bedrock-mcp-tests-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
