@@ -34,12 +34,15 @@ def main():
     tests = output / "Tests/RenderingTests"
     sources.mkdir(parents=True, exist_ok=True)
     tests.mkdir(parents=True, exist_ok=True)
-    for relative in ("UI/Markdown/MarkdownRenderer.swift", "UI/Markdown/MarkdownClipboard.swift", "UI/Markdown/SelectableMarkdown.swift", "UI/Components/TextContextMenu.swift", "UI/Markdown/MarkdownColors.swift",
+    for relative in ("UI/Markdown/MarkdownRenderer.swift", "UI/Markdown/MarkdownMathScript.swift", "UI/Markdown/MarkdownClipboard.swift", "UI/Markdown/SelectableMarkdown.swift", "UI/Components/TextContextMenu.swift", "UI/Markdown/MarkdownColors.swift",
                      "Features/Chat/ConversationFind.swift", "Services/Attachments/AttachmentProcessor.swift", "Services/Attachments/ImagePreviewLoader.swift",
                      "Services/Attachments/AttachmentStore.swift", "Features/Composer/EditorFocusState.swift"):
         shutil.copy2(app / relative, sources / Path(relative).name)
     for source in (app / "Core").rglob("*.swift"):
         shutil.copy2(source, sources / source.name)
+    resources = sources / "Resources"
+    resources.mkdir(exist_ok=True)
+    shutil.copy2(app / "Resources/Math/katex.min.js", resources / "katex.min.js")
     # Exercise the actual NSTextView paste implementation in isolation from
     # the SwiftUI wrapper's AWS/application state.
     editor = (app / "Features/Composer/ComposerTextView.swift").read_text()
@@ -63,7 +66,7 @@ let package = Package(name: "BedrockMarkdownValidation", platforms: [.macOS(.v14
     targets: [
         .target(name: "Amazon_Bedrock_Client_for_Mac",
                 dependencies: [.product(name: "MarkdownKit", package: "swift-markdownkit")],
-                path: "Sources/Rendering"),
+                path: "Sources/Rendering", resources: [.process("Resources")]),
         .testTarget(name: "MarkdownRenderingTests", dependencies: ["Amazon_Bedrock_Client_for_Mac"],
                     path: "Tests/RenderingTests")
     ], swiftLanguageModes: [.v6])
