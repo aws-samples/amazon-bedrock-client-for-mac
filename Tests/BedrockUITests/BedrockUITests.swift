@@ -89,9 +89,25 @@ final class BedrockUITests: XCTestCase {
     private func response(_ marker: String, in app: XCUIApplication, timeout: TimeInterval = 12) -> XCUIElement {
         let native = app.textViews.matching(NSPredicate(format: "label == 'Assistant response text' AND value CONTAINS %@", marker)).firstMatch
         let web = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR value == %@", marker, marker)).firstMatch
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in native.exists || web.exists }, object: nil)
+        var found: XCUIElement?
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            if native.exists { found = native; return true }
+            if web.exists { found = web; return true }
+            // WebKit can expose empty labels and numeric accessibility values.
+            // Cast values before substring matching, and inspect only the latest
+            // reply instead of walking every paragraph of older long responses.
+            if let latest = app.webViews.allElementsBoundByIndex.last {
+                for text in latest.staticTexts.allElementsBoundByIndex {
+                    if let value = text.value as? String, value.contains(marker) {
+                        found = text
+                        return true
+                    }
+                }
+            }
+            return false
+        }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: timeout), .completed, "Missing response marker: \(marker)")
-        return native.exists ? native : web
+        return found ?? native
     }
 
     @MainActor
