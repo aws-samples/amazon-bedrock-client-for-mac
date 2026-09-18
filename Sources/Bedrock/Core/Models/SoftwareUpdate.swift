@@ -54,10 +54,87 @@ struct SoftwareUpdateRelease: Decodable, Sendable {
         url.password == nil && url.port == nil && url.query == nil && url.fragment == nil &&
         url.path == "/\(repository)/releases/download/\(tag)/\(assetName)"
     }
+
+    static func decode(_ data: Data, response: HTTPURLResponse, now: Date) throws -> Self {
+        let limited = response.statusCode == 429 || (response.statusCode == 403 &&
+            (response.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0" ||
+             response.value(forHTTPHeaderField: "Retry-After") != nil))
+        if limited {
+            var deadlines: [Date] = []
+            if let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset"),
+               let seconds = TimeInterval(reset), seconds.isFinite {
+                deadlines.append(Date(timeIntervalSince1970: seconds))
+            }
+            if let retry = response.value(forHTTPHeaderField: "Retry-After") {
+                if let seconds = TimeInterval(retry), seconds.isFinite, seconds >= 0 {
+                    deadlines.append(now.addingTimeInterval(seconds))
+                } else {
+                    let formatter = DateFormatter()
+                    formatter.locale = Locale(identifier: "en_US_POSIX")
+                    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss z"
+                    if let date = formatter.date(from: retry) { deadlines.append(date) }
+                }
+            }
+            let deadline = deadlines.filter { $0 > now }.max() ?? now.addingTimeInterval(60)
+            throw SoftwareUpdateError.rateLimited(until: deadline)
+        }
+        guard response.statusCode == 200 else {
+            throw SoftwareUpdateError.metadataUnavailable(statusCode: response.statusCode)
+        }
+        do { return try JSONDecoder().decode(Self.self, from: data) }
+        catch { throw SoftwareUpdateError.invalidMetadata }
+    }
+}
+
+/// Metadata requests are independent of download and signature validation.
+/// Persist the retry deadline so restarting the app cannot hammer a limited API.
+@MainActor
+final class SoftwareUpdateClient {
+    private static let retryKey = "softwareUpdateMetadataRetryAfter"
+    private let session: URLSession
+    private let preferences: UserDefaults
+    private let endpoint: URL
+    private let now: () -> Date
+
+    init(session: URLSession = .shared, preferences: UserDefaults = .standard,
+         endpoint: URL = SoftwareUpdateRelease.latestURL, now: @escaping () -> Date = Date.init) {
+        self.session = session
+        self.preferences = preferences
+        self.endpoint = endpoint
+        self.now = now
+    }
+
+    func latestRelease() async throws -> SoftwareUpdateRelease {
+        try Task.checkCancellation()
+        let date = now()
+        if let deadline = preferences.object(forKey: Self.retryKey) as? Date, deadline > date {
+            throw SoftwareUpdateError.rateLimited(until: deadline)
+        }
+        preferences.removeObject(forKey: Self.retryKey)
+        var request = URLRequest(url: endpoint, timeoutInterval: 30)
+        request.cachePolicy = .useProtocolCachePolicy
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        try Task.checkCancellation()
+        guard let response = response as? HTTPURLResponse else {
+            throw SoftwareUpdateError.invalidMetadata
+        }
+        do { return try SoftwareUpdateRelease.decode(data, response: response, now: now()) }
+        catch let error as SoftwareUpdateError {
+            if case .rateLimited(let deadline) = error {
+                preferences.set(deadline, forKey: Self.retryKey)
+            }
+            throw error
+        }
+    }
 }
 
 enum SoftwareUpdateError: LocalizedError {
     case invalidRelease
+    case invalidMetadata
+    case metadataUnavailable(statusCode: Int)
+    case rateLimited(until: Date)
     case invalidDownload
     case manualInstallationRequired(String)
     case verification(String)
@@ -66,6 +143,11 @@ enum SoftwareUpdateError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidRelease: "The release does not contain a valid Bedrock update."
+        case .invalidMetadata: "GitHub returned unreadable update information. Please try again."
+        case .metadataUnavailable(let statusCode):
+            "GitHub could not provide update information (HTTP \(statusCode)). Please try again."
+        case .rateLimited(let deadline):
+            "GitHub temporarily limited update checks. Try again after \(DateFormatter.localizedString(from: deadline, dateStyle: .short, timeStyle: .short))."
         case .invalidDownload: "The update download is incomplete or could not be verified. Please try again."
         case .manualInstallationRequired(let detail): detail
         case .verification(let detail): "The update could not be verified. \(detail)"

@@ -10,6 +10,7 @@ final class UpdateService: NSObject, ObservableObject {
     @Published private(set) var isBusy = false
     @Published private(set) var status: String?
     private let logger = Logger(label: "UpdateService")
+    private let metadataClient = SoftwareUpdateClient()
     private var operation: Task<Void, Never>?
     private var progressWindow: NSWindow?
     private var progressLabel: NSTextField?
@@ -41,14 +42,7 @@ final class UpdateService: NSObject, ObservableObject {
             }
         }
         do {
-            var request = URLRequest(url: SoftwareUpdateRelease.latestURL, timeoutInterval: 30)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
-                throw SoftwareUpdateError.invalidRelease
-            }
-            let release = try JSONDecoder().decode(SoftwareUpdateRelease.self, from: data)
+            let release = try await metadataClient.latestRelease()
             let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
             guard let asset = try release.update(after: current) else {
                 status = "You’re up to date · \(current)"
