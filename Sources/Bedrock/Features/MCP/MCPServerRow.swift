@@ -5,6 +5,7 @@ import MCP
 struct MCPServerRow: View {
     @ObservedObject private var settingsManager = PreferencesStore.shared
     @ObservedObject private var mcpManager = MCPClientManager.shared
+    @ObservedObject private var oauth = MCPOAuthService.shared
     let serverName: String
     @State private var showingEditSheet = false
 
@@ -125,10 +126,10 @@ struct MCPServerRow: View {
 
     @ViewBuilder
     private func oauthStatusIcon(_ server: MCPServerConfig) -> some View {
-        let tokenInfo = MCPOAuthService.shared.tokenStorage[server.name]
+        let tokenInfo = oauth.token(for: server)
 
         if let info = tokenInfo {
-            if info.isExpired {
+            if info.isExpired() {
                 Image(systemName: "key.fill")
                     .foregroundStyle(.orange)
                     .imageScale(.small)

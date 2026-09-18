@@ -23,6 +23,7 @@ class MCPClientManager: ObservableObject {
     private let preferences: UserDefaults
     private let configurationDirectory: URL?
     private let automaticallyConnect: Bool
+    private let oauth: MCPOAuthService
     private var connectionTasks: [String: Task<Void, Never>] = [:]
     private var connectionIDs: [String: UUID] = [:]
     private var processes: [String: MCPProcess] = [:]
@@ -92,10 +93,12 @@ class MCPClientManager: ObservableObject {
     private static let mcpCrashCountKey = "mcpCrashCount"
     private static let mcpDisabledDueToCrashKey = "mcpDisabledDueToCrash"
 
-    init(configurationDirectory: URL? = nil, preferences: UserDefaults = .standard, autoStart: Bool = true) {
+    init(configurationDirectory: URL? = nil, preferences: UserDefaults = .standard, autoStart: Bool = true,
+         oauth: MCPOAuthService? = nil) {
         self.configurationDirectory = configurationDirectory
         self.preferences = preferences
         self.automaticallyConnect = autoStart
+        self.oauth = oauth ?? .shared
         // Check for previous crash and disable MCP if needed
         let wasRunning = preferences.bool(forKey: Self.mcpRunningKey)
         var crashCount = preferences.integer(forKey: Self.mcpCrashCountKey)
@@ -120,6 +123,7 @@ class MCPClientManager: ObservableObject {
 
         // Load servers from config file
         loadConfigFile()
+        self.oauth.migrateLegacyTokens(for: servers)
 
         // Start servers if enabled
         if mcpEnabled && autoStart {
@@ -243,6 +247,7 @@ class MCPClientManager: ObservableObject {
      * Removes a server configuration.
      */
     func removeServer(named name: String) {
+        if let server = servers.first(where: { $0.name == name }) { oauth.clearToken(for: server) }
         Task {
             await disconnectServer(name)
         }
@@ -311,10 +316,11 @@ class MCPClientManager: ObservableObject {
                     process = child
                     transport = child.transport(logger: logger)
                 case .http:
-                    let url = try LocalPath.validatedWebURL(server.url ?? "", allowedDomains: "")
-                    transport = createHTTPTransport(endpoint: url, headers: server.headers)
+                    transport = try makeHTTPTransport(for: server)
                 }
-                let tools: [Tool] = try await Self.withTimeout(seconds: connectionTimeout, interrupt: { await client.disconnect() }) {
+                let tools: [Tool] = try await Self.withTimeout(seconds: connectionTimeout,
+                    paused: { @MainActor [oauth] in oauth.isAuthenticating(server.name) },
+                    interrupt: { await client.disconnect() }) {
                     let initialized = try await client.connect(transport: transport)
                     guard initialized.capabilities.tools != nil else { return [] }
                     var result: [Tool] = []
@@ -360,10 +366,18 @@ class MCPClientManager: ObservableObject {
         }
     }
 
-    private func createHTTPTransport(endpoint: URL, headers: [String: String]?) -> HTTPClientTransport {
-        HTTPClientTransport(endpoint: endpoint, requestModifier: { @Sendable request in
+    func makeHTTPTransport(for server: MCPServerConfig,
+                           configuration: URLSessionConfiguration = .default) throws -> HTTPClientTransport {
+        let endpoint = try LocalPath.validatedWebURL(server.url ?? "", allowedDomains: "")
+        // Explicit headers continue to support API keys/PATs. OAuth credentials are
+        // applied dynamically by the transport and never persisted in configuration.
+        let hasAuthorization = server.headers?.keys.contains { $0.caseInsensitiveCompare("Authorization") == .orderedSame } == true
+        let secureOAuth = endpoint.scheme == "https" || ["localhost", "127.0.0.1", "::1", "[::1]"].contains(endpoint.host ?? "")
+        let authorizer = !hasAuthorization && secureOAuth ? oauth.makeAuthorizer(for: server) : nil
+        return HTTPClientTransport(endpoint: endpoint, configuration: configuration, authorizer: authorizer,
+                                   requestModifier: { @Sendable request in
             var request = request
-            for (key, value) in headers ?? [:] { request.setValue(value, forHTTPHeaderField: key) }
+            for (key, value) in server.headers ?? [:] { request.setValue(value, forHTTPHeaderField: key) }
             return request
         }, logger: logger)
     }
@@ -371,6 +385,7 @@ class MCPClientManager: ObservableObject {
     /// Cancelling a Swift task alone does not resume the SDK's pending JSON-RPC
     /// continuations. Interrupt the request/connection before awaiting the group.
     nonisolated private static func withTimeout<T: Sendable>(seconds: TimeInterval,
+        paused: @escaping @Sendable () async -> Bool = { false },
         interrupt: @escaping @Sendable () async -> Void,
         operation: @escaping @Sendable () async throws -> T) async throws -> T {
         try await withTaskCancellationHandler {
@@ -378,7 +393,12 @@ class MCPClientManager: ObservableObject {
                 defer { group.cancelAll() }
                 group.addTask { try Task.checkCancellation(); return try await operation() }
                 group.addTask {
-                    try await Task.sleep(for: .seconds(max(0.1, seconds)))
+                    var remaining = max(0.1, seconds)
+                    while remaining > 0 {
+                        let interval = min(0.25, remaining)
+                        try await Task.sleep(for: .seconds(interval))
+                        if !(await paused()) { remaining -= interval }
+                    }
                     await interrupt()
                     throw LocalOperationError.unavailable("The MCP request timed out. Reconnect the server and try again.")
                 }
