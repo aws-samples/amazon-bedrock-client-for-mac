@@ -60,7 +60,9 @@ final class InferenceConfigTests: XCTestCase {
             let profile = BedrockModelDescriptor(id: arn, name: "Team \(index)", provider: "",
                 inputModalities: [], outputModalities: [], inferenceTypes: ["INFERENCE_PROFILE"],
                 foundationID: foundationID, isProfile: true)
-            BedrockCapabilityRegistry.shared.replace(region: region, descriptors: [profile])
+            let foundation = BedrockModelDescriptor(id: foundationID, name: "Foundation \(index)", provider: "",
+                inputModalities: [], outputModalities: [], inferenceTypes: ["INFERENCE_PROFILE"])
+            BedrockCapabilityRegistry.shared.replace(region: region, descriptors: [foundation, profile])
             XCTAssertEqual(backend.isReasoningSupported(arn), backend.isReasoningSupported(foundationID), foundationID)
             XCTAssertEqual(backend.isToolUseSupported(arn), backend.isToolUseSupported(foundationID), foundationID)
             XCTAssertEqual(backend.isStreamingToolUseSupported(arn), backend.isStreamingToolUseSupported(foundationID), foundationID)
