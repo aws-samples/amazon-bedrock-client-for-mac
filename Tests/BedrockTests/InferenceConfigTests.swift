@@ -2,6 +2,32 @@ import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
 final class InferenceConfigTests: XCTestCase {
+    @MainActor
+    func testTitleParametersDoNotChangeTheConversationModelOrSavedInferenceSettings() async throws {
+        let preferences = PreferencesStore.shared
+        let previous = preferences.modelInferenceConfigs
+        let thinking = preferences.enableModelThinking
+        let chatModel = preferences.defaultModelId
+        defer {
+            preferences.modelInferenceConfigs = previous
+            preferences.enableModelThinking = thinking
+        }
+        let id = "us.amazon.nova-pro-v1:0"
+        preferences.modelInferenceConfigs[id] = ModelInferenceConfig(maxTokens: 8192, reasoningEffort: "high", overrideDefault: true)
+        preferences.enableModelThinking = true
+        let saved = preferences.modelInferenceConfigs
+        let backend = try BedrockService(region: "us-east-1", profile: "default", endpoint: "", runtimeEndpoint: "")
+        let request = try await backend.makeConverseRequest(modelId: id, messages: [],
+            modelParameters: ConversationTitle.parameters, thinkingEnabled: false)
+        XCTAssertEqual(request.modelId, id)
+        XCTAssertEqual(request.inferenceConfig?.maxTokens, ConversationTitle.maxOutputTokens)
+        XCTAssertNil(request.inferenceConfig?.temperature)
+        XCTAssertNil(request.inferenceConfig?.topp)
+        XCTAssertEqual(preferences.modelInferenceConfigs, saved)
+        XCTAssertEqual(preferences.defaultModelId, chatModel)
+        XCTAssertTrue(preferences.enableModelThinking)
+    }
+
     func testLegacyConfigEnablesExistingParameters() throws {
         let json = """
         {

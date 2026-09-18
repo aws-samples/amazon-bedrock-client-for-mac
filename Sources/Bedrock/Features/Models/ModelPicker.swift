@@ -4,6 +4,10 @@ import SwiftUI
 struct ModelPicker: View {
     let organizedChatModels: [String: [ChatModel]]
     @Binding var menuSelection: SidebarSelection?
+    var emptySelectionTitle = "Select model"
+    var allowsClearingSelection = false
+    var allowsDefaultAction = true
+    var controlIdentifier = "modelPicker.button"
     let handleSelectionChange: (SidebarSelection?) -> Void
     @State private var isShowingPopover = false
     @State private var hovering = false
@@ -20,7 +24,7 @@ struct ModelPicker: View {
                         .resizable().scaledToFit().frame(width: 20, height: 20)
                         .accessibilityHidden(true)
                 }
-                Text(selectedModel?.name.isEmpty == false ? selectedModel!.name : "Select model")
+                Text(selectedModel?.name.isEmpty == false ? selectedModel!.name : emptySelectionTitle)
                     .font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.tail)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
@@ -32,12 +36,15 @@ struct ModelPicker: View {
         }
         .buttonStyle(.plain).onHover { hovering = $0 }
         .help("Choose a Bedrock model")
-        .accessibilityLabel("Model: \(selectedModel?.name ?? "Select model")")
-        .accessibilityIdentifier("modelPicker.button")
+        .accessibilityLabel("Model: \(selectedModel?.name ?? emptySelectionTitle)")
+        .accessibilityIdentifier(controlIdentifier)
         .popover(isPresented: $isShowingPopover, arrowEdge: .top) {
-            ModelSelectorPopoverContent(models: organizedChatModels.values.flatMap { $0 }, selectedID: selectedModel?.id) { id in
-                let model = organizedChatModels.values.lazy.flatMap { $0 }.first { $0.id == id } ?? ModelCatalog.shared.model(id)
-                let selection = SidebarSelection.chat(model)
+            ModelSelectorPopoverContent(models: organizedChatModels.values.flatMap { $0 }, selectedID: selectedModel?.id,
+                                        clearTitle: allowsClearingSelection ? emptySelectionTitle : nil,
+                                        allowsDefaultAction: allowsDefaultAction) { id in
+                let selection = id.map { id in
+                    SidebarSelection.chat(organizedChatModels.values.lazy.flatMap { $0 }.first { $0.id == id } ?? ModelCatalog.shared.model(id))
+                }
                 // A model change can insert a transcript boundary and replace
                 // the composer's controls. Do not animate that layout inside an
                 // open popover's transaction, especially after expanding a tool.
@@ -56,7 +63,9 @@ struct ModelPicker: View {
 private struct ModelSelectorPopoverContent: View {
     let models: [ChatModel]
     let selectedID: String?
-    let select: (String) -> Void
+    let clearTitle: String?
+    let allowsDefaultAction: Bool
+    let select: (String?) -> Void
     let close: () -> Void
     @ObservedObject private var settings = PreferencesStore.shared
     @ObservedObject private var catalog = ModelCatalog.shared
@@ -91,6 +100,16 @@ private struct ModelSelectorPopoverContent: View {
             .padding(12)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.7))
             Divider()
+            if let clearTitle, query.isEmpty {
+                Button { select(nil) } label: {
+                    HStack {
+                        Text(clearTitle)
+                        Spacer()
+                        if selectedID == nil { Image(systemName: "checkmark") }
+                    }.font(.system(size: 13, weight: .medium)).padding(12).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("modelPicker.automatic")
+                Divider()
+            }
             if rows.isEmpty {
                 EmptyStateView(symbol: "magnifyingglass", title: "No models found", detail: "Try a different search term.")
             } else {
@@ -184,7 +203,9 @@ private struct ModelSelectorPopoverContent: View {
             Button("Copy model ID") {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(row.preferredID, forType: .string)
             }
-            Button("Use by default") { settings.defaultModelId = row.preferredID }
+            if allowsDefaultAction {
+                Button("Use by default") { settings.defaultModelId = row.preferredID }
+            }
         }
     }
 

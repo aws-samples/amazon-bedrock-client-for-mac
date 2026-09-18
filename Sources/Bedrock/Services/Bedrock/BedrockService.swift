@@ -1282,17 +1282,23 @@ class BedrockService: Equatable, @unchecked Sendable {
         messages: [BedrockRuntimeClientTypes.Message],
         systemContent: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil,
         inferenceConfig: BedrockRuntimeClientTypes.InferenceConfiguration? = nil,
-        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil,
+        modelParameters: ModelInferenceConfig? = nil,
+        thinkingEnabled: Bool? = nil
     ) async throws -> ConverseStreamInput {
         let modelType = getModelType(modelId)
         
         // Create default inference config if not provided
         // Get model-specific inference config
-        let modelConfig = await MainActor.run { PreferencesStore.shared.getInferenceConfig(for: modelId) }
+        let modelConfig: ModelInferenceConfig
+        if let modelParameters { modelConfig = modelParameters }
+        else { modelConfig = await MainActor.run { PreferencesStore.shared.getInferenceConfig(for: modelId) } }
         let config: BedrockRuntimeClientTypes.InferenceConfiguration
         
         // Check if reasoning is enabled for this model
-        let isThinkingEnabled = await MainActor.run { PreferencesStore.shared.enableModelThinking }
+        let isThinkingEnabled: Bool
+        if let thinkingEnabled { isThinkingEnabled = thinkingEnabled }
+        else { isThinkingEnabled = await MainActor.run { PreferencesStore.shared.enableModelThinking } }
         let isReasoningModel = isReasoningSupported(modelId) && !hasAlwaysOnReasoning(modelId)
         let shouldOverrideForReasoning = isReasoningModel && isThinkingEnabled
         
@@ -1553,9 +1559,12 @@ class BedrockService: Equatable, @unchecked Sendable {
         modelId: String,
         messages: [BedrockRuntimeClientTypes.Message],
         systemContent: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil,
-        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil,
+        modelParameters: ModelInferenceConfig? = nil,
+        thinkingEnabled: Bool? = nil
     ) async throws -> ConverseOutput {
-        let configured = try await makeConverseRequest(modelId: modelId, messages: messages, systemContent: systemContent, toolConfig: toolConfig)
+        let configured = try await makeConverseRequest(modelId: modelId, messages: messages, systemContent: systemContent,
+            toolConfig: toolConfig, modelParameters: modelParameters, thinkingEnabled: thinkingEnabled)
         var request = ConverseInput(modelId: configured.modelId)
         request.messages = configured.messages
         request.system = configured.system
@@ -1563,6 +1572,37 @@ class BedrockService: Equatable, @unchecked Sendable {
         request.toolConfig = configured.toolConfig
         request.additionalModelRequestFields = configured.additionalModelRequestFields
         return try await bedrockRuntimeClient.converse(input: request)
+    }
+
+    func generateConversationTitle(modelID: String, input: String) async throws -> String {
+        let prompt = ConversationTitle.prompt(input)
+        let route = BedrockCapabilityRegistry.shared.descriptor(modelID, region: region)?.route ?? BedrockModelID.route(modelID)
+        var title = ""
+        if route == .responses {
+            let input: [JSONValue] = [.object(["role": .string("user"), "content": .array([
+                .object(["type": .string("input_text"), "text": .string(prompt)])
+            ])])]
+            for try await event in try await mantleResponsesStream(
+                modelId: modelID, input: input, modelParameters: ConversationTitle.parameters) {
+                switch event {
+                case .text(let delta): title += delta
+                case .finished(_, _, let fallback): if title.isEmpty { title = fallback }
+                case .output: break
+                }
+            }
+        } else {
+            let response = try await converse(modelId: modelID,
+                messages: [.init(content: [.text(prompt)], role: .user)],
+                modelParameters: ConversationTitle.parameters, thinkingEnabled: false)
+            if case .message(let message)? = response.output {
+                title = (message.content ?? []).compactMap { content in
+                    if case .text(let text) = content { return text }
+                    return nil
+                }.joined()
+            }
+        }
+        try Task.checkCancellation()
+        return ConversationTitle.clean(title)
     }
 
     func converseStream(
@@ -1632,7 +1672,8 @@ class BedrockService: Equatable, @unchecked Sendable {
     func mantleResponsesStream(
         modelId: String,
         input: [JSONValue],
-        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil
+        toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil,
+        modelParameters: ModelInferenceConfig? = nil
     ) async throws -> AsyncThrowingStream<MantleResponseEvent, Error> {
         // Guard the region before signing anything. A saved chat keeps pointing at its model
         // after the user switches regions, so without this the request goes to a bedrock-mantle
@@ -1649,7 +1690,9 @@ class BedrockService: Equatable, @unchecked Sendable {
             }
         }
 
-        let modelConfig = await MainActor.run { PreferencesStore.shared.getInferenceConfig(for: modelId) }
+        let modelConfig: ModelInferenceConfig
+        if let modelParameters { modelConfig = modelParameters }
+        else { modelConfig = await MainActor.run { PreferencesStore.shared.getInferenceConfig(for: modelId) } }
         let apiKey = ValidationMode.isOffline ? "" : await MainActor.run { PreferencesStore.shared.bedrockApiKey }
         // Fall back to the model's own defaults rather than a fixed 8192/medium, so each
         // GPT-5.6 tier gets its own token budget and effort baseline.
