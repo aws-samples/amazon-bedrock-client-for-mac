@@ -117,6 +117,7 @@
 		79B37BFB2DA06BB5006A7A62 /* DocumentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B37BFA2DA06BB1006A7A62 /* DocumentPreview.swift */; };
 		79BFF5102AD342710057BF3A /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BFF50F2AD342710057BF3A /* ConversationStore.swift */; };
 		79C4F01E2C30362100C488C2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C4F01D2C30362100C488C2 /* AppDelegate.swift */; };
+		BB202002A000000000000001 /* ApplicationTerminationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB202002A000000000000002 /* ApplicationTerminationCoordinator.swift */; };
 		79C4F0202C3048A300C488C2 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */; };
 		79C7F5ED2AD282EE008FBB35 /* FontEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C7F5EC2AD282EE008FBB35 /* FontEnvironment.swift */; };
 		79D3C7832D9C799700CB020F /* EditorFocusState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D3C7822D9C799000CB020F /* EditorFocusState.swift */; };
@@ -333,6 +334,7 @@
 		79BF645E2ACFF8FD00383300 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		79BFF50F2AD342710057BF3A /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		79C4F01D2C30362100C488C2 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		BB202002A000000000000002 /* ApplicationTerminationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationTerminationCoordinator.swift; sourceTree = "<group>"; };
 		79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		79C7F5EC2AD282EE008FBB35 /* FontEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontEnvironment.swift; sourceTree = "<group>"; };
 		79D3C7822D9C799000CB020F /* EditorFocusState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorFocusState.swift; sourceTree = "<group>"; };
@@ -964,6 +966,7 @@
 				82B6A47EC81FA98C20D1D1E1 /* AppActions.swift */,
 				79C4F01F2C3048A300C488C2 /* AppCoordinator.swift */,
 				79C4F01D2C30362100C488C2 /* AppDelegate.swift */,
+				BB202002A000000000000002 /* ApplicationTerminationCoordinator.swift */,
 				D68D94D9DF2A35C81866EB71 /* AppStore.swift */,
 				79610DBE2AD22A2F00993D09 /* BedrockApp.swift */,
 				90644831BF770FF46304EE38 /* DraftIndicator.swift */,
@@ -1444,6 +1447,7 @@
 				79C4F0202C3048A300C488C2 /* AppCoordinator.swift in Sources */,
 				0484061195E98CD66B24B2C8 /* AppDataSnapshot.swift in Sources */,
 				79C4F01E2C30362100C488C2 /* AppDelegate.swift in Sources */,
+				BB202002A000000000000001 /* ApplicationTerminationCoordinator.swift in Sources */,
 				0389F087EFDD2BF6E146A2E1 /* AppPreferences.swift in Sources */,
 				B2E59115719B3AD6AF8C3AA5 /* AppStore.swift in Sources */,
 				DF4C57F36EBD5888A8593970 /* AttachmentListView.swift in Sources */,
@@ -1805,7 +1809,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.1;
+				MARKETING_VERSION = 2.0.2;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BEDROCK_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_MODULE_NAME = Amazon_Bedrock_Client_for_Mac;
@@ -1848,7 +1852,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.1;
+				MARKETING_VERSION = 2.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BEDROCK_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_MODULE_NAME = Amazon_Bedrock_Client_for_Mac;
 				PRODUCT_NAME = "Amazon Bedrock";

@@ -34,7 +34,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // Flag to track if this is the first activation
     private var isFirstActivation = true
-    private var isPreparingToQuit = false
+    private var termination: ApplicationTerminationCoordinator?
+
+    private func makeTerminationCoordinator() -> ApplicationTerminationCoordinator {
+        ApplicationTerminationCoordinator(
+            prepare: {
+                let savedSessions = await ChatSessionPool.shared.prepareToTerminate()
+                let savedWelcome = await ComposerDraft.welcome.flush()
+                let savedWorkspace = AppStore.shared.flush()
+                guard savedSessions && savedWelcome && savedWorkspace else {
+                    ChatSessionPool.shared.resumeAfterCancelledQuit()
+                    return false
+                }
+                await BackgroundProcessRegistry.shared.stopAll()
+                await MCPClientManager.shared.shutdown()
+                return true
+            },
+            cancelled: {
+                UpdateService.shared.cancelInstallationAfterFailedSave()
+            })
+    }
 
     @objc func newChat(_ sender: Any?) {
         AppWindows.showMain()
@@ -114,22 +133,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !isPreparingToQuit else { return .terminateLater }
-        isPreparingToQuit = true
-        Task {
-            let savedSessions = await ChatSessionPool.shared.prepareToTerminate()
-            let savedWelcome = await ComposerDraft.welcome.flush()
-            let saved = savedSessions && savedWelcome
-            if !saved { ChatSessionPool.shared.resumeAfterCancelledQuit() }
-            if saved {
-                await BackgroundProcessRegistry.shared.stopAll()
-                await MCPClientManager.shared.shutdown()
-            }
-            AppStore.shared.flush()
-            isPreparingToQuit = false
-            sender.reply(toApplicationShouldTerminate: saved)
-        }
-        return .terminateLater
+        let coordinator = termination ?? makeTerminationCoordinator()
+        termination = coordinator
+        return coordinator.shouldTerminate()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

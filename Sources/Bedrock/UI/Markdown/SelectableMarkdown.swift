@@ -184,9 +184,24 @@ final class MarkdownSelectionTextView: NSTextView, NSTextViewDelegate {
             if value != nil { inlineCodeRanges.append(range) }
         }
         let retained = selections.compactMap { range, original -> NSValue? in
-            guard NSMaxRange(range) <= (string as NSString).length,
-                  (string as NSString).substring(with: range) == original else { return nil }
-            return NSValue(range: range)
+            let text = string as NSString
+            if NSMaxRange(range) <= text.length, text.substring(with: range) == original {
+                return NSValue(range: range)
+            }
+            // Formatting can consume literal Markdown delimiters before the
+            // selected words. Preserve the closest identical passage.
+            var nearest: NSRange?
+            var cursor = 0
+            while cursor < text.length {
+                let match = text.range(of: original, options: .literal,
+                                       range: NSRange(location: cursor, length: text.length - cursor))
+                guard match.location != NSNotFound else { break }
+                if nearest == nil || abs(match.location - range.location) < abs(nearest!.location - range.location) {
+                    nearest = match
+                }
+                cursor = NSMaxRange(match)
+            }
+            return nearest.map { NSValue(range: $0) }
         }
         if !retained.isEmpty { selectedRanges = retained }
         while copyButtons.count > codeBlocks.count { copyButtons.removeLast().removeFromSuperview() }

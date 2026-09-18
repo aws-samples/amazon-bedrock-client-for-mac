@@ -43,6 +43,7 @@ jobs:
           key: native-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.version }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'Bedrock.xcodeproj/project.pbxproj', 'Bedrock.xcodeproj/xcshareddata/xcschemes/Bedrock.xcscheme') }}-${{ github.sha }}
           restore-keys: |
             native-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.version }}-${{ hashFiles('Bedrock.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'Bedrock.xcodeproj/project.pbxproj', 'Bedrock.xcodeproj/xcshareddata/xcschemes/Bedrock.xcscheme') }}-
+            native-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.version }}-
       - name: Run the complete local CI command
         run: |
           python3 scripts/ci.py \
@@ -78,6 +79,8 @@ jobs:
             artifacts/*.md
             artifacts/core/*.log
             artifacts/rendering/*.log
+            artifacts/lifecycle/**/*.log
+            artifacts/lifecycle/*.json
             artifacts/Bedrock.xcresult
           retention-days: 14
       - name: Save optimized test build intermediates

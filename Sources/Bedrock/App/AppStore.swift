@@ -330,11 +330,17 @@ final class AppStore: ObservableObject {
     }
     func reveal(_ url: URL) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
 
-    func flush() {
+    @discardableResult
+    func flush() -> Bool {
         saveTask?.cancel()
-        guard !storageFailed else { return }
-        do { try file.save(state) }
-        catch { errorMessage = "Could not save local workspace: \(error.localizedDescription)" }
+        guard !storageFailed else { return false }
+        do {
+            try file.save(state)
+            return true
+        } catch {
+            errorMessage = "Could not save local workspace: \(error.localizedDescription)"
+            return false
+        }
     }
     private func scheduleSave() {
         guard !storageFailed else { return }

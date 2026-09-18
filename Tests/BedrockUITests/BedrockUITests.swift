@@ -87,9 +87,11 @@ final class BedrockUITests: XCTestCase {
 
     @MainActor
     private func response(_ marker: String, in app: XCUIApplication, timeout: TimeInterval = 12) -> XCUIElement {
-        let result = app.textViews.matching(NSPredicate(format: "label == 'Assistant response text' AND value CONTAINS %@", marker)).firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: timeout), "Missing response marker: \(marker)")
-        return result
+        let native = app.textViews.matching(NSPredicate(format: "label == 'Assistant response text' AND value CONTAINS %@", marker)).firstMatch
+        let web = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR value == %@", marker, marker)).firstMatch
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in native.exists || web.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: timeout), .completed, "Missing response marker: \(marker)")
+        return native.exists ? native : web
     }
 
     @MainActor
@@ -908,7 +910,7 @@ final class BedrockUITests: XCTestCase {
     }
 
     @MainActor
-    func testStreamingNativeToWebMarkdownKeepsFollowingMessagesOutsideTheResponse() async throws {
+    func testStreamingMarkdownKeepsOneRendererAndFollowingMessagesOutsideTheResponse() async throws {
         let (app, _) = try launch(withRuntime: true)
         let window = app.windows["MainWindow"]
         // Match the hosted display locally. Offscreen WebKit text is not a
@@ -937,12 +939,13 @@ final class BedrockUITests: XCTestCase {
             window.frame.width <= 1026 && window.frame.height <= 636
         }, object: nil)
         let fitResult = await XCTWaiter.fulfillment(of: [fitted], timeout: 5)
-        XCTAssertEqual(fitResult, .completed, "Exercise the streaming handoff at the small hosted window size.")
+        XCTAssertEqual(fitResult, .completed, "Exercise streaming at the small hosted window size.")
         guard fitResult == .completed else { return }
         send("[layout-stream] Grow this reply past the native Markdown threshold.", in: app)
         _ = response("LAYOUT_STREAM_BEGIN", in: app)
         let transcript = window.descendants(matching: .any)["conversation.transcript"].firstMatch
-        XCTAssertFalse(transcript.webViews.firstMatch.exists, "The short reply starts in the native text renderer.")
+        XCTAssertTrue(transcript.webViews.firstMatch.exists,
+                      "A live reply uses one renderer from its first text through completion.")
         try await XCTUnwrap(runtime).growStream()
         let web = transcript.webViews.firstMatch
         let grown = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in

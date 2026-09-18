@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
@@ -14,6 +15,11 @@ final class ConversationViewportTests: XCTestCase {
         let attachments = MessageAttachmentPresenter()
 
         init() { stream.update(message) }
+
+        func append(_ text: String) {
+            message.text += text
+            stream.update(message)
+        }
 
         func finish() {
             message.text += " COMPLETE"
@@ -35,7 +41,7 @@ final class ConversationViewportTests: XCTestCase {
     }
 
     @MainActor
-    func testCompletingResponsePreservesTheSelectedNativeText() async throws {
+    func testStreamingKeepsTheSelectedWebTextAcrossTheLengthThresholdAndCompletion() async throws {
         let response = CompletingResponse()
         let host = NSHostingView(rootView: CompletionRow(response: response))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 300),
@@ -45,28 +51,45 @@ final class ConversationViewportTests: XCTestCase {
         window.orderFront(nil)
         defer { window.close() }
 
-        func textView(in view: NSView) -> MarkdownSelectionTextView? {
-            if let text = view as? MarkdownSelectionTextView { return text }
+        func textView(in view: NSView) -> WKWebView? {
+            if let text = view as? WKWebView { return text }
             return view.subviews.lazy.compactMap { textView(in: $0) }.first
         }
-        let ready = ContinuousClock.now.advanced(by: .seconds(3))
-        while textView(in: host)?.string.contains("passage") != true, ContinuousClock.now < ready {
+        func contains(_ value: String) async -> Bool {
+            guard let web = textView(in: host) else { return false }
+            return (try? await web.callAsyncJavaScript(
+                "return document.getElementById('bedrock-content')?.textContent.includes(value) === true;",
+                arguments: ["value": value], in: nil, contentWorld: .page)) as? Bool == true
+        }
+        let ready = ContinuousClock.now.advanced(by: .seconds(10))
+        while !(await contains("passage")), ContinuousClock.now < ready {
             try await Task.sleep(for: .milliseconds(10))
         }
         let original = try XCTUnwrap(textView(in: host))
-        let selection = (original.string as NSString).range(of: "passage")
-        XCTAssertNotEqual(selection.location, NSNotFound)
-        original.setSelectedRange(selection)
+        _ = try await original.callAsyncJavaScript("""
+            const text = document.querySelector('#bedrock-content strong').firstChild;
+            getSelection().setBaseAndExtent(text, text.length, text, 0);
+            """, arguments: [:], in: nil, contentWorld: .page)
+        response.append("\n\n" + String(repeating: "Longer output. ", count: 400) + "THRESHOLD")
+        let appended = ContinuousClock.now.advanced(by: .seconds(10))
+        while !(await contains("THRESHOLD")), ContinuousClock.now < appended {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(textView(in: host) === original, "Growing output must not replace the selected renderer.")
+        let during = try await original.evaluateJavaScript("getSelection().toString()")
+        XCTAssertEqual(during as? String, "passage")
 
         response.finish()
-        let finished = ContinuousClock.now.advanced(by: .seconds(3))
-        while textView(in: host)?.string.contains("COMPLETE") != true, ContinuousClock.now < finished {
+        let finished = ContinuousClock.now.advanced(by: .seconds(10))
+        while !(await contains("COMPLETE")), ContinuousClock.now < finished {
             try await Task.sleep(for: .milliseconds(10))
         }
         let completed = try XCTUnwrap(textView(in: host))
-        XCTAssertTrue(completed.string.contains("COMPLETE"))
-        XCTAssertTrue(completed === original, "Finishing output must retain the native response view.")
-        XCTAssertEqual(completed.selectedRange(), selection,
+        let hasFinalText = await contains("COMPLETE")
+        XCTAssertTrue(hasFinalText)
+        XCTAssertTrue(completed === original, "Finishing output must retain the response view.")
+        let selected = try await completed.evaluateJavaScript("getSelection().toString()")
+        XCTAssertEqual(selected as? String, "passage",
                        "The user must be able to finish copying a passage when streaming ends.")
     }
 

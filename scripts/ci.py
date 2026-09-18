@@ -179,6 +179,9 @@ def main():
         run("documentation and media", [python, "scripts/validate-documentation.py"], "documentation.log")
         run("pipeline automation",
             [python, "-m", "unittest", "discover", "-s", "Tests/Pipeline", "-v"], "pipeline.log")
+        run("real AppKit shutdown and update relaunch",
+            [python, "scripts/validate-app-termination.py", "--output", output / "lifecycle"],
+            "lifecycle.log", timeout=180)
         run("Bedrock protocol fixtures",
             [python, "-m", "unittest", "discover", "-s", "Tests/Fixtures", "-p", "test_*.py", "-v"], "fixtures.log")
         run("local core", [python, "scripts/validate-local-core.py", "--output", output / "core"],

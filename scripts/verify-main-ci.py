@@ -71,6 +71,8 @@ def verify_receipt(root, revision, run, receipt, summary, inventory, inputs):
     steps = receipt.get("steps", [])
     required = REQUIRED_STEPS | ({"pipeline automation"} if any(
         name.startswith("Tests/Pipeline/") for name in inputs) else set())
+    if "Sources/Bedrock/App/ApplicationTerminationCoordinator.swift" in inputs:
+        required.add("real AppKit shutdown and update relaunch")
     require(required <= {step.get("name") for step in steps}
             and all(step.get("exitCode") == 0 for step in steps), "A required CI stage did not pass.")
     hashes, modes = receipt.get("inputSHA256", {}), receipt.get("inputExecutable", {})

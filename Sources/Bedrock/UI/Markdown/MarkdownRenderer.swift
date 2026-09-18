@@ -49,6 +49,71 @@ enum MarkdownDOMUpdateScript {
     static let source = MarkdownSanitizerScript.source + #"""
     let bedrockSourceBlocks = null;
     const bedrockStreamAnimations = new Set();
+    const bedrockCaptureSelection = content => {
+        const selection = getSelection();
+        if (!selection || selection.isCollapsed || !selection.rangeCount ||
+            !content.contains(selection.anchorNode) || !content.contains(selection.focusNode)) return null;
+        const range = selection.getRangeAt(0);
+        let scope = range.commonAncestorContainer;
+        while (scope !== content && scope.parentNode !== content) scope = scope.parentNode;
+        const offset = (node, position) => {
+            const prefix = document.createRange();
+            prefix.selectNodeContents(scope); prefix.setEnd(node, position);
+            return prefix.toString().length;
+        };
+        const start = offset(range.startContainer, range.startOffset);
+        const end = offset(range.endContainer, range.endOffset);
+        return {scope, index: Array.from(content.children).indexOf(scope), start, end,
+                text: scope.textContent, selected: range.toString(),
+                backward: selection.anchorNode === range.endContainer && selection.anchorOffset === range.endOffset,
+                anchor: selection.anchorNode, anchorOffset: selection.anchorOffset,
+                focus: selection.focusNode, focusOffset: selection.focusOffset};
+    };
+    const bedrockRestoreSelection = (content, saved) => {
+        if (!saved) return;
+        const selection = getSelection();
+        // Appending to unchanged text nodes already preserves the live drag.
+        // Do not reset its anchor or dispatch a selection change in that case.
+        if (selection.anchorNode === saved.anchor && selection.anchorOffset === saved.anchorOffset &&
+            selection.focusNode === saved.focus && selection.focusOffset === saved.focusOffset &&
+            selection.toString() === saved.selected) return;
+        const scope = content.contains(saved.scope) ? saved.scope : content.children[saved.index];
+        if (!scope) return;
+        const text = scope.textContent;
+        let start = saved.start, end = saved.end;
+        if (text.slice(start, end) !== saved.selected) {
+            // Closing Markdown delimiters can remove literal '*' or '[' before
+            // the selected words. Prefer the same passage nearest its old place.
+            let nearest = -1, distance = Infinity, found = text.indexOf(saved.selected);
+            while (saved.selected.length && found !== -1) {
+                if (Math.abs(found - start) < distance) { nearest = found; distance = Math.abs(found - start); }
+                found = text.indexOf(saved.selected, found + Math.max(1, saved.selected.length));
+            }
+            if (nearest >= 0) { start = nearest; end = start + saved.selected.length; }
+            else {
+                let prefix = 0, suffix = 0;
+                while (prefix < Math.min(saved.text.length, text.length) && saved.text[prefix] === text[prefix]) prefix++;
+                while (suffix < Math.min(saved.text.length, text.length) - prefix &&
+                       saved.text[saved.text.length - suffix - 1] === text[text.length - suffix - 1]) suffix++;
+                const map = value => value <= prefix ? value : value >= saved.text.length - suffix
+                    ? value + text.length - saved.text.length : Math.min(value, text.length - suffix);
+                start = Math.max(0, map(start)); end = Math.min(text.length, map(end));
+            }
+        }
+        if (end <= start) return;
+        const point = position => {
+            const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+            let node, previous;
+            while ((node = walker.nextNode())) {
+                if (position <= node.length) return [node, position];
+                position -= node.length; previous = node;
+            }
+            return previous ? [previous, previous.length] : [scope, 0];
+        };
+        const first = point(start), last = point(end);
+        const anchor = saved.backward ? last : first, focus = saved.backward ? first : last;
+        selection.setBaseAndExtent(anchor[0], anchor[1], focus[0], focus[1]);
+    };
     const bedrockPatchNode = (current, incoming) => {
         if (current.nodeType !== incoming.nodeType || current.nodeName !== incoming.nodeName) {
             current.replaceWith(incoming);
@@ -80,6 +145,7 @@ enum MarkdownDOMUpdateScript {
     };
     window.bedrockUpdateContent = (html, fontSize, streaming = false, reduceMotion = false) => {
         const content = document.getElementById('bedrock-content');
+        const selection = bedrockCaptureSelection(content);
         const template = document.createElement('template');
         template.innerHTML = html;
         bedrockSanitize(template.content);
@@ -105,6 +171,7 @@ enum MarkdownDOMUpdateScript {
                 if (language && hljs.getLanguage(language.slice(9))) hljs.highlightElement(code);
             });
         });
+        bedrockRestoreSelection(content, selection);
         const reduced = reduceMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!streaming || reduced) {
             bedrockStreamAnimations.forEach(animation => animation.cancel());

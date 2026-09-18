@@ -110,7 +110,7 @@ private final class MarkdownMessageRenderer: ObservableObject {
     init(text: String, isStreaming: Bool) {
         if let cached = MarkdownRenderCache.shared.cachedDocument(text) {
             native = MarkdownDocumentState(rows: cached.rows, isStreaming: isStreaming)
-            html = cached.isNative ? nil : MarkdownRenderCache.shared.html(text, document: cached, cache: !isStreaming)
+            html = cached.isNative && !isStreaming ? nil : MarkdownRenderCache.shared.html(text, document: cached, cache: !isStreaming)
             source = text
             isFinal = !isStreaming
         } else {
@@ -125,7 +125,10 @@ private final class MarkdownMessageRenderer: ObservableObject {
 
     func update(text: String, isStreaming: Bool) async {
         guard source != text || isFinal == isStreaming else { return }
-        guard let next = await MarkdownParsingWorker.shared.parse(text, cache: !isStreaming, useWeb: html != nil),
+        // A live reply can grow beyond the native threshold or acquire HTML.
+        // Start it in the scalable renderer and retain that view through
+        // completion so an in-progress selection never crosses renderers.
+        guard let next = await MarkdownParsingWorker.shared.parse(text, cache: !isStreaming, useWeb: isStreaming || html != nil),
               !Task.isCancelled else { return }
         if next.html == nil {
             native.update(rows: next.document.rows, isStreaming: isStreaming)

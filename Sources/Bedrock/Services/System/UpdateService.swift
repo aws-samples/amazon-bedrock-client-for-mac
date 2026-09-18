@@ -14,6 +14,7 @@ final class UpdateService: NSObject, ObservableObject {
     private var progressWindow: NSWindow?
     private var progressLabel: NSTextField?
     private var installer: Process?
+    private var installationSaveFailed = false
 
     func checkForUpdates(manual: Bool = false) {
         guard !isBusy, !ValidationMode.isOffline,
@@ -100,19 +101,23 @@ final class UpdateService: NSObject, ObservableObject {
             confirmation.addButton(withTitle: "Later")
             guard await present(confirmation) == .alertFirstButtonReturn else { return }
             try Task.checkCancellation()
+            installationSaveFailed = false
             installer = try await UpdateInstaller.handOff(prepared)
             installer?.terminationHandler = { [weak self] process in
                 let succeeded = process.terminationStatus == 0
                 Task { @MainActor in
                     // This is reached only if the app stayed open (for example,
                     // its data could not be saved and graceful quit was refused).
-                    self?.installer = nil
-                    self?.isBusy = false
-                    self?.status = succeeded ? "Update installed" : "Update not installed · your previous app was kept"
+                    guard let self, self.installer === process else { return }
+                    self.installer = nil
+                    self.isBusy = false
+                    if !self.installationSaveFailed {
+                        self.status = succeeded ? "Update installed" : "Update not installed · your previous app was kept"
+                    }
                 }
             }
             handedOff = true
-            status = "Restarting to install…"
+            status = "Saving your work and restarting…"
             NSApp.terminate(nil)
         } catch is CancellationError {
             status = "Update canceled"
@@ -130,6 +135,14 @@ final class UpdateService: NSObject, ObservableObject {
         progressWindow = nil
         // The installation helper deliberately outlives this app. It waits for
         // applicationShouldTerminate to finish saving before replacing anything.
+    }
+
+    func cancelInstallationAfterFailedSave() {
+        guard let installer else { return }
+        installationSaveFailed = true
+        if installer.isRunning { installer.terminate() }
+        isBusy = false
+        status = "Update paused · your work could not be saved"
     }
 
     @objc private func cancelUpdate(_ sender: Any?) { operation?.cancel() }

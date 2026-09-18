@@ -157,6 +157,11 @@ class ReleaseGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "required CI stage"):
             self.verify()
 
+    def test_real_appkit_lifecycle_execution_is_required_for_the_quit_coordinator(self):
+        self.inputs.add("Sources/Bedrock/App/ApplicationTerminationCoordinator.swift")
+        with self.assertRaisesRegex(ValueError, "required CI stage"):
+            self.verify()
+
 
 if __name__ == "__main__":
     unittest.main()

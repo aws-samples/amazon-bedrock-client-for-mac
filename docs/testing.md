@@ -72,6 +72,14 @@ Dedicated hardware measurements use `scripts/measure-ui-responsiveness.swift`; t
 
 ## Live checks
 
+`scripts/validate-app-termination.py --output /tmp/bedrock-termination-check`
+runs separate AppKit processes without XCTest injection. It verifies saving
+before termination, repeated Quit requests, recovery after a failed save, and
+the production installer replacing and reopening a signed disposable app.
+This catches termination-loop deadlocks that an injected XCTest host can hide.
+It does not modify an installed Bedrock app or its data. CI requires this stage
+before issuing the release receipt.
+
 Deterministic tests do not prove account-specific model access, all regions, a provider's generated content, microphone permissions or external MCP credentials. Those require live checks against the intended account and hardware. Keep local results in `artifacts/`; share only sanitized summaries that identify the tested revision and limitations. Optional public MCP diagnostics remain opt-in with `BEDROCK_LIVE_NETWORK_TESTS=1`.
 
 Validation artifacts contain `ci-result.json`, `summary.json`, logs and

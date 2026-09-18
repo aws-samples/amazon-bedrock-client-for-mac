@@ -393,6 +393,25 @@ final class MarkdownRenderingTests: XCTestCase {
     }
 
     @MainActor
+    func testNativeSelectionFollowsWordsWhenStreamingCompletesMarkdownDelimiters() {
+        let view = MarkdownSelectionTextView()
+        let parser = ExtendedMarkdownParser()
+        for (before, after, selected) in [
+            ("Keep **선택한 문장", "Keep **선택한 문장** and more.", "선택한 문장"),
+            ("Keep [selected words", "Keep [selected words](https://example.com) and more.", "selected words"),
+        ] {
+            view.install(rows: MarkdownLayoutRow.flatten(parser.parse(before)),
+                         fontSize: 14, highlights: [], dark: false, isStreaming: true)
+            let range = (view.string as NSString).range(of: selected)
+            XCTAssertNotEqual(range.location, NSNotFound)
+            view.setSelectedRange(range)
+            view.install(rows: MarkdownLayoutRow.flatten(parser.parse(after)),
+                         fontSize: 14, highlights: [], dark: false, isStreaming: true)
+            XCTAssertEqual((view.string as NSString).substring(with: view.selectedRange()), selected)
+        }
+    }
+
+    @MainActor
     func testNativeMarkdownLinksKeepReadableLabelsWithoutUnsafeTargets() {
         let rows = MarkdownLayoutRow.flatten(ExtendedMarkdownParser().parse(
             "[Safe](https://example.com) [Unsafe](javascript:alert) [Local](file:///tmp/private)"))
@@ -633,6 +652,56 @@ final class MarkdownRenderingTests: XCTestCase {
         XCTAssertEqual(values["finalItem"] as? String, "Finished tail")
         XCTAssertEqual(values["items"] as? Int, 3)
         XCTAssertEqual(values["tail"] as? String, "Following paragraph.")
+        webView.stopLoading()
+        withExtendedLifetime(delegate) {}
+    }
+
+    @MainActor
+    func testStreamingSelectionSurvivesFormattingLinksAndFinalSyntaxHighlighting() async throws {
+        let webView = WKWebView()
+        let ready = expectation(description: "Selection preservation page loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+        <html><body><main id="bedrock-content"></main>
+        <script>\(MarkdownDOMUpdateScript.source)\(MarkdownClipboardScript.source)</script></body></html>
+        """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        let result = try await webView.callAsyncJavaScript("""
+            const failures = [];
+            for (const [before, after, selected] of [
+                ['<p>Keep **선택한 문장</p>', '<p>Keep <strong>선택한 문장</strong> and more.</p>', '선택한 문장'],
+                ['<p>Keep [selected words</p>', '<p>Keep <a href="https://example.com">selected words</a> and more.</p>', 'selected words'],
+                ['<p>Keep selected words.</p>', '<h2>Keep selected words.</h2>', 'selected words'],
+            ]) {
+                for (const backward of [false, true]) {
+                    getSelection().removeAllRanges();
+                    bedrockUpdateContent(before, 15, true);
+                    const text = document.getElementById('bedrock-content').firstChild.firstChild;
+                    const start = text.data.indexOf(selected), end = start + selected.length;
+                    getSelection().setBaseAndExtent(text, backward ? end : start, text, backward ? start : end);
+                    for (let index = 0; index < 30; index++) {
+                        bedrockUpdateContent(after + `<p>${'Continued. '.repeat(index)}</p>`, 15, true);
+                        if (getSelection().toString() !== selected) failures.push('Lost selection: ' + before);
+                    }
+                    const selection = getSelection(), range = selection.getRangeAt(0);
+                    const reversed = selection.anchorNode === range.endContainer && selection.anchorOffset === range.endOffset;
+                    if (reversed !== backward) failures.push('Changed drag direction');
+                    if (!bedrockSelectionPayload().html.includes(selected)) failures.push('Lost rich-text copy');
+                }
+            }
+            bedrockUpdateContent('<pre><code class="language-swift">let answer = 42</code></pre>', 15, true);
+            const code = document.querySelector('code'), text = code.firstChild;
+            getSelection().setBaseAndExtent(text, 4, text, 10);
+            window.hljs = {getLanguage: () => true, highlightElement: element => {
+                element.innerHTML = '<span>let </span><span>answer</span><span> = 42</span>';
+                element.dataset.highlighted = 'yes';
+            }};
+            bedrockUpdateContent('<pre><code class="language-swift">let answer = 42</code></pre>', 15, false);
+            if (getSelection().toString() !== 'answer') failures.push('Lost selection on completion');
+            return failures;
+            """, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(result as? [String], [])
         webView.stopLoading()
         withExtendedLifetime(delegate) {}
     }
