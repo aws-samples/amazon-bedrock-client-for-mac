@@ -3,6 +3,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from socketserver import TCPServer
+import signal
 import sys
 
 PAYLOAD = b"verified update payload"
@@ -36,6 +37,10 @@ class DownloadFixture(ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
+    # A fixture launched from a cooperative XCTest worker can inherit blocked
+    # signals. Restore normal termination before publishing the ready port.
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.pthread_sigmask(signal.SIG_SETMASK, [])
     with DownloadFixture() as server:
         ready = Path(sys.argv[1])
         pending = ready.with_name(ready.name + ".tmp")

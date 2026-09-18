@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
@@ -44,12 +45,25 @@ final class UpdateInstallerTests: XCTestCase {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = errors
-        try process.run()
-        defer {
-            if process.isRunning { process.terminate(); process.waitUntilExit() }
-            try? errors.close()
-            try? FileManager.default.removeItem(at: directory)
+        addTeardownBlock {
+            defer {
+                try? errors.close()
+                try? FileManager.default.removeItem(at: directory)
+            }
+            guard process.isRunning else { return }
+            process.terminate()
+            for _ in 0..<50 where process.isRunning {
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+                for _ in 0..<50 where process.isRunning {
+                    try? await Task.sleep(for: .milliseconds(20))
+                }
+            }
+            XCTAssertFalse(process.isRunning, "The owned download fixture must stop within two seconds.")
         }
+        try process.run()
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         var readyPort: Int?
         while process.isRunning, ContinuousClock.now < deadline {
