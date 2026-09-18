@@ -442,7 +442,7 @@ class BedrockService: Equatable, @unchecked Sendable {
     /// Check if a model is an OpenAI frontier model served via the bedrock-mantle Responses API
     /// (not available through bedrock-runtime InvokeModel/Converse)
     func isMantleResponsesModel(_ modelId: String) -> Bool {
-        BedrockModelID.route(modelId) == .responses
+        BedrockModelID.route(BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)) == .responses
     }
 
     func isFrontierGPT(_ modelId: String) -> Bool {
@@ -1775,6 +1775,11 @@ class BedrockService: Equatable, @unchecked Sendable {
     }
     
     // MARK: - Foundation Model Information
+
+    func getInferenceProfile(_ arn: String) async throws -> GetInferenceProfileOutput {
+        let identifier = try BedrockInferenceProfile.validateARN(arn, region: region)
+        return try await bedrockClient.getInferenceProfile(input: .init(inferenceProfileIdentifier: identifier))
+    }
     
     func listFoundationModels(
         byCustomizationType: BedrockClientTypes.ModelCustomization? = nil,

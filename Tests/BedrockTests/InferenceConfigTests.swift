@@ -2,6 +2,25 @@ import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
 final class InferenceConfigTests: XCTestCase {
+    @MainActor
+    func testApplicationProfileResolvesCapabilitiesAndKeepsItsARNInRequests() async throws {
+        let region = "eu-west-3"
+        let arn = "arn:aws:bedrock:eu-west-3:123456789012:application-inference-profile/team-model"
+        let foundationID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+        let profile = BedrockModelDescriptor(id: arn, name: "Team model", provider: "Anthropic",
+            inputModalities: ["TEXT", "IMAGE"], outputModalities: ["TEXT"], inferenceTypes: ["INFERENCE_PROFILE"],
+            streaming: true, foundationID: foundationID, isProfile: true)
+        let catalog = ModelCatalog.shared.descriptors
+        BedrockCapabilityRegistry.shared.replace(region: region, descriptors: [profile])
+        defer { BedrockCapabilityRegistry.shared.replace(region: region, descriptors: catalog) }
+        let backend = try BedrockService(region: region, profile: "default", endpoint: "", runtimeEndpoint: "")
+        guard case .claudeHaiku45 = backend.getModelType(arn) else { return XCTFail("Profile capabilities were not resolved.") }
+        XCTAssertTrue(backend.isVisionSupported(arn))
+        let request = try await backend.makeConverseRequest(modelId: arn, messages: [])
+        XCTAssertEqual(request.modelId, arn, "The application ARN must reach Bedrock for billing and IAM enforcement.")
+        XCTAssertNotNil(request.inferenceConfig?.maxTokens)
+    }
+
     func testLegacyConfigEnablesExistingParameters() throws {
         let json = """
         {

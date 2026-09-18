@@ -101,6 +101,7 @@ struct BedrockModelDescriptor: Codable, Identifiable, Equatable, Sendable {
     var lifecycle: String? = nil
     var origin: BedrockModelOrigin = .runtime
     var route: BedrockModelRoute { BedrockModelID.route(foundationID ?? id, output: outputModalities) }
+    var isApplicationProfile: Bool { isProfile && id.contains(":application-inference-profile/") }
     var isLegacy: Bool { BedrockModelID.isLegacy(foundationID ?? id, lifecycle: lifecycle) }
     var isHiddenFromSelection: Bool {
         isLegacy || BedrockModelID.isExcludedFromSelection(id)
@@ -134,7 +135,8 @@ final class BedrockCapabilityRegistry: @unchecked Sendable {
         guard let catalog = byRegion[region], let entry = catalog[id], !entry.isProfile,
               !entry.inferenceTypes.contains("ON_DEMAND"), entry.inferenceTypes.contains("INFERENCE_PROFILE") else { return id }
         let prefix = region.hasPrefix("us-gov-") ? "us-gov." : region.hasPrefix("eu-") ? "eu." : region.hasPrefix("ap-") ? "apac." : "us."
-        return catalog.values.filter { $0.isProfile && BedrockModelID.base($0.foundationID ?? $0.id) == BedrockModelID.base(id) }
+        return catalog.values.filter { $0.isProfile && !$0.isApplicationProfile &&
+            BedrockModelID.base($0.foundationID ?? $0.id) == BedrockModelID.base(id) }
             .sorted {
                 func rank(_ item: BedrockModelDescriptor) -> Int { item.id.hasPrefix(prefix) ? 0 : item.id.hasPrefix("global.") ? 1 : 2 }
                 if rank($0) != rank($1) { return rank($0) < rank($1) }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		77AA38FBC42F5A19ADB81FF1 /* BedrockInferenceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */; };
 		C18A096342B9418AA90E40E1 /* BedrockResponsesEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */; };
 		C18A096342B9418AA90E40E3 /* BedrockResponsesRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */; };
 		C18A096342B9418AA90E40D1 /* ConversationDateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */; };
@@ -224,6 +225,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockInferenceProfile.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesEndpoint.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesRequest.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDateGroup.swift; sourceTree = "<group>"; };
@@ -541,6 +543,7 @@
 				DB439879B4E3642B0FB1EF2C /* BedrockInferenceParameters.swift */,
 				0F601B7236AF5223F89C6211 /* BedrockModelChoice.swift */,
 				6985269D8C0D227D417D6C51 /* BedrockModelDescriptor.swift */,
+				EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */,
 				D8C4FA6663DB1DA6F44050CD /* BedrockModelType.swift */,
 				6CF2C6BD140C26148D25A72F /* BedrockRegionalModel.swift */,
 				C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */,
@@ -1464,6 +1467,7 @@
 				B065D13DCA619D46D6001361 /* BedrockInferenceParameters.swift in Sources */,
 				25B069C1C4BC01BDEE569001 /* BedrockModelChoice.swift in Sources */,
 				738E8E05DD99514072F0FE55 /* BedrockModelDescriptor.swift in Sources */,
+				77AA38FBC42F5A19ADB81FF1 /* BedrockInferenceProfile.swift in Sources */,
 				9CC977E417E6728F9C5AE7AA /* BedrockModelType.swift in Sources */,
 				5E68D7D007EE5F58E681BA47 /* BedrockRegionalModel.swift in Sources */,
 				79610DDA2AD22A2F00993D09 /* BedrockService.swift in Sources */,
