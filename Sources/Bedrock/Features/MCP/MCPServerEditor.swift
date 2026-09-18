@@ -6,6 +6,7 @@ struct MCPServerEditor: View {
     @Binding var isPresented: Bool
     @ObservedObject private var settingsManager = PreferencesStore.shared
     @ObservedObject private var mcpManager = MCPClientManager.shared
+    @ObservedObject private var oauth = MCPOAuthService.shared
     
     var editingServer: MCPServerConfig?
     
@@ -405,8 +406,8 @@ struct MCPServerEditor: View {
     
     @ViewBuilder
     private func oauthStatusView(for server: MCPServerConfig) -> some View {
-        let hasToken = MCPOAuthService.shared.tokenStorage[server.name] != nil
-        let tokenInfo = MCPOAuthService.shared.tokenStorage[server.name]
+        let tokenInfo = oauth.token(for: server)
+        let hasToken = tokenInfo != nil
         
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -418,7 +419,7 @@ struct MCPServerEditor: View {
             
             HStack(spacing: 12) {
                 if hasToken {
-                    if let info = tokenInfo, !info.isExpired {
+                    if let info = tokenInfo, !info.isExpired() {
                         Label("Authenticated", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                             .font(.caption)
@@ -426,7 +427,7 @@ struct MCPServerEditor: View {
                         Spacer()
                         
                         Button("Clear Token") {
-                            MCPOAuthService.shared.clearToken(for: server.name)
+                            oauth.clearToken(for: server)
                         }
                         .font(.caption)
                         .foregroundStyle(.red)
@@ -457,13 +458,18 @@ struct MCPServerEditor: View {
             .padding(10)
             .background(Color.secondary.opacity(0.1))
             .cornerRadius(8)
+            if let error = oauth.persistenceError {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
         }
         .padding(.horizontal)
     }
     
     private func authenticateServer(_ server: MCPServerConfig) async {
         do {
-            _ = try await MCPOAuthService.shared.authenticate(for: server)
+            try await oauth.authenticate(for: server)
+            await mcpManager.disconnectServer(server.name)
+            mcpManager.connectToServer(server)
         } catch {
             errorMessage = "Authentication failed: \(error.localizedDescription)"
         }

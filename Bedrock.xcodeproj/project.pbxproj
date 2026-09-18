@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		5E0A7E333051B0063FE8F76A /* ConversationTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B10A3C70C911A5348B2D04A /* ConversationTitle.swift */; };
 		77AA38FBC42F5A19ADB81FF1 /* BedrockInferenceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */; };
+		2CD1C93483DDBEA748F7F469 /* MCPOAuthCallbackListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3361DD48FEF045557CD5EC6C /* MCPOAuthCallbackListener.swift */; };
+		D80468E5169DF62E32FC9404 /* MCPOAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F112693F51FE526482BDE60B /* MCPOAuthTests.swift */; };
 		C18A096342B9418AA90E40E1 /* BedrockResponsesEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */; };
 		C18A096342B9418AA90E40E3 /* BedrockResponsesRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */; };
 		C18A096342B9418AA90E40D1 /* ConversationDateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */; };
@@ -228,6 +230,8 @@
 /* Begin PBXFileReference section */
 		9B10A3C70C911A5348B2D04A /* ConversationTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTitle.swift; sourceTree = "<group>"; };
 		EB3D7061A691F76995CCD293 /* BedrockInferenceProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockInferenceProfile.swift; sourceTree = "<group>"; };
+		3361DD48FEF045557CD5EC6C /* MCPOAuthCallbackListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuthCallbackListener.swift; sourceTree = "<group>"; };
+		F112693F51FE526482BDE60B /* MCPOAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuthTests.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesEndpoint.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesRequest.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDateGroup.swift; sourceTree = "<group>"; };
@@ -784,6 +788,7 @@
 				79FF2B322D925ED10075249D /* MCPClientManager.swift */,
 				A03F3AE446EB2587994056A3 /* MCPConfiguration.swift */,
 				79FF2B362D925F300075249D /* MCPOAuthService.swift */,
+				3361DD48FEF045557CD5EC6C /* MCPOAuthCallbackListener.swift */,
 				7BDE79D11E27DF1C6F319C15 /* MCPProcess.swift */,
 			);
 			name = MCP;
@@ -1240,6 +1245,7 @@
 				B02B2369C02381C5DE987288 /* MarkdownRenderingTests.swift */,
 				A3F3F1E2A5E56D6416356765 /* MCPConfigurationTests.swift */,
 				190222772896F50F76316584 /* MCPIntegrationTests.swift */,
+				F112693F51FE526482BDE60B /* MCPOAuthTests.swift */,
 				E1216CFDB12E46C08B2CF7CD /* LocalToolIntegrationTests.swift */,
 				C200DF2D416C315FD9914A1B /* MCPServerTests.swift */,
 				2B3D0A21CC87C26C80A87CAA /* WindowLifecycleTests.swift */,
@@ -1544,6 +1550,7 @@
 				923D77A4972EBA386D630E6B /* MCPImportView.swift in Sources */,
 				79FF2B352D925F2E0075249D /* MCPModels.swift in Sources */,
 				79FF2B372D925F320075249D /* MCPOAuthService.swift in Sources */,
+				2CD1C93483DDBEA748F7F469 /* MCPOAuthCallbackListener.swift in Sources */,
 				0E8C2E82C3013EE772417DD1 /* MCPProcess.swift in Sources */,
 				C1F176AE3252BCFE93419AA0 /* MCPServerEditor.swift in Sources */,
 				A97275C94282284D134E12F5 /* MCPServerRow.swift in Sources */,
@@ -1631,6 +1638,7 @@
 				6DF4F992EF7668B13FAA4B43 /* MarkdownRenderingTests.swift in Sources */,
 				DAB4CD2548F3CC1ED63D8253 /* MCPConfigurationTests.swift in Sources */,
 				D8C607E825A8DD8DD2B49408 /* MCPIntegrationTests.swift in Sources */,
+				D80468E5169DF62E32FC9404 /* MCPOAuthTests.swift in Sources */,
 				EC8DFA48B2BC48308F281E21 /* LocalToolIntegrationTests.swift in Sources */,
 				DA78D175A68A198C7E15D151 /* MCPServerTests.swift in Sources */,
 				26D51BFCAB8CE062AF918273 /* WindowLifecycleTests.swift in Sources */,
