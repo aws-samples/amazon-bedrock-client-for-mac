@@ -93,16 +93,19 @@ def main():
         bundle(destination, "install", folder)
         bundle(staged, "installed", folder)
         elapsed = launch([str(destination / "Contents/MacOS/TerminationProbe")], folder)
+        backup = destination.parent / ".staging/Previous.app"
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
-            if (folder / "reopened").exists() and (folder / "result").exists():
+            # Relaunch and successful replacement can precede the helper's
+            # final backup removal. Wait for all three observable outcomes.
+            if (folder / "reopened").exists() and (folder / "result").exists() and not backup.exists():
                 break
             time.sleep(0.05)
         require((folder / "reopened").read_text() == "2.0.2\n", "Installed application did not reopen")
         require((folder / "result").read_text() == "installed\n", "Installer did not finish")
         info = plistlib.loads((destination / "Contents/Info.plist").read_bytes())
         require(info["CFBundleShortVersionString"] == "2.0.2", "Wrong installed version")
-        require(not (destination.parent / ".staging/Previous.app").exists(), "Backup was not cleaned up")
+        require(not backup.exists(), "Backup was not cleaned up")
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(destination)],
                        check=True, capture_output=True, timeout=20)
         report["scenarios"].append({"name": "install-and-relaunch", "passed": True,
