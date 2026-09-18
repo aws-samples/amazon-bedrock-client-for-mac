@@ -2,7 +2,7 @@ import Foundation
 
 enum ModelType: Sendable {
     // Anthropic models
-    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeSonnet5, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeOpus5, claudeFable5
+    case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeSonnet46, claudeSonnet5, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeOpus5, claudeFable5
     // Meta models
     case llama2, llama3, llama31, llama32Small, llama32Large, llama33, llama4Maverick, llama4Scout
     // Mistral models

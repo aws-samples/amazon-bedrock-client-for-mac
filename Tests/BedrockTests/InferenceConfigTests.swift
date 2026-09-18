@@ -242,6 +242,73 @@ final class InferenceConfigTests: XCTestCase {
         XCTAssertFalse(parameters.includeTopP)
     }
 
+    @MainActor
+    func testSonnet46RequestsUseOnlyOneSamplingParameterAcrossProfileForms() async throws {
+        let preferences = PreferencesStore.shared
+        let savedConfigs = preferences.modelInferenceConfigs
+        let savedThinking = preferences.enableModelThinking
+        defer {
+            preferences.modelInferenceConfigs = savedConfigs
+            preferences.enableModelThinking = savedThinking
+        }
+        preferences.modelInferenceConfigs = [:]
+        preferences.enableModelThinking = false
+        let backend = try BedrockService(region: "us-east-1", profile: "default", endpoint: "", runtimeEndpoint: "")
+        let identifiers = [
+            "anthropic.claude-sonnet-4-6",
+            "us.anthropic.claude-sonnet-4-6",
+            "global.anthropic.claude-sonnet-4-6",
+            "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-sonnet-4-6"
+        ]
+        for id in identifiers {
+            XCTAssertEqual(backend.getModelType(id), .claudeSonnet46, id)
+            let defaults = ModelInferenceRange.getParameterDefaultsForModel(id)
+            XCTAssertTrue(defaults.includeTemperature, id)
+            XCTAssertFalse(defaults.includeTopP, id)
+            let request = try await backend.makeConverseRequest(modelId: id, messages: [])
+            XCTAssertEqual(request.inferenceConfig?.temperature, 0.9, id)
+            XCTAssertNil(request.inferenceConfig?.topp, id)
+            XCTAssertTrue(backend.isVisionSupported(id), id)
+            XCTAssertTrue(backend.isToolUseSupported(id), id)
+        }
+    }
+
+    @MainActor
+    func testSonnet46CustomSamplingAndThinkingAreNormalizedInTheRequest() async throws {
+        let preferences = PreferencesStore.shared
+        let savedConfigs = preferences.modelInferenceConfigs
+        let savedThinking = preferences.enableModelThinking
+        defer {
+            preferences.modelInferenceConfigs = savedConfigs
+            preferences.enableModelThinking = savedThinking
+        }
+        let id = "us.anthropic.claude-sonnet-4-6"
+        let backend = try BedrockService(region: "us-east-1", profile: "default", endpoint: "", runtimeEndpoint: "")
+        preferences.enableModelThinking = false
+
+        // Old saved settings can still have both fields enabled.
+        preferences.setInferenceConfig(.init(temperature: 0.3, topP: 0.8, overrideDefault: true), for: id)
+        var request = try await backend.makeConverseRequest(modelId: id, messages: [])
+        XCTAssertEqual(request.inferenceConfig?.temperature, 0.3)
+        XCTAssertNil(request.inferenceConfig?.topp)
+
+        preferences.setInferenceConfig(.init(topP: 0.8, includeTemperature: false, overrideDefault: true), for: id)
+        request = try await backend.makeConverseRequest(modelId: id, messages: [])
+        XCTAssertNil(request.inferenceConfig?.temperature)
+        XCTAssertEqual(request.inferenceConfig?.topp, 0.8)
+
+        preferences.setInferenceConfig(.init(includeTemperature: false, includeTopP: false, overrideDefault: true), for: id)
+        request = try await backend.makeConverseRequest(modelId: id, messages: [])
+        XCTAssertNil(request.inferenceConfig?.temperature)
+        XCTAssertNil(request.inferenceConfig?.topp)
+
+        preferences.setInferenceConfig(.init(temperature: 0.3, topP: 0.8, overrideDefault: true), for: id)
+        preferences.enableModelThinking = true
+        request = try await backend.makeConverseRequest(modelId: id, messages: [])
+        XCTAssertEqual(request.inferenceConfig?.temperature, 1.0)
+        XCTAssertNil(request.inferenceConfig?.topp)
+    }
+
     func testParameterInclusionRoundTrips() throws {
         let original = ModelInferenceConfig(
             maxTokens: 12000,

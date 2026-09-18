@@ -302,7 +302,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         if isFrontierGPT(modelId) || id.hasPrefix("xai.grok-") || id.hasPrefix("google.gemma-4-") || id.hasPrefix("anthropic.claude-sonnet-4-6") { return true }
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -313,7 +313,7 @@ class BedrockService: Equatable, @unchecked Sendable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
             return true
         default:
             return false
@@ -342,7 +342,7 @@ class BedrockService: Equatable, @unchecked Sendable {
     /// This applies to all Anthropic models from version 4.5 onwards
     func isClaude45OrLater(_ modelType: ModelType) -> Bool {
         switch modelType {
-        case .claudeSonnet45, .claudeHaiku45, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claudeSonnet45, .claudeSonnet46, .claudeHaiku45, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         default:
             return false
@@ -455,7 +455,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Anthropic models that support prompt caching
-        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         // Models that don't support prompt caching (including Nova models due to image caching issues)
         default:
@@ -481,7 +481,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
             // Models that support document chat
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
@@ -541,7 +541,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support system prompts
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .openaiGpt6Astra, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna:
             return true
@@ -595,7 +595,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
+        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
             return true
         // Llama 4 models support vision
         case .llama4Maverick, .llama4Scout:
@@ -643,7 +643,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -683,7 +683,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support streaming tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -775,6 +775,8 @@ class BedrockService: Equatable, @unchecked Sendable {
         case "anthropic":
             if modelNameAndVersion.contains("claude-sonnet-5") {
                 return .claudeSonnet5
+            } else if modelNameAndVersion.contains("claude-sonnet-4-6") {
+                return .claudeSonnet46
             } else if modelNameAndVersion.contains("claude-sonnet-4-5") {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
@@ -1006,7 +1008,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             return BedrockRuntimeClientTypes.InferenceConfiguration(
                 maxTokens: 4096
             )
-        case .claudeSonnet45:
+        case .claudeSonnet45, .claudeSonnet46:
             // Claude Sonnet 4.5 only supports temperature OR top_p, not both
             // We prefer temperature as per the issue requirements
             return BedrockRuntimeClientTypes.InferenceConfiguration(

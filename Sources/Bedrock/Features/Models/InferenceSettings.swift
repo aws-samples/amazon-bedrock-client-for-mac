@@ -138,9 +138,7 @@ struct InferenceConfigPopoverContent: View {
     // Check if this is Claude 4.5+ model which doesn't support both temperature and top_p
     // This applies to all Anthropic models from 4.5 onwards (Sonnet 4.5, Haiku 4.5, Opus 4.5, and future versions)
     private var isClaude45PlusModel: Bool {
-        let modelType = backend.getModelType(modelId)
-        // All Claude 4.5+ models have this limitation
-        return modelType == .claudeSonnet45 || modelType == .claudeHaiku45 || modelType == .claudeOpus45 || modelType == .claudeOpus46 || modelType == .claudeOpus47 || modelType == .claudeOpus48 || modelType == .claudeOpus5 || modelType == .claudeFable5
+        backend.isClaude45OrLater(backend.getModelType(modelId))
     }
 
     private var isClaudeSonnet5Model: Bool {
