@@ -126,7 +126,7 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "high"
             )
-        case .claudeSonnet45:
+        case .claudeSonnet45, .claudeSonnet46:
             // Claude Sonnet 4.5 doesn't support top_p with temperature
             return ModelInferenceRange(
                 maxTokensRange: 1...64000,
@@ -524,7 +524,7 @@ struct ModelInferenceRange {
                 includeTemperature: false,
                 includeTopP: false
             )
-        case .claudeSonnet45, .claudeHaiku45, .claudeOpus45,
+        case .claudeSonnet45, .claudeSonnet46, .claudeHaiku45, .claudeOpus45,
              .claudeOpus46, .claudeOpus47, .claudeOpus48:
             return ModelInferenceParameterDefaults(
                 includeMaxTokens: true,
@@ -551,21 +551,17 @@ struct ModelInferenceRange {
         if lowerFullId.contains("gpt-5.5") { return .openaiGpt55 }
         if lowerFullId.contains("gpt-5.4") { return .openaiGpt54 }
 
-        // Backend의 getModelType 로직을 여기에 복사하거나 참조
-        let modelIdWithoutVersion = modelId.split(separator: ":").first ?? ""
-        let parts = String(modelIdWithoutVersion).split(separator: ".")
-        
-        guard parts.count >= 2 else { return .unknown }
-        
-        let providerIndex = parts.count >= 3 ? 1 : 0
-        let provider = String(parts[providerIndex]).lowercased()
-        let modelNameElements = parts.suffix(from: providerIndex + 1)
-        let modelNameAndVersion = modelNameElements.joined(separator: ".")
-        
+        let parts = BedrockModelID.base(modelId).lowercased().split(separator: ".", maxSplits: 1)
+        guard parts.count == 2 else { return .unknown }
+        let provider = String(parts[0])
+        let modelNameAndVersion = String(parts[1])
+
         switch provider {
         case "anthropic":
             if modelNameAndVersion.contains("claude-sonnet-5") {
                 return .claudeSonnet5
+            } else if modelNameAndVersion.contains("claude-sonnet-4-6") {
+                return .claudeSonnet46
             } else if modelNameAndVersion.contains("claude-sonnet-4-5") {
                 return .claudeSonnet45
             } else if modelNameAndVersion.contains("claude-haiku-4-5") {
