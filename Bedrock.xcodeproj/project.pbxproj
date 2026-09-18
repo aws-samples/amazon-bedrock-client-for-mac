@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1FCB52E30D34F4E018E6FFF5 /* AWSSSODeviceAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84837B588B4855CCC94F47C /* AWSSSODeviceAuthorization.swift */; };
+		236AC8CB2EEF08B2DF674D2F /* AWSSSOProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5761AA7746CF7A10A40BAC61 /* AWSSSOProfile.swift */; };
 		C18A096342B9418AA90E40E1 /* BedrockResponsesEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */; };
 		C18A096342B9418AA90E40E3 /* BedrockResponsesRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */; };
 		C18A096342B9418AA90E40D1 /* ConversationDateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */; };
@@ -224,6 +226,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B84837B588B4855CCC94F47C /* AWSSSODeviceAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSSSODeviceAuthorization.swift; sourceTree = "<group>"; };
+		5761AA7746CF7A10A40BAC61 /* AWSSSOProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSSSOProfile.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesEndpoint.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesRequest.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDateGroup.swift; sourceTree = "<group>"; };
@@ -567,6 +571,8 @@
 			isa = PBXGroup;
 			children = (
 				493D7F74E871C5B3A0380C23 /* AppPreferences.swift */,
+				B84837B588B4855CCC94F47C /* AWSSSODeviceAuthorization.swift */,
+				5761AA7746CF7A10A40BAC61 /* AWSSSOProfile.swift */,
 				9FEF63DD886C5DBD8C999AB2 /* SettingsRegistry.swift */,
 			);
 			name = Settings;
@@ -1449,6 +1455,8 @@
 				79C4F01E2C30362100C488C2 /* AppDelegate.swift in Sources */,
 				BB202002A000000000000001 /* ApplicationTerminationCoordinator.swift in Sources */,
 				0389F087EFDD2BF6E146A2E1 /* AppPreferences.swift in Sources */,
+				1FCB52E30D34F4E018E6FFF5 /* AWSSSODeviceAuthorization.swift in Sources */,
+				236AC8CB2EEF08B2DF674D2F /* AWSSSOProfile.swift in Sources */,
 				B2E59115719B3AD6AF8C3AA5 /* AppStore.swift in Sources */,
 				DF4C57F36EBD5888A8593970 /* AttachmentListView.swift in Sources */,
 				2B360F375C765DBBB5F31D9A /* AttachmentProcessor.swift in Sources */,
