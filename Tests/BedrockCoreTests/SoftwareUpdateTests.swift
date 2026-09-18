@@ -43,6 +43,107 @@ final class SoftwareUpdateTests: XCTestCase {
         }
     }
 
+    func testMetadataHTTPFailuresAreNotReportedAsInvalidReleaseAssets() throws {
+        for status in [401, 403, 404, 500, 502, 503] {
+            let response = try XCTUnwrap(HTTPURLResponse(url: SoftwareUpdateRelease.latestURL,
+                statusCode: status, httpVersion: nil, headerFields: nil))
+            XCTAssertThrowsError(try SoftwareUpdateRelease.decode(Data(), response: response, now: Date())) { error in
+                guard case SoftwareUpdateError.metadataUnavailable(let code) = error else {
+                    return XCTFail("Unexpected error for HTTP \(status): \(error)")
+                }
+                XCTAssertEqual(code, status)
+                XCTAssertFalse(error.localizedDescription.contains("valid Bedrock update"))
+            }
+        }
+    }
+
+    func testRateLimitsHonorResetSecondsAndHTTPDateWithoutImmediateRetry() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss z"
+        let cases: [(Int, [String: String], TimeInterval)] = [
+            (403, ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1800000120"], 120),
+            (429, ["Retry-After": "90"], 90),
+            (403, ["Retry-After": formatter.string(from: now.addingTimeInterval(180))], 180),
+            (429, [:], 60),
+            (429, ["Retry-After": "-10", "X-RateLimit-Reset": "invalid"], 60),
+            (403, ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1"], 60)
+        ]
+        for (status, headers, expected) in cases {
+            let response = try XCTUnwrap(HTTPURLResponse(url: SoftwareUpdateRelease.latestURL,
+                statusCode: status, httpVersion: nil, headerFields: headers))
+            XCTAssertThrowsError(try SoftwareUpdateRelease.decode(Data(), response: response, now: now)) { error in
+                guard case SoftwareUpdateError.rateLimited(let deadline) = error else {
+                    return XCTFail("Expected a rate limit, got \(error)")
+                }
+                XCTAssertEqual(deadline.timeIntervalSince(now), expected, accuracy: 0.01)
+            }
+        }
+    }
+
+    func testUnreadableMetadataIsSeparateFromAMissingOrUntrustedAsset() throws {
+        let response = try XCTUnwrap(HTTPURLResponse(url: SoftwareUpdateRelease.latestURL,
+            statusCode: 200, httpVersion: nil, headerFields: nil))
+        XCTAssertThrowsError(try SoftwareUpdateRelease.decode(Data("not JSON".utf8), response: response, now: Date())) { error in
+            guard case SoftwareUpdateError.invalidMetadata = error else {
+                return XCTFail("Expected invalid metadata, got \(error)")
+            }
+        }
+        let data = Data(#"{"tag_name":"v2.0.2","draft":false,"prerelease":false,"assets":[]}"#.utf8)
+        let decoded = try SoftwareUpdateRelease.decode(data, response: response, now: Date())
+        XCTAssertThrowsError(try decoded.update(after: "2.0.1")) { error in
+            guard case SoftwareUpdateError.invalidRelease = error else {
+                return XCTFail("Asset validation must still reject a missing DMG")
+            }
+        }
+    }
+
+    @MainActor
+    func testMetadataClientPersistsCooldownAcrossInstancesAndRecoversAfterReset() async throws {
+        let suite = "UpdateMetadataTests.\(UUID())"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let endpoint = try XCTUnwrap(URL(string: "https://updates.test/\(UUID())"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [UpdateMetadataURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer {
+            session.invalidateAndCancel()
+            preferences.removePersistentDomain(forName: suite)
+            UpdateMetadataURLProtocol.fixtures.remove(endpoint)
+        }
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        UpdateMetadataURLProtocol.fixtures.set(endpoint, status: 403,
+            headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1800000120"])
+        let client = SoftwareUpdateClient(session: session, preferences: preferences, endpoint: endpoint, now: { now })
+        do {
+            _ = try await client.latestRelease()
+            XCTFail("The rate-limited response must fail")
+        } catch {
+            guard case SoftwareUpdateError.rateLimited = error else { return XCTFail("\(error)") }
+        }
+        let restarted = SoftwareUpdateClient(session: session, preferences: preferences, endpoint: endpoint, now: { now })
+        do {
+            _ = try await restarted.latestRelease()
+            XCTFail("A restarted client must respect the persisted deadline")
+        } catch {
+            guard case SoftwareUpdateError.rateLimited = error else { return XCTFail("\(error)") }
+        }
+        XCTAssertEqual(UpdateMetadataURLProtocol.fixtures.count(endpoint), 1)
+
+        now = now.addingTimeInterval(121)
+        let body = try JSONSerialization.data(withJSONObject: [
+            "tag_name": "v2.0.2", "draft": false, "prerelease": false,
+            "assets": [["name": SoftwareUpdateRelease.assetName,
+                        "browser_download_url": "https://github.com/\(SoftwareUpdateRelease.repository)/releases/download/v2.0.2/\(SoftwareUpdateRelease.assetName)"]]
+        ])
+        UpdateMetadataURLProtocol.fixtures.set(endpoint, status: 200, body: body)
+        let recovered = try await restarted.latestRelease()
+        XCTAssertNotNil(try recovered.update(after: "2.0.1"))
+        XCTAssertEqual(UpdateMetadataURLProtocol.fixtures.count(endpoint), 2)
+    }
+
     func testInstallerWaitsForTheExactOldProcessAndDoesNotDeleteItsAppOnTimeout() async throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -206,5 +307,52 @@ final class SoftwareUpdateTests: XCTestCase {
                           userInfo: [NSLocalizedDescriptionKey: output])
         }
         return output
+    }
+}
+
+private final class UpdateMetadataURLProtocol: URLProtocol, @unchecked Sendable {
+    static let fixtures = FixtureStore()
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "updates.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url, let fixture = Self.fixtures.take(url),
+              let response = HTTPURLResponse(url: url, statusCode: fixture.status,
+                                             httpVersion: nil, headerFields: fixture.headers) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: fixture.body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+
+    struct Fixture {
+        let status: Int
+        let headers: [String: String]
+        let body: Data
+    }
+    final class FixtureStore: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [URL: Fixture] = [:]
+        private var requests: [URL: Int] = [:]
+        func set(_ url: URL, status: Int, headers: [String: String] = [:], body: Data = Data()) {
+            lock.lock(); defer { lock.unlock() }
+            values[url] = Fixture(status: status, headers: headers, body: body)
+        }
+        func take(_ url: URL) -> Fixture? {
+            lock.lock(); defer { lock.unlock() }
+            requests[url, default: 0] += 1
+            return values[url]
+        }
+        func count(_ url: URL) -> Int {
+            lock.lock(); defer { lock.unlock() }
+            return requests[url, default: 0]
+        }
+        func remove(_ url: URL) {
+            lock.lock(); defer { lock.unlock() }
+            values.removeValue(forKey: url)
+            requests.removeValue(forKey: url)
+        }
     }
 }
