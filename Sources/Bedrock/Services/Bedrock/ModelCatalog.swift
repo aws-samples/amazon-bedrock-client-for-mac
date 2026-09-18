@@ -10,11 +10,13 @@ final class ModelCatalog: ObservableObject {
     @Published var models: [ChatModel] = []
     @Published private(set) var organized: [String: [ChatModel]] = [:]
     @Published private(set) var descriptors: [BedrockModelDescriptor] = []
+    @Published private(set) var importedProfiles: [BedrockModelDescriptor] = []
     @Published private(set) var refreshedAt: Date?
     @Published var isLoading = false
     @Published var errorMessage: String?
     private var requestID = UUID()
     private var activeIdentity: String?
+    private var importedProfileFile: JSONFile<[BedrockModelDescriptor]>?
     private struct Cache: Codable {
         var updatedAt: Date
         var descriptors: [BedrockModelDescriptor]
@@ -61,21 +63,8 @@ final class ModelCatalog: ObservableObject {
         isLoading = true
         defer { if requestID == id { isLoading = false } }
         errorMessage = nil
-        let settings = PreferencesStore.shared
         let region = backend.region
-        let identity = "\(region)|\(backend.profile)|\(backend.endpoint)|\(backend.runtimeEndpoint)|\(settings.bedrockApiKey.isEmpty)"
-        let hash = SHA256.hash(data: Data(identity.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
-        let file = JSONFile<Cache>(url: AppStore.shared.directory.appendingPathComponent("model-catalog-\(hash).json"))
-        if activeIdentity != identity {
-            activeIdentity = identity
-            if let cached = try? file.load() {
-                install(cached.descriptors, region: region)
-                refreshedAt = cached.updatedAt
-            } else {
-                install(BedrockBundledCatalog.records.flatMap { $0.descriptors(in: region) } + BedrockMantleCatalog.descriptors(in: region), region: region)
-                refreshedAt = nil
-            }
-        }
+        let file = activateConnection(backend)
         async let foundations = backend.listFoundationModels()
         async let profiles = backend.listInferenceProfilesResult()
         let (foundationResult, profileResult) = await (foundations, profiles)
@@ -97,25 +86,19 @@ final class ModelCatalog: ObservableObject {
             entries = descriptors.filter { !$0.isProfile && $0.origin == .runtime }
             warnings.append("Model refresh: \(error.localizedDescription)")
         }
-        let foundationsByID = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        let foundationEntries = entries + BedrockBundledCatalog.records.flatMap { $0.descriptors(in: region) }
         switch profileResult {
         case .success(let summaries):
             entries += summaries.compactMap { profile in
-                guard let id = profile.inferenceProfileId, profile.status?.rawValue == "ACTIVE" else { return nil }
-                let foundationID = profile.models?.first?.modelArn.map(BedrockModelID.base) ?? BedrockModelID.base(id)
-                let foundation = foundationsByID[foundationID]
-                return BedrockModelDescriptor(id: id, name: foundation?.name ?? profile.inferenceProfileName ?? id,
-                    provider: foundation?.provider ?? BedrockModelID.providerName(foundationID),
-                    inputModalities: foundation?.inputModalities ?? [],
-                    outputModalities: foundation?.outputModalities ?? [],
-                    inferenceTypes: ["INFERENCE_PROFILE"], streaming: foundation?.streaming,
-                    foundationID: foundationID, isProfile: true, lifecycle: foundation?.lifecycle)
+                try? BedrockInferenceProfile.descriptor(id: profile.inferenceProfileId, arn: profile.inferenceProfileArn,
+                    name: profile.inferenceProfileName, type: profile.type?.rawValue, status: profile.status?.rawValue,
+                    modelARNs: profile.models?.compactMap(\.modelArn) ?? [], foundations: foundationEntries)
             }
         case .failure(let error):
             entries += descriptors.filter { $0.isProfile }
             warnings.append("Inference profile refresh: \(error.localizedDescription)")
         }
-        entries += BedrockMantleCatalog.descriptors(in: region)
+        entries += importedProfiles + BedrockMantleCatalog.descriptors(in: region)
         install(entries, region: region)
         if warnings.isEmpty {
             refreshedAt = Date()
@@ -123,6 +106,56 @@ final class ModelCatalog: ObservableObject {
             catch { warnings.append("Could not save the local model catalog: \(error.localizedDescription)") }
         }
         errorMessage = warnings.isEmpty ? nil : warnings.joined(separator: "\n")
+    }
+
+    /// Imports only the requested profile. Broad list permissions are not required.
+    func addInferenceProfile(_ arn: String, backend: BedrockService) async throws -> ChatModel {
+        _ = activateConnection(backend)
+        let identity = activeIdentity
+        let profile = try await backend.getInferenceProfile(arn)
+        try Task.checkCancellation()
+        guard activeIdentity == identity else {
+            throw LocalOperationError.invalid("The AWS connection changed. Add the profile again using the current connection.")
+        }
+        let foundations = descriptors + BedrockBundledCatalog.records.flatMap { $0.descriptors(in: backend.region) }
+        let descriptor = try BedrockInferenceProfile.descriptor(id: profile.inferenceProfileId, arn: profile.inferenceProfileArn,
+            name: profile.inferenceProfileName, type: profile.type?.rawValue, status: profile.status?.rawValue,
+            modelARNs: profile.models?.compactMap(\.modelArn) ?? [], foundations: foundations)
+        guard !descriptor.isHiddenFromSelection else {
+            throw LocalOperationError.invalid("This profile uses a retired or unavailable model.")
+        }
+        let updated = importedProfiles.filter { $0.id != descriptor.id } + [descriptor]
+        try importedProfileFile?.save(updated)
+        importedProfiles = updated
+        install(descriptors.filter { $0.id != descriptor.id } + [descriptor], region: backend.region)
+        return model(descriptor.id)
+    }
+
+    func removeImportedProfile(_ id: String, region: String) throws {
+        let updated = importedProfiles.filter { $0.id != id }
+        try importedProfileFile?.save(updated)
+        importedProfiles = updated
+        install(descriptors.filter { $0.id != id }, region: region)
+    }
+
+    private func activateConnection(_ backend: BedrockService) -> JSONFile<Cache> {
+        let identity = "\(backend.region)|\(backend.profile)|\(backend.endpoint)|\(backend.runtimeEndpoint)|\(PreferencesStore.shared.bedrockApiKey.isEmpty)"
+        let hash = SHA256.hash(data: Data(identity.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+        let file = JSONFile<Cache>(url: AppStore.shared.directory.appendingPathComponent("model-catalog-\(hash).json"))
+        if activeIdentity != identity {
+            activeIdentity = identity
+            importedProfileFile = JSONFile(url: AppStore.shared.directory.appendingPathComponent("inference-profiles-\(hash).json"))
+            importedProfiles = (try? importedProfileFile?.load()) ?? []
+            if let cached = try? file.load() {
+                install(cached.descriptors + importedProfiles, region: backend.region)
+                refreshedAt = cached.updatedAt
+            } else {
+                install(BedrockBundledCatalog.records.flatMap { $0.descriptors(in: backend.region) } +
+                        BedrockMantleCatalog.descriptors(in: backend.region) + importedProfiles, region: backend.region)
+                refreshedAt = nil
+            }
+        }
+        return file
     }
 
     private func install(_ entries: [BedrockModelDescriptor], region: String) {

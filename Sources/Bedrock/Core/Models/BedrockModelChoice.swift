@@ -18,7 +18,9 @@ struct BedrockModelChoice: Identifiable, Equatable, Sendable {
 
     static func make(descriptors: [BedrockModelDescriptor], selectedID: String?, favoriteIDs: Set<String>, region: String) -> [Self] {
         let active = descriptors.filter { !$0.isHiddenFromSelection && !$0.needsProvisionedThroughput && !$0.id.isEmpty }
-        let groups = Dictionary(grouping: active) { BedrockModelID.base($0.foundationID ?? $0.id) }
+        let groups = Dictionary(grouping: active) {
+            $0.isApplicationProfile ? $0.id : BedrockModelID.base($0.foundationID ?? $0.id)
+        }
         let regionPrefix = region.hasPrefix("us-gov-") ? "us-gov." :
             region.hasPrefix("eu-") ? "eu." : region.hasPrefix("ap-") ? "apac." : "us."
         func rank(_ item: BedrockModelDescriptor) -> Int {
@@ -46,12 +48,13 @@ struct BedrockModelChoice: Identifiable, Equatable, Sendable {
     }
 
     static func variantTitle(_ entry: BedrockModelDescriptor) -> String {
-        if entry.id.hasPrefix("arn:") { return "Application profile" }
+        if entry.isApplicationProfile { return "Application profile" }
         if entry.origin == .mantle { return "Mantle" }
         if !entry.isProfile {
             return entry.inferenceTypes.contains("ON_DEMAND") ? "In this region" : "Automatic profile"
         }
-        let prefix = String(entry.id.split(separator: ".").first ?? "")
+        let identifier = entry.id.split(separator: "/").last.map(String.init) ?? entry.id
+        let prefix = String(identifier.split(separator: ".").first ?? "")
         return ["us": "United States", "us-gov": "AWS GovCloud", "global": "Global",
                 "eu": "Europe", "apac": "Asia Pacific", "jp": "Japan", "au": "Australia"][prefix] ?? "Inference profile"
     }

@@ -29,6 +29,9 @@ struct SettingsView: View {
     @State private var loginEnabled = false
     @State private var loginMessage: String?
     @State private var notificationBusy = false
+    @State private var inferenceProfileARN = ""
+    @State private var inferenceProfileBusy = false
+    @State private var inferenceProfileMessage: String?
     @AppStorage("adjustedFontSize") private var fontSize = -1
     private var rows: [SettingsItem] { SettingsItem.all.filter { $0.pane == (pane ?? .general) } }
     private let advancedRows: Set<String> = ["endpoint", "runtimeEndpoint", "context", "summaries", "workingDirectory", "timeout", "output", "domains", "sound", "background", "notificationTest"]
@@ -264,6 +267,49 @@ struct SettingsView: View {
                         }
                         .accessibilityLabel("Model ID: \(model.id)")
                         .accessibilityIdentifier("settings.defaultModelID")
+                }
+            }
+        case "inferenceProfiles":
+            settingsField(row.title) {
+                TextField("Inference profile ARN", text: $inferenceProfileARN)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("settings.inferenceProfileARN")
+                HStack(spacing: 10) {
+                    Button(inferenceProfileBusy ? "Resolving…" : "Add profile") {
+                        let arn = inferenceProfileARN
+                        inferenceProfileBusy = true
+                        inferenceProfileMessage = nil
+                        Task {
+                            defer { inferenceProfileBusy = false }
+                            do {
+                                let model = try await catalog.addInferenceProfile(arn, backend: backend.backend)
+                                inferenceProfileARN = ""
+                                inferenceProfileMessage = "Added \(model.name). Select it in the model picker to use it."
+                            } catch { inferenceProfileMessage = error.localizedDescription }
+                        }
+                    }.disabled(inferenceProfileBusy || inferenceProfileARN.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if inferenceProfileBusy { ProgressView().controlSize(.small) }
+                }
+                if let inferenceProfileMessage {
+                    Text(inferenceProfileMessage).font(.caption).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(catalog.importedProfiles) { profile in
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(profile.name).font(.system(size: 13, weight: .medium))
+                            Text("\(profile.provider) · \(profile.foundationID ?? "")").font(.caption).foregroundStyle(.secondary)
+                            Text(profile.id).font(.system(size: 10, design: .monospaced))
+                                .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                        }
+                        Spacer(minLength: 8)
+                        Button("Use by default") { settings.defaultModelId = profile.id }
+                        Button {
+                            do { try catalog.removeImportedProfile(profile.id, region: settings.selectedRegion.rawValue) }
+                            catch { inferenceProfileMessage = error.localizedDescription }
+                        } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
+                        .help("Remove imported profile").accessibilityLabel("Remove \(profile.name)")
+                    }
                 }
             }
         case "systemPrompt": SystemPromptEditor()

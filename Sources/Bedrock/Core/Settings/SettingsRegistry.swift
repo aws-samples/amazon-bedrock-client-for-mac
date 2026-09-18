@@ -73,6 +73,7 @@ struct SettingsItem: Identifiable, Sendable {
         .init(id: "runtimeEndpoint", pane: .connection, title: "Runtime endpoint", detail: "Optional custom inference endpoint.", keywords: "url proxy"),
         .init(id: "connectionTest", pane: .connection, title: "Test connection", detail: "Refresh the model catalog using this connection.", keywords: "refresh models credentials"),
         .init(id: "defaultModel", pane: .models, title: "Default model", detail: "Model selected for new threads.", keywords: "provider claude nova favorite"),
+        .init(id: "inferenceProfiles", pane: .models, title: "Inference profiles", detail: "Add a profile directly when your account cannot list all models. Profiles are saved for this AWS connection.", keywords: "application arn billing cost access model"),
         .init(id: "systemPrompt", pane: .models, title: "System prompt", detail: "Instructions applied to model requests.", keywords: "template persona saved"),
         .init(id: "thinking", pane: .models, title: "Model thinking", detail: "Enable reasoning for compatible models.", keywords: "effort budget reasoning"),
         .init(id: "caching", pane: .models, title: "Prompt caching", detail: "Reuse eligible prompt prefixes on supported Bedrock models.", keywords: "tokens cost performance"),

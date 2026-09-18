@@ -20,7 +20,7 @@ struct ModelPicker: View {
         Button { isShowingPopover.toggle() } label: {
             HStack(spacing: 8) {
                 if let model = selectedModel, !model.id.isEmpty {
-                    ModelImageHelper.getImage(for: model.id)
+                    ModelImageHelper.getImage(for: ModelCatalog.shared.descriptor(model.id)?.foundationID ?? model.id)
                         .resizable().scaledToFit().frame(width: 20, height: 20)
                         .accessibilityHidden(true)
                 }
@@ -153,7 +153,7 @@ private struct ModelSelectorPopoverContent: View {
         return HStack(spacing: 0) {
             Button { select(row.preferredID) } label: {
                 HStack(spacing: 8) {
-                    ModelImageHelper.getImage(for: row.preferredID)
+                    ModelImageHelper.getImage(for: row.preferred.foundationID ?? row.preferredID)
                         .resizable().scaledToFit().frame(width: 38, height: 38)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
