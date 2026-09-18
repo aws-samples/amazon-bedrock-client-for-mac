@@ -41,6 +41,52 @@ final class MantleResponsesTests: XCTestCase {
         }
     }
 
+    func testFrontierGPTImagesUseTheProviderPathAndRequiredImageDetail() async throws {
+        for model in ["openai.gpt-5.4", "openai.gpt-5.5"] {
+            let fixture = ResponsesFixture(events: [
+                #"{"type":"response.output_text.delta","delta":"Red rectangle and blue circle."}"#,
+                #"{"type":"response.completed","response":{"output":[]}}"#
+            ])
+            defer { fixture.close() }
+            let image = Data([137, 80, 78, 71, 13, 10, 26, 10]).base64EncodedString()
+            let history: [BedrockMessage] = [
+                .init(role: .user, content: [.image(.init(format: .png, base64Data: image)), .text("Describe the image.")]),
+                .init(role: .assistant, content: [.text("Two colored shapes.")]),
+                .init(role: .user, content: [.text("Which one is on the left?")])
+            ]
+            var text = ""
+            for try await event in fixture.service.streamResponse(
+                modelId: model, input: try BedrockResponsesRequest.input(history), maxOutputTokens: 256, reasoningEffort: "low"
+            ) {
+                if case .text(let delta) = event { text += delta }
+            }
+            XCTAssertEqual(text, "Red rectangle and blue circle.")
+            XCTAssertEqual(fixture.request?.url?.path, "/openai/v1/responses")
+            let body = try XCTUnwrap(fixture.body)
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            let input = try XCTUnwrap(json["input"] as? [[String: Any]])
+            XCTAssertEqual(input.count, 3, "A follow-up must retain the image-bearing turn.")
+            let part = try XCTUnwrap((input[0]["content"] as? [[String: Any]])?.first)
+            XCTAssertEqual(part["image_url"] as? String, "data:image/png;base64," + image)
+            XCTAssertEqual(part["detail"] as? String, "auto")
+            XCTAssertEqual(json["store"] as? Bool, false)
+        }
+    }
+
+    func testToolResultImagesUseTheSameResponsesImageSchema() throws {
+        let image = Data([255, 216, 255]).base64EncodedString()
+        let history: [BedrockMessage] = [.init(role: .user, content: [
+            .toolresult(.init(toolUseId: "image-tool", result: "Screenshot captured", status: "success",
+                              images: [.init(base64: image, format: "jpeg")]))
+        ])]
+        let input = try BedrockResponsesRequest.input(history)
+        let parts = try XCTUnwrap(input.last?["content"] as? [[String: Any]])
+        let part = try XCTUnwrap(parts.last)
+        XCTAssertEqual(part["type"] as? String, "input_image")
+        XCTAssertEqual(part["detail"] as? String, "auto")
+        XCTAssertEqual(part["image_url"] as? String, "data:image/jpeg;base64," + image)
+    }
+
     func testOutputLimitPreservesTextUsageAndContinueAction() async throws {
         let fixture = ResponsesFixture(events: [
             #"{"type":"response.output_text.delta","delta":"A partial "}"#,
@@ -90,7 +136,7 @@ final class MantleResponsesTests: XCTestCase {
         XCTAssertEqual(items.count, 1)
         let request = try XCTUnwrap(fixture.request)
         XCTAssertEqual(request.url?.host, "bedrock-mantle.us-west-2.api.aws")
-        XCTAssertEqual(request.url?.path, "/v1/responses")
+        XCTAssertEqual(request.url?.path, "/openai/v1/responses")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer FIXTURE_ONLY")
         let body = try XCTUnwrap(fixture.body)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -162,6 +208,7 @@ final class MantleResponsesTests: XCTestCase {
         XCTAssertEqual(parts[0]["filename"] as? String, "Saved report.pdf")
         XCTAssertEqual(parts[0]["file_data"] as? String, "data:application/pdf;base64," + pdf)
         XCTAssertEqual(parts[1]["image_url"] as? String, "data:image/png;base64," + image)
+        XCTAssertEqual(parts[1]["detail"] as? String, "auto")
         XCTAssertEqual(sent[2]["type"] as? String, "function_call")
         XCTAssertEqual(sent[3]["call_id"] as? String, "read-1")
         XCTAssertEqual(sent[3]["output"] as? String, "ACTUAL_TOOL_RESULT")
