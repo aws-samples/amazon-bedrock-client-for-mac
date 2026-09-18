@@ -26,6 +26,10 @@ struct MCPServerRow: View {
                 HStack(spacing: 6) {
                     Text(server.name)
                         .fontWeight(.medium)
+                    if server.loadsOnDemand {
+                        Text("On demand").font(.caption2).foregroundStyle(.secondary)
+                            .help("Activation keywords: " + MCPContextPolicy.keywords(server.activationKeywords).joined(separator: ", "))
+                    }
 
                     // Transport type badge
                     Text(server.transportType.rawValue.uppercased())
@@ -106,6 +110,7 @@ struct MCPServerRow: View {
                     Image(systemName: "circle.fill")
                         .foregroundStyle(.tertiary)
                         .imageScale(.small)
+                        .help(server.loadsOnDemand ? "Connects when an activation keyword appears in your message." : "Disconnected")
                 case .connecting:
                     ProgressView()
                         .controlSize(.small)

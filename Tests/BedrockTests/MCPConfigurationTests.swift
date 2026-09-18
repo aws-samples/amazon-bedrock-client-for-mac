@@ -4,6 +4,21 @@ import XCTest
 
 final class MCPConfigurationTests: XCTestCase {
     @MainActor
+    func testDynamicContextConfigurationRoundTripsAndOldConfigurationsStayEager() throws {
+        let legacy = try MCPConfiguration.decode(Data(#"{"mcpServers":{"old":{"command":"/usr/bin/true"}}}"#.utf8))
+        XCTAssertFalse(try XCTUnwrap(legacy.first).loadsOnDemand)
+        let server = MCPServerConfig(name: "docs", command: "/usr/bin/true",
+            activationKeywords: ["database", "schema"], onboardingMarkdown: "# Guidelines\nUse read-only queries first.")
+        let restored = try XCTUnwrap(MCPConfiguration.decode(MCPConfiguration.encode([server])).first)
+        XCTAssertTrue(restored.loadsOnDemand)
+        XCTAssertEqual(restored.activationKeywords, ["database", "schema"])
+        XCTAssertEqual(restored.onboardingMarkdown, server.onboardingMarkdown)
+        var invalid = restored
+        invalid.onboardingMarkdown = String(repeating: "x", count: 32_001)
+        XCTAssertThrowsError(try MCPConfiguration.validate(invalid))
+    }
+
+    @MainActor
     func testShareableExportOmitsSecretsWithoutChangingPrivateConfiguration() throws {
         let server = MCPServerConfig(name: "private-server", transportType: .http,
             command: "/usr/bin/python3",

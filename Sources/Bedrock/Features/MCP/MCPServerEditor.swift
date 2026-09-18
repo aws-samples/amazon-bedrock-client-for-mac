@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import MCP
+import UniformTypeIdentifiers
 
 struct MCPServerEditor: View {
     @Binding var isPresented: Bool
@@ -25,6 +26,8 @@ struct MCPServerEditor: View {
     // OAuth credentials (for servers that don't support Dynamic Client Registration)
     @State private var clientId: String = ""
     @State private var clientSecret: String = ""
+    @State private var activationKeywords = ""
+    @State private var onboardingMarkdown = ""
     
     @State private var errorMessage: String?
     @FocusState private var focusField: Field?
@@ -145,6 +148,25 @@ struct MCPServerEditor: View {
                     } else {
                         httpConfigurationView
                     }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Context loading").font(.headline)
+                        TextField("Activation keywords, separated by commas", text: $activationKeywords)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("mcp.activationKeywords")
+                        Text("Leave empty to keep this server always available. Otherwise, load its tools only when a keyword appears in the latest message.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Text("Usage guidelines (optional)").font(.subheadline)
+                            Spacer()
+                            Button("Import Markdown…", action: importOnboarding)
+                        }
+                        TextEditor(text: $onboardingMarkdown).font(.system(size: 12))
+                            .frame(height: 100).padding(6)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.1)))
+                            .accessibilityIdentifier("mcp.onboarding")
+                        Text("Included only with this server’s active tools. Up to 8,000 characters per server and 24,000 across all active servers.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.padding(.horizontal)
                     
                     if let error = errorMessage {
                         Text(error)
@@ -489,6 +511,8 @@ struct MCPServerEditor: View {
             url = server.url ?? ""
             clientId = server.clientId ?? ""
             clientSecret = server.clientSecret ?? ""
+            activationKeywords = (server.activationKeywords ?? []).joined(separator: ", ")
+            onboardingMarkdown = server.onboardingMarkdown ?? ""
             
             if let headers = server.headers, !headers.isEmpty {
                 headerPairs = headers.map { ($0.key, $0.value) }
@@ -532,7 +556,7 @@ struct MCPServerEditor: View {
     private func saveServer() {
         guard validateInputs() else { return }
         
-        let serverConfig: MCPServerConfig
+        var serverConfig: MCPServerConfig
         
         switch transportType {
         case .stdio:
@@ -574,6 +598,11 @@ struct MCPServerEditor: View {
             )
         }
 
+        let keywords = MCPContextPolicy.keywords(activationKeywords.components(separatedBy: CharacterSet(charactersIn: ",\n")))
+        serverConfig.activationKeywords = keywords.isEmpty ? nil : keywords
+        let documentation = onboardingMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+        serverConfig.onboardingMarkdown = documentation.isEmpty ? nil : documentation
+        serverConfig.enabled = editingServer?.enabled ?? true
         do { try MCPConfiguration.validate(serverConfig) }
         catch { errorMessage = error.localizedDescription; return }
         
@@ -589,6 +618,22 @@ struct MCPServerEditor: View {
             } else {
                 errorMessage = "A server with this name already exists"
             }
+        }
+    }
+
+    private func importOnboarding() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText, UTType(filenameExtension: "md") ?? .plainText]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 128_000 else {
+                    throw LocalOperationError.tooLarge(128_000)
+                }
+                let text = try String(contentsOf: url, encoding: .utf8)
+                guard text.count <= 32_000 else { throw LocalOperationError.tooLarge(32_000) }
+                onboardingMarkdown = text
+            } catch { errorMessage = error.localizedDescription }
         }
     }
     

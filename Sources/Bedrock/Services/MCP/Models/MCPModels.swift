@@ -47,6 +47,9 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
     var clientSecret: String? = nil
     
     var enabled: Bool = true
+    var activationKeywords: [String]?
+    var onboardingMarkdown: String?
+    var loadsOnDemand: Bool { !MCPContextPolicy.keywords(activationKeywords).isEmpty }
     
     static func == (lhs: MCPServerConfig, rhs: MCPServerConfig) -> Bool {
         return lhs.name == rhs.name
@@ -55,6 +58,7 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
     // Coding keys for backward compatibility
     enum CodingKeys: String, CodingKey {
         case name, transportType, command, args, env, cwd, url, headers, clientId, clientSecret, enabled
+        case activationKeywords, onboardingMarkdown
     }
     
     init(from decoder: Decoder) throws {
@@ -70,9 +74,12 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
         clientId = try container.decodeIfPresent(String.self, forKey: .clientId)
         clientSecret = try container.decodeIfPresent(String.self, forKey: .clientSecret)
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        activationKeywords = try container.decodeIfPresent([String].self, forKey: .activationKeywords)
+        onboardingMarkdown = try container.decodeIfPresent(String.self, forKey: .onboardingMarkdown)
     }
     
-    init(name: String, transportType: MCPTransportType = .stdio, command: String = "", args: [String] = [], env: [String: String]? = nil, cwd: String? = nil, url: String? = nil, headers: [String: String]? = nil, clientId: String? = nil, clientSecret: String? = nil, enabled: Bool = true) {
+    init(name: String, transportType: MCPTransportType = .stdio, command: String = "", args: [String] = [], env: [String: String]? = nil, cwd: String? = nil, url: String? = nil, headers: [String: String]? = nil, clientId: String? = nil, clientSecret: String? = nil, enabled: Bool = true,
+         activationKeywords: [String]? = nil, onboardingMarkdown: String? = nil) {
         self.name = name
         self.transportType = transportType
         self.command = command
@@ -84,6 +91,8 @@ struct MCPServerConfig: Codable, Identifiable, Equatable {
         self.clientId = clientId
         self.clientSecret = clientSecret
         self.enabled = enabled
+        self.activationKeywords = activationKeywords
+        self.onboardingMarkdown = onboardingMarkdown
     }
 }
 

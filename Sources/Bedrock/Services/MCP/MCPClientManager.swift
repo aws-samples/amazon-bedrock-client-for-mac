@@ -11,6 +11,12 @@ import MCP
 import Logging
 import System
 
+struct MCPConversationContext {
+    let id: UUID
+    let tools: [MCPToolInfo]
+    let onboarding: String
+}
+
 /**
  * Manages Model Context Protocol (MCP) integrations.
  * Handles server connections, tool discovery, and tool execution.
@@ -25,6 +31,10 @@ class MCPClientManager: ObservableObject {
     private let automaticallyConnect: Bool
     private var connectionTasks: [String: Task<Void, Never>] = [:]
     private var connectionIDs: [String: UUID] = [:]
+    private var contextLeases: [UUID: Set<String>] = [:]
+    private var idleTasks: [String: Task<Void, Never>] = [:]
+    private var inFlightCalls: [String: Int] = [:]
+    var idleDisconnectDelay: TimeInterval = 30
     private var processes: [String: MCPProcess] = [:]
     var activeProcessIDs: [String: Int32] { processes.mapValues(\.pid) }
     var connectionTimeout: TimeInterval = 15
@@ -206,7 +216,7 @@ class MCPClientManager: ObservableObject {
     func addServer(_ server: MCPServerConfig) {
         if !servers.contains(where: { $0.name == server.name }) {
             servers.append(server)
-            if server.enabled && mcpEnabled {
+            if server.enabled && mcpEnabled && shouldStart(server) {
                 connectToServer(server)
             }
         }
@@ -225,13 +235,13 @@ class MCPClientManager: ObservableObject {
             servers = updatedServers
 
             // Handle connection state changes
-            if server.enabled && mcpEnabled {
+            if server.enabled && mcpEnabled && shouldStart(server) {
                 // Reconnect to apply changes
                 Task {
                     await disconnectServer(server.name)
                     connectToServer(server)
                 }
-            } else if !server.enabled && wasEnabled {
+            } else if wasEnabled {
                 Task {
                     await disconnectServer(server.name)
                 }
@@ -256,7 +266,7 @@ class MCPClientManager: ObservableObject {
         if let index = servers.firstIndex(where: { $0.name == name }) {
             servers[index].enabled = enabled
 
-            if enabled && mcpEnabled {
+            if enabled && mcpEnabled && shouldStart(servers[index]) {
                 connectToServer(servers[index])
             } else if !enabled {
                 Task {
@@ -285,10 +295,63 @@ class MCPClientManager: ObservableObject {
     func connectToAllServers() {
         guard mcpEnabled else { return }
 
-        for server in servers.filter({ $0.enabled }) {
+        for server in servers.filter({ $0.enabled && shouldStart($0) }) {
             if activeClients[server.name] == nil && !connecting.contains(server.name) {
                 connectToServer(server)
             }
+        }
+    }
+
+    private func shouldStart(_ server: MCPServerConfig) -> Bool {
+        !server.loadsOnDemand || contextLeases.values.contains { $0.contains(server.name) }
+    }
+
+    /// A lease lasts through the entire model/tool cycle, not just its first request.
+    func prepareContext(prompt: String) async throws -> MCPConversationContext {
+        let id = UUID()
+        guard mcpEnabled else { return .init(id: id, tools: [], onboarding: "") }
+        let selected = servers.filter { $0.enabled && MCPContextPolicy.matches(prompt, keywords: $0.activationKeywords) }
+        let names = Set(selected.map(\.name))
+        contextLeases[id] = names
+        for server in selected {
+            idleTasks.removeValue(forKey: server.name)?.cancel()
+            connectToServer(server)
+        }
+        do {
+            while names.contains(where: { connecting.contains($0) }) {
+                try Task.checkCancellation()
+                try await Task.sleep(for: .milliseconds(25))
+            }
+            try Task.checkCancellation()
+            guard mcpEnabled else { releaseContext(id); return .init(id: id, tools: [], onboarding: "") }
+            let tools = toolInfos.filter { names.contains($0.serverName) && activeClients[$0.serverName] != nil }
+            let active = Set(tools.map(\.serverName))
+            let documentation = selected.filter { active.contains($0.name) }.map { ($0.name, $0.onboardingMarkdown ?? "") }
+            return .init(id: id, tools: tools, onboarding: MCPContextPolicy.onboarding(documentation))
+        } catch {
+            releaseContext(id)
+            throw error
+        }
+    }
+
+    func releaseContext(_ id: UUID) {
+        let names = contextLeases.removeValue(forKey: id) ?? []
+        for name in names { scheduleIdleDisconnect(name) }
+    }
+
+    private func scheduleIdleDisconnect(_ name: String) {
+        guard servers.first(where: { $0.name == name })?.loadsOnDemand == true,
+              !contextLeases.values.contains(where: { $0.contains(name) }),
+              inFlightCalls[name, default: 0] == 0 else { return }
+        idleTasks.removeValue(forKey: name)?.cancel()
+        idleTasks[name] = Task { [weak self] in
+            guard let self else { return }
+            do { try await Task.sleep(for: .seconds(max(0, idleDisconnectDelay))) }
+            catch { return }
+            guard !contextLeases.values.contains(where: { $0.contains(name) }),
+                  inFlightCalls[name, default: 0] == 0 else { return }
+            idleTasks.removeValue(forKey: name)
+            await disconnectServer(name)
         }
     }
 
@@ -421,12 +484,16 @@ class MCPClientManager: ObservableObject {
     }
 
     func shutdown() async {
+        contextLeases.removeAll()
+        for task in idleTasks.values { task.cancel() }
+        idleTasks.removeAll()
         let names = Set(activeClients.keys).union(connectionTasks.keys).union(processes.keys)
         for name in names { await disconnectServer(name) }
         markMCPRunning(false)
     }
 
     func disconnectServer(_ serverName: String) async {
+        idleTasks.removeValue(forKey: serverName)?.cancel()
         connectionIDs.removeValue(forKey: serverName)
         let connectingTask = connectionTasks.removeValue(forKey: serverName)
         connectingTask?.cancel()
@@ -533,6 +600,12 @@ class MCPClientManager: ObservableObject {
             let toolId = id.isEmpty ? "tool_\(UUID().uuidString)" : id
 
             if let info = toolInfo(named: name), let client = activeClients[info.serverName] {
+                idleTasks.removeValue(forKey: info.serverName)?.cancel()
+                inFlightCalls[info.serverName, default: 0] += 1
+                defer {
+                    inFlightCalls[info.serverName, default: 1] -= 1
+                    scheduleIdleDisconnect(info.serverName)
+                }
                 logger.debug("Executing tool '\(info.toolName)' on server '\(info.serverName)'")
 
                 // Convert input to proper format for tool call with multi-modal support

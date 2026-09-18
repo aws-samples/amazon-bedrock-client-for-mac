@@ -1093,6 +1093,11 @@ class ChatViewModel: ObservableObject {
     // MARK: - handleTextLLMWithConverseStream
     
     private func handleTextLLMWithConverseStream(_ userMessage: MessageData) async throws {
+        let mcpContext = backendModel.backend.isStreamingToolUseSupported(chatModel.id)
+            ? try await mcpManager.prepareContext(prompt: userMessage.text)
+            : MCPConversationContext(id: UUID(), tools: [], onboarding: "")
+        availableTools = mcpContext.tools
+        defer { mcpManager.releaseContext(mcpContext.id) }
         // Normalize the saved conversation once, including this user message,
         // pasted text and historical attachments. Do not build a second,
         // unused payload before preparing that same history.
@@ -1103,16 +1108,16 @@ class ChatViewModel: ObservableObject {
         var toolConfig: AWSBedrockRuntime.BedrockRuntimeClientTypes.ToolConfiguration? = nil
         
         // Check if any MCP server is actually connected (subprocess running)
-        let hasConnectedServer = mcpManager.connectionStatus.values.contains(.connected)
+        let hasConnectedServer = !availableTools.isEmpty
         
         if mcpManager.mcpEnabled &&
-            !mcpManager.toolInfos.isEmpty &&
+            !availableTools.isEmpty &&
             hasConnectedServer &&
             backendModel.backend.isStreamingToolUseSupported(chatModel.id) {
-            let toolCount = mcpManager.toolInfos.count
-            let connectedCount = mcpManager.connectionStatus.values.filter { $0 == .connected }.count
+            let toolCount = availableTools.count
+            let connectedCount = Set(availableTools.map(\.serverName)).count
             logger.info("MCP enabled with \(toolCount) tools from \(connectedCount) connected server(s) for model \(chatModel.id).")
-            toolConfig = try convertMCPToolsToBedrockFormat(mcpManager.toolInfos)
+            toolConfig = try convertMCPToolsToBedrockFormat(availableTools)
             // MCP connection notification is sent from MCPClientManager when server connects
         } else if mcpManager.mcpEnabled && !mcpManager.toolInfos.isEmpty && !hasConnectedServer {
             logger.info("MCP enabled but no servers connected yet.")
@@ -1130,7 +1135,7 @@ class ChatViewModel: ObservableObject {
             guard case .toolspec(let specification) = tool else { return nil }
             return specification.name
         }
-        let systemPrompt = try AppStore.shared.effectiveSystemPrompt(for: chatId, availableToolNames: availableToolNames)
+        let systemPrompt = try AppStore.shared.effectiveSystemPrompt(for: chatId, availableToolNames: availableToolNames) + mcpContext.onboarding
         
         // Reset tool tracker for new conversation
         
@@ -1353,7 +1358,9 @@ class ChatViewModel: ObservableObject {
         if let kind = BuiltInTool(rawValue: name) {
             return await LocalToolExecutor.execute(kind: kind, input: jsonInput, threadID: chatId, modelID: chatModel.id)
         }
-        guard mcpManager.mcpEnabled, mcpManager.toolInfo(named: name) != nil else {
+        guard mcpManager.mcpEnabled,
+              availableTools.contains(where: { $0.invocationName == name || $0.toolName == name }),
+              mcpManager.toolInfo(named: name) != nil else {
             return .init(status: "error", text: "This MCP tool is no longer available.", error: "Tool unavailable")
         }
         let result = await mcpManager.executeBedrockTool(id: id, name: name, input: input)
@@ -1594,8 +1601,7 @@ class ChatViewModel: ObservableObject {
         
         let backend = backendModel.backend
         let isResponses = backend.isMantleResponsesModel(chatModel.id)
-        let hasMCPTools = mcpManager.mcpEnabled && !mcpManager.toolInfos.isEmpty &&
-            mcpManager.connectionStatus.values.contains(.connected)
+        let hasMCPTools = mcpManager.mcpEnabled && !availableTools.isEmpty
         let hasLocalTools = !LocalToolExecutor.specifications(threadID: chatId).isEmpty
         let replay = ConversationReplay.prepare(
             history, targetModelID: chatModel.id,
