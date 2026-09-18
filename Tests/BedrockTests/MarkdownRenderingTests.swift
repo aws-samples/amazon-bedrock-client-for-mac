@@ -7,6 +7,201 @@ import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
 final class MarkdownRenderingTests: XCTestCase {
+    #if !SWIFT_PACKAGE
+    // This integration case uses the app's SwiftUI host. The standalone
+    // renderer harness exercises the same equations and clipboard scripts below.
+    @MainActor
+    func testMathLoadsLazilyInTheActualMessageViewInBothAppearances() async throws {
+        let source = """
+        ## Mathematics in the conversation
+
+        An inline equation, $E = mc^2$, stays with the surrounding text.
+
+        \\[
+        f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}} e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}
+        \\]
+
+        A matrix and a sum use the same text color and scale:
+
+        $$
+        A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}
+        \\qquad \\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}
+        $$
+
+        - **Readable:** text, equations, and lists share one response.
+        - **Offline:** formulas do not request scripts or fonts from a server.
+        """
+        for dark in [false, true] {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 540),
+                                  styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            window.contentView = NSHostingView(rootView:
+                MessageMarkdownView(text: source, fontSize: 16, searchRanges: [],
+                                    isStreaming: false, selectedSearchIndex: nil)
+                    .padding(28)
+                    .frame(width: 720, height: 540, alignment: .topLeading)
+                    .background(dark ? Color(red: 0.10, green: 0.10, blue: 0.11) : .white)
+                    .preferredColorScheme(dark ? .dark : .light))
+            window.orderFront(nil)
+            defer { window.contentView = nil; window.close() }
+            func findWebView(_ view: NSView) -> WKWebView? {
+                (view as? WKWebView) ?? view.subviews.lazy.compactMap(findWebView).first
+            }
+            var rendered: WKWebView?
+            for _ in 0..<100 {
+                if let view = window.contentView.flatMap(findWebView),
+                   let count = try? await view.evaluateJavaScript("document.querySelectorAll('math').length") as? Int,
+                   count == 3, view.frame.height > 150 {
+                    rendered = view
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            let web = try XCTUnwrap(rendered, "The actual message view must load the bundled renderer on demand.")
+            let value = try await web.evaluateJavaScript("""
+                ({ resources: performance.getEntriesByType('resource').length,
+                   errors: document.querySelectorAll('[data-math-error]').length,
+                   matrix: document.querySelectorAll('mtable').length })
+                """) as? [String: Int]
+            XCTAssertEqual(value?["resources"], 0)
+            XCTAssertEqual(value?["errors"], 0)
+            XCTAssertGreaterThan(value?["matrix"] ?? 0, 0)
+            let image = try await web.takeSnapshot(configuration: nil)
+            let screenshot = XCTAttachment(image: image)
+            screenshot.name = dark ? "Offline math – dark appearance" : "Offline math – light appearance"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+    }
+    #endif
+
+    @MainActor
+    func testMathRendersOfflineAndCopiesWithFormattingAndSingleTeXRepresentation() async throws {
+        XCTAssertFalse(MarkdownMathAssets.javascript.isEmpty, "Ship the equation renderer in the app.")
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 720, height: 300))
+        let ready = expectation(description: "Offline equation renderer loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+            <html><head>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+            <style>body{font-size:16px;color:rgb(32,33,36)}\(MarkdownMathAssets.css)</style>
+            </head><body><main id="bedrock-content"></main>
+            <script>\(MarkdownMathAssets.javascript)\(MarkdownDOMUpdateScript.source)\(MarkdownClipboardScript.source)</script>
+            </body></html>
+            """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        let source = "**Energy:** $E = mc^2$.\n\n\\[\n\\frac{a}{b} + \\sqrt{x}\n\\]\n\n- **Result**"
+        let html = HtmlGenerator().generate(doc: ExtendedMarkdownParser().parse(MarkdownMath.prepare(source)))
+        let value = try await webView.callAsyncJavaScript("""
+            bedrockUpdateContent(html, 16);
+            const content = document.getElementById('bedrock-content');
+            const range = document.createRange(); range.selectNodeContents(content);
+            getSelection().removeAllRanges(); getSelection().addRange(range);
+            const payload = bedrockSelectionPayload();
+            return {
+                equations: content.querySelectorAll('math').length,
+                fractions: content.querySelectorAll('mfrac').length,
+                superscripts: content.querySelectorAll('msup').length,
+                resources: performance.getEntriesByType('resource').length,
+                height: content.getBoundingClientRect().height,
+                text: payload.text, html: payload.html
+            };
+            """, arguments: ["html": html], in: nil, contentWorld: .page)
+        let result = try XCTUnwrap(value as? [String: Any])
+        XCTAssertEqual(result["equations"] as? Int, 2)
+        XCTAssertEqual(result["fractions"] as? Int, 1)
+        XCTAssertEqual(result["superscripts"] as? Int, 1)
+        XCTAssertEqual(result["resources"] as? Int, 0)
+        XCTAssertGreaterThan(try XCTUnwrap(result["height"] as? Double), 60)
+        let copied = try XCTUnwrap(result["text"] as? String)
+        XCTAssertEqual(copied.components(separatedBy: #"E = mc^2"#).count - 1, 1)
+        XCTAssertTrue(copied.contains(#"\frac{a}{b} + \sqrt{x}"#))
+        let rich = try XCTUnwrap(result["html"] as? String)
+        for tag in ["<strong>", "<ul>", "<math", "<mfrac>", "application/x-tex"] { XCTAssertTrue(rich.contains(tag), tag) }
+        webView.stopLoading()
+        withExtendedLifetime(delegate) {}
+    }
+
+    @MainActor
+    func testStreamingMathCachesCompletedEquationsAndPreservesSelectionThroughCompletion() async throws {
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 720, height: 300))
+        let ready = expectation(description: "Streaming equation renderer loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+            <html><head><style>body{font-size:16px}\(MarkdownMathAssets.css)</style></head>
+            <body><main id="bedrock-content"></main>
+            <script>\(MarkdownMathAssets.javascript)\(MarkdownDOMUpdateScript.source)
+            const originalMathRender = katex.renderToString;
+            window.mathRenderCount = 0;
+            katex.renderToString = (...values) => { window.mathRenderCount++; return originalMathRender(...values); };
+            </script></body></html>
+            """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        let prefix = "Stable **paragraph** with $x^2$.\n\n"
+        let sources = (1...40).map { prefix + "New text " + String(repeating: "stream ", count: $0) } +
+            [prefix + #"New formula \[\frac{1}{2}\]"#]
+        let frames = sources.map { HtmlGenerator().generate(doc: ExtendedMarkdownParser().parse(MarkdownMath.prepare($0))) }
+        let value = try await webView.callAsyncJavaScript("""
+            bedrockUpdateContent(frames[0], 16, true, true);
+            const originalEquation = document.querySelector('math');
+            const text = document.querySelector('p').firstChild;
+            getSelection().setBaseAndExtent(text, 0, text, 6);
+            for (const html of frames) bedrockUpdateContent(html, 16, true, true);
+            const before = document.getElementById('bedrock-content').getBoundingClientRect().height;
+            const selected = getSelection().toString();
+            bedrockUpdateContent(frames[frames.length - 1], 16, false, true);
+            return {
+                same: originalEquation === document.querySelector('math'), selected,
+                finalSelection: getSelection().toString(), renders: window.mathRenderCount,
+                delta: document.getElementById('bedrock-content').getBoundingClientRect().height - before
+            };
+            """, arguments: ["frames": frames], in: nil, contentWorld: .page)
+        let result = try XCTUnwrap(value as? [String: Any])
+        XCTAssertEqual(result["same"] as? Bool, true)
+        XCTAssertEqual(result["selected"] as? String, "Stable")
+        XCTAssertEqual(result["finalSelection"] as? String, "Stable")
+        XCTAssertEqual(result["renders"] as? Int, 2)
+        XCTAssertEqual(try XCTUnwrap(result["delta"] as? Double), 0, accuracy: 0.5)
+        webView.stopLoading()
+        withExtendedLifetime(delegate) {}
+    }
+
+    @MainActor
+    func testUntrustedMathCannotLoadImagesLinksScriptsOrUnboundedMacros() async throws {
+        let webView = WKWebView()
+        let ready = expectation(description: "Math security fixture loaded")
+        let delegate = MarkdownPageDelegate(ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString("""
+            <html><body><main id="bedrock-content"></main>
+            <script>\(MarkdownMathAssets.javascript)\(MarkdownDOMUpdateScript.source)</script>
+            </body></html>
+            """, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 10)
+        let source = #"$\href{javascript:alert(1)}{unsafe}$ and $\includegraphics{https://example.invalid/leak}$ and $\def\loop{\loop}\loop$"#
+        let html = HtmlGenerator().generate(doc: ExtendedMarkdownParser().parse(MarkdownMath.prepare(source))) +
+            "<math onclick='window.attacked=true'><mtext>RAW_MATH</mtext></math>"
+        let result = try await webView.callAsyncJavaScript("""
+            bedrockUpdateContent(html, 16);
+            const content = document.getElementById('bedrock-content');
+            return {
+                active: content.querySelectorAll('a[href],img,script,[onclick]').length,
+                raw: content.textContent.includes('RAW_MATH'),
+                resources: performance.getEntriesByType('resource').length,
+                fallback: content.querySelectorAll('[data-math-error]').length
+            };
+            """, arguments: ["html": html], in: nil, contentWorld: .page) as? [String: Any]
+        XCTAssertEqual(result?["active"] as? Int, 0)
+        XCTAssertEqual(result?["raw"] as? Bool, false)
+        XCTAssertEqual(result?["resources"] as? Int, 0)
+        XCTAssertGreaterThanOrEqual(result?["fallback"] as? Int ?? 0, 1)
+        webView.stopLoading()
+        withExtendedLifetime(delegate) {}
+    }
+
     @MainActor
     func testReadOnlySelectionMenuKeepsOnlyCopyAndSelectAll() {
         let view = MarkdownSelectionTextView()

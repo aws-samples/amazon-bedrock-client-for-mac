@@ -160,6 +160,13 @@ enum MarkdownClipboardScript {
         const allowed = new Set(['p','br','hr','h1','h2','h3','h4','h5','h6','ul','ol','li',
             'blockquote','pre','code','strong','b','em','i','del','s','a','table','thead',
             'tbody','tfoot','tr','th','td','sup','sub']);
+        const mathTags = new Set(['math','semantics','annotation','mrow','mi','mn','mo','mtext',
+            'msup','msub','msubsup','mfrac','msqrt','mroot','mtable','mtr','mtd','munder',
+            'mover','munderover','mspace','menclose','mstyle','mphantom','mpadded']);
+        const mathAttributes = new Set(['display','mathvariant','scriptlevel','displaystyle','rowspacing',
+            'columnspacing','rowalign','columnalign','linethickness','minsize','maxsize','stretchy',
+            'fence','separator','accent','accentunder','movablelimits','notation','width','height',
+            'depth','lspace','rspace']);
         const remove = new Set(['script','style','button','svg','img','iframe','object','embed',
             'link','meta','base','form','input','textarea','select','video','audio']);
         const plain = [];
@@ -174,7 +181,21 @@ enum MarkdownClipboardScript {
             if (range.compareBoundaryPoints(Range.END_TO_END, bounds) > 0) {
                 range.setEnd(bounds.endContainer, bounds.endOffset);
             }
-            plain.push(range.toString());
+            let selectedText = range.toString();
+            for (const equation of content.querySelectorAll('span[data-bedrock-math]')) {
+                if (!range.intersectsNode(equation)) continue;
+                try {
+                    const bytes = Uint8Array.from(atob(equation.dataset.bedrockMath), value => value.charCodeAt(0));
+                    if (bytes.length > 4096) continue;
+                    const source = new TextDecoder().decode(bytes);
+                    const display = equation.dataset.mathDisplay === 'true';
+                    // MathML includes a hidden TeX annotation. Copy a complete
+                    // selected formula once, with editable TeX in plain text.
+                    selectedText = selectedText.replace(equation.textContent,
+                        display ? `$$${source}$$` : `\\(${source}\\)`);
+                } catch {}
+            }
+            plain.push(selectedText);
             let fragment = range.cloneContents();
             let parent = range.commonAncestorContainer;
             if (parent.nodeType === Node.TEXT_NODE) parent = parent.parentElement;
@@ -203,7 +224,7 @@ enum MarkdownClipboardScript {
         for (const element of Array.from(output.querySelectorAll('*'))) {
             const tag = element.tagName.toLowerCase();
             if (remove.has(tag)) { element.remove(); continue; }
-            if (!allowed.has(tag)) { element.replaceWith(...element.childNodes); continue; }
+            if (!allowed.has(tag) && !mathTags.has(tag)) { element.replaceWith(...element.childNodes); continue; }
             for (const attribute of Array.from(element.attributes)) {
                 const name = attribute.name.toLowerCase();
                 let keep = ['colspan','rowspan'].includes(name) && ['td','th'].includes(tag) &&
@@ -215,6 +236,13 @@ enum MarkdownClipboardScript {
                         const url = new URL(attribute.value);
                         keep = !url.username && !url.password && ['https:','http:','mailto:'].includes(url.protocol);
                     } catch { keep = false; }
+                }
+                if (mathTags.has(tag)) {
+                    keep ||= name === 'xmlns' && tag === 'math' &&
+                        attribute.value === 'http://www.w3.org/1998/Math/MathML';
+                    keep ||= name === 'encoding' && tag === 'annotation' && attribute.value === 'application/x-tex';
+                    keep ||= mathAttributes.has(name) && attribute.value.length <= 128 &&
+                        /^[\w\s.+%,-]+$/.test(attribute.value);
                 }
                 if (!keep) element.removeAttribute(attribute.name);
             }

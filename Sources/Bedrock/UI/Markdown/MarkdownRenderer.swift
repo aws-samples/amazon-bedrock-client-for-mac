@@ -33,6 +33,9 @@ enum MarkdownSanitizerScript {
             for (const attribute of Array.from(element.attributes)) {
                 const name = attribute.name.toLowerCase();
                 const keep = attributes.has(name) ||
+                    (tag === 'span' && name === 'data-bedrock-math' && attribute.value.length <= 5500 &&
+                     /^[A-Za-z0-9+/]*={0,2}$/.test(attribute.value)) ||
+                    (tag === 'span' && name === 'data-math-display' && ['true','false'].includes(attribute.value)) ||
                     (tag === 'a' && name === 'href' && safeLink(attribute.value)) ||
                     (tag === 'img' && name === 'src') ||
                     ((tag === 'ol' && name === 'start' || tag === 'li' && name === 'value') &&
@@ -46,7 +49,7 @@ enum MarkdownSanitizerScript {
 }
 
 enum MarkdownDOMUpdateScript {
-    static let source = MarkdownSanitizerScript.source + #"""
+    static let source = MarkdownSanitizerScript.source + MarkdownMathScript.source + #"""
     let bedrockSourceBlocks = null;
     const bedrockStreamAnimations = new Set();
     const bedrockCaptureSelection = content => {
@@ -149,6 +152,7 @@ enum MarkdownDOMUpdateScript {
         const template = document.createElement('template');
         template.innerHTML = html;
         bedrockSanitize(template.content);
+        window.bedrockRenderMath(template.content);
         const incoming = Array.from(template.content.children);
         const sources = incoming.map(node => node.outerHTML);
         const current = Array.from(content.children);
@@ -214,7 +218,7 @@ enum MarkdownSearchScript {
         if (!query) return null;
         const content = document.getElementById('bedrock-content');
         const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
-            acceptNode: node => node.parentElement.closest('script,style,button') ?
+            acceptNode: node => node.parentElement.closest('script,style,button,annotation') ?
                 NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
         });
         let text = '', node;
