@@ -31,7 +31,7 @@ def main():
     for flag, value in [("-F", frameworks), ("-L", libraries), ("-rpath", frameworks), ("-rpath", libraries)]:
         command += ["-Xlinker", flag, "-Xlinker", str(value)]
     with (output / "build.log").open("w") as log:
-        result = subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT)
+        result = subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT, timeout=360)
     if result.returncode:
         raise SystemExit(f"Core test build failed: {output / 'build.log'}")
     bundles = list((output / ".build").glob("**/BedrockCoreTests.xctest"))
@@ -42,7 +42,7 @@ def main():
     with (output / "tests.log").open("w") as log:
         selection = ["-XCTest", args.filter] if args.filter else []
         result = subprocess.run([str(runner), *selection, str(bundles[0])],
-                                env=environment, stdout=log, stderr=subprocess.STDOUT)
+                                env=environment, stdout=log, stderr=subprocess.STDOUT, timeout=180)
     text = (output / "tests.log").read_text()
     print(text)
     assert_tests_executed(text)

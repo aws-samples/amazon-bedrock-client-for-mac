@@ -6,9 +6,48 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import time
+
+
+def run_bounded(command, *, cwd, env, stdout, timeout, heartbeat=30, progress=None):
+    """Bound the stage and clean up its process group on timeout or interruption."""
+    process = subprocess.Popen(command, cwd=cwd, env=env, stdout=stdout,
+                               stderr=subprocess.STDOUT, start_new_session=True)
+    started = time.monotonic()
+
+    def stop():
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        # Include descendants that kept the stage's output or work alive.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
+
+    try:
+        while True:
+            remaining = timeout - (time.monotonic() - started)
+            if remaining <= 0:
+                stop()
+                return 124
+            try:
+                return process.wait(timeout=min(heartbeat, remaining))
+            except subprocess.TimeoutExpired:
+                if progress:
+                    progress(time.monotonic() - started)
+    except BaseException:
+        stop()
+        raise
 
 
 def input_hashes(root):
@@ -88,20 +127,24 @@ def main():
     def save():
         receipt.write_text(json.dumps(report, indent=2) + "\n")
 
-    def run(name, command, logfile):
+    def run(name, command, logfile, timeout=120):
         if os.environ.get("GITHUB_ACTIONS"):
             print(f"::group::{name}", flush=True)
         print(f"Running {name}…", flush=True)
         start = time.monotonic()
+        def progress(elapsed):
+            print(f"{name}: {elapsed:.0f}s / {timeout}s; log: {logfile}", flush=True)
+            live_log = output / ("core/tests.log" if name == "local core" else logfile)
+            if live_log.is_file():
+                with live_log.open("rb") as source:
+                    source.seek(max(0, live_log.stat().st_size - 8_192))
+                    lines = source.read().decode(errors="replace").splitlines()
+                cases = [line for line in lines if line.startswith("Test Case ")]
+                if cases:
+                    print(cases[-1][:250], flush=True)
         with (output / logfile).open("w") as log:
-            process = subprocess.Popen([str(value) for value in command], cwd=root, env=environment,
-                                       stdout=log, stderr=subprocess.STDOUT)
-            while True:
-                try:
-                    return_code = process.wait(timeout=30)
-                    break
-                except subprocess.TimeoutExpired:
-                    print(f"{name}: {time.monotonic() - start:.0f}s elapsed; log: {logfile}", flush=True)
+            return_code = run_bounded([str(value) for value in command], cwd=root, env=environment,
+                                      stdout=log, timeout=timeout, progress=progress)
         report["steps"].append({
             "name": name, "exitCode": return_code,
             "seconds": round(time.monotonic() - start, 3), "log": logfile,
@@ -113,7 +156,8 @@ def main():
             lines = (output / logfile).read_text(errors="replace").splitlines()
             important = [line for line in lines if "error:" in line or "failed" in line.lower()]
             print("\n".join((important or lines[-25:])[-25:]), file=sys.stderr)
-            raise RuntimeError(f"{name} failed; see {output / logfile}")
+            reason = f"exceeded its {timeout}s limit" if return_code == 124 else "failed"
+            raise RuntimeError(f"{name} {reason}; see {output / logfile}")
         print(f"Passed {name} ({report['steps'][-1]['seconds']:.1f}s)", flush=True)
 
     common = [
@@ -137,15 +181,19 @@ def main():
             [python, "-m", "unittest", "discover", "-s", "Tests/Pipeline", "-v"], "pipeline.log")
         run("Bedrock protocol fixtures",
             [python, "-m", "unittest", "discover", "-s", "Tests/Fixtures", "-p", "test_*.py", "-v"], "fixtures.log")
-        run("local core", [python, "scripts/validate-local-core.py", "--output", output / "core"], "core-suite.log")
+        run("local core", [python, "scripts/validate-local-core.py", "--output", output / "core"],
+            "core-suite.log", timeout=600)
         run("pinned dependencies", [xcodebuild, "-resolvePackageDependencies", *common,
-                                    "-onlyUsePackageVersionsFromResolvedFile"], "dependencies.log")
+                                    "-onlyUsePackageVersionsFromResolvedFile"], "dependencies.log", timeout=300)
         run("UI automation readiness",
             [python, "scripts/check-ui-test-environment.py"], "ui-environment.log")
         run("optimized app integration and UI",
             [xcodebuild, "test", *common, "-configuration", "Release",
              "-destination", "platform=macOS", "-resultBundlePath", result_bundle,
              "-disableAutomaticPackageResolution", "-parallel-testing-enabled", "NO",
+             "-test-timeouts-enabled", "YES",
+             "-default-test-execution-time-allowance", "180",
+             "-maximum-test-execution-time-allowance", "300",
              "-skipMacroValidation", "-skipPackagePluginValidation",
              "ENABLE_TESTABILITY=YES", "SWIFT_OPTIMIZATION_LEVEL=-O",
              "ONLY_ACTIVE_ARCH=YES", "COMPILER_INDEX_STORE_ENABLE=NO",
@@ -153,7 +201,7 @@ def main():
              "BEDROCK_APP_BUNDLE_IDENTIFIER=AWS.Amazon-Bedrock-Client-for-Mac.UITestHost",
              f"BEDROCK_TEST_PYTHON={python}",
              "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-",
-             "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="], "app-tests.log")
+             "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="], "app-tests.log", timeout=2100)
         run("Xcode execution receipt",
             ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", result_bundle, "--compact"],
             "xcode-summary.json")

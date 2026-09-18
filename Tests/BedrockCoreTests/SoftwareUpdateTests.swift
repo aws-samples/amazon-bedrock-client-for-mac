@@ -46,12 +46,18 @@ final class SoftwareUpdateTests: XCTestCase {
     func testInstallerWaitsForTheExactOldProcessAndDoesNotDeleteItsAppOnTimeout() async throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let sleeper = Process()
-        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        sleeper.arguments = ["30"]
-        try sleeper.run()
-        defer { if sleeper.isRunning { sleeper.terminate(); sleeper.waitUntilExit() } }
-        var plan = try makePlan(in: root, pid: sleeper.processIdentifier)
+        let sleeper = try startSleeper()
+        var ownsSleeper = true
+        defer {
+            // Reap our fixture PID directly so cleanup across an await does
+            // not depend on Foundation run-loop exit notifications.
+            if ownsSleeper {
+                _ = kill(sleeper, SIGKILL)
+                var status: Int32 = 0
+                while waitpid(sleeper, &status, 0) < 0 && errno == EINTR {}
+            }
+        }
+        var plan = try makePlan(in: root, pid: sleeper)
         plan.quitTimeoutSeconds = 1
         try plan.writeHelper()
         let result = try await execute(plan)
@@ -60,7 +66,10 @@ final class SoftwareUpdateTests: XCTestCase {
         XCTAssertEqual(try marker(plan.stagedApp), "new")
         XCTAssertFalse(FileManager.default.fileExists(atPath: plan.previousApp.path))
         XCTAssertEqual(try String(contentsOf: plan.resultURL, encoding: .utf8), "failed\n")
-        XCTAssertTrue(sleeper.isRunning, "An updater must never force-kill the running app.")
+        var status: Int32 = 0
+        let exited = waitpid(sleeper, &status, WNOHANG)
+        if exited == sleeper || (exited < 0 && errno == ECHILD) { ownsSleeper = false }
+        XCTAssertEqual(exited, 0, "An updater must never force-kill the running app.")
     }
 
     func testInstallerReplacesOnlyTheStagedAppAndKeepsAdjacentDataWithLiteralPaths() async throws {
@@ -128,6 +137,19 @@ final class SoftwareUpdateTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
         return root
+    }
+
+    private func startSleeper() throws -> pid_t {
+        var arguments = [strdup("/bin/sleep"), strdup("30"), nil]
+        var environment = [strdup("PATH=/usr/bin:/bin"), nil]
+        defer {
+            arguments.forEach { free($0) }
+            environment.forEach { free($0) }
+        }
+        var pid: pid_t = 0
+        let result = posix_spawn(&pid, "/bin/sleep", nil, nil, &arguments, &environment)
+        guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: result) ?? .EIO) }
+        return pid
     }
 
     private func makePlan(in root: URL, pid: Int32 = Int32.max) throws -> UpdateInstallationPlan {

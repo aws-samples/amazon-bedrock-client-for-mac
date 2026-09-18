@@ -105,6 +105,8 @@ The validation workflow runs on every push to `main`, on pull requests, and on d
 
 Pinned package sources and optimized build intermediates are cached by toolchain and dependency graph. CI compiles for the runner's architecture and disables editor indexing; distribution builds still include both architectures. Release reuses the successful main run for the exact tag commit after matching its source hashes, executable permissions, and complete Xcode inventory. It builds and checks the distribution separately. Stage timings appear in the workflow summary, and long stages report progress every 30 seconds. See [CI coverage](testing.md) for the scenario map and the distinction between deterministic and live AWS checks.
 
+Stages have explicit time limits and stop their process group when interrupted or timed out. The portable core test execution is limited to three minutes; app/UI cases also have individual XCTest limits. A timeout leaves the validation receipt incomplete and retains the current case and logs for diagnosis.
+
 ## Performance checks
 
 Use an optimized **Release** executable for timing. Stop compilation before recording results, preserve existing data, and identify synthetic fixtures separately from model responses.
