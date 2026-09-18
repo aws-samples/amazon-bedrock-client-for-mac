@@ -21,6 +21,55 @@ final class InferenceConfigTests: XCTestCase {
         XCTAssertNotNil(request.inferenceConfig?.maxTokens)
     }
 
+    @MainActor
+    func testFrontierApplicationProfilesRetainToolsAndTheirConverseARN() async throws {
+        let region = "eu-west-3"
+        let catalog = ModelCatalog.shared.descriptors
+        defer { BedrockCapabilityRegistry.shared.replace(region: region, descriptors: catalog) }
+        let backend = try BedrockService(region: region, profile: "default", endpoint: "", runtimeEndpoint: "")
+        for (index, foundationID) in ["openai.gpt-6-astra", "openai.gpt-5.6-luna"].enumerated() {
+            let arn = "arn:aws:bedrock:eu-west-3:123456789012:application-inference-profile/team-\(index)"
+            let profile = BedrockModelDescriptor(id: arn, name: "Team \(index)", provider: "OpenAI",
+                inputModalities: ["TEXT", "IMAGE"], outputModalities: ["TEXT"], inferenceTypes: ["INFERENCE_PROFILE"],
+                streaming: true, foundationID: foundationID, isProfile: true)
+            BedrockCapabilityRegistry.shared.replace(region: region, descriptors: [profile])
+            XCTAssertTrue(backend.isToolUseSupported(arn), foundationID)
+            XCTAssertTrue(backend.isStreamingToolUseSupported(arn), foundationID)
+            XCTAssertTrue(backend.isReasoningSupported(arn), foundationID)
+            XCTAssertTrue(backend.isVisionSupported(arn), foundationID)
+            XCTAssertFalse(BedrockResponsesEndpoint.usesResponses(arn, hasDocuments: false),
+                           "Application profiles must retain Converse routing and billing.")
+            let request = try await backend.makeConverseRequest(modelId: arn, messages: [])
+            XCTAssertEqual(request.modelId, arn)
+            XCTAssertNil(request.inferenceConfig?.temperature)
+            XCTAssertNil(request.inferenceConfig?.topp)
+            XCTAssertNotNil(request.additionalModelRequestFields)
+        }
+    }
+
+    @MainActor
+    func testOpaqueProfileCapabilitiesMatchFoundationCapabilities() throws {
+        let region = "eu-west-3"
+        let catalog = ModelCatalog.shared.descriptors
+        defer { BedrockCapabilityRegistry.shared.replace(region: region, descriptors: catalog) }
+        let backend = try BedrockService(region: region, profile: "default", endpoint: "", runtimeEndpoint: "")
+        let models = ["xai.grok-4.6", "mistral.mistral-7b-instruct-v0:2",
+                      "amazon.titan-text-premier-v1:0", "stability.stable-image-ultra-v1:1"]
+        for (index, foundationID) in models.enumerated() {
+            let arn = "arn:aws:bedrock:eu-west-3:123456789012:application-inference-profile/opaque-\(index)"
+            let profile = BedrockModelDescriptor(id: arn, name: "Team \(index)", provider: "",
+                inputModalities: [], outputModalities: [], inferenceTypes: ["INFERENCE_PROFILE"],
+                foundationID: foundationID, isProfile: true)
+            BedrockCapabilityRegistry.shared.replace(region: region, descriptors: [profile])
+            XCTAssertEqual(backend.isReasoningSupported(arn), backend.isReasoningSupported(foundationID), foundationID)
+            XCTAssertEqual(backend.isToolUseSupported(arn), backend.isToolUseSupported(foundationID), foundationID)
+            XCTAssertEqual(backend.isStreamingToolUseSupported(arn), backend.isStreamingToolUseSupported(foundationID), foundationID)
+            XCTAssertEqual(backend.isImageGenerationModel(arn), backend.isImageGenerationModel(foundationID), foundationID)
+            XCTAssertEqual(backend.isSystemPromptSupported(arn), backend.isSystemPromptSupported(foundationID), foundationID)
+            XCTAssertEqual(backend.isDocumentChatSupported(arn), backend.isDocumentChatSupported(foundationID), foundationID)
+        }
+    }
+
     func testLegacyConfigEnablesExistingParameters() throws {
         let json = """
         {

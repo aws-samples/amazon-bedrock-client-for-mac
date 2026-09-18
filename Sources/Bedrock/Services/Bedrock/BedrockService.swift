@@ -287,18 +287,18 @@ class BedrockService: Equatable, @unchecked Sendable {
         
     /// Check if a model is an image generation model
     func isImageGenerationModel(_ modelId: String) -> Bool {
-        let route = BedrockModelID.route(modelId)
+        let route = BedrockModelID.route(BedrockCapabilityRegistry.shared.foundationID(modelId, region: region))
         return route == .image || route == .video
     }
     
     /// Check if a model is a video generation model
     func isVideoGenerationModel(_ modelId: String) -> Bool {
-        BedrockModelID.route(modelId) == .video
+        BedrockModelID.route(BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)) == .video
     }
 
     /// Check if a model supports advanced reasoning capabilities
     func isReasoningSupported(_ modelId: String) -> Bool {
-        let id = BedrockModelID.base(modelId)
+        let id = BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)
         if isFrontierGPT(modelId) || id.hasPrefix("xai.grok-") || id.hasPrefix("google.gemma-4-") || id.hasPrefix("anthropic.claude-sonnet-4-6") { return true }
         let modelType = getModelType(modelId)
         switch modelType {
@@ -435,7 +435,9 @@ class BedrockService: Equatable, @unchecked Sendable {
     /// Whether the given Mantle model is served in this backend's region.
     /// Non-Mantle models are unaffected and always return true.
     func isMantleModelAvailableInRegion(_ modelId: String) -> Bool {
-        guard let regions = BedrockService.mantleRegions(for: modelId) else { return true }
+        guard let regions = BedrockService.mantleRegions(
+            for: BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)
+        ) else { return true }
         return regions.contains(region)
     }
 
@@ -471,7 +473,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             return true
         default:
             // Fallback to string check for edge cases
-            let id = modelId.lowercased()
+            let id = BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).lowercased()
             return id.contains("embed") || id.contains("titan-e1t") || id.contains("marengo-embed")
         }
     }
@@ -493,7 +495,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             return true
         case .titan:
             // Titan Text Premier doesn't support document chat
-            return !modelId.contains("text-premier")
+            return !BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).contains("text-premier")
         case .cohereCommand:
             return true
         case .cohereCommandLight:
@@ -577,7 +579,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         // Models with specific exceptions
         case .mistral, .mistral7b, .mixtral:
             // Mistral Instruct models don't support system prompts
-            return !modelId.contains("instruct")
+            return !BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).contains("instruct")
             
         // Models that don't support system prompts
         case .titan, .titanEmbed, .titanImage, .cohereCommand, .cohereCommandLight,
@@ -622,7 +624,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         // Models with exceptions
         case .claude35:
             // Claude 3.5 Haiku doesn't support vision
-            return !modelId.contains("haiku")
+            return !BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).contains("haiku")
         
         // Claude 3.5 Haiku doesn't support vision
         case .claude35Haiku:
@@ -636,7 +638,7 @@ class BedrockService: Equatable, @unchecked Sendable {
 
     /// Check if a model supports tool use
     func isToolUseSupported(_ modelId: String) -> Bool {
-        let id = BedrockModelID.base(modelId)
+        let id = BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)
         if ["openai.gpt-", "xai.grok-", "zai.glm-", "google.gemma-",
             "nvidia.nemotron-", "mistral.devstral-", "mistral.magistral-",
             "moonshotai.kimi-", "writer.palmyra-vision", "deepseek.v3."].contains(where: id.hasPrefix) { return true }
@@ -676,7 +678,7 @@ class BedrockService: Equatable, @unchecked Sendable {
 
     /// Check if a model supports streaming tool use
     func isStreamingToolUseSupported(_ modelId: String) -> Bool {
-        let id = BedrockModelID.base(modelId)
+        let id = BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)
         if ["openai.gpt-", "xai.grok-", "zai.glm-", "google.gemma-",
             "nvidia.nemotron-", "mistral.devstral-", "mistral.magistral-",
             "moonshotai.kimi-", "minimax.", "qwen.", "writer.palmyra-vision", "deepseek.v3."].contains(where: id.hasPrefix) { return true }
@@ -712,7 +714,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         // Models that don't support guardrails
         case .claude35:
             // Claude 3.5 Haiku doesn't support guardrails
-            return !modelId.contains("haiku")
+            return !BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).contains("haiku")
         case .cohereCommandR, .cohereCommandRPlus:
             return false
         case .jambaInstruct:
