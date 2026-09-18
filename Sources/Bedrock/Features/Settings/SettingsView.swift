@@ -10,6 +10,7 @@ struct SettingsView: View {
     @ObservedObject private var mcp = MCPClientManager.shared
     @ObservedObject private var updater = UpdateService.shared
     @StateObject private var backend = BedrockConnection()
+    @StateObject private var sso = AWSSSOService()
     @State private var pane: SettingsPane? = .general
     @State private var query = ""
     @State private var highlighted: String?
@@ -126,6 +127,7 @@ struct SettingsView: View {
             endpoint = settings.endpoint; runtimeEndpoint = settings.runtimeEndpoint; apiKey = settings.bedrockApiKey
             modifiers = settings.hotkeyModifiers; keyCode = settings.hotkeyKeyCode
             loginEnabled = SMAppService.mainApp.status == .enabled
+            sso.selectProfile(settings.selectedProfile)
             if let id = store.requestedSettingsRow { open(id); store.requestedSettingsRow = nil }
         }
         .onChange(of: store.requestedSettingsRow) { _, id in if let id { open(id); store.requestedSettingsRow = nil } }
@@ -133,7 +135,8 @@ struct SettingsView: View {
         .onChange(of: runtimeEndpoint) { _, _ in scheduleEndpoints() }
         .onChange(of: modifiers) { _, _ in updateHotkey() }
         .onChange(of: keyCode) { _, _ in updateHotkey() }
-        .onDisappear { connectionTask?.cancel(); if connectionEdited { saveEndpoints() } }
+        .onChange(of: settings.selectedProfile) { _, name in sso.selectProfile(name) }
+        .onDisappear { sso.cancel(); connectionTask?.cancel(); if connectionEdited { saveEndpoints() } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workbench.settings")
     }
@@ -148,6 +151,48 @@ struct SettingsView: View {
         .id(row.id)
         .accessibilityIdentifier("setting.\(row.id)")
     }
+
+    private var ssoControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if sso.isSigningIn {
+                    ProgressView().controlSize(.small)
+                    Text("Waiting for sign-in…").font(DesignTokens.detail)
+                    Button("Cancel") { sso.cancel() }
+                } else {
+                    Button("Sign in with AWS SSO") { sso.signIn() }
+                        .disabled(sso.profile == nil)
+                        .accessibilityIdentifier("settings.sso.signIn")
+                }
+                Spacer(minLength: 0)
+            }
+            if let challenge = sso.challenge {
+                HStack(spacing: 12) {
+                    Text(challenge.userCode).font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .textSelection(.enabled).accessibilityLabel("Verification code: \(challenge.userCode)")
+                    Button("Open browser") { sso.openBrowser() }
+                    Button("Copy link") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(challenge.verificationURL.absoluteString, forType: .string)
+                    }
+                }
+            }
+            if let message = sso.message {
+                Text(message).font(DesignTokens.detail).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let expiration = sso.expiresAt {
+                HStack(spacing: 4) {
+                    Text(expiration > Date() ? "Session expires" : "Session expired")
+                    Text(expiration, format: .dateTime.month().day().hour().minute())
+                }.font(DesignTokens.detail).foregroundStyle(.secondary)
+            } else if sso.profile == nil {
+                Text("Set sso_start_url and sso_region in this profile or its sso-session, then refresh profiles.")
+                    .font(DesignTokens.detail).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }.padding(.top, 4)
+    }
+
     @ViewBuilder private func control(_ row: SettingsItem) -> some View {
         switch row.id {
         case "updates":
@@ -192,13 +237,13 @@ struct SettingsView: View {
                 HStack(spacing: 10) {
                     SelectionField(title: row.title, selection: $settings.selectedProfile,
                                        options: profileOptions)
-                    Button { settings.refreshAWSProfiles() } label: { Image(systemName: "arrow.clockwise") }
+                    Button { settings.refreshAWSProfiles(); sso.selectProfile(settings.selectedProfile) } label: { Image(systemName: "arrow.clockwise") }
                         .buttonStyle(LiquidGlassToolbarButtonStyle())
                         .help("Refresh AWS profiles").accessibilityLabel("Refresh AWS profiles")
                 }
             }
-            if settings.profiles.first(where: { $0.name == settings.selectedProfile })?.type == .sso {
-                Text("Uses the local AWS SSO session. Refresh it with aws sso login --profile \(settings.selectedProfile).").font(.caption).textSelection(.enabled)
+            if sso.profile != nil || settings.profiles.first(where: { $0.name == settings.selectedProfile })?.type == .sso {
+                ssoControls
             }
         case "apiKey":
             settingsField(row.title) {

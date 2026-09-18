@@ -110,7 +110,9 @@ fails, the previous app is restored. Conversations and settings stay in their ex
 3. Select **Test connection & refresh models**.
 4. Choose a model in the composer and send a message.
 
-For SSO, sign in using your profile before connecting:
+For an SSO profile, select **Sign in with AWS SSO** in AWS connection settings and approve the request in your browser. The app supports both named `sso-session` configurations and legacy SSO profiles, and shares the standard local token cache with the AWS CLI.
+
+You can also sign in from the terminal:
 
 ```sh
 aws sso login --profile your-profile
