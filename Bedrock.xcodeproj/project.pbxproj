@@ -14,6 +14,10 @@
 		4987B85C4374D427EAE42D15 /* MCPContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E2ED47D9F174157E772B22 /* MCPContextPolicy.swift */; };
 		1FCB52E30D34F4E018E6FFF5 /* AWSSSODeviceAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84837B588B4855CCC94F47C /* AWSSSODeviceAuthorization.swift */; };
 		236AC8CB2EEF08B2DF674D2F /* AWSSSOProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5761AA7746CF7A10A40BAC61 /* AWSSSOProfile.swift */; };
+		C2C85ECD373D55EAACCB09AD /* katex-LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = F233344771CDF67E4560759C /* katex-LICENSE */; };
+		2F2379DFDF1F36BA96F2B3E5 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 46F6F98B6B03B3E0D4F00EFF /* katex.min.js */; };
+		F90310459DBD9E81A2EFFC74 /* MarkdownMathScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4512F9F33F8910AE954EC /* MarkdownMathScript.swift */; };
+		5B6E7566E154C556898145CA /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB331358B842F5484E959D69 /* MarkdownMath.swift */; };
 		C18A096342B9418AA90E40E1 /* BedrockResponsesEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */; };
 		C18A096342B9418AA90E40E3 /* BedrockResponsesRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */; };
 		C18A096342B9418AA90E40D1 /* ConversationDateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */; };
@@ -238,6 +242,10 @@
 		51E2ED47D9F174157E772B22 /* MCPContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPContextPolicy.swift; sourceTree = "<group>"; };
 		B84837B588B4855CCC94F47C /* AWSSSODeviceAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSSSODeviceAuthorization.swift; sourceTree = "<group>"; };
 		5761AA7746CF7A10A40BAC61 /* AWSSSOProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSSSOProfile.swift; sourceTree = "<group>"; };
+		F233344771CDF67E4560759C /* katex-LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = "katex-LICENSE"; sourceTree = "<group>"; };
+		46F6F98B6B03B3E0D4F00EFF /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "katex.min.js"; sourceTree = "<group>"; };
+		44C4512F9F33F8910AE954EC /* MarkdownMathScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMathScript.swift; sourceTree = "<group>"; };
+		AB331358B842F5484E959D69 /* MarkdownMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMath.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesEndpoint.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesRequest.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDateGroup.swift; sourceTree = "<group>"; };
@@ -509,6 +517,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BAE89E182CAE9AA49D8832ED /* Math */ = {
+			isa = PBXGroup;
+			children = (
+				46F6F98B6B03B3E0D4F00EFF /* katex.min.js */,
+				F233344771CDF67E4560759C /* katex-LICENSE */,
+			);
+			path = Math;
+			sourceTree = "<group>";
+		};
 		0694C3816086FAD3F2A57434 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -572,6 +589,7 @@
 			children = (
 				08731DDD50011CDBC9F24E44 /* LocalOperationError.swift */,
 				57E0CD6FE0677AE3C881DD20 /* MarkdownLinkPolicy.swift */,
+				AB331358B842F5484E959D69 /* MarkdownMath.swift */,
 				6782C0B8654732434B66E0DF /* ValidationMode.swift */,
 			);
 			name = Support;
@@ -745,6 +763,7 @@
 			isa = PBXGroup;
 			children = (
 				6ECA233F6B1EF4BD9907A6E9 /* Highlight */,
+				BAE89E182CAE9AA49D8832ED /* Math */,
 				79610DC22AD22A2F00993D09 /* Assets.xcassets */,
 				79F2C4012EB0705A003F46E6 /* Bedrock.icon */,
 				797A12BD2C2EB53800494DD9 /* ChatModel.xcdatamodeld */,
@@ -758,6 +777,7 @@
 			children = (
 				79D6E6A22C99BFF300314D86 /* MarkdownColors.swift */,
 				02B0DA2E72B22C1A67EE296C /* MarkdownRenderer.swift */,
+				44C4512F9F33F8910AE954EC /* MarkdownMathScript.swift */,
 				7CA0C2F3A52D4F08967A9431 /* MarkdownClipboard.swift */,
 				16BD564F8434874E5BBB8132 /* SelectableMarkdown.swift */,
 				98FA8411C37A94B030A8221C /* MessageMarkdownView.swift */,
@@ -1438,6 +1458,8 @@
 				701F3C86C5D045FC270335E3 /* highlight-github-dark.css in Resources */,
 				4CC6E03D7E75BA72DF34F309 /* highlight-LICENSE in Resources */,
 				9B9EA7D9C21E08A33BA77A72 /* highlight.min.js in Resources */,
+				C2C85ECD373D55EAACCB09AD /* katex-LICENSE in Resources */,
+				2F2379DFDF1F36BA96F2B3E5 /* katex.min.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1554,7 +1576,9 @@
 				79FAB1E62EF0000200BED0C2 /* MantleResponsesService.swift in Sources */,
 				79D6E6A32C99BFF300314D86 /* MarkdownColors.swift in Sources */,
 				0AD95AD8E19BDB64962B9206 /* MarkdownLinkPolicy.swift in Sources */,
+				5B6E7566E154C556898145CA /* MarkdownMath.swift in Sources */,
 				7353858C0378A35BFCC7A7F4 /* MarkdownRenderer.swift in Sources */,
+				F90310459DBD9E81A2EFFC74 /* MarkdownMathScript.swift in Sources */,
 				98C67A82C89D48F09C0CB704 /* MarkdownClipboard.swift in Sources */,
 				79FF2B332D925EDB0075249D /* MCPClientManager.swift in Sources */,
 				B5ACA4CBE9EF3EB4C16BA2FA /* MCPConfiguration.swift in Sources */,

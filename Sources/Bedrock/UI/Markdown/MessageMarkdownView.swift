@@ -28,7 +28,7 @@ private final class MarkdownRenderCache: @unchecked Sendable {
     }
     func document(_ text: String, cache: Bool = true) -> Document {
         if let cached = documents.object(forKey: text as NSString) { return cached }
-        let document = Document(ExtendedMarkdownParser().parse(text), sourceBytes: text.utf8.count)
+        let document = Document(ExtendedMarkdownParser().parse(MarkdownMath.prepare(text)), sourceBytes: text.utf8.count)
         // Do not retain hundreds of increasingly large prefixes of a live reply.
         if cache { documents.setObject(document, forKey: text as NSString, cost: text.utf8.count * 3) }
         return document

@@ -176,6 +176,8 @@ struct HTMLMarkdownView: NSViewRepresentable {
         var sourceReduceMotion = false
         private var isReady = false
         private var isApplyingContent = false
+        private var hasInstalledMath = false
+        private var isInstallingMath = false
         private var appliedHTML: String?
         private var appliedFontSize: CGFloat?
         private var appliedIsStreaming = false
@@ -202,6 +204,17 @@ struct HTMLMarkdownView: NSViewRepresentable {
                   let html = sourceHTML, let size = sourceFontSize,
                   html != appliedHTML || size != appliedFontSize ||
                     sourceIsStreaming != appliedIsStreaming || sourceReduceMotion != appliedReduceMotion else { return }
+            if html.contains("data-bedrock-math="), !hasInstalledMath {
+                guard !isInstallingMath else { return }
+                isInstallingMath = true
+                webView.evaluateJavaScript(MarkdownMathAssets.javascript) { [weak self, weak webView] _, _ in
+                    guard let self, self.active, let webView else { return }
+                    self.isInstallingMath = false
+                    self.hasInstalledMath = true
+                    self.applyLatestContent(to: webView)
+                }
+                return
+            }
             isApplyingContent = true
             let streaming = sourceIsStreaming
             let reduced = sourceReduceMotion
@@ -345,6 +358,7 @@ struct HTMLMarkdownView: NSViewRepresentable {
             </style>
             <script nonce="\(nonce)">\(CodeHighlightAssets.javascript)</script>
             <style>
+                \(MarkdownMathAssets.css)
                 .copied-icon, .copied-text { display: none; }
                 :root {
                     --message-font-size: \(fontSize)px;
