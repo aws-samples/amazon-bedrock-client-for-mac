@@ -29,13 +29,17 @@ final class BedrockResponsesEndpointTests: XCTestCase {
     }
 
     func testMantleOnlyModelsKeepTheirExistingEndpointAndBareID() throws {
-        for id in ["openai.gpt-5.5", "openai.gpt-5.4", "xai.grok-4.3", "google.gemma-4-31b"] {
+        for id in ["openai.gpt-5.5", "openai.gpt-5.4", "openai.gpt-5.4-2026-03-05",
+                   "openai.gpt-5.5-2026-04-23", "xai.grok-4.3", "google.gemma-4-31b"] {
             XCTAssertTrue(BedrockResponsesEndpoint.usesResponses(id, hasDocuments: false))
             let endpoint = try BedrockResponsesEndpoint.resolve(modelID: id, region: "us-east-2")
             XCTAssertEqual(endpoint.plane, .mantle)
             XCTAssertEqual(endpoint.modelID, id)
-            XCTAssertEqual(endpoint.url.absoluteString, "https://bedrock-mantle.us-east-2.api.aws/v1/responses")
+            let path = id.hasPrefix("openai.gpt-5.") ? "/openai/v1/responses" : "/v1/responses"
+            XCTAssertEqual(endpoint.url.absoluteString, "https://bedrock-mantle.us-east-2.api.aws" + path)
             XCTAssertEqual(endpoint.signingService, "bedrock")
         }
+        XCTAssertEqual(try BedrockResponsesEndpoint.resolve(modelID: "openai.gpt-oss-120b", region: "us-east-1").url.path,
+                       "/v1/responses", "GPT OSS keeps the standard Mantle API path.")
     }
 }

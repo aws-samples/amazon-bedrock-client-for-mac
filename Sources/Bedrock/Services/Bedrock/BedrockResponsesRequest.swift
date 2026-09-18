@@ -91,6 +91,7 @@ enum BedrockResponsesRequest {
     }
 
     private static func imagePart(_ base64: String, format: String) -> [String: Any] {
-        ["type": "input_image", "image_url": "data:image/\(format == "jpg" ? "jpeg" : format);base64,\(base64)"]
+        ["type": "input_image", "image_url": "data:image/\(format == "jpg" ? "jpeg" : format);base64,\(base64)",
+         "detail": "auto"]
     }
 }

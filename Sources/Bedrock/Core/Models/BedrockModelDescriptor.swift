@@ -47,7 +47,8 @@ enum BedrockModelID {
         if output.contains("IMAGE") || id.hasPrefix("stability.") || id.contains("nova-canvas") || id.contains("titan-image") { return .image }
         // GPT-6 and GPT-5.6 have Converse cross-region profiles. The models below
         // are still Mantle-only and use its OpenAI-compatible Responses endpoint.
-        if ["openai.gpt-5.4", "openai.gpt-5.5", "xai.grok-4.3"].contains(id) || id.hasPrefix("google.gemma-4-") { return .responses }
+        if ["openai.gpt-5.4", "openai.gpt-5.5"].contains(where: { id == $0 || id.hasPrefix($0 + "-") }) ||
+            id == "xai.grok-4.3" || id.hasPrefix("google.gemma-4-") { return .responses }
         return .conversation
     }
 

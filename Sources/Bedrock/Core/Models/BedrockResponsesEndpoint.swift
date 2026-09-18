@@ -30,9 +30,12 @@ struct BedrockResponsesEndpoint: Equatable, Sendable {
             }
             wireID = "us." + modelID
         }
+        let baseID = BedrockModelID.base(modelID)
+        let frontierOpenAI = baseID.hasPrefix("openai.gpt-") && !baseID.hasPrefix("openai.gpt-oss")
+        let mantlePath = frontierOpenAI ? "/openai/v1/responses" : "/v1/responses"
         let address = runtime
             ? "https://bedrock-runtime.\(region).amazonaws.com/openai/v1/responses"
-            : "https://bedrock-mantle.\(region).api.aws/v1/responses"
+            : "https://bedrock-mantle.\(region).api.aws\(mantlePath)"
         guard let url = URL(string: address), url.host != nil, !region.contains("/"), !region.contains(":") else {
             throw LocalOperationError.invalid("Choose a valid AWS region.")
         }
