@@ -278,7 +278,22 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing).accessibilityLabel("Context budget in characters")
             }
             Text("Effective limit: \(store.preferences.validContextBudget.formatted()) characters. Images and documents also count toward request size.").font(.caption)
-        case "titles": Toggle(row.title, isOn: pref(\.automaticTitles))
+        case "titles":
+            Toggle(row.title, isOn: pref(\.automaticTitles))
+            if store.preferences.automaticTitles {
+                settingsField("Title generation model") {
+                    ModelPicker(organizedChatModels: titleModels, menuSelection: titleModelSelection,
+                                emptySelectionTitle: "Automatic", allowsClearingSelection: true,
+                                allowsDefaultAction: false, controlIdentifier: "settings.titleModel") { _ in }
+                    Text("Used only for automatic titles. Your conversation model stays the same.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let id = store.preferences.titleGenerationModelID,
+                       !catalog.descriptors.contains(where: { $0.id == id && ConversationTitle.supports($0) }) {
+                        Text("This title model is unavailable in the current connection. Select another model or Automatic.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
+                }
+            }
         case "summaries": Toggle(row.title, isOn: pref(\.thinkingSummaries))
         case "toolProfile":
             settingsField(row.title) {
@@ -405,6 +420,16 @@ struct SettingsView: View {
             get: { catalog.defaultModel.map(SidebarSelection.chat) },
             set: { if case .chat(let model) = $0 { settings.defaultModelId = model.id } }
         )
+    }
+    private var titleModels: [String: [ChatModel]] {
+        Dictionary(grouping: catalog.descriptors.filter(ConversationTitle.supports).map { catalog.model($0.id) }, by: \.provider)
+    }
+    private var titleModelSelection: Binding<SidebarSelection?> {
+        Binding(get: { store.preferences.titleGenerationModelID.map { .chat(catalog.model($0)) } },
+                set: { selection in
+                    if case .chat(let model) = selection { store.preferences.titleGenerationModelID = model.id }
+                    else { store.preferences.titleGenerationModelID = nil }
+                })
     }
     private func chooseAllowedFolders() {
         let panel = NSOpenPanel()

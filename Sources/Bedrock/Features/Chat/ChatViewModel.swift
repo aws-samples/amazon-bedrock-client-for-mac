@@ -897,7 +897,7 @@ class ChatViewModel: ObservableObject {
         }
 
         let tempInput = preparedMessage.text
-        if AppStore.shared.preferences.automaticTitles {
+        if messages.isEmpty && AppStore.shared.preferences.automaticTitles {
             Task { await updateChatTitle(with: tempInput) }
         } else if messages.isEmpty && !chatModel.isManuallyRenamed {
             let title = tempInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2701,62 +2701,19 @@ class ChatViewModel: ObservableObject {
     
     /// Updates the chat title with a summary of the input.
     func updateChatTitle(with input: String) async {
-        // Skip auto title generation if chat was manually renamed
-        if chatModel.isManuallyRenamed {
-            return
-        }
-        let summaryPrompt = """
-        Summarize user input <input>\(input)</input> as short as possible. Just in few words without punctuation. It should not be more than 5 words. Do as best as you can. please do summary this without punctuation:
-        """
-        
-        // Create message for converseStream
-        let userMsg = BedrockMessage(
-            role: .user,
-            content: [.text(summaryPrompt)]
-        )
-        
-        // Select model for title generation with fallback
-        let preferredModelId = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
-        let fallbackModelId = "us.amazon.nova-pro-v1:0"
-        
-        // Check if preferred model is available, otherwise use fallback
-        let availableModelIds = PreferencesStore.shared.availableModels.map { $0.id }
-        let titleModelId = availableModelIds.contains(preferredModelId) ? preferredModelId : fallbackModelId
-        
+        guard !chatModel.isManuallyRenamed else { return }
         do {
-            // Convert to AWS SDK format
-            let awsMessage = try convertToBedrockMessage(userMsg)
-            
-            // Use converseStream API to get the title
-            var title = ""
-            
-            let systemContentBlocks: [BedrockRuntimeClientTypes.SystemContentBlock]? = nil
-            let backend = await MainActor.run { backendModel.backend }
-            
-            for try await chunk in try await backend.converseStream(
-                withId: titleModelId,
-                messages: [awsMessage],
-                systemContent: systemContentBlocks,
-                inferenceConfig: nil,
-                usageHandler: { @Sendable usage in
-                    // Title generation usage info
-                    print("Title generation usage - Input: \(usage.inputTokens ?? 0), Output: \(usage.outputTokens ?? 0)")
-                }
-            ) {
-                if let textChunk = extractTextFromChunk(chunk) {
-                    title += textChunk
-                }
-            }
-            
-            // Update chat title with the generated summary
-            if !title.isEmpty {
-                chatManager.updateChatTitle(
-                    for: chatModel.chatId,
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
-            }
+            let preferences = AppStore.shared.preferences
+            let modelID = try ConversationTitle.modelID(preferred: preferences.titleGenerationModelID,
+                                                        available: ModelCatalog.shared.descriptors)
+            let title = try await backendModel.backend.generateConversationTitle(modelID: modelID, input: input)
+            // A user can rename/delete the chat or disable automatic titles while the request is running.
+            guard !Task.isCancelled, !title.isEmpty, AppStore.shared.preferences.automaticTitles,
+                  let current = chatManager.chats.first(where: { $0.chatId == chatId }),
+                  !current.isManuallyRenamed else { return }
+            chatManager.updateChatTitle(for: chatId, title: title)
         } catch {
-            logger.error("Error updating chat title: \(error)")
+            logger.warning("Automatic title was not updated: \(error.localizedDescription)")
         }
     }
     

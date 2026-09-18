@@ -8,6 +8,8 @@ struct AppPreferences: Codable, Equatable, Sendable {
     var promptCaching = true
     var contextCharacterBudget = 180_000
     var automaticTitles = false
+    // nil retains automatic selection when loading preferences from older versions.
+    var titleGenerationModelID: String?
     var thinkingSummaries = false
     var toolProfile: ToolProfile = .all
     var customTools: Set<BuiltInTool> = []

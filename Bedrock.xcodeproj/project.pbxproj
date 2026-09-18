@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5E0A7E333051B0063FE8F76A /* ConversationTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B10A3C70C911A5348B2D04A /* ConversationTitle.swift */; };
 		C18A096342B9418AA90E40E1 /* BedrockResponsesEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */; };
 		C18A096342B9418AA90E40E3 /* BedrockResponsesRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */; };
 		C18A096342B9418AA90E40D1 /* ConversationDateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */; };
@@ -224,6 +225,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		9B10A3C70C911A5348B2D04A /* ConversationTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTitle.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E2 /* BedrockResponsesEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesEndpoint.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40E4 /* BedrockResponsesRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockResponsesRequest.swift; sourceTree = "<group>"; };
 		C18A096342B9418AA90E40D2 /* ConversationDateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDateGroup.swift; sourceTree = "<group>"; };
@@ -715,6 +717,7 @@
 				3D03F6152EEDB0BD6EE65B87 /* ConversationReplay.swift */,
 				306DA119A344104B1243D8A1 /* ConversationSearch.swift */,
 				F240BABF697F41A0A9E2E52C /* ConversationTranscript.swift */,
+				9B10A3C70C911A5348B2D04A /* ConversationTitle.swift */,
 				D8AA5FBFE411D1A6409F531C /* LegacyConversationDecoder.swift */,
 				D96710AA8CDE4BA160D2D661 /* ThreadMetadata.swift */,
 			);
@@ -1490,6 +1493,7 @@
 				05B83F348A25D25CFECB18B4 /* ConversationReplay.swift in Sources */,
 				6DB2061B16361F033796DBEF /* ConversationSearch.swift in Sources */,
 				70A9D1C92E8049AD98516852 /* ConversationTranscript.swift in Sources */,
+				5E0A7E333051B0063FE8F76A /* ConversationTitle.swift in Sources */,
 				79BFF5102AD342710057BF3A /* ConversationStore.swift in Sources */,
 				B258B716BBA725FF4A033187 /* ConversationViewportController.swift in Sources */,
 				0CB5F122142248038717C050 /* ConversationTranscriptView.swift in Sources */,
