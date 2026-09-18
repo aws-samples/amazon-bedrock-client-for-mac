@@ -74,7 +74,7 @@ final class AppStore: ObservableObject {
         seedSkillsIfNeeded()
         reloadSkills()
         terminateObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.flush() }
+            MainActor.assumeIsolated { _ = self?.flush() }
         }
     }
 
@@ -347,7 +347,7 @@ final class AppStore: ObservableObject {
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-            self?.flush()
+            _ = self?.flush()
         }
     }
     private func seedSkillsIfNeeded() {
