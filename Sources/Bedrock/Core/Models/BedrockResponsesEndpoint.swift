@@ -17,11 +17,29 @@ struct BedrockResponsesEndpoint: Equatable, Sendable {
          "openai.gpt-5.6-luna", "xai.grok-4.6"].contains(BedrockModelID.base(modelID))
     }
 
-    static func usesResponses(_ modelID: String, hasDocuments: Bool) -> Bool {
-        BedrockModelID.route(modelID) == .responses || hasDocuments && supportsRuntimeDocuments(modelID)
+    static func usesResponses(_ modelID: String, hasDocuments: Bool, foundationID: String? = nil) -> Bool {
+        guard !modelID.contains(":application-inference-profile/") else { return false }
+        let foundation = foundationID ?? modelID
+        return BedrockModelID.route(foundation) == .responses || hasDocuments && supportsRuntimeDocuments(foundation)
+    }
+
+    /// Application profiles retain their billing and IAM scope. Runtime
+    /// Responses accepts system profiles, so substituting one is not a retry.
+    static func validateDocumentRoute(modelID: String, foundationID: String, hasDocuments: Bool) throws {
+        if hasDocuments && modelID.contains(":application-inference-profile/") && supportsRuntimeDocuments(foundationID) {
+            throw LocalOperationError.invalid(
+                "This model cannot receive documents through an application inference profile. Select its US or Global model profile to send the file. Your attachment is still saved."
+            )
+        }
     }
 
     static func resolve(modelID: String, region: String) throws -> Self {
+        guard !modelID.contains(":application-inference-profile/") else {
+            throw LocalOperationError.invalid("Responses does not support application inference profiles. Select a system inference profile for this request.")
+        }
+        guard region.range(of: #"^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$"#, options: .regularExpression) != nil else {
+            throw LocalOperationError.invalid("Choose a valid AWS region.")
+        }
         let runtime = supportsRuntimeDocuments(modelID)
         var wireID = modelID
         if runtime && modelID == BedrockModelID.base(modelID) {

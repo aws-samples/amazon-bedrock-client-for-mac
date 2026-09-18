@@ -4,6 +4,43 @@ import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
 final class MantleResponsesTests: XCTestCase {
+    func testAstraFilesUseRuntimeResponsesAndRemainInFollowUpHistory() async throws {
+        for format in [MessageContent.DocumentFormat.pdf, .txt] {
+            let fixture = ResponsesFixture(events: [
+                #"{"type":"response.output_text.delta","delta":"ASTRA_FILE_OK"}"#,
+                #"{"type":"response.completed","response":{"output":[{"type":"message","content":[{"type":"output_text","text":"ASTRA_FILE_OK"}]}]}}"#
+            ], apiKey: "")
+            defer { fixture.close() }
+            let bytes = Data("SYNTHETIC_ASTRA_FILE".utf8).base64EncodedString()
+            let history: [BedrockMessage] = [
+                .init(role: .user, content: [.document(.init(format: format, base64Data: bytes, name: "Report")),
+                                            .text("Read this file.")]),
+                .init(role: .assistant, content: [.text("I have read the file.")]),
+                .init(role: .user, content: [.text("What was the marker?")])
+            ]
+            var text = ""
+            for try await event in fixture.service.streamResponse(
+                modelId: "us.openai.gpt-6-astra", input: try BedrockResponsesRequest.input(history),
+                maxOutputTokens: 256, reasoningEffort: "low"
+            ) {
+                if case .text(let delta) = event { text += delta }
+            }
+            XCTAssertEqual(text, "ASTRA_FILE_OK")
+            XCTAssertEqual(fixture.request?.url?.path, "/openai/v1/responses")
+            XCTAssertEqual(fixture.request?.url?.host, "bedrock-runtime.us-west-2.amazonaws.com")
+            let body = try XCTUnwrap(fixture.body)
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["model"] as? String, "us.openai.gpt-6-astra")
+            XCTAssertEqual(json["store"] as? Bool, false)
+            let input = try XCTUnwrap(json["input"] as? [[String: Any]])
+            XCTAssertEqual(input.count, 3)
+            let part = try XCTUnwrap((input[0]["content"] as? [[String: Any]])?.first)
+            XCTAssertEqual(part["type"] as? String, "input_file")
+            XCTAssertEqual(part["filename"] as? String, "Report." + format.rawValue)
+            XCTAssertTrue((part["file_data"] as? String)?.hasSuffix(bytes) == true)
+        }
+    }
+
     func testOutputLimitPreservesTextUsageAndContinueAction() async throws {
         let fixture = ResponsesFixture(events: [
             #"{"type":"response.output_text.delta","delta":"A partial "}"#,

@@ -728,6 +728,11 @@ class ChatViewModel: ObservableObject {
                 guard validation.isValid else { throw LocalOperationError.invalid("Choose an output S3 bucket in response settings before generating a video.") }
                 guard (message.imageBase64Strings?.count ?? 0) <= 2 else { throw LocalOperationError.invalid("Attach at most two video keyframes: the start image and the end image.") }
             }
+            try BedrockResponsesEndpoint.validateDocumentRoute(
+                modelID: chatModel.id,
+                foundationID: BedrockCapabilityRegistry.shared.foundationID(chatModel.id, region: backendModel.backend.region),
+                hasDocuments: message.documentBase64Strings?.isEmpty == false
+            )
             if message.documentBase64Strings?.isEmpty == false && !backendModel.backend.isDocumentChatSupported(chatModel.id) {
                 throw LocalOperationError.invalid("This model does not accept document attachments. Choose a document-capable model.")
             }
@@ -1145,7 +1150,9 @@ class ChatViewModel: ObservableObject {
         let hasDocuments = conversationHistory.contains { message in
             message.content.contains { if case .document = $0 { return true }; return false }
         }
-        if BedrockResponsesEndpoint.usesResponses(chatModel.id, hasDocuments: hasDocuments) {
+        let foundationID = BedrockCapabilityRegistry.shared.foundationID(chatModel.id, region: backendModel.backend.region)
+        try BedrockResponsesEndpoint.validateDocumentRoute(modelID: chatModel.id, foundationID: foundationID, hasDocuments: hasDocuments)
+        if BedrockResponsesEndpoint.usesResponses(chatModel.id, hasDocuments: hasDocuments, foundationID: foundationID) {
             try await processResponsesToolCycles(history: conversationHistory, systemPrompt: systemPrompt,
                                                 toolConfig: toolConfig, maxTurns: maxTurns)
             return
