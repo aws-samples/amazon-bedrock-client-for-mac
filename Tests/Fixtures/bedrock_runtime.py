@@ -111,15 +111,22 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def handle_responses(self, request):
         model = request.get("model", "")
-        if model != "us.openai.gpt-5.6-luna" or request.get("store") is not False:
-            raise ValueError("Expected stateless Luna on its selected US profile")
+        if model not in ("us.openai.gpt-5.6-luna", "us.moonshotai.kimi-k3") or request.get("store") is not False:
+            raise ValueError("Expected stateless Luna or Kimi K3 on its selected US profile")
+        if model == "us.moonshotai.kimi-k3":
+            if "temperature" in request or "top_p" in request:
+                raise ValueError("Kimi K3 rejects sampling parameters")
+            if request.get("reasoning", {}).get("effort") != "none":
+                raise ValueError("Thinking is off in this fixture; Kimi K3 must receive effort none")
         items = request.get("input", [])
         user_parts = [
             part for item in items if item.get("role") == "user"
             for part in item.get("content", []) if isinstance(part, dict)
         ]
         documents = [part for part in user_parts if part.get("type") == "input_file"]
-        if not documents or any(not part.get("filename", "").endswith(".txt") for part in documents):
+        if (not documents and model == "us.openai.gpt-5.6-luna") or any(
+            not part.get("filename", "").endswith(".txt") for part in documents
+        ):
             raise ValueError("Expected the document and its required filename extension")
         self.server.record({"model": model, "path": self.path, "body": request})
         prompts = [part.get("text", "") for part in user_parts if part.get("type") == "input_text"]

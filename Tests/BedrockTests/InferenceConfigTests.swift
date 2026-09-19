@@ -3,6 +3,89 @@ import XCTest
 
 final class InferenceConfigTests: XCTestCase {
     @MainActor
+    func testUnknownModelsUseServiceSamplingDefaultsAndPreserveExplicitOverrides() async throws {
+        let preferences = PreferencesStore.shared
+        let savedConfigs = preferences.modelInferenceConfigs
+        defer {
+            preferences.modelInferenceConfigs = savedConfigs
+        }
+        preferences.modelInferenceConfigs = [:]
+        let backend = try BedrockService(region: "us-east-1", profile: "default", endpoint: "", runtimeEndpoint: "")
+        for id in ["future.new-model", "us.future.new-model", "global.moonshotai.kimi-k99",
+                   "anthropic.claude-next", "xai.grok-future"] {
+            let defaults = preferences.getInferenceConfig(for: id)
+            XCTAssertNil(defaults.requestTemperature, id)
+            XCTAssertNil(defaults.requestTopP, id)
+            for thinking in [false, true] {
+                let request = try await backend.makeConverseRequest(modelId: id, messages: [], thinkingEnabled: thinking)
+                XCTAssertEqual(request.inferenceConfig?.maxTokens, 4096, id)
+                XCTAssertNil(request.inferenceConfig?.temperature, id)
+                XCTAssertNil(request.inferenceConfig?.topp, id)
+                XCTAssertNil(request.additionalModelRequestFields, "Do not guess a reasoning schema for \(id).")
+            }
+            let custom = ModelInferenceConfig(maxTokens: 1234, temperature: 0.25, topP: 0.85,
+                                              overrideDefault: true, enableStreaming: false)
+            preferences.setInferenceConfig(custom, for: id)
+            let request = try await backend.makeConverseRequest(modelId: id, messages: [], thinkingEnabled: false)
+            XCTAssertEqual(request.inferenceConfig?.maxTokens, 1234, id)
+            XCTAssertEqual(request.inferenceConfig?.temperature, 0.25, id)
+            XCTAssertEqual(request.inferenceConfig?.topp, 0.85, id)
+            XCTAssertEqual(preferences.getInferenceConfig(for: id), custom)
+            preferences.resetInferenceConfig(for: id)
+        }
+    }
+
+    @MainActor
+    func testKimiK3ConverseNormalizesOldSettingsAndKeepsApplicationProfileIdentity() async throws {
+        let region = "us-east-1"
+        let arn = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/kimi-team"
+        let catalog = ModelCatalog.shared.descriptors
+        defer { BedrockCapabilityRegistry.shared.replace(region: region, descriptors: catalog) }
+        let profile = BedrockModelDescriptor(id: arn, name: "Kimi team", provider: "Moonshot AI",
+            inputModalities: ["TEXT", "IMAGE"], outputModalities: ["TEXT"], inferenceTypes: ["INFERENCE_PROFILE"],
+            streaming: true, foundationID: "moonshotai.kimi-k3", isProfile: true)
+        BedrockCapabilityRegistry.shared.replace(region: region, descriptors: [profile])
+        let backend = try BedrockService(region: region, profile: "default", endpoint: "", runtimeEndpoint: "")
+        let oldConfig = ModelInferenceConfig(maxTokens: 1024, temperature: 0.7, topP: 0.9,
+                                             reasoningEffort: "max", overrideDefault: true)
+        for id in ["moonshotai.kimi-k3", "us.moonshotai.kimi-k3", "global.moonshotai.kimi-k3", arn] {
+            XCTAssertEqual(backend.getModelType(id), .kimiK3, id)
+            XCTAssertTrue(backend.isReasoningSupported(id), id)
+            XCTAssertTrue(backend.hasConfigurableReasoning(id), id)
+            XCTAssertFalse(backend.hasAlwaysOnReasoning(id), id)
+            XCTAssertTrue(backend.isVisionSupported(id), id)
+            XCTAssertTrue(backend.isDocumentChatSupported(id), id)
+            XCTAssertTrue(backend.isToolUseSupported(id), id)
+            XCTAssertFalse(backend.isPromptCachingSupported(id), "K3 Converse must not receive cachePoint.")
+            XCTAssertNil(BedrockService.mantleRegions(for: id))
+            for thinking in [false, true] {
+                let request = try await backend.makeConverseRequest(modelId: id, messages: [],
+                    modelParameters: oldConfig, thinkingEnabled: thinking)
+                XCTAssertEqual(request.modelId, id)
+                XCTAssertEqual(request.inferenceConfig?.maxTokens, 1024)
+                XCTAssertNil(request.inferenceConfig?.temperature)
+                XCTAssertNil(request.inferenceConfig?.topp)
+                let fields = try XCTUnwrap(request.additionalModelRequestFields).asStringMap()
+                let reasoning = try XCTUnwrap(fields["reasoning"]).asStringMap()
+                XCTAssertEqual(try reasoning["effort"]?.asString(), thinking ? "max" : "none")
+                XCTAssertNil(fields["reasoning_effort"])
+            }
+        }
+        XCTAssertTrue(oldConfig.includeTemperature, "Normalize the request without rewriting saved settings.")
+        XCTAssertTrue(oldConfig.includeTopP)
+        let replay = try await backend.makeConverseRequest(modelId: arn, messages: [
+            .init(content: [
+                .reasoningcontent(.reasoningtext(.init(signature: "SYNTHETIC_SIGNATURE", text: "Earlier reasoning"))),
+                .text("Earlier answer")
+            ], role: .assistant),
+            .init(content: [.text("Continue")], role: .user)
+        ], modelParameters: oldConfig, thinkingEnabled: false)
+        XCTAssertEqual(replay.modelId, arn)
+        XCTAssertEqual(replay.messages?.count, 2)
+        XCTAssertEqual(replay.messages?.first?.content?.count, 1, "Converse must not replay K3 reasoning blocks.")
+    }
+
+    @MainActor
     func testTitleParametersDoNotChangeTheConversationModelOrSavedInferenceSettings() async throws {
         let preferences = PreferencesStore.shared
         let previous = preferences.modelInferenceConfigs

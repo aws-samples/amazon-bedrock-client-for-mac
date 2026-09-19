@@ -4,6 +4,65 @@ import XCTest
 @testable import Amazon_Bedrock_Client_for_Mac
 
 final class MantleResponsesTests: XCTestCase {
+    func testKimiK3ResponsesKeepFilesImagesToolsAndOptionalCacheControls() async throws {
+        for caching in [false, true] {
+            let fixture = ResponsesFixture(events: [
+                #"{"type":"response.output_text.delta","delta":"KIMI_FILE_OK"}"#,
+                #"{"type":"response.completed","response":{"output":[],"usage":{"input_tokens":2048,"output_tokens":12,"input_tokens_details":{"cached_tokens":1024,"cache_write_tokens":512}}}}"#
+            ], apiKey: "")
+            defer { fixture.close() }
+            let pdf = Data("SYNTHETIC_KIMI_PDF".utf8).base64EncodedString()
+            let image = Data([137, 80, 78, 71]).base64EncodedString()
+            let history: [BedrockMessage] = [
+                .init(role: .user, content: [
+                    .document(.init(format: .pdf, base64Data: pdf, name: "Kimi report")),
+                    .image(.init(format: .png, base64Data: image)), .text("Read the marker.")
+                ]),
+                .init(role: .assistant, content: [.tooluse(.init(toolUseId: "read-1", name: "local_read_file", input: .object([:])))]),
+                .init(role: .user, content: [.toolresult(.init(toolUseId: "read-1", result: "TOOL_MARKER", status: "success"))])
+            ]
+            var text = ""
+            var usage: UsageInfo?
+            for try await event in fixture.service.streamResponse(
+                modelId: "global.moonshotai.kimi-k3", input: try BedrockResponsesRequest.input(history),
+                maxOutputTokens: nil, reasoningEffort: "none",
+                tools: [["type": "function", "name": "local_read_file", "parameters": ["type": "object"]]],
+                promptCaching: caching
+            ) {
+                if case .text(let delta) = event { text += delta }
+                if case .finished(_, let value, _) = event { usage = value }
+            }
+            XCTAssertEqual(text, "KIMI_FILE_OK")
+            XCTAssertEqual(usage?.cacheReadInputTokens, 1024)
+            XCTAssertEqual(usage?.cacheCreationInputTokens, 512)
+            let request = try XCTUnwrap(fixture.request)
+            XCTAssertEqual(request.url?.host, "bedrock-runtime.us-west-2.amazonaws.com")
+            XCTAssertEqual(request.url?.path, "/openai/v1/responses")
+            XCTAssertTrue(request.value(forHTTPHeaderField: "Authorization")?.contains("/us-west-2/bedrock/aws4_request") == true)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(fixture.body)) as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, "global.moonshotai.kimi-k3")
+            XCTAssertEqual(body["store"] as? Bool, false)
+            XCTAssertNil(body["temperature"])
+            XCTAssertNil(body["top_p"])
+            XCTAssertNil(body["max_output_tokens"], "Omitting the limit must reach the Responses request.")
+            XCTAssertNil(body["include"], "K3 does not use OpenAI's encrypted reasoning include flag.")
+            XCTAssertEqual((body["reasoning"] as? [String: String])?["effort"], "none")
+            XCTAssertNil(body["reasoning_effort"])
+            let input = try XCTUnwrap(body["input"] as? [[String: Any]])
+            let parts = try XCTUnwrap(input[0]["content"] as? [[String: Any]])
+            XCTAssertEqual(parts[0]["file_data"] as? String, "data:application/pdf;base64," + pdf)
+            XCTAssertEqual(parts[0]["filename"] as? String, "Kimi report.pdf")
+            XCTAssertEqual(parts[1]["image_url"] as? String, "data:image/png;base64," + image)
+            XCTAssertEqual(input[2]["call_id"] as? String, "read-1")
+            XCTAssertEqual(input[2]["output"] as? String, "TOOL_MARKER")
+            XCTAssertEqual((body["tools"] as? [[String: Any]])?.first?["name"] as? String, "local_read_file")
+            XCTAssertEqual((body["prompt_cache_options"] as? [String: String])?["mode"], caching ? "explicit" : nil)
+            XCTAssertEqual((parts[2]["prompt_cache_breakpoint"] as? [String: String])?["mode"], caching ? "explicit" : nil)
+            XCTAssertNil(parts[0]["prompt_cache_breakpoint"])
+            XCTAssertNil(input[2]["prompt_cache_breakpoint"])
+        }
+    }
+
     func testAstraFilesUseRuntimeResponsesAndRemainInFollowUpHistory() async throws {
         for format in [MessageContent.DocumentFormat.pdf, .txt] {
             let fixture = ResponsesFixture(events: [

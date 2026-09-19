@@ -302,7 +302,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         if isFrontierGPT(modelId) || id.hasPrefix("xai.grok-") || id.hasPrefix("google.gemma-4-") || id.hasPrefix("anthropic.claude-sonnet-4-6") { return true }
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking, .kimiK3:
             return true
         default:
             return false
@@ -313,7 +313,7 @@ class BedrockService: Equatable, @unchecked Sendable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking, .kimiK3:
             return true
         default:
             return false
@@ -350,10 +350,9 @@ class BedrockService: Equatable, @unchecked Sendable {
     }
 
     /// Check if a model rejects sampling parameters (temperature / top_p / top_k) outright.
-    /// Claude Opus 5, Sonnet 5, and Fable 5 return 400 when any of them is sent.
     func omitsSamplingParameters(_ modelType: ModelType) -> Bool {
         switch modelType {
-        case .claudeSonnet5, .claudeOpus5, .claudeFable5:
+        case .claudeSonnet5, .claudeOpus5, .claudeFable5, .kimiK3:
             return true
         default:
             return false
@@ -516,7 +515,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             return true
         case .pegasus:
             return true
-        case .kimiK2Thinking:
+        case .kimiK2Thinking, .kimiK3:
             return true
         case .nvidiaNemotronNano9b, .nvidiaNemotronNano12bVL:
             return true
@@ -567,7 +566,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             return true
         case .pegasus:
             return true
-        case .kimiK2Thinking:
+        case .kimiK2Thinking, .kimiK3:
             return true
         case .nvidiaNemotronNano9b, .nvidiaNemotronNano12bVL:
             return true
@@ -603,7 +602,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         case .llama4Maverick, .llama4Scout:
             return true
         // Pixtral Large supports vision
-        case .pixtralLarge:
+        case .pixtralLarge, .kimiK3:
             return true
         // Cohere Embed v4 supports image input
         case .cohereEmbedV4:
@@ -809,7 +808,7 @@ class BedrockService: Equatable, @unchecked Sendable {
                 return .claude35
             } else if modelNameAndVersion.contains("claude-3") {
                 return .claude3
-            } else {
+            } else if modelNameAndVersion.hasPrefix("claude-v") || modelNameAndVersion.hasPrefix("claude-instant-") {
                 return .claude
             }
             
@@ -969,7 +968,9 @@ class BedrockService: Equatable, @unchecked Sendable {
             }
             
         case "moonshot", "moonshotai":
-            if modelNameAndVersion.contains("kimi-k2") {
+            if provider == "moonshotai" && modelNameAndVersion == "kimi-k3" {
+                return .kimiK3
+            } else if modelNameAndVersion.contains("kimi-k2") {
                 return .kimiK2Thinking
             }
             
@@ -1005,6 +1006,8 @@ class BedrockService: Equatable, @unchecked Sendable {
     
     func getDefaultInferenceConfig(for modelType: ModelType, isThinkingEnabled: Bool = false) -> BedrockRuntimeClientTypes.InferenceConfiguration {
         switch modelType {
+        case .kimiK3:
+            return .init(maxTokens: 8192)
         case .claudeSonnet5:
             // Sonnet 5 rejects non-default sampling values and defaults to adaptive thinking.
             return BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -1266,11 +1269,9 @@ class BedrockService: Equatable, @unchecked Sendable {
                 topp: 0.5
             )
         default:
-            return BedrockRuntimeClientTypes.InferenceConfiguration(
-                maxTokens: 4096,
-                temperature: 0.7,
-                topp: 0.9
-            )
+            // Keep a bounded output while the service chooses compatible sampling
+            // defaults for newly discovered models.
+            return BedrockRuntimeClientTypes.InferenceConfiguration(maxTokens: 4096)
         }
     }
     
@@ -1302,7 +1303,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         if let thinkingEnabled { isThinkingEnabled = thinkingEnabled }
         else { isThinkingEnabled = await MainActor.run { PreferencesStore.shared.enableModelThinking } }
         let isReasoningModel = isReasoningSupported(modelId) && !hasAlwaysOnReasoning(modelId)
-        let shouldOverrideForReasoning = isReasoningModel && isThinkingEnabled
+        let shouldOverrideForReasoning = isReasoningModel && isThinkingEnabled && modelType != .unknown
         
         // Check if this is Claude 4.5+ model which only supports temperature OR top_p, not both
         // This applies to all Anthropic models from 4.5 onwards
@@ -1312,7 +1313,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let isNova2WithHighEffort = modelType == .nova2Lite && isThinkingEnabled && 
             (modelConfig.overrideDefault ? modelConfig.reasoningEffort : "low") == "high"
         
-        if isFrontierGPT(modelId) {
+        if isFrontierGPT(modelId) || modelType == .kimiK3 {
             config = .init(maxTokens: modelConfig.requestMaxTokens)
         } else if isNova2WithHighEffort {
             // Nova 2 Lite with high reasoning effort requires temperature and maxTokens to be unset
@@ -1365,16 +1366,18 @@ class BedrockService: Equatable, @unchecked Sendable {
             }
         } else {
             // Default config - but modify for reasoning if needed
-            let defaultConfig = getDefaultInferenceConfig(for: modelType)
+            var defaultConfig = getDefaultInferenceConfig(for: modelType)
+            if !modelConfig.includeTemperature { defaultConfig.temperature = nil }
+            if !modelConfig.includeTopP { defaultConfig.topp = nil }
             
             if shouldOverrideForReasoning {
                 // Override default config for reasoning requirements
                 config = BedrockRuntimeClientTypes.InferenceConfiguration(
                     maxTokens: defaultConfig.maxTokens,
-                    temperature: 1.0,  // Force temperature to 1.0 for reasoning
+                    temperature: modelConfig.includeTemperature ? 1.0 : nil,
                     topp: nil          // Disable topP for reasoning
                 )
-                logger.info("Using default inference config for \(modelType) with reasoning override: temperature=1.0 (forced), topP=disabled")
+                logger.info("Using default inference config for \(modelType) with reasoning override")
             } else {
                 config = defaultConfig
                 logger.info("Using default inference config for model type: \(modelType)")
@@ -1383,6 +1386,19 @@ class BedrockService: Equatable, @unchecked Sendable {
         
         // Apply prompt caching if supported by the model
         var processedMessages = messages
+
+        if modelType == .kimiK3 {
+            // K3 application profiles retain Converse. AWS documents failures
+            // when prior reasoning blocks are replayed on that API.
+            processedMessages = messages.compactMap { message in
+                var message = message
+                message.content = (message.content ?? []).filter {
+                    if case .reasoningcontent = $0 { return false }
+                    return true
+                }
+                return message.content?.isEmpty == true ? nil : message
+            }
+        }
         
         if await MainActor.run(body: { AppStore.shared.preferences.promptCaching }) && isPromptCachingSupported(modelId) && !messages.isEmpty {
             // Add cache control to the last user message to enable caching
@@ -1405,7 +1421,11 @@ class BedrockService: Equatable, @unchecked Sendable {
         }
         
         // Sonnet 5 defaults to adaptive thinking, so disabling it must be explicit.
-        if isFrontierGPT(modelId) {
+        if modelType == .kimiK3 {
+            request.additionalModelRequestFields = try Document.make(from: [
+                "reasoning": ["effort": modelConfig.kimiK3ReasoningEffort(thinkingEnabled: isThinkingEnabled)]
+            ])
+        } else if isFrontierGPT(modelId) {
             request.additionalModelRequestFields = try Document.make(from: [
                 "reasoning": ["effort": modelConfig.frontierReasoningEffort(
                     modelID: BedrockCapabilityRegistry.shared.foundationID(modelId, region: region),
@@ -1468,7 +1488,7 @@ class BedrockService: Equatable, @unchecked Sendable {
             } catch {
                 logger.error("Failed to create Opus 5 reasoning config document: \(error)")
             }
-        } else if isReasoningModel && isThinkingEnabled {
+        } else if shouldOverrideForReasoning {
             do {
                 let reasoningConfig: [String: Any]
                 
@@ -1578,14 +1598,14 @@ class BedrockService: Equatable, @unchecked Sendable {
 
     func generateConversationTitle(modelID: String, input: String) async throws -> String {
         let prompt = ConversationTitle.prompt(input)
-        let route = BedrockCapabilityRegistry.shared.descriptor(modelID, region: region)?.route ?? BedrockModelID.route(modelID)
+        let foundationID = BedrockCapabilityRegistry.shared.foundationID(modelID, region: region)
         var title = ""
-        if route == .responses {
+        if BedrockResponsesEndpoint.usesResponses(modelID, hasDocuments: false, foundationID: foundationID) {
             let input: [JSONValue] = [.object(["role": .string("user"), "content": .array([
                 .object(["type": .string("input_text"), "text": .string(prompt)])
             ])])]
             for try await event in try await mantleResponsesStream(
-                modelId: modelID, input: input, modelParameters: ConversationTitle.parameters) {
+                modelId: modelID, input: input, modelParameters: ConversationTitle.parameters, thinkingEnabled: false) {
                 switch event {
                 case .text(let delta): title += delta
                 case .finished(_, _, let fallback): if title.isEmpty { title = fallback }
@@ -1675,7 +1695,8 @@ class BedrockService: Equatable, @unchecked Sendable {
         modelId: String,
         input: [JSONValue],
         toolConfig: BedrockRuntimeClientTypes.ToolConfiguration? = nil,
-        modelParameters: ModelInferenceConfig? = nil
+        modelParameters: ModelInferenceConfig? = nil,
+        thinkingEnabled: Bool? = nil
     ) async throws -> AsyncThrowingStream<MantleResponseEvent, Error> {
         // Guard the region before signing anything. A saved chat keeps pointing at its model
         // after the user switches regions, so without this the request goes to a bedrock-mantle
@@ -1699,8 +1720,16 @@ class BedrockService: Equatable, @unchecked Sendable {
         // Fall back to the model's own defaults rather than a fixed 8192/medium, so each
         // GPT-5.6 tier gets its own token budget and effort baseline.
         let range = ModelInferenceRange.getRangeForModel(modelId)
-        let maxTokens = modelConfig.overrideDefault ? modelConfig.maxTokens : range.defaultMaxTokens
-        let effort = modelConfig.reasoningEffort.isEmpty ? range.defaultReasoningEffort : modelConfig.reasoningEffort
+        let maxTokens = modelConfig.overrideDefault ? modelConfig.requestMaxTokens : range.defaultMaxTokens
+        let isKimiK3 = BedrockModelID.isKimiK3(modelId)
+        let thinking: Bool
+        if let thinkingEnabled { thinking = thinkingEnabled }
+        else { thinking = await MainActor.run { PreferencesStore.shared.enableModelThinking } }
+        let effort = isKimiK3
+            ? modelConfig.kimiK3ReasoningEffort(thinkingEnabled: thinking)
+            : (modelConfig.reasoningEffort.isEmpty ? range.defaultReasoningEffort : modelConfig.reasoningEffort)
+        let cachingEnabled = await MainActor.run { AppStore.shared.preferences.promptCaching }
+        let promptCaching = isKimiK3 && cachingEnabled
         let tools: [[String: Any]] = try (toolConfig?.tools ?? []).compactMap { tool in
             guard case .toolspec(let specification) = tool, let name = specification.name,
                   case .json(let schema)? = specification.inputSchema else { return nil }
@@ -1734,7 +1763,8 @@ class BedrockService: Equatable, @unchecked Sendable {
             input: input.compactMap(\.asDictionary),
             maxOutputTokens: maxTokens,
             reasoningEffort: effort,
-            tools: tools
+            tools: tools,
+            promptCaching: promptCaching
         )
     }
 

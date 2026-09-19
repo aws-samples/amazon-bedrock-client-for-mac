@@ -36,6 +36,7 @@ enum BedrockModelID {
         return String(value[value.index(after: dot)...])
     }
     static func provider(_ value: String) -> String { String(base(value).split(separator: ".").first ?? "") }
+    static func isKimiK3(_ value: String) -> Bool { base(value).lowercased() == "moonshotai.kimi-k3" }
     static func route(_ value: String, output: [String] = []) -> BedrockModelRoute {
         let id = base(value).lowercased()
         if id.contains("sonic") { return .speech }
@@ -45,6 +46,8 @@ enum BedrockModelID {
         if output.contains("EMBEDDING") || id.contains("embed") || id.contains("titan-e1t") { return .embedding }
         if output.contains("VIDEO") || id.contains("nova-reel") || id.hasPrefix("luma.") { return .video }
         if output.contains("IMAGE") || id.hasPrefix("stability.") || id.contains("nova-canvas") || id.contains("titan-image") { return .image }
+        // Kimi K3 documents and explicit caching require Runtime Responses.
+        if isKimiK3(id) { return .responses }
         // GPT-6 and GPT-5.6 have Converse cross-region profiles. The models below
         // are still Mantle-only and use its OpenAI-compatible Responses endpoint.
         if ["openai.gpt-5.4", "openai.gpt-5.5"].contains(where: { id == $0 || id.hasPrefix($0 + "-") }) ||

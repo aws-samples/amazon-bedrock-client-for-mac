@@ -2,6 +2,50 @@ import XCTest
 @testable import BedrockCore
 
 final class BedrockResponsesEndpointTests: XCTestCase {
+    func testKimiK3AlwaysUsesRuntimeResponsesAndPreservesRegionAndProfile() throws {
+        for region in ["us-east-1", "us-east-2", "us-west-2"] {
+            for profile in ["us.moonshotai.kimi-k3", "global.moonshotai.kimi-k3"] {
+                for hasDocuments in [false, true] {
+                    XCTAssertTrue(BedrockResponsesEndpoint.usesResponses(profile, hasDocuments: hasDocuments))
+                }
+                let endpoint = try BedrockResponsesEndpoint.resolve(modelID: profile, region: region)
+                XCTAssertEqual(endpoint.plane, .runtime)
+                XCTAssertEqual(endpoint.modelID, profile)
+                XCTAssertEqual(endpoint.region, region)
+                XCTAssertEqual(endpoint.url.host, "bedrock-runtime.\(region).amazonaws.com")
+                XCTAssertEqual(endpoint.url.path, "/openai/v1/responses")
+            }
+        }
+        let korea = try BedrockResponsesEndpoint.resolve(modelID: "global.moonshotai.kimi-k3", region: "ap-northeast-2")
+        XCTAssertEqual(korea.region, "ap-northeast-2")
+        XCTAssertEqual(korea.modelID, "global.moonshotai.kimi-k3")
+        for region in ["us-east-1", "us-west-1", "ca-central-1", "ca-west-1"] {
+            XCTAssertEqual(try BedrockResponsesEndpoint.resolve(modelID: "moonshotai.kimi-k3", region: region).modelID,
+                           "us.moonshotai.kimi-k3")
+        }
+        XCTAssertThrowsError(try BedrockResponsesEndpoint.resolve(modelID: "moonshotai.kimi-k3", region: "eu-central-1"))
+        XCTAssertFalse(BedrockMantleCatalog.entries.contains { BedrockModelID.isKimiK3($0.id) })
+        XCTAssertEqual(BedrockModelID.route("moonshotai.kimi-k2.5"), .conversation)
+    }
+
+    func testKimiK3CatalogSuppliesProfilesAndApplicationProfilesKeepTheirBilling() throws {
+        let model = try XCTUnwrap(BedrockBundledCatalog.records.first { $0.id == "moonshotai.kimi-k3" })
+        let descriptors = model.descriptors(in: "us-east-1")
+        XCTAssertEqual(Set(descriptors.map(\.id)), ["moonshotai.kimi-k3", "us.moonshotai.kimi-k3", "global.moonshotai.kimi-k3"])
+        XCTAssertTrue(descriptors.allSatisfy { $0.acceptsImages && $0.isConversation && $0.streaming == true })
+        let registry = BedrockCapabilityRegistry()
+        registry.replace(region: "us-east-1", descriptors: descriptors)
+        XCTAssertEqual(registry.invocationID(model.id, region: "us-east-1"), "us.moonshotai.kimi-k3")
+        registry.replace(region: "ap-northeast-2", descriptors: model.descriptors(in: "ap-northeast-2"))
+        XCTAssertEqual(registry.invocationID(model.id, region: "ap-northeast-2"), "global.moonshotai.kimi-k3")
+
+        let arn = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/kimi-team"
+        XCTAssertFalse(BedrockResponsesEndpoint.usesResponses(arn, hasDocuments: false, foundationID: model.id))
+        XCTAssertNoThrow(try BedrockResponsesEndpoint.validateDocumentRoute(modelID: arn, foundationID: model.id, hasDocuments: false))
+        XCTAssertThrowsError(try BedrockResponsesEndpoint.validateDocumentRoute(modelID: arn, foundationID: model.id, hasDocuments: true))
+        XCTAssertThrowsError(try BedrockResponsesEndpoint.resolve(modelID: arn, region: "us-east-1"))
+    }
+
     func testAstraApplicationProfileDoesNotSilentlyChangeBillingForFiles() throws {
         let arn = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/team"
         let foundation = "openai.gpt-6-astra"

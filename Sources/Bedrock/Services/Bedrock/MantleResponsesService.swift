@@ -41,9 +41,10 @@ final class MantleResponsesService: Sendable {
     func streamResponse(
         modelId: String,
         input: [[String: Any]],
-        maxOutputTokens: Int,
+        maxOutputTokens: Int?,
         reasoningEffort: String,
-        tools: [[String: Any]] = []
+        tools: [[String: Any]] = [],
+        promptCaching: Bool = false
     ) -> AsyncThrowingStream<MantleResponseEvent, Error> {
         // Serialize the request body before entering the stream closure so the
         // non-Sendable [[String: Any]] payload is not captured across tasks
@@ -53,12 +54,27 @@ final class MantleResponsesService: Sendable {
             "input": input,
             "stream": true,
             "store": false,
-            "max_output_tokens": maxOutputTokens,
             "reasoning": ["effort": reasoningEffort]
         ]
+        if let maxOutputTokens { body["max_output_tokens"] = maxOutputTokens }
         if !tools.isEmpty { body["tools"] = tools }
         if BedrockModelID.provider(modelId) == "openai" {
             body["include"] = ["reasoning.encrypted_content"]
+        }
+        if promptCaching && BedrockModelID.isKimiK3(modelId) {
+            // K3 accepts explicit cache breakpoints on Responses input content,
+            // not Converse cachePoint blocks. Cache through the latest user text.
+            for index in input.indices.reversed() {
+                guard input[index]["role"] as? String == "user",
+                      var content = input[index]["content"] as? [[String: Any]],
+                      let textIndex = content.lastIndex(where: { $0["type"] as? String == "input_text" }) else { continue }
+                content[textIndex]["prompt_cache_breakpoint"] = ["mode": "explicit"]
+                var cachedInput = input
+                cachedInput[index]["content"] = content
+                body["input"] = cachedInput
+                body["prompt_cache_options"] = ["mode": "explicit"]
+                break
+            }
         }
         let bodyData = try? JSONSerialization.data(withJSONObject: body)
 

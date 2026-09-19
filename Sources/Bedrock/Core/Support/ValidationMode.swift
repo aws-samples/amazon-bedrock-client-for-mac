@@ -46,5 +46,6 @@ enum ValidationMode {
         // Mantle, speech, async media and control-plane clients have separate
         // endpoints. Never allow those to escape the isolated fixture run.
         return BedrockModelID.route(modelID) == .conversation
+            || BedrockResponsesEndpoint.supportsRuntimeDocuments(modelID)
     }
 }

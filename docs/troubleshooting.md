@@ -41,6 +41,10 @@ Models can require different request APIs, inference profiles, attachments, or p
 
 For a parameter validation error, open **Response settings** and reset that model's custom parameters. For a request error, expand its details to inspect the service response. Retry creates a branch so the original conversation remains available.
 
+For models without built-in inference settings, temperature and Top P are omitted by default; the service chooses compatible values. A 4,096-token output limit remains in place. Enable **Custom parameters** and each parameter's inclusion switch to send your own values. Existing saved overrides are preserved.
+
+Kimi K3 uses a US or Global inference profile on Bedrock Runtime. Temperature and Top P are not sent, even if an older custom configuration included them. Turning **Thinking** off sends an explicit Off effort. Its documents and explicit prompt caching use the Responses API. Application inference profiles keep their original billing scope through Converse; select a system profile to attach documents. See the [AWS Kimi K3 model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k3.html) for API and regional limitations.
+
 ## A long conversation or pasted content is slow
 
 Scroll the complete conversation directly. Offscreen content renders as you move

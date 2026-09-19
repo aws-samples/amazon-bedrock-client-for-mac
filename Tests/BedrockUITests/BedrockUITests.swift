@@ -7,7 +7,7 @@ final class BedrockUITests: XCTestCase {
 
     @MainActor
     private func launch(appearance: String = "light", withRuntime: Bool = false,
-                        scrollbars: String? = nil) throws -> (XCUIApplication, URL) {
+                        scrollbars: String? = nil, thinkingEnabled: Bool? = nil) throws -> (XCUIApplication, URL) {
         continueAfterFailure = false
         // The signed runner's default temporaryDirectory is inside its app
         // container. Importing from there raises macOS cross-app privacy UI.
@@ -32,7 +32,8 @@ final class BedrockUITests: XCTestCase {
         app.launchArguments = ["-checkForUpdates", "NO", "-enableQuickAccess", "NO", "-mcpEnabled", "NO",
                                "-appearance", appearance, "-selectedRegion", "us-west-2",
                                 "-selectedProfile", "default",
-                                "-defaultModelId", "us.amazon.nova-2-lite-v1:0"]
+                                 "-defaultModelId", "us.amazon.nova-2-lite-v1:0"]
+        if let thinkingEnabled { app.launchArguments += ["-enableModelThinking", thinkingEnabled ? "YES" : "NO"] }
         // AppKit saves window geometry outside the isolated conversation data.
         // Ignore a previous scenario's resized frame so a fresh launch exercises
         // the app's real default size, rather than inheriting that test's size.
@@ -1648,20 +1649,43 @@ final class BedrockUITests: XCTestCase {
 
     @MainActor
     func testLunaDocumentHistoryUsesResponsesAndKeepsRealLocalToolsAndFollowups() throws {
-        let (app, directory) = try launch(withRuntime: true)
+        try assertResponsesHistory(model: "us.openai.gpt-5.6-luna", name: "GPT-5.6 Luna", provider: "OpenAI")
+    }
+
+    @MainActor
+    func testKimiK3DocumentsToolsAndFollowupsUseRuntimeResponsesWithThinkingOff() throws {
+        try assertResponsesHistory(model: "us.moonshotai.kimi-k3", name: "Kimi K3", provider: "Moonshot AI")
+    }
+
+    @MainActor
+    func testKimiK3TextAndToolsAlsoUseResponsesWithoutDocuments() throws {
+        try assertResponsesHistory(model: "us.moonshotai.kimi-k3", name: "Kimi K3", provider: "Moonshot AI",
+                                   includeDocument: false, appearance: "dark")
+    }
+
+    @MainActor
+    private func assertResponsesHistory(model: String, name: String, provider: String,
+                                        includeDocument: Bool = true, appearance: String = "light") throws {
+        let isKimi = model == "us.moonshotai.kimi-k3"
+        let (app, directory) = try launch(appearance: appearance, withRuntime: true, thinkingEnabled: isKimi ? false : nil)
         let localFile = directory.appendingPathComponent("responses-tool.txt")
         try Data("RESPONSES_FILE_MARKER".utf8).write(to: localFile)
         let document = Data((String(repeating: "An earlier document. 한국어\n", count: 1_000)
-                             + "LUNA_DOCUMENT_LAST_LINE").utf8).base64EncodedString()
-        let model = "us.openai.gpt-5.6-luna"
-        let file = directory.appendingPathComponent("luna-history.json")
+                             + "RESPONSES_DOCUMENT_LAST_LINE").utf8).base64EncodedString()
+        var first: [String: Any] = [
+            "id": UUID().uuidString, "role": "user", "text": "Keep the earlier context.",
+            "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate
+        ]
+        if includeDocument {
+            first["documentBase64Strings"] = [document]
+            first["documentFormats"] = ["txt"]
+            first["documentNames"] = ["Earlier report"]
+        }
+        let file = directory.appendingPathComponent("responses-history.json")
         try JSONSerialization.data(withJSONObject: [
-            "version": 1, "title": "Luna document continuation", "modelID": model,
-            "modelName": "GPT-5.6 Luna", "provider": "OpenAI", "messages": [
-                ["id": UUID().uuidString, "role": "user", "text": "Keep the complete attached document.",
-                 "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate,
-                 "documentBase64Strings": [document], "documentFormats": ["txt"],
-                 "documentNames": ["Earlier report"]],
+            "version": 1, "title": "\(name) continuation", "modelID": model,
+            "modelName": name, "provider": provider, "messages": [
+                first,
                 ["id": UUID().uuidString, "role": "assistant", "text": "Ready for the next request.",
                  "modelID": model, "isError": false, "timestamp": Date().timeIntervalSinceReferenceDate]
             ]
@@ -1682,9 +1706,17 @@ final class BedrockUITests: XCTestCase {
             let input = try XCTUnwrap(body["input"] as? [[String: Any]])
             let documents = input.flatMap { $0["content"] as? [[String: Any]] ?? [] }
                 .filter { $0["type"] as? String == "input_file" }
-            XCTAssertEqual(documents.count, 1)
-            XCTAssertEqual(documents[0]["filename"] as? String, "Earlier report.txt")
-            XCTAssertEqual(documents[0]["file_data"] as? String, "data:text/plain;base64," + document)
+            XCTAssertEqual(documents.count, includeDocument ? 1 : 0)
+            if includeDocument {
+                XCTAssertEqual(documents[0]["filename"] as? String, "Earlier report.txt")
+                XCTAssertEqual(documents[0]["file_data"] as? String, "data:text/plain;base64," + document)
+            }
+            if isKimi {
+                XCTAssertNil(body["temperature"])
+                XCTAssertNil(body["top_p"])
+                XCTAssertEqual((body["reasoning"] as? [String: String])?["effort"], "none")
+                XCTAssertEqual((body["prompt_cache_options"] as? [String: String])?["mode"], "explicit")
+            }
         }
         let continuation = try XCTUnwrap(requests[1]["body"] as? [String: Any])
         let input = try XCTUnwrap(continuation["input"] as? [[String: Any]])
@@ -1702,9 +1734,21 @@ final class BedrockUITests: XCTestCase {
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
             return object["messages"] as? [[String: Any]] ?? []
         }
-        XCTAssertEqual(stored.flatMap { $0["documentNames"] as? [String] ?? [] }, ["Earlier report"])
-        XCTAssertEqual(stored.flatMap { $0["documentBase64Strings"] as? [String] ?? [] }, [document])
+        XCTAssertEqual(stored.flatMap { $0["documentNames"] as? [String] ?? [] }, includeDocument ? ["Earlier report"] : [])
+        XCTAssertEqual(stored.flatMap { $0["documentBase64Strings"] as? [String] ?? [] }, includeDocument ? [document] : [])
         XCTAssertFalse(stored.contains { $0["isError"] as? Bool == true })
+        if isKimi {
+            app.buttons["Response settings"].click()
+            let popover = app.descendants(matching: .any).matching(identifier: "responseSettings.popover").firstMatch
+            XCTAssertTrue(popover.waitForExistence(timeout: 5))
+            XCTAssertFalse(popover.staticTexts["Temperature"].exists)
+            XCTAssertFalse(popover.staticTexts["Top P"].exists)
+            XCTAssertTrue(popover.staticTexts["Reasoning effort"].exists)
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Kimi K3 response settings – \(appearance)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
     }
 
     @MainActor

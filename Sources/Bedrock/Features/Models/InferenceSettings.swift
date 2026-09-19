@@ -146,7 +146,7 @@ struct InferenceConfigPopoverContent: View {
     }
 
     private var omitsSamplingParameters: Bool {
-        isClaudeSonnet5Model || isClaudeOpus5Model || isClaudeFable5Model || isOpenAIFrontierModel
+        backend.omitsSamplingParameters(backend.getModelType(modelId)) || isOpenAIFrontierModel
     }
 
     // Check if Top P should be disabled by the model or reasoning mode.
@@ -176,6 +176,8 @@ struct InferenceConfigPopoverContent: View {
         let modelType = backend.getModelType(modelId)
         return modelType == .kimiK2Thinking
     }
+
+    private var isKimiK3Model: Bool { backend.getModelType(modelId) == .kimiK3 }
 
     // Check if this is a Nova 2 model (uses reasoningEffort instead of thinkingBudget)
     private var isNova2Model: Bool {
@@ -220,7 +222,7 @@ struct InferenceConfigPopoverContent: View {
 
     // Check if this model uses reasoning effort.
     private var usesReasoningEffort: Bool {
-        return isGptOssModel || isNova2Model || isKimiK2Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIFrontierModel
+        return isGptOssModel || isNova2Model || isKimiK2Model || isKimiK3Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIFrontierModel
     }
 
     // Check if thinking budget should be enabled (Claude models only, not models using effort-based reasoning)
@@ -367,12 +369,8 @@ struct InferenceConfigPopoverContent: View {
             Text("Model defaults").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             LabeledContent("Output limit", value: actualDefaultConfig.maxTokens.map { "\($0.formatted()) tokens" } ?? "Model default")
             if !omitsSamplingParameters {
-                if let temperature = actualDefaultConfig.temperature {
-                    LabeledContent("Temperature", value: String(format: "%.2f", temperature))
-                }
-                if let topP = actualDefaultConfig.topP {
-                    LabeledContent("Top P", value: String(format: "%.2f", topP))
-                }
+                LabeledContent("Temperature", value: actualDefaultConfig.temperature.map { String(format: "%.2f", $0) } ?? "Model default")
+                LabeledContent("Top P", value: actualDefaultConfig.topP.map { String(format: "%.2f", $0) } ?? "Model default")
             }
             if isThinkingBudgetEnabled {
                 LabeledContent("Thinking budget", value: "\(actualDefaultConfig.thinkingBudget.formatted()) tokens")
@@ -392,8 +390,8 @@ struct InferenceConfigPopoverContent: View {
 
         return (
             maxTokens: defaultConfig.maxTokens,
-            temperature: defaultConfig.temperature.map { Float($0) },
-            topP: defaultConfig.topp.map { Float($0) },
+            temperature: config.includeTemperature ? defaultConfig.temperature : nil,
+            topP: config.includeTopP ? defaultConfig.topp : nil,
             thinkingBudget: range.defaultThinkingBudget,
             enableStreaming: config.enableStreaming
         )
@@ -624,15 +622,21 @@ struct InferenceConfigPopoverContent: View {
                     .font(DesignTokens.detail)
                     .foregroundColor(.secondary)
             }
+            if isKimiK3Model && !settingManager.enableModelThinking {
+                Text("Thinking is off. Enable thinking to use the selected effort.")
+                    .font(DesignTokens.detail)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 
     private var effortOptions: [(value: String, title: String)] {
         var options = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
-        if isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIGpt56Model {
+        if isKimiK3Model { options.insert(("none", "Off"), at: 0) }
+        if isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIGpt56Model || isKimiK3Model {
             options.append(("xhigh", "Very high"))
         }
-        if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIGpt56Model {
+        if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIGpt56Model || isKimiK3Model {
             options.append(("max", "Max"))
         }
         return options
@@ -643,7 +647,7 @@ struct InferenceConfigPopoverContent: View {
         // save effort independently without forcing override on
         var newConfig = settingManager.getInferenceConfig(for: modelId)
         newConfig.reasoningEffort = effort
-        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeOpus5Model && !isClaudeSonnet5Model && !isClaudeFable5Model && !isOpenAIFrontierModel {
+        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeOpus5Model && !isClaudeSonnet5Model && !isClaudeFable5Model && !isOpenAIFrontierModel && !isKimiK3Model {
             newConfig.overrideDefault = true
         }
         settingManager.setInferenceConfig(newConfig, for: modelId)

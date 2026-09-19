@@ -81,7 +81,9 @@ Conversations, drafts, skills, schedules, and settings are stored locally. There
 
 Model requests and the context you include go directly to Amazon Bedrock. Enabled web tools and configured MCP servers make their own connections. Optional update checks contact GitHub. Bedrock API keys are stored in macOS Keychain; AWS profiles use your local AWS configuration.
 
-The app discovers foundation models and inference profiles for your connection and region. It supports Bedrock Converse and Mantle Responses routes, with dedicated image, video, and embedding requests where implemented. Access and capabilities depend on your AWS account, region, and endpoint. Retired models are excluded from new selections; existing conversations remain readable.
+The app discovers foundation models and inference profiles for your connection and region. It supports Bedrock Converse and Runtime/Mantle Responses routes, with dedicated image, video, and embedding requests where implemented. Access and capabilities depend on your AWS account, region, and endpoint. Retired models are excluded from new selections; existing conversations remain readable.
+
+Models without built-in inference settings use the service's sampling defaults instead of automatically sending temperature and Top P. Custom values remain opt-in through **Response settings**. Kimi K3 uses Runtime Responses for text, images, documents, tools, and explicit prompt caching, with US and Global inference profiles.
 
 ## Get started
 

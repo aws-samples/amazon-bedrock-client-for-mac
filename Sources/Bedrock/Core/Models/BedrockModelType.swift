@@ -34,7 +34,7 @@ enum ModelType: Sendable {
     // TwelveLabs models
     case pegasus
     // Moonshot models
-    case kimiK2Thinking
+    case kimiK2Thinking, kimiK3
     // NVIDIA models
     case nvidiaNemotronNano9b, nvidiaNemotronNano12bVL
     // MiniMax models

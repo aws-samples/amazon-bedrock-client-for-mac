@@ -226,6 +226,45 @@ final class ConversationCompatibilityTests: XCTestCase {
         XCTAssertEqual(config.frontierReasoningEffort(modelID: "openai.gpt-5.6-luna", thinkingEnabled: false), "none")
     }
 
+    func testNewModelDefaultsOmitSamplingWithoutChangingLegacyOverrides() throws {
+        for id in ["future.new-model", "moonshotai.kimi-k99", "global.anthropic.claude-next",
+                   "us.zai.new-model", "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.future.new-model"] {
+            let defaults = ModelInferenceRange.getParameterDefaultsForModel(id)
+            XCTAssertTrue(defaults.includeMaxTokens, "Keep a bounded output for \(id).")
+            XCTAssertFalse(defaults.includeTemperature, id)
+            XCTAssertFalse(defaults.includeTopP, id)
+        }
+        let legacy = try JSONDecoder().decode(ModelInferenceConfig.self, from:
+            Data(#"{"temperature":0.4,"topP":0.8,"overrideDefault":true}"#.utf8))
+        XCTAssertEqual(legacy.requestTemperature, 0.4)
+        XCTAssertEqual(legacy.requestTopP, 0.8)
+        XCTAssertTrue(legacy.overrideDefault)
+        let known = ModelInferenceRange.getParameterDefaultsForModel("us.anthropic.claude-sonnet-4-6")
+        XCTAssertTrue(known.includeTemperature)
+        XCTAssertFalse(known.includeTopP)
+    }
+
+    func testKimiK3ReasoningOffIsExplicitAndSavedEffortIsValidated() {
+        for effort in ["none", "low", "medium", "high", "xhigh", "max"] {
+            let config = ModelInferenceConfig(reasoningEffort: effort)
+            XCTAssertEqual(config.kimiK3ReasoningEffort(thinkingEnabled: true), effort)
+            XCTAssertEqual(config.kimiK3ReasoningEffort(thinkingEnabled: false), "none")
+            XCTAssertEqual(config.reasoningEffort, effort, "Turning thinking off must not erase the saved effort.")
+        }
+        for effort in ["", "bogus", "disabled"] {
+            XCTAssertEqual(ModelInferenceConfig(reasoningEffort: effort).kimiK3ReasoningEffort(thinkingEnabled: true), "medium")
+        }
+        XCTAssertEqual(ModelInferenceConfig(reasoningEffort: " MAX ").kimiK3ReasoningEffort(thinkingEnabled: true), "max")
+        for id in ["moonshotai.kimi-k3", "us.moonshotai.kimi-k3", "global.moonshotai.kimi-k3"] {
+            let range = ModelInferenceRange.getRangeForModel(id)
+            XCTAssertEqual(range.maxTokensRange, 1...128000)
+            XCTAssertEqual(range.defaultMaxTokens, 8192)
+            let defaults = ModelInferenceRange.getParameterDefaultsForModel(id)
+            XCTAssertFalse(defaults.includeTemperature)
+            XCTAssertFalse(defaults.includeTopP)
+        }
+    }
+
     func testSettingsBackupPreservesReleasedKeysWithoutCredentialsOrChangingPreferences() throws {
         let name = "bedrock-settings-test-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))

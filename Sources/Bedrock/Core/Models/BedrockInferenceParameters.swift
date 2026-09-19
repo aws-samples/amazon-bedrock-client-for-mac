@@ -65,6 +65,12 @@ struct ModelInferenceConfig: Codable, Equatable, Sendable {
         return thinkingEnabled ? (effort.isEmpty ? "medium" : effort) : "none"
     }
 
+    func kimiK3ReasoningEffort(thinkingEnabled: Bool) -> String {
+        guard thinkingEnabled else { return "none" }
+        let effort = reasoningEffort.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ["none", "low", "medium", "high", "xhigh", "max"].contains(effort) ? effort : "medium"
+    }
+
     private enum CodingKeys: String, CodingKey {
         case maxTokens
         case temperature
@@ -204,8 +210,8 @@ struct ModelInferenceRange {
                 defaultThinkingBudget: 2048,
                 defaultReasoningEffort: "high"
             )
-        case .openaiGpt6Astra, .openaiGpt55, .openaiGpt54:
-            // OpenAI frontier models via bedrock-mantle Responses API
+        case .kimiK3, .openaiGpt6Astra, .openaiGpt55, .openaiGpt54:
+            // Models with a 128,000-token output limit and effort-based reasoning.
             return ModelInferenceRange(
                 maxTokensRange: 1...128000,
                 temperatureRange: 0.0...2.0,
@@ -510,7 +516,9 @@ struct ModelInferenceRange {
 
     static func getParameterDefaultsForModel(_ modelId: String) -> ModelInferenceParameterDefaults {
         switch getModelTypeFromId(modelId) {
-        case .claudeSonnet5, .claudeOpus5, .claudeFable5:
+        case .claudeSonnet5, .claudeOpus5, .claudeFable5, .kimiK3, .unknown:
+            // Unrecognized models inherit the service's sampling defaults.
+            // New models can reject these optional fields even at common values.
             return ModelInferenceParameterDefaults(
                 includeMaxTokens: true,
                 includeTemperature: false,
@@ -592,7 +600,7 @@ struct ModelInferenceRange {
                 return .claude35
             } else if modelNameAndVersion.contains("claude-3") {
                 return .claude3
-            } else {
+            } else if modelNameAndVersion.hasPrefix("claude-v") || modelNameAndVersion.hasPrefix("claude-instant-") {
                 return .claude
             }
             
@@ -660,6 +668,11 @@ struct ModelInferenceRange {
         case "moonshot":
             if modelNameAndVersion.contains("kimi-k2") {
                 return .kimiK2Thinking
+            }
+
+        case "moonshotai":
+            if modelNameAndVersion == "kimi-k3" {
+                return .kimiK3
             }
             
         case "nvidia":

@@ -14,7 +14,7 @@ struct BedrockResponsesEndpoint: Equatable, Sendable {
     // https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-mantle.html
     static func supportsRuntimeDocuments(_ modelID: String) -> Bool {
         ["openai.gpt-6-astra", "openai.gpt-5.6-sol", "openai.gpt-5.6-terra",
-         "openai.gpt-5.6-luna", "xai.grok-4.6"].contains(BedrockModelID.base(modelID))
+         "openai.gpt-5.6-luna", "xai.grok-4.6", "moonshotai.kimi-k3"].contains(BedrockModelID.base(modelID))
     }
 
     static func usesResponses(_ modelID: String, hasDocuments: Bool, foundationID: String? = nil) -> Bool {
@@ -43,7 +43,14 @@ struct BedrockResponsesEndpoint: Equatable, Sendable {
         let runtime = supportsRuntimeDocuments(modelID)
         var wireID = modelID
         if runtime && modelID == BedrockModelID.base(modelID) {
-            guard ["us-east-1", "us-east-2", "us-west-2"].contains(region) else {
+            let supportsUSProfile: Bool
+            if BedrockModelID.isKimiK3(modelID) {
+                supportsUSProfile = BedrockBundledCatalog.records.first { $0.id == modelID }?
+                    .regions[region]?.profiles.contains("us." + modelID) == true
+            } else {
+                supportsUSProfile = ["us-east-1", "us-east-2", "us-west-2"].contains(region)
+            }
+            guard supportsUSProfile else {
                 throw LocalOperationError.invalid("Choose an inference profile available in \(region) for this model in Settings → Models.")
             }
             wireID = "us." + modelID

@@ -175,6 +175,43 @@ class BedrockFixtureTests(unittest.TestCase):
                 server.server_close()
                 worker.join(timeout=3)
 
+    def test_kimi_responses_fixture_requires_omitted_sampling_and_explicit_thinking_off(self):
+        with tempfile.TemporaryDirectory() as directory:
+            server = FixtureServer(Path(directory) / "requests.jsonl")
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            try:
+                endpoint = f"http://127.0.0.1:{server.server_port}/openai/v1/responses"
+                body = {"model": "us.moonshotai.kimi-k3", "store": False, "stream": True,
+                        "reasoning": {"effort": "none"},
+                        "input": [{"role": "user", "content": [
+                            {"type": "input_text", "text": "Continue without a document."}]}]}
+
+                def send():
+                    return urllib.request.urlopen(urllib.request.Request(
+                        endpoint, data=json.dumps(body).encode(),
+                        headers={"Content-Type": "application/json"}), timeout=5)
+
+                for field in ("temperature", "top_p"):
+                    body[field] = 0.7
+                    with self.assertRaises(HTTPError) as failure:
+                        send()
+                    self.assertEqual(failure.exception.code, 400)
+                    failure.exception.close()
+                    del body[field]
+                del body["reasoning"]
+                with self.assertRaises(HTTPError) as failure:
+                    send()
+                self.assertEqual(failure.exception.code, 400)
+                failure.exception.close()
+                body["reasoning"] = {"effort": "none"}
+                with send() as response:
+                    self.assertIn(b"RESPONSES_DOCUMENT_FOLLOWUP_COMPLETE", response.read())
+            finally:
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=3)
+
     def test_layout_stream_waits_for_measurement_before_growth_and_completion(self):
         with tempfile.TemporaryDirectory() as directory:
             server = FixtureServer(Path(directory) / "requests.jsonl")

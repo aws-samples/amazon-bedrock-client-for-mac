@@ -50,7 +50,7 @@ checks. Release-branch pushes do not duplicate pull-request validation.
 | Light / Dark / System and settings | UI opens all nine settings panes, captures screenshots, selects all appearances and repeatedly closes/reopens Settings |
 | Error recovery | UI receives a real SDK validation error from the fixture and successfully sends the next message |
 | Existing data and explicit settings | Core tests cover historical JSON/Core Data-compatible records, migration defaults, future/corrupt data, import/export, paths and atomic writes |
-| Model/task compatibility | Core routing and demo tests; app inference configuration tests for omission, reasoning, profile and model-family behavior |
+| Model/task compatibility | Core routing and demo tests; app inference configuration tests for unknown-model sampling defaults, saved overrides, reasoning, profile and model-family behavior. Kimi K3 UI cases exercise Runtime Responses with and without documents, real local tools, follow-ups, Thinking off, cache controls, and Light/Dark settings. |
 | Release integrity | Source/tag/version match, production bundle identity, Intel + Apple silicon executable, strict signature, hardened runtime, accepted notarization and stapled app/DMG; read-only mounting verifies the packaged app, exact executable and Applications link |
 
 ## What the loopback server tests

@@ -26,6 +26,10 @@ final class ValidationModeTests: XCTestCase {
             modelID: "us.amazon.nova-2-lite-v1:0", runtimeEndpoint: "http://127.0.0.1:51234", environment: offline))
         XCTAssertTrue(ValidationMode.permitsInference(
             modelID: "global.openai.gpt-6-astra", runtimeEndpoint: "http://127.0.0.1:51234", environment: offline))
+        XCTAssertTrue(ValidationMode.permitsInference(
+            modelID: "us.moonshotai.kimi-k3", runtimeEndpoint: "http://127.0.0.1:51234", environment: offline))
+        XCTAssertFalse(ValidationMode.permitsInference(
+            modelID: "us.moonshotai.kimi-k3", runtimeEndpoint: "https://bedrock-runtime.us-east-1.amazonaws.com", environment: offline))
     }
 
     func testIsolationRejectsInvalidPortsAndOtherInferenceRoutes() {
