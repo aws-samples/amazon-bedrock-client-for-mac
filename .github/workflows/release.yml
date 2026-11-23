@@ -227,6 +227,8 @@ jobs:
         run: |
           DMG_SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
           brew tap didhd/tap
+          # Homebrew 7 loads casks from third-party taps only after they are trusted.
+          brew trust --tap didhd/tap
           brew bump-cask-pr --version="$RELEASE_VERSION" --no-browse --no-audit \
             --sha256="$DMG_SHA256" \
             --url="https://github.com/aws-samples/amazon-bedrock-client-for-mac/releases/download/v$RELEASE_VERSION/Amazon.Bedrock.Client.for.Mac.dmg" \
