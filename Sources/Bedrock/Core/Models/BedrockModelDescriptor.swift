@@ -37,6 +37,40 @@ enum BedrockModelID {
     }
     static func provider(_ value: String) -> String { String(base(value).split(separator: ".").first ?? "") }
     static func isKimiK3(_ value: String) -> Bool { base(value).lowercased() == "moonshotai.kimi-k3" }
+
+    private static func matches(_ id: String, _ family: String) -> Bool {
+        id == family || id.hasPrefix(family + "-") || id.hasPrefix(family + ":")
+    }
+
+    /// Models whose request rules differ from earlier models that share a name
+    /// prefix (Claude Opus 5.5 is not Opus 5). Both classifiers check these first.
+    static func versionedType(_ value: String) -> ModelType? {
+        let id = base(value).lowercased()
+        let families: [(String, ModelType)] = [
+            ("anthropic.claude-opus-5-5", .claudeOpus55),
+            ("anthropic.claude-sonnet-5-5", .claudeSonnet55),
+            ("anthropic.claude-haiku-5-5", .claudeHaiku55),
+            ("openai.gpt-6.2-astra", .openaiGpt62Astra),
+            ("openai.gpt-6.2-sol", .openaiGpt62Sol),
+            ("openai.gpt-6.1-sol", .openaiGpt61Sol),
+            ("openai.gpt-6.1-terra", .openaiGpt61Terra),
+            ("openai.gpt-6-sol", .openaiGpt6Sol),
+            ("openai.gpt-6-luna", .openaiGpt6Luna),
+            ("xai.grok-4.6", .xaiGrok4),
+            ("xai.grok-4.7", .xaiGrok4)
+        ]
+        return families.first { matches(id, $0.0) }?.1
+    }
+
+    /// Frontier GPT models that accept reasoning effort `none`, measured on
+    /// Bedrock Runtime. Others keep reasoning on, including future versions.
+    static func frontierGPTCanDisableReasoning(_ value: String) -> Bool {
+        let id = base(value).lowercased()
+        return ["openai.gpt-5.4", "openai.gpt-5.5", "openai.gpt-5.6-sol", "openai.gpt-5.6-terra",
+                "openai.gpt-5.6-luna", "openai.gpt-6-sol", "openai.gpt-6-luna", "openai.gpt-6.1-terra"]
+            .contains { matches(id, $0) }
+    }
+
     static func route(_ value: String, output: [String] = []) -> BedrockModelRoute {
         let id = base(value).lowercased()
         if id.contains("sonic") { return .speech }

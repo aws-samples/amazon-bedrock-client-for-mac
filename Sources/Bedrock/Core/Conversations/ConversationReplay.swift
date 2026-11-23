@@ -6,6 +6,7 @@ enum ConversationReplay {
     static func prepare(
         _ history: ConversationHistory, targetModelID: String,
         supportsReasoning: Bool, supportsTools: Bool, supportsImages: Bool, supportsDocuments: Bool,
+        supportsPDF: Bool = true,
         foundationID: (String) -> String = BedrockModelID.base
     ) -> ConversationHistory {
         let target = foundationID(targetModelID)
@@ -51,10 +52,18 @@ enum ConversationReplay {
                 append("[\(images.count) earlier image attachment(s) remain saved locally. Image contents are unavailable to this model in this request.]", to: &message.text)
                 message.imageBase64Strings = nil
             }
-            if !supportsDocuments, let documents = message.documentBase64Strings, !documents.isEmpty {
+            if let documents = message.documentBase64Strings, !documents.isEmpty {
+                var kept: [(data: String, format: String?, name: String?)] = []
                 for (index, document) in documents.enumerated() {
-                    let name = message.documentNames.flatMap { index < $0.count ? $0[index] : nil } ?? "Document"
-                    let format = message.documentFormats.flatMap { index < $0.count ? $0[index].lowercased() : nil } ?? ""
+                    let storedName = message.documentNames.flatMap { index < $0.count ? $0[index] : nil }
+                    let storedFormat = message.documentFormats.flatMap { index < $0.count ? $0[index] : nil }
+                    let format = storedFormat?.lowercased() ?? ""
+                    // A model that reads files but not PDFs keeps its other files.
+                    if supportsDocuments && (supportsPDF || format != "pdf") {
+                        kept.append((document, storedFormat, storedName))
+                        continue
+                    }
+                    let name = storedName ?? "Document"
                     if ["txt", "md", "csv", "html"].contains(format),
                        let data = Data(base64Encoded: document), let text = String(data: data, encoding: .utf8) {
                         append("[Earlier attachment: \(name)]\n\(text)", to: &message.text)
@@ -62,9 +71,11 @@ enum ConversationReplay {
                         append("[Earlier attachment: \(name) remains saved locally. Its contents are unavailable to this model in this request.]", to: &message.text)
                     }
                 }
-                message.documentBase64Strings = nil
-                message.documentFormats = nil
-                message.documentNames = nil
+                if kept.count != documents.count {
+                    message.documentBase64Strings = kept.isEmpty ? nil : kept.map(\.data)
+                    message.documentFormats = kept.isEmpty || message.documentFormats == nil ? nil : kept.map { $0.format ?? "" }
+                    message.documentNames = kept.isEmpty || message.documentNames == nil ? nil : kept.map { $0.name ?? "Document" }
+                }
             }
             return message
         }

@@ -226,6 +226,49 @@ final class ConversationCompatibilityTests: XCTestCase {
         XCTAssertEqual(config.frontierReasoningEffort(modelID: "openai.gpt-5.6-luna", thinkingEnabled: false), "none")
     }
 
+    func testFrontierGPTReasoningOffFollowsEachModelsAcceptedEfforts() {
+        let config = ModelInferenceConfig(reasoningEffort: "high")
+        for id in ["openai.gpt-6.2-astra", "us.openai.gpt-6.2-sol", "global.openai.gpt-6.1-sol",
+                   "openai.gpt-6-astra", "openai.gpt-7-future"] {
+            XCTAssertEqual(config.frontierReasoningEffort(modelID: id, thinkingEnabled: false), "high", id)
+            XCTAssertEqual(config.frontierReasoningEffort(modelID: id, thinkingEnabled: true), "high", id)
+        }
+        for id in ["openai.gpt-6.1-terra", "us.openai.gpt-6-sol", "global.openai.gpt-6-luna",
+                   "openai.gpt-5.6-sol", "openai.gpt-5.5"] {
+            XCTAssertEqual(config.frontierReasoningEffort(modelID: id, thinkingEnabled: false), "none", id)
+            XCTAssertEqual(config.frontierReasoningEffort(modelID: id, thinkingEnabled: true), "high", id)
+        }
+        XCTAssertEqual(ModelInferenceConfig(reasoningEffort: "minimal")
+            .frontierReasoningEffort(modelID: "openai.gpt-6.1-terra", thinkingEnabled: true), "medium",
+            "Bedrock rejects minimal for GPT-6.x.")
+        for (saved, sent) in [("xhigh", "xhigh"), ("max", "medium"), ("none", "medium"), (" LOW ", "low")] {
+            XCTAssertEqual(ModelInferenceConfig(reasoningEffort: saved).grokReasoningEffort(), sent, saved)
+        }
+    }
+
+    func testReplayKeepsReadableFilesAndNotesPDFsForModelsWithoutPDFInput() {
+        let pdf = Data("%PDF-1.4".utf8).base64EncodedString()
+        let text = Data("PLAIN_NOTES".utf8).base64EncodedString()
+        let history = ConversationHistory(chatId: "one", modelId: "us.openai.gpt-6.1-terra", messages: [
+            .init(id: UUID(), text: "Read these", role: .user, timestamp: Date(), isError: false,
+                  documentBase64Strings: [pdf, text], documentFormats: ["pdf", "txt"],
+                  documentNames: ["report.pdf", "notes.txt"]),
+            .init(id: UUID(), text: "Done", role: .assistant, timestamp: Date(), isError: false)
+        ])
+        let replay = ConversationReplay.prepare(history, targetModelID: "us.openai.gpt-6.2-sol",
+                                                supportsReasoning: false, supportsTools: true, supportsImages: true,
+                                                supportsDocuments: true, supportsPDF: false)
+        XCTAssertEqual(replay.messages[0].documentBase64Strings, [text])
+        XCTAssertEqual(replay.messages[0].documentFormats, ["txt"])
+        XCTAssertEqual(replay.messages[0].documentNames, ["notes.txt"])
+        XCTAssertTrue(replay.messages[0].text.contains("report.pdf remains saved locally"))
+        XCTAssertEqual(history.messages[0].documentBase64Strings, [pdf, text], "Local history keeps the PDF.")
+        let unchanged = ConversationReplay.prepare(history, targetModelID: "us.openai.gpt-6.1-terra",
+                                                   supportsReasoning: false, supportsTools: true, supportsImages: true,
+                                                   supportsDocuments: true)
+        XCTAssertEqual(unchanged.messages, history.messages)
+    }
+
     func testNewModelDefaultsOmitSamplingWithoutChangingLegacyOverrides() throws {
         for id in ["future.new-model", "moonshotai.kimi-k99", "global.anthropic.claude-next",
                    "us.zai.new-model", "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.future.new-model"] {

@@ -3,6 +3,8 @@ import Foundation
 enum ModelType: Sendable {
     // Anthropic models
     case claude, claude3, claude35, claude35Haiku, claude37, claudeSonnet4, claudeSonnet45, claudeSonnet46, claudeSonnet5, claudeHaiku45, claudeOpus4, claudeOpus41, claudeOpus45, claudeOpus46, claudeOpus47, claudeOpus48, claudeOpus5, claudeFable5
+    // Claude 5.5 models: adaptive thinking only; each has its own way to turn thinking off
+    case claudeOpus55, claudeSonnet55, claudeHaiku55
     // Meta models
     case llama2, llama3, llama31, llama32Small, llama32Large, llama33, llama4Maverick, llama4Scout
     // Mistral models
@@ -25,6 +27,8 @@ enum ModelType: Sendable {
     // OpenAI GPT-5.6 capability tiers (bedrock-mantle Responses API only)
     case openaiGpt56Sol, openaiGpt56Terra, openaiGpt56Luna
     case openaiGpt6Astra
+    // OpenAI GPT-6.x models with Converse and Runtime Responses profiles
+    case openaiGpt6Sol, openaiGpt6Luna, openaiGpt61Sol, openaiGpt61Terra, openaiGpt62Astra, openaiGpt62Sol
     // DeepSeek models
     case deepseekr1, deepseekv3
     // Qwen models
@@ -39,6 +43,8 @@ enum ModelType: Sendable {
     case nvidiaNemotronNano9b, nvidiaNemotronNano12bVL
     // MiniMax models
     case minimaxM2
+    // xAI models with Converse and Runtime Responses profiles
+    case xaiGrok4
     // Google models
     case gemma3_4b, gemma3_12b, gemma3_27b
     // Other models

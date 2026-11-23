@@ -145,6 +145,21 @@ struct InferenceConfigPopoverContent: View {
         backend.getModelType(modelId) == .claudeSonnet5
     }
 
+    // Claude Opus 5.5, Sonnet 5.5 and Haiku 5.5 use adaptive thinking with Low through Max effort.
+    private var isClaude55Model: Bool {
+        [.claudeOpus55, .claudeSonnet55, .claudeHaiku55].contains(backend.getModelType(modelId))
+    }
+
+    // These models send effort with thinking off too, limited to High.
+    private var clampsEffortWithThinkingOff: Bool {
+        [.claudeOpus5, .claudeSonnet55, .claudeHaiku55].contains(backend.getModelType(modelId))
+    }
+
+    // Grok 4.6 and 4.7 always reason, with Low through Very high effort.
+    private var isGrokModel: Bool {
+        backend.getModelType(modelId) == .xaiGrok4
+    }
+
     private var omitsSamplingParameters: Bool {
         backend.omitsSamplingParameters(backend.getModelType(modelId)) || isOpenAIFrontierModel
     }
@@ -216,13 +231,14 @@ struct InferenceConfigPopoverContent: View {
     // GPT-5.6 (Sol/Terra/Luna) supports none/low/medium/high/xhigh/max reasoning effort,
     // where GPT-5.5/5.4 stop at high.
     private var isOpenAIGpt56Model: Bool {
-        let modelType = backend.getModelType(modelId)
-        return modelType == .openaiGpt6Astra || modelType == .openaiGpt56Sol || modelType == .openaiGpt56Terra || modelType == .openaiGpt56Luna
+        [.openaiGpt6Astra, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna,
+         .openaiGpt6Sol, .openaiGpt6Luna, .openaiGpt61Sol, .openaiGpt61Terra,
+         .openaiGpt62Astra, .openaiGpt62Sol].contains(backend.getModelType(modelId))
     }
 
     // Check if this model uses reasoning effort.
     private var usesReasoningEffort: Bool {
-        return isGptOssModel || isNova2Model || isKimiK2Model || isKimiK3Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIFrontierModel
+        return isGptOssModel || isNova2Model || isKimiK2Model || isKimiK3Model || isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isClaude55Model || isGrokModel || isOpenAIFrontierModel
     }
 
     // Check if thinking budget should be enabled (Claude models only, not models using effort-based reasoning)
@@ -352,7 +368,7 @@ struct InferenceConfigPopoverContent: View {
                 // Reasoning Effort (GPT-OSS, GPT-5.x, Nova 2, Kimi K2, Opus 4.6-4.8, Opus 5, Fable 5)
                 // Always-on / mantle models keep effort configurable regardless of the thinking toggle.
                 // Opus 5 applies effort in both modes (clamped to `high` when thinking is disabled).
-                if usesReasoningEffort && (backend.hasAlwaysOnReasoning(modelId) || isClaudeFable5Model || isClaudeOpus5Model || isOpenAIFrontierModel || (isReasoningSupported && settingManager.enableModelThinking)) {
+                if usesReasoningEffort && (backend.hasAlwaysOnReasoning(modelId) || isClaudeFable5Model || clampsEffortWithThinkingOff || isOpenAIFrontierModel || (isReasoningSupported && settingManager.enableModelThinking)) {
                     reasoningEffortControl
                 }
 
@@ -615,8 +631,8 @@ struct InferenceConfigPopoverContent: View {
             .frame(maxWidth: .infinity)
 
 
-            // Opus 5 rejects disabled thinking above `high` effort, so the request clamps it.
-            if isClaudeOpus5Model && !settingManager.enableModelThinking
+            // These models reject thinking off above `high` effort, so the request clamps it.
+            if clampsEffortWithThinkingOff && !settingManager.enableModelThinking
                 && (selectedReasoningEffort == "xhigh" || selectedReasoningEffort == "max") {
                 Text("Thinking is off, so this request will use High effort. Enable thinking to use \(selectedReasoningEffort.capitalized).")
                     .font(DesignTokens.detail)
@@ -633,10 +649,10 @@ struct InferenceConfigPopoverContent: View {
     private var effortOptions: [(value: String, title: String)] {
         var options = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
         if isKimiK3Model { options.insert(("none", "Off"), at: 0) }
-        if isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIGpt56Model || isKimiK3Model {
+        if isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isClaude55Model || isOpenAIGpt56Model || isKimiK3Model || isGrokModel {
             options.append(("xhigh", "Very high"))
         }
-        if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isOpenAIGpt56Model || isKimiK3Model {
+        if isClaudeOpus46Model || isClaudeOpus47Model || isClaudeOpus5Model || isClaudeSonnet5Model || isClaudeFable5Model || isClaude55Model || isOpenAIGpt56Model || isKimiK3Model {
             options.append(("max", "Max"))
         }
         return options
@@ -647,7 +663,7 @@ struct InferenceConfigPopoverContent: View {
         // save effort independently without forcing override on
         var newConfig = settingManager.getInferenceConfig(for: modelId)
         newConfig.reasoningEffort = effort
-        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeOpus5Model && !isClaudeSonnet5Model && !isClaudeFable5Model && !isOpenAIFrontierModel && !isKimiK3Model {
+        if !isClaudeOpus46Model && !isClaudeOpus47Model && !isClaudeOpus5Model && !isClaudeSonnet5Model && !isClaudeFable5Model && !isClaude55Model && !isGrokModel && !isOpenAIFrontierModel && !isKimiK3Model {
             newConfig.overrideDefault = true
         }
         settingManager.setInferenceConfig(newConfig, for: modelId)

@@ -1450,7 +1450,7 @@ final class BedrockUITests: XCTestCase {
         composer(app).click()
         composer(app).typeText(draft)
         for _ in 0..<3 {
-            for model in ["Stable Image Ultra 1.0", "GPT-6 Astra"] {
+            for model in ["Stable Image Style Guide", "GPT-6 Astra"] {
                 chooseModel(model, in: app)
                 XCTAssertEqual(app.buttons["modelPicker.button"].label, "Model: \(model)")
                 XCTAssertEqual(composer(app).value as? String, draft)

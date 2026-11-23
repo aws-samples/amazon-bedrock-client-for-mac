@@ -45,6 +45,10 @@ For models without built-in inference settings, temperature and Top P are omitte
 
 Kimi K3 uses a US or Global inference profile on Bedrock Runtime. Temperature and Top P are not sent, even if an older custom configuration included them. Turning **Thinking** off sends an explicit Off effort. Its documents and explicit prompt caching use the Responses API. Application inference profiles keep their original billing scope through Converse; select a system profile to attach documents. See the [AWS Kimi K3 model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k3.html) for API and regional limitations.
 
+Claude Opus 5.5, Sonnet 5.5, and Haiku 5.5 reject temperature, Top P, and thinking budgets, so the app sends only the output limit and an effort. Opus 5.5 always thinks. With **Thinking** off, Sonnet 5.5 thinks only between tool calls and Haiku 5.5 does not think; both then use High effort or lower. GPT-6.2 Astra, GPT-6.2 Sol, GPT-6.1 Sol, GPT-6 Astra, Grok 4.6, and Grok 4.7 always reason at the selected effort. GPT-6.x and Grok models send documents through Bedrock Runtime Responses. GPT-6.2 does not accept PDF files; attach text, Markdown, CSV, or HTML instead.
+
+If a request fails with "data retention mode 'none' is not available for this model", your AWS account's Bedrock data retention mode in that Region does not allow the model. OpenAI GPT models on Bedrock Runtime and Claude Fable models require a mode other than `none`. Choose another model or Region, or change the mode for that Region as described in [Amazon Bedrock data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html).
+
 ## A long conversation or pasted content is slow
 
 Scroll the complete conversation directly. Offscreen content renders as you move

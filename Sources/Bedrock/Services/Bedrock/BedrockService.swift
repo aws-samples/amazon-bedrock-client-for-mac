@@ -302,7 +302,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         if isFrontierGPT(modelId) || id.hasPrefix("xai.grok-") || id.hasPrefix("google.gemma-4-") || id.hasPrefix("anthropic.claude-sonnet-4-6") { return true }
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking, .kimiK3:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55, .deepseekr1, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .nova2Lite, .kimiK2Thinking, .kimiK3, .xaiGrok4:
             return true
         default:
             return false
@@ -313,7 +313,7 @@ class BedrockService: Equatable, @unchecked Sendable {
     func hasConfigurableReasoning(_ modelId: String) -> Bool {
         let modelType = getModelType(modelId)
         switch modelType {
-        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking, .kimiK3:
+        case .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeSonnet55, .claudeHaiku55, .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard, .nova2Lite, .kimiK2Thinking, .kimiK3:
             return true
         default:
             return false
@@ -322,7 +322,11 @@ class BedrockService: Equatable, @unchecked Sendable {
 
     /// Check if a model has always-on reasoning (can't be disabled)
     func hasAlwaysOnReasoning(_ modelId: String) -> Bool {
-        if BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).hasPrefix("openai.gpt-6-") { return true }
+        // GPT-6 Astra, GPT-6.1 Sol and GPT-6.2 reject reasoning effort `none`.
+        if isFrontierGPT(modelId),
+           !BedrockModelID.frontierGPTCanDisableReasoning(BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)) {
+            return true
+        }
         let modelType = getModelType(modelId)
         switch modelType {
         case .deepseekr1:
@@ -330,8 +334,9 @@ class BedrockService: Equatable, @unchecked Sendable {
         // GPT OSS models also have always-on reasoning with configurable effort (low/medium/high)
         case .openaiGptOss120b, .openaiGptOss20b, .openaiGptOssSafeguard:
             return true
-        // Claude Fable 5: adaptive thinking is always on and cannot be disabled (effort is configurable)
-        case .claudeFable5:
+        // Claude Fable 5.x and Opus 5.5 reject disabled thinking; only effort is configurable.
+        // Grok 4.6 and 4.7 reject effort `none`.
+        case .claudeFable5, .claudeOpus55, .xaiGrok4:
             return true
         default:
             return false
@@ -342,7 +347,7 @@ class BedrockService: Equatable, @unchecked Sendable {
     /// This applies to all Anthropic models from version 4.5 onwards
     func isClaude45OrLater(_ modelType: ModelType) -> Bool {
         switch modelType {
-        case .claudeSonnet45, .claudeSonnet46, .claudeHaiku45, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claudeSonnet45, .claudeSonnet46, .claudeHaiku45, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
             return true
         default:
             return false
@@ -352,15 +357,15 @@ class BedrockService: Equatable, @unchecked Sendable {
     /// Check if a model rejects sampling parameters (temperature / top_p / top_k) outright.
     func omitsSamplingParameters(_ modelType: ModelType) -> Bool {
         switch modelType {
-        case .claudeSonnet5, .claudeOpus5, .claudeFable5, .kimiK3:
+        case .claudeSonnet5, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55, .kimiK3, .xaiGrok4:
             return true
         default:
             return false
         }
     }
 
-    /// Claude Opus 5 accepts `reasoning_config: {"type": "disabled"}` only at effort `high` or
-    /// lower — pairing it with `xhigh`/`max` returns a 400. Clamp the effort in that case.
+    /// Claude Opus 5 and Haiku 5.5 (`disabled`) and Sonnet 5.5 (`between_tools`) accept thinking
+    /// off only at effort `high` or lower — `xhigh`/`max` return a 400. Clamp the effort in that case.
     func effortForDisabledThinking(_ effort: String) -> String {
         switch effort {
         case "xhigh", "max":
@@ -368,6 +373,21 @@ class BedrockService: Equatable, @unchecked Sendable {
         default:
             return effort
         }
+    }
+
+    /// Claude 5.5 accepts adaptive thinking only. Opus 5.5 cannot turn it off,
+    /// Sonnet 5.5 turns it off with `between_tools` (which takes no `display`),
+    /// and Haiku 5.5 with `disabled`. Measured on Bedrock Converse, 2026-11-23.
+    func claude55ReasoningFields(_ modelType: ModelType, effort savedEffort: String, thinkingEnabled: Bool) -> [String: Any] {
+        let value = savedEffort.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let defaultEffort = ModelInferenceRange.defaultReasoningEffort(for: modelType)
+        let effort = ["low", "medium", "high", "xhigh", "max"].contains(value) ? value : defaultEffort
+        if thinkingEnabled || modelType == .claudeOpus55 {
+            return ["reasoning_config": ["type": "adaptive", "display": "summarized"],
+                    "output_config": ["effort": effort]]
+        }
+        return ["reasoning_config": ["type": modelType == .claudeSonnet55 ? "between_tools" : "disabled"],
+                "output_config": ["effort": effortForDisabledThinking(effort)]]
     }
 
     private func events(from response: ConverseOutput) throws -> AsyncThrowingStream<BedrockRuntimeClientTypes.ConverseStreamOutput, Error> {
@@ -418,26 +438,19 @@ class BedrockService: Equatable, @unchecked Sendable {
 
     // MARK: - Bedrock Mantle Model Availability
 
-    static let mantleModels: [(id: String, name: String, regions: Set<String>)] =
-        BedrockMantleCatalog.entries.map { ($0.id, $0.name, $0.regions) }
-
     /// Regions that serve the given Mantle model, or nil if it isn't a known Mantle model.
     static func mantleRegions(for modelId: String) -> Set<String>? {
-        // Match on the longest ID first so `gpt-5.6-sol` doesn't get shadowed by a shorter entry
-        let lowerId = modelId.lowercased()
-        return mantleModels
-            .filter { lowerId.contains($0.id.lowercased()) }
-            .max(by: { $0.id.count < $1.id.count })?
-            .regions
+        BedrockMantleCatalog.regions(for: modelId)
     }
 
-    /// Whether the given Mantle model is served in this backend's region.
-    /// Non-Mantle models are unaffected and always return true.
+    /// Whether the given Mantle model is served in this backend's region, by
+    /// bedrock-mantle or by a Runtime system profile. Other models return true.
     func isMantleModelAvailableInRegion(_ modelId: String) -> Bool {
         guard let regions = BedrockService.mantleRegions(
             for: BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)
         ) else { return true }
-        return regions.contains(region)
+        return regions.contains(region) || BedrockResponsesEndpoint.usesRuntimeOutsideMantle(
+            modelID: BedrockCapabilityRegistry.shared.invocationID(modelId, region: region), region: region)
     }
 
     /// Check if a model is an OpenAI frontier model served via the bedrock-mantle Responses API
@@ -456,7 +469,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Anthropic models that support prompt caching
-        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
             return true
         // Models that don't support prompt caching (including Nova models due to image caching issues)
         default:
@@ -479,10 +492,14 @@ class BedrockService: Equatable, @unchecked Sendable {
 
     /// Check if a model supports document chat
     func isDocumentChatSupported(_ modelId: String) -> Bool {
+        // These models read files through Runtime Responses; Converse refuses them.
+        if BedrockResponsesEndpoint.supportsRuntimeDocuments(BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)) {
+            return true
+        }
         let modelType = getModelType(modelId)
         switch modelType {
             // Models that support document chat
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
@@ -542,9 +559,10 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support system prompts
-        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude, .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
             return true
-        case .openaiGpt6Astra, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna:
+        case .openaiGpt6Astra, .openaiGpt55, .openaiGpt54, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna,
+             .openaiGpt6Sol, .openaiGpt6Luna, .openaiGpt61Sol, .openaiGpt61Terra, .openaiGpt62Astra, .openaiGpt62Sol, .xaiGrok4:
             return true
         case .llama2, .llama3, .llama31, .llama32Small, .llama32Large, .llama33, .llama4Maverick, .llama4Scout:
             return true
@@ -596,7 +614,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that fully support vision
-        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .novaPro, .llama32Large, .nova2Lite:
+        case .claude3, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55, .novaPro, .llama32Large, .nova2Lite:
             return true
         // Llama 4 models support vision
         case .llama4Maverick, .llama4Scout:
@@ -644,7 +662,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -684,7 +702,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         let modelType = getModelType(modelId)
         switch modelType {
         // Models that support streaming tool use
-        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5:
+        case .claude3, .claude35, .claude35Haiku, .claude37, .claudeSonnet4, .claudeSonnet45, .claudeSonnet46, .claudeSonnet5, .claudeHaiku45, .claudeOpus4, .claudeOpus41, .claudeOpus45, .claudeOpus46, .claudeOpus47, .claudeOpus48, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
             return true
         case .novaPremier, .novaPro, .novaLite, .novaMicro, .nova2Lite:
             return true
@@ -756,6 +774,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         // OpenAI frontier model IDs contain dots in the version (openai.gpt-5.6-sol),
         // which breaks the dot-separated provider parsing below — match on the full ID first
         let lowerFullId = BedrockCapabilityRegistry.shared.foundationID(modelId, region: region).lowercased()
+        if let type = BedrockModelID.versionedType(lowerFullId) { return type }
         if lowerFullId.contains("gpt-6-astra") { return .openaiGpt6Astra }
         if lowerFullId.contains("gpt-5.6-sol") { return .openaiGpt56Sol }
         if lowerFullId.contains("gpt-5.6-terra") { return .openaiGpt56Terra }
@@ -1008,6 +1027,12 @@ class BedrockService: Equatable, @unchecked Sendable {
         switch modelType {
         case .kimiK3:
             return .init(maxTokens: 8192)
+        case .claudeOpus55:
+            // Opus 5.5 always thinks, and maxTokens covers thinking plus the response.
+            return .init(maxTokens: 32000)
+        case .claudeSonnet55, .claudeHaiku55, .xaiGrok4:
+            // Sampling parameters are rejected; leave room for reasoning.
+            return .init(maxTokens: 16000)
         case .claudeSonnet5:
             // Sonnet 5 rejects non-default sampling values and defaults to adaptive thinking.
             return BedrockRuntimeClientTypes.InferenceConfiguration(
@@ -1313,8 +1338,12 @@ class BedrockService: Equatable, @unchecked Sendable {
         let isNova2WithHighEffort = modelType == .nova2Lite && isThinkingEnabled && 
             (modelConfig.overrideDefault ? modelConfig.reasoningEffort : "low") == "high"
         
-        if isFrontierGPT(modelId) || modelType == .kimiK3 {
+        if isFrontierGPT(modelId) || modelType == .kimiK3 || modelType == .xaiGrok4 {
             config = .init(maxTokens: modelConfig.requestMaxTokens)
+        } else if [.claudeOpus55, .claudeSonnet55, .claudeHaiku55].contains(modelType) {
+            // Claude 5.5 rejects temperature and top_p, even at their former defaults.
+            config = .init(maxTokens: modelConfig.overrideDefault ? modelConfig.requestMaxTokens
+                           : getDefaultInferenceConfig(for: modelType).maxTokens)
         } else if isNova2WithHighEffort {
             // Nova 2 Lite with high reasoning effort requires temperature and maxTokens to be unset
             config = BedrockRuntimeClientTypes.InferenceConfiguration()
@@ -1425,6 +1454,13 @@ class BedrockService: Equatable, @unchecked Sendable {
             request.additionalModelRequestFields = try Document.make(from: [
                 "reasoning": ["effort": modelConfig.kimiK3ReasoningEffort(thinkingEnabled: isThinkingEnabled)]
             ])
+        } else if modelType == .xaiGrok4 {
+            request.additionalModelRequestFields = try Document.make(from: [
+                "reasoning": ["effort": modelConfig.grokReasoningEffort()]
+            ])
+        } else if modelType == .claudeOpus55 || modelType == .claudeSonnet55 || modelType == .claudeHaiku55 {
+            request.additionalModelRequestFields = try Document.make(from: claude55ReasoningFields(
+                modelType, effort: modelConfig.reasoningEffort, thinkingEnabled: isThinkingEnabled))
         } else if isFrontierGPT(modelId) {
             request.additionalModelRequestFields = try Document.make(from: [
                 "reasoning": ["effort": modelConfig.frontierReasoningEffort(
@@ -1701,7 +1737,9 @@ class BedrockService: Equatable, @unchecked Sendable {
         // Guard the region before signing anything. A saved chat keeps pointing at its model
         // after the user switches regions, so without this the request goes to a bedrock-mantle
         // endpoint that doesn't serve the model and surfaces an opaque HTTP failure.
-        if let regions = BedrockService.mantleRegions(for: modelId), !regions.contains(region) {
+        let invocationID = BedrockCapabilityRegistry.shared.invocationID(modelId, region: region)
+        if let regions = BedrockService.mantleRegions(for: modelId), !regions.contains(region),
+           !BedrockResponsesEndpoint.usesRuntimeOutsideMantle(modelID: invocationID, region: region) {
             let available = regions.sorted().joined(separator: ", ")
             let message = "\(modelId) is not available in \(region). It is served in: \(available). Switch regions in Settings to use this model."
             logger.error("Mantle Responses API region mismatch: \(message)")
@@ -1719,15 +1757,25 @@ class BedrockService: Equatable, @unchecked Sendable {
         let apiKey = ValidationMode.isOffline ? "" : await MainActor.run { PreferencesStore.shared.bedrockApiKey }
         // Fall back to the model's own defaults rather than a fixed 8192/medium, so each
         // GPT-5.6 tier gets its own token budget and effort baseline.
-        let range = ModelInferenceRange.getRangeForModel(modelId)
+        let foundationID = BedrockCapabilityRegistry.shared.foundationID(modelId, region: region)
+        let range = ModelInferenceRange.getRangeForModel(foundationID)
         let maxTokens = modelConfig.overrideDefault ? modelConfig.requestMaxTokens : range.defaultMaxTokens
         let isKimiK3 = BedrockModelID.isKimiK3(modelId)
         let thinking: Bool
         if let thinkingEnabled { thinking = thinkingEnabled }
         else { thinking = await MainActor.run { PreferencesStore.shared.enableModelThinking } }
-        let effort = isKimiK3
-            ? modelConfig.kimiK3ReasoningEffort(thinkingEnabled: thinking)
-            : (modelConfig.reasoningEffort.isEmpty ? range.defaultReasoningEffort : modelConfig.reasoningEffort)
+        let effort: String
+        if isKimiK3 {
+            effort = modelConfig.kimiK3ReasoningEffort(thinkingEnabled: thinking)
+        } else if getModelType(modelId) == .xaiGrok4 {
+            effort = modelConfig.grokReasoningEffort()
+        } else if isFrontierGPT(modelId) && BedrockModelID.route(foundationID) != .responses {
+            // Files use Responses for models that otherwise chat through Converse.
+            // Both requests follow the same reasoning rules.
+            effort = modelConfig.frontierReasoningEffort(modelID: foundationID, thinkingEnabled: thinking)
+        } else {
+            effort = modelConfig.reasoningEffort.isEmpty ? range.defaultReasoningEffort : modelConfig.reasoningEffort
+        }
         let cachingEnabled = await MainActor.run { AppStore.shared.preferences.promptCaching }
         let promptCaching = isKimiK3 && cachingEnabled
         let tools: [[String: Any]] = try (toolConfig?.tools ?? []).compactMap { tool in
@@ -1743,7 +1791,8 @@ class BedrockService: Equatable, @unchecked Sendable {
                 throw LocalOperationError.invalid("AWS requests are disabled in this isolated UI test run.")
             }
             endpointOverride = URL(string: local + "/openai/v1/responses")
-        } else if BedrockResponsesEndpoint.supportsRuntimeDocuments(modelId), !runtimeEndpoint.isEmpty {
+        } else if !runtimeEndpoint.isEmpty,
+                  (try? BedrockResponsesEndpoint.resolve(modelID: invocationID, region: region))?.plane == .runtime {
             guard let base = URL(string: runtimeEndpoint), base.host != nil else {
                 throw LocalOperationError.invalid("The custom Bedrock Runtime endpoint is not a valid URL.")
             }
@@ -1759,7 +1808,7 @@ class BedrockService: Equatable, @unchecked Sendable {
         )
         logger.info("Mantle Responses API stream request for model: \(modelId) (effort: \(effort))")
         return service.streamResponse(
-            modelId: BedrockCapabilityRegistry.shared.invocationID(modelId, region: region),
+            modelId: invocationID,
             input: input.compactMap(\.asDictionary),
             maxOutputTokens: maxTokens,
             reasoningEffort: effort,

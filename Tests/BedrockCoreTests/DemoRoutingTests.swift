@@ -73,6 +73,16 @@ final class DemoRoutingTests: XCTestCase {
         XCTAssertEqual(BedrockFailureMessage.readable(escaped), #"Use "high" effort."#)
     }
 
+    func testDataRetentionRefusalExplainsTheRegionSetting() {
+        let source = #"ValidationException(properties: Properties(message: Optional("The model returned the following errors: data retention mode \'none\' is not available for this model")), httpResponse: details)"#
+        let message = BedrockFailureMessage.readable(source)
+        XCTAssertTrue(message.contains("data retention mode in this Region is 'none'"), message)
+        XCTAssertTrue(message.contains("https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html"))
+        XCTAssertFalse(message.contains("httpResponse"))
+        let responses = "Responses API error (HTTP 400): The model returned the following errors: data retention mode 'default' is not available for this model"
+        XCTAssertTrue(BedrockFailureMessage.readable(responses).contains("is 'default'"))
+    }
+
     func testServiceApostrophesDecodeWithoutDamagingPathsOrQuotedText() {
         for source in [
             #"This model doesn\'t support documents."#,

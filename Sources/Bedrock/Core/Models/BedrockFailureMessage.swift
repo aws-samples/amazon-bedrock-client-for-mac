@@ -22,6 +22,14 @@ enum BedrockFailureMessage {
         if message.contains("on-demand throughput") && message.contains("inference profile") {
             return "This model requires an inference profile. Refresh the model catalog in Settings → AWS connection, then choose the model again."
         }
+        // Data retention is set per AWS account and Region, and each model lists the
+        // modes it accepts: https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html
+        if let expression = try? NSRegularExpression(pattern: #"data retention mode '([^']+)' is not available for this model"#,
+                                                     options: .caseInsensitive),
+           let match = expression.firstMatch(in: message, range: NSRange(message.startIndex..., in: message)),
+           let range = Range(match.range(at: 1), in: message) {
+            return "Amazon Bedrock does not offer this model while your account's data retention mode in this Region is '\(message[range])'. Choose another model or Region, or change the data retention mode for this Region: https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html"
+        }
         return message.isEmpty ? "Bedrock did not return a response. Please try again." : message
     }
 

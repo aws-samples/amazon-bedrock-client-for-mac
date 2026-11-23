@@ -20,7 +20,7 @@ enum ConversationTitle {
             }
             return preferred
         }
-        for preferredBase in ["anthropic.claude-haiku-4-5-20251001-v1:0",
+        for preferredBase in ["anthropic.claude-haiku-4-5-20251001-v1:0", "anthropic.claude-haiku-5-5",
                               "amazon.nova-micro-v1:0", "amazon.nova-pro-v1:0"] {
             if let model = models.first(where: { BedrockModelID.base($0.foundationID ?? $0.id) == preferredBase }) {
                 return model.id

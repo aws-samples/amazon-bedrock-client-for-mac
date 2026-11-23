@@ -736,6 +736,10 @@ class ChatViewModel: ObservableObject {
             if message.documentBase64Strings?.isEmpty == false && !backendModel.backend.isDocumentChatSupported(chatModel.id) {
                 throw LocalOperationError.invalid("This model does not accept document attachments. Choose a document-capable model.")
             }
+            try BedrockResponsesEndpoint.validateDocumentFormats(
+                foundationID: BedrockCapabilityRegistry.shared.foundationID(chatModel.id, region: backendModel.backend.region),
+                formats: message.documentBase64Strings?.isEmpty == false ? message.documentFormats ?? [] : []
+            )
             if message.imageBase64Strings?.isEmpty == false &&
                 !backendModel.backend.isVisionSupported(chatModel.id) &&
                 !backendModel.backend.isImageGenerationModel(chatModel.id) {
@@ -1616,6 +1620,8 @@ class ChatViewModel: ObservableObject {
             supportsTools: backend.isStreamingToolUseSupported(chatModel.id) && (hasMCPTools || hasLocalTools),
             supportsImages: backend.isVisionSupported(chatModel.id),
             supportsDocuments: backend.isDocumentChatSupported(chatModel.id),
+            supportsPDF: BedrockResponsesEndpoint.readsPDF(
+                BedrockCapabilityRegistry.shared.foundationID(chatModel.id, region: backend.region)),
             foundationID: { BedrockCapabilityRegistry.shared.foundationID($0, region: backend.region) }
         )
         for message in replay.messages where !message.isError {

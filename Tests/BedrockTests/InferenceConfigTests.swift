@@ -321,6 +321,153 @@ final class InferenceConfigTests: XCTestCase {
         XCTAssertTrue(backend.omitsSamplingParameters(.claudeOpus5))
     }
 
+    // MARK: - Claude 5.5
+
+    /// Claude 5.5 rejects temperature, top_p and budget thinking. Opus 5.5 cannot turn thinking
+    /// off; Sonnet 5.5 uses `between_tools` and Haiku 5.5 `disabled` (Bedrock Converse, 2026-11-23).
+    @MainActor
+    func testClaude55ModelsUseTheirOwnThinkingControls() async throws {
+        let preferences = PreferencesStore.shared
+        let saved = preferences.modelInferenceConfigs
+        defer { preferences.modelInferenceConfigs = saved }
+        preferences.modelInferenceConfigs = [:]
+        let backend = try BedrockService(region: "us-east-1", profile: "default", endpoint: "", runtimeEndpoint: "")
+        let models: [(base: String, type: ModelType, tokens: Int, effort: String, off: String?)] = [
+            ("anthropic.claude-opus-5-5", .claudeOpus55, 32000, "high", nil),
+            ("anthropic.claude-sonnet-5-5", .claudeSonnet55, 16000, "high", "between_tools"),
+            ("anthropic.claude-haiku-5-5", .claudeHaiku55, 16000, "medium", "disabled")
+        ]
+        let custom = ModelInferenceConfig(maxTokens: 2048, temperature: 0.7, topP: 0.9,
+                                          reasoningEffort: "max", overrideDefault: true)
+        for model in models {
+            for id in [model.base, "us." + model.base, "global." + model.base] {
+                XCTAssertEqual(backend.getModelType(id), model.type, id)
+                XCTAssertTrue(backend.isReasoningSupported(id), id)
+                XCTAssertEqual(backend.hasAlwaysOnReasoning(id), model.off == nil, id)
+                XCTAssertEqual(backend.hasConfigurableReasoning(id), model.off != nil, id)
+                XCTAssertTrue(backend.omitsSamplingParameters(model.type), id)
+                XCTAssertTrue(backend.isVisionSupported(id), id)
+                XCTAssertTrue(backend.isToolUseSupported(id), id)
+                XCTAssertTrue(backend.isStreamingToolUseSupported(id), id)
+                XCTAssertTrue(backend.isDocumentChatSupported(id), id)
+                XCTAssertTrue(backend.isPromptCachingSupported(id), id)
+                XCTAssertTrue(backend.isSystemPromptSupported(id), id)
+                XCTAssertFalse(BedrockResponsesEndpoint.usesResponses(id, hasDocuments: true), id)
+                let range = ModelInferenceRange.getRangeForModel(id)
+                XCTAssertEqual(range.maxTokensRange, 1...128000, id)
+                XCTAssertEqual(range.defaultMaxTokens, model.tokens, id)
+                XCTAssertEqual(range.defaultReasoningEffort, model.effort, id)
+                XCTAssertNil(preferences.getInferenceConfig(for: id).requestTemperature, id)
+                XCTAssertNil(preferences.getInferenceConfig(for: id).requestTopP, id)
+
+                for thinking in [true, false] {
+                    let request = try await backend.makeConverseRequest(modelId: id, messages: [],
+                        modelParameters: custom, thinkingEnabled: thinking)
+                    XCTAssertEqual(request.inferenceConfig?.maxTokens, 2048, id)
+                    XCTAssertNil(request.inferenceConfig?.temperature, id)
+                    XCTAssertNil(request.inferenceConfig?.topp, id)
+                    let fields = try XCTUnwrap(request.additionalModelRequestFields).asStringMap()
+                    let reasoning = try XCTUnwrap(fields["reasoning_config"]).asStringMap()
+                    let effort = try XCTUnwrap(fields["output_config"]).asStringMap()["effort"]?.asString()
+                    if thinking || model.off == nil {
+                        XCTAssertEqual(try reasoning["type"]?.asString(), "adaptive", id)
+                        XCTAssertEqual(try reasoning["display"]?.asString(), "summarized", id)
+                        XCTAssertEqual(effort, "max", id)
+                    } else {
+                        XCTAssertEqual(try reasoning["type"]?.asString(), model.off, id)
+                        XCTAssertNil(reasoning["display"], "Thinking off takes no display: \(id)")
+                        XCTAssertEqual(effort, "high", "Thinking off rejects effort above High: \(id)")
+                    }
+                }
+                let request = try await backend.makeConverseRequest(modelId: id, messages: [], thinkingEnabled: true)
+                XCTAssertEqual(request.inferenceConfig?.maxTokens, model.tokens, id)
+                XCTAssertNil(request.inferenceConfig?.temperature, id)
+                let fields = try XCTUnwrap(request.additionalModelRequestFields).asStringMap()
+                XCTAssertEqual(try fields["output_config"]?.asStringMap()["effort"]?.asString(), model.effort, id)
+            }
+        }
+        // Earlier models that share a name prefix keep their own rules.
+        XCTAssertEqual(backend.getModelType("us.anthropic.claude-opus-5"), .claudeOpus5)
+        XCTAssertEqual(backend.getModelType("global.anthropic.claude-sonnet-5"), .claudeSonnet5)
+        XCTAssertEqual(backend.getModelType("us.anthropic.claude-fable-5-2"), .claudeFable5)
+        XCTAssertEqual(backend.getModelType("global.anthropic.claude-haiku-4-5-20251001-v1:0"), .claudeHaiku45)
+        XCTAssertTrue(backend.hasAlwaysOnReasoning("us.anthropic.claude-fable-5-2"))
+    }
+
+    // MARK: - GPT-6.x and Grok
+
+    /// Bedrock rejects reasoning effort `none` for GPT-6 Astra, GPT-6.1 Sol and GPT-6.2 (measured
+    /// 2026-11-23), so turning thinking off sends `none` only where it is accepted.
+    @MainActor
+    func testGPT6ReasoningTurnsOffOnlyWhereBedrockAcceptsIt() async throws {
+        let backend = try BedrockService(region: "us-west-2", profile: "default", endpoint: "", runtimeEndpoint: "")
+        let models: [(base: String, type: ModelType, canTurnOff: Bool, tokens: Int)] = [
+            ("openai.gpt-6.2-astra", .openaiGpt62Astra, false, 32000),
+            ("openai.gpt-6.2-sol", .openaiGpt62Sol, false, 32000),
+            ("openai.gpt-6.1-sol", .openaiGpt61Sol, false, 32000),
+            ("openai.gpt-6.1-terra", .openaiGpt61Terra, true, 16000),
+            ("openai.gpt-6-sol", .openaiGpt6Sol, true, 32000),
+            ("openai.gpt-6-luna", .openaiGpt6Luna, true, 8192),
+            ("openai.gpt-6-astra", .openaiGpt6Astra, false, 8192)
+        ]
+        let custom = ModelInferenceConfig(maxTokens: 4000, temperature: 0.7, topP: 0.9,
+                                          reasoningEffort: "xhigh", overrideDefault: true)
+        for model in models {
+            for id in ["us." + model.base, "global." + model.base] {
+                XCTAssertEqual(backend.getModelType(id), model.type, id)
+                XCTAssertTrue(backend.isFrontierGPT(id), id)
+                XCTAssertTrue(backend.isReasoningSupported(id), id)
+                XCTAssertEqual(backend.hasAlwaysOnReasoning(id), !model.canTurnOff, id)
+                XCTAssertTrue(backend.isDocumentChatSupported(id), id)
+                XCTAssertTrue(backend.isStreamingToolUseSupported(id), id)
+                XCTAssertFalse(backend.isMantleResponsesModel(id), id)
+                let range = ModelInferenceRange.getRangeForModel(id)
+                XCTAssertEqual(range.maxTokensRange, 1...128000, id)
+                XCTAssertEqual(range.defaultMaxTokens, model.tokens, id)
+                let defaults = ModelInferenceRange.getParameterDefaultsForModel(id)
+                XCTAssertFalse(defaults.includeTemperature, id)
+                XCTAssertFalse(defaults.includeTopP, id)
+                for thinking in [true, false] {
+                    let request = try await backend.makeConverseRequest(modelId: id, messages: [],
+                        modelParameters: custom, thinkingEnabled: thinking)
+                    XCTAssertEqual(request.inferenceConfig?.maxTokens, 4000, id)
+                    XCTAssertNil(request.inferenceConfig?.temperature, id)
+                    XCTAssertNil(request.inferenceConfig?.topp, id)
+                    let fields = try XCTUnwrap(request.additionalModelRequestFields).asStringMap()
+                    XCTAssertEqual(try fields["reasoning"]?.asStringMap()["effort"]?.asString(),
+                                   thinking || !model.canTurnOff ? "xhigh" : "none", id)
+                }
+            }
+        }
+        XCTAssertEqual(ModelInferenceRange.getRangeForModel("us.openai.gpt-6-luna").defaultReasoningEffort, "low")
+        XCTAssertEqual(ModelInferenceRange.getRangeForModel("us.openai.gpt-6.2-sol").defaultReasoningEffort, "medium")
+    }
+
+    /// Grok 4.6 and 4.7 always reason and accept Low through Very high; `none` and `max` return 400.
+    @MainActor
+    func testGrokReasoningEffortStaysWithinWhatBedrockAccepts() async throws {
+        let backend = try BedrockService(region: "us-west-2", profile: "default", endpoint: "", runtimeEndpoint: "")
+        for id in ["us.xai.grok-4.7", "global.xai.grok-4.7", "xai.grok-4.6", "us.xai.grok-4.6"] {
+            XCTAssertEqual(backend.getModelType(id), .xaiGrok4, id)
+            XCTAssertTrue(backend.hasAlwaysOnReasoning(id), id)
+            XCTAssertTrue(backend.isDocumentChatSupported(id), id)
+            XCTAssertTrue(backend.isStreamingToolUseSupported(id), id)
+            XCTAssertEqual(ModelInferenceRange.getRangeForModel(id).maxTokensRange, 1...128000, id)
+            for (saved, sent) in [("xhigh", "xhigh"), ("low", "low"), ("max", "medium"), ("none", "medium"), ("", "medium")] {
+                let config = ModelInferenceConfig(maxTokens: 1000, temperature: 0.7, reasoningEffort: saved, overrideDefault: true)
+                for thinking in [true, false] {
+                    let request = try await backend.makeConverseRequest(modelId: id, messages: [],
+                        modelParameters: config, thinkingEnabled: thinking)
+                    XCTAssertEqual(request.inferenceConfig?.maxTokens, 1000, id)
+                    XCTAssertNil(request.inferenceConfig?.temperature, id)
+                    let fields = try XCTUnwrap(request.additionalModelRequestFields).asStringMap()
+                    XCTAssertEqual(try fields["reasoning"]?.asStringMap()["effort"]?.asString(), sent, "\(id) \(saved)")
+                }
+            }
+        }
+        XCTAssertEqual(backend.getModelType("xai.grok-4.3"), .unknown, "Mantle's Grok 4.3 keeps its existing request.")
+    }
+
     // MARK: - GPT-5.6 (Sol / Terra / Luna)
 
     func testGpt56TiersAreClassified() throws {
@@ -387,7 +534,8 @@ final class InferenceConfigTests: XCTestCase {
         XCTAssertNil(BedrockService.mantleRegions(for: "openai.gpt-oss-120b"))
     }
 
-    /// GPT-5.5 is Mantle-only and unavailable in Oregon; Sol has Converse profiles.
+    /// GPT-5.5 is not on bedrock-mantle in Oregon, where its Runtime profiles serve it.
+    /// Dated Mantle-only IDs and Regions without those profiles stay gated.
     func testMantleRegionGateRejectsUnservedRegion() throws {
         let oregon = try BedrockService(
             region: "us-west-2",
@@ -395,7 +543,11 @@ final class InferenceConfigTests: XCTestCase {
             endpoint: "",
             runtimeEndpoint: ""
         )
-        XCTAssertFalse(oregon.isMantleModelAvailableInRegion("openai.gpt-5.5"))
+        XCTAssertTrue(oregon.isMantleModelAvailableInRegion("openai.gpt-5.5"))
+        XCTAssertTrue(oregon.isMantleModelAvailableInRegion("us.openai.gpt-5.5"))
+        XCTAssertFalse(oregon.isMantleModelAvailableInRegion("openai.gpt-5.5-2026-04-23"))
+        let frankfurt = try BedrockService(region: "eu-central-1", profile: "default", endpoint: "", runtimeEndpoint: "")
+        XCTAssertFalse(frankfurt.isMantleModelAvailableInRegion("openai.gpt-5.5"))
         XCTAssertTrue(oregon.isMantleModelAvailableInRegion("openai.gpt-5.6-sol"))
         XCTAssertTrue(oregon.isMantleModelAvailableInRegion("openai.gpt-5.6-terra"))
         XCTAssertTrue(oregon.isMantleModelAvailableInRegion("openai.gpt-5.6-luna"))

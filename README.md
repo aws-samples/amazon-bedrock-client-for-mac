@@ -83,7 +83,7 @@ Model requests and the context you include go directly to Amazon Bedrock. Enable
 
 The app discovers foundation models and inference profiles for your connection and region. It supports Bedrock Converse and Runtime/Mantle Responses routes, with dedicated image, video, and embedding requests where implemented. Access and capabilities depend on your AWS account, region, and endpoint. Retired models are excluded from new selections; existing conversations remain readable.
 
-Models without built-in inference settings use the service's sampling defaults instead of automatically sending temperature and Top P. Custom values remain opt-in through **Response settings**. Kimi K3 uses Runtime Responses for text, images, documents, tools, and explicit prompt caching, with US and Global inference profiles.
+Models without built-in inference settings use the service's sampling defaults instead of automatically sending temperature and Top P. Custom values remain opt-in through **Response settings**. Kimi K3 uses Runtime Responses for text, images, documents, tools, and explicit prompt caching, with US and Global inference profiles. Claude 5.5, GPT-6.x, and Grok 4.6/4.7 use each model's own reasoning controls; GPT-6.x and Grok send documents through Runtime Responses.
 
 ## Get started
 

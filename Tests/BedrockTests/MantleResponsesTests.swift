@@ -200,7 +200,26 @@ final class MantleResponsesTests: XCTestCase {
         let body = try XCTUnwrap(fixture.body)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["store"] as? Bool, false)
-        XCTAssertEqual(json["model"] as? String, "openai.gpt-5.5")
+        XCTAssertEqual(json["model"] as? String, "openai.gpt-5.4")
+    }
+
+    /// bedrock-mantle does not serve GPT-5.5 in Oregon; its Runtime system profile does.
+    func testGPT55UsesItsRuntimeProfileWhereMantleDoesNotServeIt() async throws {
+        let fixture = ResponsesFixture(events: [
+            #"{"type":"response.completed","response":{"output":[{"type":"message","content":[{"type":"output_text","text":"OK"}]}]}}"#
+        ])
+        defer { fixture.close() }
+        var events: [MantleResponseEvent] = []
+        for try await event in fixture.service.streamResponse(
+            modelId: "openai.gpt-5.5", input: [["role": "user", "content": "Fixture request"]],
+            maxOutputTokens: 64, reasoningEffort: "low"
+        ) { events.append(event) }
+        XCTAssertEqual(events.last, .finished(stopReason: "end_turn", usage: nil, fallbackText: "OK"))
+        let request = try XCTUnwrap(fixture.request)
+        XCTAssertEqual(request.url?.host, "bedrock-runtime.us-west-2.amazonaws.com")
+        XCTAssertEqual(request.url?.path, "/openai/v1/responses")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(fixture.body)) as? [String: Any])
+        XCTAssertEqual(json["model"] as? String, "us.openai.gpt-5.5")
     }
 
     func testUnexpectedEOFDoesNotReportACompleteResponse() async throws {
@@ -312,7 +331,7 @@ final class MantleResponsesTests: XCTestCase {
             group.addTask {
                 var events: [MantleResponseEvent] = []
                 for try await event in service.streamResponse(
-                    modelId: "openai.gpt-5.5", input: [["role": "user", "content": "Fixture request"]],
+                    modelId: "openai.gpt-5.4", input: [["role": "user", "content": "Fixture request"]],
                     maxOutputTokens: 64, reasoningEffort: "low"
                 ) { events.append(event) }
                 return events
@@ -336,7 +355,7 @@ private final class ResponsesFixture {
     var request: URLRequest? { ResponsesFixtureProtocol.lock.withLock { ResponsesFixtureProtocol.requests[id] } }
     var body: Data? { ResponsesFixtureProtocol.lock.withLock { ResponsesFixtureProtocol.bodies[id] } }
     var stream: AsyncThrowingStream<MantleResponseEvent, Error> {
-        service.streamResponse(modelId: "openai.gpt-5.5", input: [["role": "user", "content": "Fixture request"]],
+        service.streamResponse(modelId: "openai.gpt-5.4", input: [["role": "user", "content": "Fixture request"]],
                                maxOutputTokens: 64, reasoningEffort: "low")
     }
 

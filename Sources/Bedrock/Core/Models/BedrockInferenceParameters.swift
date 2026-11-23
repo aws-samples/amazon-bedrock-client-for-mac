@@ -57,12 +57,17 @@ struct ModelInferenceConfig: Codable, Equatable, Sendable {
 
     func frontierReasoningEffort(modelID: String, thinkingEnabled: Bool) -> String {
         let effort = reasoningEffort.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if BedrockModelID.base(modelID).hasPrefix("openai.gpt-6-") {
-            // Astra reasoning is always on. The global thinking toggle cannot
-            // disable it or silently replace a saved effort with Low.
-            return ["low", "medium", "high", "xhigh", "max"].contains(effort) ? effort : "medium"
-        }
-        return thinkingEnabled ? (effort.isEmpty ? "medium" : effort) : "none"
+        let selected = ["low", "medium", "high", "xhigh", "max"].contains(effort) ? effort : "medium"
+        // GPT-6 Astra, GPT-6.1 Sol and GPT-6.2 reject `none`: their reasoning is
+        // always on, and the global thinking toggle cannot replace a saved effort.
+        guard BedrockModelID.frontierGPTCanDisableReasoning(modelID) else { return selected }
+        return thinkingEnabled ? selected : "none"
+    }
+
+    /// Grok 4.6 and 4.7 reason on every request and accept Low through Very high.
+    func grokReasoningEffort() -> String {
+        let effort = reasoningEffort.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ["low", "medium", "high", "xhigh"].contains(effort) ? effort : "medium"
     }
 
     func kimiK3ReasoningEffort(thinkingEnabled: Bool) -> String {
@@ -120,6 +125,44 @@ struct ModelInferenceRange {
         let modelType = getModelTypeFromId(modelId)
         
         switch modelType {
+        case .claudeOpus55, .claudeSonnet55, .claudeHaiku55:
+            // Claude 5.5: 128K max output, adaptive thinking only, sampling rejected.
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 1.0...1.0,  // Not used — sampling params are omitted
+                topPRange: 1.0...1.0,         // Not used
+                thinkingBudgetRange: 1024...8192,  // Not used, adaptive thinking with effort
+                defaultMaxTokens: modelType == .claudeOpus55 ? 32000 : 16000,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: defaultReasoningEffort(for: modelType)
+            )
+        case .openaiGpt62Astra, .openaiGpt62Sol, .openaiGpt61Sol, .openaiGpt61Terra, .openaiGpt6Sol, .openaiGpt6Luna:
+            // GPT-6.x: 128K output on Bedrock (GPT-6 Sol/Luna and 6.1 Sol accept 131,072).
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...2.0,  // Not used — temperature is rejected
+                topPRange: 0.01...1.0,        // Not used
+                thinkingBudgetRange: 1024...2048,  // Not used, uses reasoningEffort instead
+                defaultMaxTokens: modelType == .openaiGpt6Luna ? 8192 : modelType == .openaiGpt61Terra ? 16000 : 32000,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: defaultReasoningEffort(for: modelType)
+            )
+        case .xaiGrok4:
+            return ModelInferenceRange(
+                maxTokensRange: 1...128000,
+                temperatureRange: 0.0...2.0,  // Not used — Grok 4.7 rejects temperature
+                topPRange: 0.01...1.0,        // Not used
+                thinkingBudgetRange: 1024...2048,  // Not used, uses reasoningEffort instead
+                defaultMaxTokens: 16000,
+                defaultTemperature: 1.0,
+                defaultTopP: 1.0,
+                defaultThinkingBudget: 2048,
+                defaultReasoningEffort: "medium"
+            )
         case .claudeSonnet5:
             return ModelInferenceRange(
                 maxTokensRange: 1...128000,
@@ -516,7 +559,8 @@ struct ModelInferenceRange {
 
     static func getParameterDefaultsForModel(_ modelId: String) -> ModelInferenceParameterDefaults {
         switch getModelTypeFromId(modelId) {
-        case .claudeSonnet5, .claudeOpus5, .claudeFable5, .kimiK3, .unknown:
+        case .claudeSonnet5, .claudeOpus5, .claudeFable5, .claudeOpus55, .claudeSonnet55, .claudeHaiku55,
+             .kimiK3, .xaiGrok4, .unknown:
             // Unrecognized models inherit the service's sampling defaults.
             // New models can reject these optional fields even at common values.
             return ModelInferenceParameterDefaults(
@@ -526,7 +570,8 @@ struct ModelInferenceRange {
             )
         // OpenAI frontier models go through the bedrock-mantle Responses API, which only
         // takes max_output_tokens + reasoning effort — sampling params are never sent.
-        case .openaiGpt6Astra, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .openaiGpt55, .openaiGpt54:
+        case .openaiGpt6Astra, .openaiGpt56Sol, .openaiGpt56Terra, .openaiGpt56Luna, .openaiGpt55, .openaiGpt54,
+             .openaiGpt6Sol, .openaiGpt6Luna, .openaiGpt61Sol, .openaiGpt61Terra, .openaiGpt62Astra, .openaiGpt62Sol:
             return ModelInferenceParameterDefaults(
                 includeMaxTokens: true,
                 includeTemperature: false,
@@ -548,10 +593,20 @@ struct ModelInferenceRange {
         }
     }
     
+    /// Effort used until a person picks one for the model.
+    static func defaultReasoningEffort(for modelType: ModelType) -> String {
+        switch modelType {
+        case .claudeOpus55, .claudeSonnet55: return "high"
+        case .openaiGpt6Luna: return "low"
+        default: return "medium"
+        }
+    }
+
     private static func getModelTypeFromId(_ modelId: String) -> ModelType {
         // OpenAI frontier IDs contain dots in the version (openai.gpt-5.5) which breaks
         // the dot-separated parsing below — match on the full ID first
         let lowerFullId = modelId.lowercased()
+        if let type = BedrockModelID.versionedType(lowerFullId) { return type }
         if lowerFullId.contains("gpt-6-astra") { return .openaiGpt6Astra }
         if lowerFullId.contains("gpt-5.6-sol") { return .openaiGpt56Sol }
         if lowerFullId.contains("gpt-5.6-terra") { return .openaiGpt56Terra }

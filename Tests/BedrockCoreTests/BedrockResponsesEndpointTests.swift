@@ -89,6 +89,57 @@ final class BedrockResponsesEndpointTests: XCTestCase {
         XCTAssertFalse(BedrockResponsesEndpoint.usesResponses("us.amazon.nova-2-lite-v1:0", hasDocuments: true))
     }
 
+    func testGPT6AndGrok47FilesUseRuntimeResponsesWithTheSelectedProfile() throws {
+        for model in ["openai.gpt-6.2-astra", "openai.gpt-6.2-sol", "openai.gpt-6.1-sol", "openai.gpt-6.1-terra",
+                      "openai.gpt-6-sol", "openai.gpt-6-luna", "xai.grok-4.7"] {
+            XCTAssertEqual(BedrockModelID.route(model), .conversation, model)
+            XCTAssertTrue(BedrockResponsesEndpoint.supportsRuntimeDocuments(model), model)
+            for profile in ["us." + model, "global." + model] {
+                XCTAssertFalse(BedrockResponsesEndpoint.usesResponses(profile, hasDocuments: false), profile)
+                XCTAssertTrue(BedrockResponsesEndpoint.usesResponses(profile, hasDocuments: true), profile)
+                let endpoint = try BedrockResponsesEndpoint.resolve(modelID: profile, region: "us-west-2")
+                XCTAssertEqual(endpoint.plane, .runtime, profile)
+                XCTAssertEqual(endpoint.modelID, profile)
+                XCTAssertEqual(endpoint.url.absoluteString, "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/responses")
+            }
+            XCTAssertEqual(try BedrockResponsesEndpoint.resolve(modelID: model, region: "us-east-2").modelID, "us." + model)
+        }
+    }
+
+    func testGPT62RefusesPDFAttachmentsBeforeSendingAndKeepsTextFiles() throws {
+        for model in ["openai.gpt-6.2-astra", "us.openai.gpt-6.2-sol", "global.openai.gpt-6.2-astra"] {
+            XCTAssertFalse(BedrockResponsesEndpoint.readsPDF(model), model)
+            XCTAssertThrowsError(try BedrockResponsesEndpoint.validateDocumentFormats(foundationID: model, formats: ["txt", "PDF"])) { error in
+                XCTAssertTrue(error.localizedDescription.contains("cannot read PDF"))
+                XCTAssertTrue(error.localizedDescription.contains("attachment is still saved"))
+            }
+            XCTAssertNoThrow(try BedrockResponsesEndpoint.validateDocumentFormats(foundationID: model, formats: ["txt", "md", "csv"]))
+        }
+        for model in ["openai.gpt-6.1-terra", "openai.gpt-6-astra", "xai.grok-4.7", "anthropic.claude-haiku-5-5"] {
+            XCTAssertTrue(BedrockResponsesEndpoint.readsPDF(model), model)
+            XCTAssertNoThrow(try BedrockResponsesEndpoint.validateDocumentFormats(foundationID: model, formats: ["pdf"]))
+        }
+    }
+
+    func testGPT55UsesRuntimeProfilesOnlyWhereMantleDoesNotServeIt() throws {
+        for id in ["openai.gpt-5.5", "us.openai.gpt-5.5", "global.openai.gpt-5.5"] {
+            let virginia = try BedrockResponsesEndpoint.resolve(modelID: id, region: "us-east-2")
+            XCTAssertEqual(virginia.plane, .mantle, id)
+            XCTAssertEqual(virginia.modelID, "openai.gpt-5.5", id)
+            let oregon = try BedrockResponsesEndpoint.resolve(modelID: id, region: "us-west-2")
+            XCTAssertEqual(oregon.plane, .runtime, id)
+            XCTAssertEqual(oregon.modelID, id == "openai.gpt-5.5" ? "us.openai.gpt-5.5" : id)
+            XCTAssertEqual(oregon.url.absoluteString, "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/responses")
+        }
+        XCTAssertEqual(try BedrockResponsesEndpoint.resolve(modelID: "openai.gpt-5.4", region: "us-west-2").plane, .mantle,
+                       "bedrock-mantle still serves GPT-5.4 in Oregon.")
+        XCTAssertEqual(try BedrockResponsesEndpoint.resolve(modelID: "openai.gpt-5.5-2026-04-23", region: "us-west-2").plane, .mantle)
+        XCTAssertFalse(BedrockResponsesEndpoint.usesRuntimeOutsideMantle(modelID: "openai.gpt-5.5", region: "eu-central-1"),
+                       "A bare ID must not opt into another geography.")
+        XCTAssertTrue(BedrockResponsesEndpoint.usesRuntimeOutsideMantle(modelID: "global.openai.gpt-5.5", region: "eu-central-1"))
+        XCTAssertFalse(BedrockResponsesEndpoint.usesRuntimeOutsideMantle(modelID: "xai.grok-4.3", region: "eu-west-1"))
+    }
+
     func testSelectedGlobalProfileAndSourceRegionStayExplicit() throws {
         let endpoint = try BedrockResponsesEndpoint.resolve(modelID: "global.openai.gpt-5.6-luna", region: "eu-central-1")
         XCTAssertEqual(endpoint.modelID, "global.openai.gpt-5.6-luna")
